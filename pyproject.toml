@@ -1,0 +1,7 @@
+[project]
+name = "vectorops-know"
+version = "0.1.0"
+description = "VectorOps Code Knowledgebase"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
