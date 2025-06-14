@@ -176,3 +176,13 @@ class ImportEdge(BaseModel):
     # Runtime links
     from_package_ref: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
     to_package_ref: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
+
+
+class SymbolEdge(BaseModel):
+    """
+    Directed relationship between two symbols inside the code-base.
+    """
+    id: Optional[str] = None
+    from_symbol_id: str          # source symbol (caller / container / etc.)
+    to_symbol_id: str            # destination symbol
+    type: EdgeType               # kind of relationship (calls, contains, …)

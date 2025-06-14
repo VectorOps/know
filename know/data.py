@@ -124,6 +124,19 @@ class AbstractImportEdgeRepository(ABC):
     def delete(self, edge_id: str) -> bool:
         pass
 
+
+class AbstractSymbolEdgeRepository(ABC):
+    @abstractmethod
+    def get_by_id(self, edge_id: str) -> Optional[SymbolEdge]: ...
+    @abstractmethod
+    def get_list_by_ids(self, edge_ids: list[str]) -> list[SymbolEdge]: ...
+    @abstractmethod
+    def create(self, edge: SymbolEdge) -> SymbolEdge: ...
+    @abstractmethod
+    def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[SymbolEdge]: ...
+    @abstractmethod
+    def delete(self, edge_id: str) -> bool: ...
+
 class AbstractDataRepository(ABC):
     @property
     @abstractmethod
