@@ -79,24 +79,11 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     pass
 
 class InMemorySymbolEdgeRepository(InMemoryBaseRepository[SymbolEdge]):
-    def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[SymbolEdge]:
-        """Update a symbol edge by its ID."""
-        edge = self._items.get(edge_id)
-        if not edge:
-            return None
-        for k, v in data.items():
-            setattr(edge, k, v)
-        return edge
+    pass
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge]):
-    def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[ImportEdge]:
-        """Update an import edge by its ID."""
-        edge = self._items.get(edge_id)
-        if not edge:
-            return None
-        for k, v in data.items():
-            setattr(edge, k, v)
-        return edge
+    pass
+
 
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):

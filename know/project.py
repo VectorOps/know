@@ -1,10 +1,13 @@
+import uuid
 from know.models import RepoMetadata
 from know.stores.memory import InMemoryRepoMetadataRepository
+
 
 class ProjectSettings:
     def __init__(self, project_path: str = None, project_id: str = None):
         self.project_path = project_path
         self.project_id = project_id
+
 
 class Project:
     """
@@ -19,6 +22,7 @@ class Project:
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
         return self._repo_metadata
+
 
 def init_project(settings: ProjectSettings) -> Project:
     """
@@ -36,7 +40,6 @@ def init_project(settings: ProjectSettings) -> Project:
         repo_metadata = repo_repository.get_by_path(settings.project_path)
     if not repo_metadata:
         # Create new RepoMetadata
-        import uuid
         repo_metadata = RepoMetadata(
             id=settings.project_id or str(uuid.uuid4()),
             root_path=settings.project_path,

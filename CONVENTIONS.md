@@ -18,12 +18,14 @@ This document outlines the coding conventions and best practices for Python appl
 
 ## Project Structure
 
-When importing from other packages, use explicit module names:
+1. When importing from other packages, use explicit module names:
 
 ```python
 from src.auth import constants as auth_constants
 from src.notifications import service as notification_service
 ```
+
+2. Never add imports inside of functions or methods - only add them to the top of the file
 
 ## Type Hints
 

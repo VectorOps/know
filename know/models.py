@@ -166,8 +166,7 @@ class SymbolMetadata(BaseModel):
     children: List["SymbolMetadata"] = field(default_factory=list, repr=False, compare=False)
 
 
-@dataclass
-class SymbolEdge:
+class SymbolEdge(BaseModel):
     id: str
     from_symbol_id: str
     to_symbol_id: str
@@ -180,8 +179,7 @@ class SymbolEdge:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class ImportEdge:
+class ImportEdge(BaseModel):
     id: str
     from_package_id: str  # importing package
     to_package_path: str  # textual path like "fmt"; may not map to a package_id if external
