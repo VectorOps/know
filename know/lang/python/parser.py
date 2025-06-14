@@ -2,6 +2,7 @@ import os
 import ast
 import re
 from typing import Optional
+from pathlib import Path
 from tree_sitter import Language, Parser
 from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
 from know.models import (
@@ -15,14 +16,16 @@ from know.models import (
 from know.project import Project
 
 # Load the Tree-sitter Python parser
-Language.build_library(
-    'build/my-languages.so',
-    [
-        'vendor/tree-sitter-python'
-    ]
-)
+LIB_PATH = Path(__file__).with_suffix("")  \
+            .parent / "build" / "my-languages.so"
 
-PY_LANGUAGE = Language('build/my-languages.so', 'python')
+if not LIB_PATH.exists():                       # ← build only once
+    Language.build_library(
+        str(LIB_PATH),
+        ['vendor/tree-sitter-python']
+    )
+
+PY_LANGUAGE = Language(str(LIB_PATH), 'python')
 
 class PythonCodeParser(AbstractCodeParser):
     def __init__(self):
@@ -487,3 +490,7 @@ class PythonCodeParser(AbstractCodeParser):
         # Determine if the import is local by checking the project structure
         potential_path = os.path.join(project.project_path, import_path.replace('.', '/') + '.py')
         return os.path.exists(potential_path)
+
+from know.parsers import CodeParserRegistry
+
+CodeParserRegistry.register_parser(".py", PythonCodeParser())
