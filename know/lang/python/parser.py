@@ -228,6 +228,25 @@ class PythonCodeParser(AbstractCodeParser):
         """Return True if the given identifier looks like a constant (ALL_CAPS)."""
         return bool(cls._CONST_RE.match(name))
 
+    # ---------------------------------------------------------------------
+    # Visibility helpers
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def _infer_visibility(name: str) -> Visibility:
+        """
+        Infer symbol visibility from its leading underscores.
+
+        - '__name' → PRIVATE
+        - '_name'  → PROTECTED
+        - otherwise → PUBLIC
+        Double-underscore “dunder” names like '__init__' are considered PUBLIC.
+        """
+        if name.startswith("__") and not name.endswith("__"):
+            return Visibility.PRIVATE
+        if name.startswith("_"):
+            return Visibility.PROTECTED
+        return Visibility.PUBLIC
+
     def _create_assignment_symbol(
         self,
         name: str,
@@ -258,7 +277,7 @@ class PythonCodeParser(AbstractCodeParser):
             end_line=node.end_point[0],
             start_byte=node.start_byte,
             end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
+            visibility=self._infer_visibility(name),
             modifiers=[],
             docstring=None,
             signature=None,
@@ -308,7 +327,7 @@ class PythonCodeParser(AbstractCodeParser):
             end_line=node.end_point[0],
             start_byte=node.start_byte,
             end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
+            visibility=self._infer_visibility(method_name),
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(node),
@@ -338,7 +357,7 @@ class PythonCodeParser(AbstractCodeParser):
             end_line=node.end_point[0],
             start_byte=node.start_byte,
             end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
+            visibility=self._infer_visibility(class_name),
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(node),
@@ -409,7 +428,7 @@ class PythonCodeParser(AbstractCodeParser):
             end_line=node.end_point[0],
             start_byte=node.start_byte,
             end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
+            visibility=self._infer_visibility(node.child_by_field_name('name').text.decode('utf8')),
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=None,
