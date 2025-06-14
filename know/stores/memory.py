@@ -56,7 +56,7 @@ class InMemoryBaseRepository(Generic[T], AbstractRepoMetadataRepository):
         """Delete an item by its ID."""
         return self._items.pop(item_id, None) is not None
 
-class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], AbstractRepoMetadataRepository):
+class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata]):
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""
         for repo in self._items.values():
@@ -67,7 +67,7 @@ class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], Abstr
 class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata], AbstractPackageMetadataRepository):
     pass
 
-class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata], AbstractFileMetadataRepository):
+class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata]):
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
         """Get a file by its project-relative path."""
         for file in self._items.values():
@@ -78,7 +78,7 @@ class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata], Abstr
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     pass
 
-class InMemorySymbolEdgeRepository(InMemoryBaseRepository[SymbolEdge], AbstractSymbolEdgeRepository):
+class InMemorySymbolEdgeRepository(InMemoryBaseRepository[SymbolEdge]):
     def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[SymbolEdge]:
         """Update a symbol edge by its ID."""
         edge = self._items.get(edge_id)
@@ -88,7 +88,7 @@ class InMemorySymbolEdgeRepository(InMemoryBaseRepository[SymbolEdge], AbstractS
             setattr(edge, k, v)
         return edge
 
-class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
+class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge]):
     def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[ImportEdge]:
         """Update an import edge by its ID."""
         edge = self._items.get(edge_id)
