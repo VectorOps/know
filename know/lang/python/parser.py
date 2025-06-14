@@ -416,23 +416,34 @@ class PythonCodeParser(AbstractCodeParser):
         parsed_file.imports.append(import_edge)
 
     def _handle_function_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
-        # Handle function definitions
+        """
+        Handle top-level function definitions.
+
+        The function name is decoded once and reused to minimise repeated
+        byte-to-str conversions, slightly improving performance for large files.
+        """
+        func_name_node = node.child_by_field_name("name")
+        if func_name_node is None:
+            # Malformed node – skip to remain resilient to parser errors.
+            return
+        func_name = func_name_node.text.decode("utf8")
+
         symbol = ParsedSymbol(
-            name=node.child_by_field_name('name').text.decode('utf8'),
-            fqn=f"{package.virtual_path}.{node.child_by_field_name('name').text.decode('utf8')}",
-            body=node.text.decode('utf8'),
-            key=node.child_by_field_name('name').text.decode('utf8'),
-            hash='',
+            name=func_name,
+            fqn=f"{package.virtual_path}.{func_name}",
+            body=node.text.decode("utf8"),
+            key=func_name,
+            hash="",
             kind=SymbolKind.FUNCTION,
             start_line=node.start_point[0],
             end_line=node.end_point[0],
             start_byte=node.start_byte,
             end_byte=node.end_byte,
-            visibility=self._infer_visibility(node.child_by_field_name('name').text.decode('utf8')),
+            visibility=self._infer_visibility(func_name),
             modifiers=[],
             docstring=self._extract_docstring(node),
-            signature=None,
-            children=[]
+            signature=self._build_function_signature(node),
+            children=[],
         )
         parsed_file.symbols.append(symbol)
 
