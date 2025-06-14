@@ -1,26 +1,28 @@
 from pydantic import BaseModel, Field
 
+
 # Parser-specific data structures
 class ParsedImportEdge(BaseModel):
-    path: Optional[str]
-    virtual_path: str
+    path: Optional[str] = None # relative path to package. Can be None for external packages.
+    virtual_path: str # syntax specific virtual path to package
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")
+    external: bool
 
 
 class ParsedPackage(BaseModel):
     language: ProgrammingLanguage
-    path: str
-    virtual_path: str
+    path: str # relative path to package
+    virtual_path: str # syntax specific virtual path to package
     imports: List[ParsedImportEdge] = Field(default_factory=list, repr=False, compare=False)
 
 
 class ParsedSymbol(BaseModel):
-    name: str
-    fqn: str
-    body: str
+    name: str # local name
+    fqn: str # fully qualified name
+    body: str # full ssymbol body
     key: str # virtual path within a file
-    hash: str
+    hash: str # sha256 hash of the symbol
     kind: SymbolKind
 
     start_line: int
@@ -38,7 +40,7 @@ class ParsedSymbol(BaseModel):
 
 class ParsedFile(BaseModel):
     package: ParsedPackage
-    path: str
+    path: str # relative path
     language: ProgrammingLanguage
     docstring: Optional[str] = None
 
