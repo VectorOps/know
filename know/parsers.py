@@ -24,7 +24,7 @@ class ParsedPackage(BaseModel):
 class ParsedSymbol(BaseModel):
     name: str # local name
     fqn: str # fully qualified name
-    body: str # full ssymbol body
+    body: str # full symbol body
     key: str # virtual path within a file
     hash: str # sha256 hash of the symbol
     kind: SymbolKind
