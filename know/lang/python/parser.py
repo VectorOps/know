@@ -265,15 +265,53 @@ class PythonCodeParser(AbstractCodeParser):
         )
 
     def _handle_import_statement(self, node, parsed_file: ParsedFile, project: Project):
-        # Handle import statements
-        import_path = node.text.decode('utf8')
-        is_local = self._is_local_import(import_path, project)
+        """
+        Handle `import` / `from … import …` statements and populate alias & dot flags.
+
+        alias:
+            - For `import pkg as alias`      → "alias"
+            - For `from pkg import name as a`→ "a"
+            - Otherwise                     → None
+
+        dot:
+            - True  when the statement is a relative import (leading dots)
+            - False otherwise
+        """
+        raw_stmt = node.text.decode("utf8")
+
+        # Defaults
+        import_path: str | None = None
+        alias: str | None = None
+        dot: bool = False
+
+        # Parse with `ast` for a robust extraction
+        try:
+            stmt_node = ast.parse(raw_stmt).body[0]  # type: ignore[index]
+            if isinstance(stmt_node, ast.Import):
+                if stmt_node.names:
+                    first_alias = stmt_node.names[0]
+                    import_path = first_alias.name
+                    alias = first_alias.asname
+            elif isinstance(stmt_node, ast.ImportFrom):
+                level_prefix = "." * stmt_node.level if stmt_node.level else ""
+                module_part = stmt_node.module or ""
+                import_path = f"{level_prefix}{module_part}"
+                dot = stmt_node.level > 0
+                if stmt_node.names:
+                    alias = stmt_node.names[0].asname
+        except Exception:
+            # Fallback to raw text on parse error
+            import_path = raw_stmt
+
+        # Determine locality (strip leading dots for filesystem check)
+        is_local = self._is_local_import(import_path.lstrip(".") if import_path else "", project)
+
         import_edge = ParsedImportEdge(
             path=import_path if is_local else None,
-            virtual_path=import_path,
-            alias=None,
-            dot=False,
-            external=not is_local
+            virtual_path=import_path or raw_stmt,
+            alias=alias,
+            dot=dot,
+            external=not is_local,
         )
         parsed_file.imports.append(import_edge)
 
