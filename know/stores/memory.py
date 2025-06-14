@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TypeVar, Generic
 from know.models import (
     RepoMetadata,
     PackageMetadata,
@@ -17,205 +17,86 @@ from know.data import (
     AbstractDataRepository,
 )
 
-class InMemoryRepoMetadataRepository(AbstractRepoMetadataRepository):
+T = TypeVar("T")
+
+class InMemoryBaseRepository(Generic[T]):
     def __init__(self):
-        """Initialize the in-memory repo metadata repository."""
-        self._repos: Dict[str, RepoMetadata] = {}
+        """Initialize the in-memory base repository."""
+        self._items: Dict[str, T] = {}
 
-    def get_by_id(self, repo_id: str) -> Optional[RepoMetadata]:
-        """Get a repo by its ID."""
-        return self._repos.get(repo_id)
+    def get_by_id(self, item_id: str) -> Optional[T]:
+        """Get an item by its ID."""
+        return self._items.get(item_id)
 
-    def get_list_by_ids(self, repo_ids: list[str]) -> list[RepoMetadata]:
-        """Get a list of repos by their IDs."""
-        return [self._repos[rid] for rid in repo_ids if rid in self._repos]
+    def get_list_by_ids(self, item_ids: list[str]) -> list[T]:
+        """Get a list of items by their IDs."""
+        return [self._items[iid] for iid in item_ids if iid in self._items]
 
-    def create(self, repo: RepoMetadata) -> RepoMetadata:
-        """Create a new repo entry."""
-        self._repos[repo.id] = repo
-        return repo
+    def create(self, item: T) -> T:
+        """Create a new item entry."""
+        self._items[item.id] = item
+        return item
 
-    def update(self, repo_id: str, data: Dict[str, Any]) -> Optional[RepoMetadata]:
-        """Update a repo by its ID."""
-        repo = self._repos.get(repo_id)
-        if not repo:
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[T]:
+        """Update an item by its ID."""
+        item = self._items.get(item_id)
+        if not item:
             return None
-        updated = repo.copy(update=data)
-        self._repos[repo_id] = updated
-        return updated
+        # For pydantic models, use .copy(update=...)
+        if hasattr(item, "copy"):
+            updated = item.copy(update=data)
+            self._items[item_id] = updated
+            return updated
+        # For dataclasses, update fields in place
+        for k, v in data.items():
+            setattr(item, k, v)
+        return item
 
-    def delete(self, repo_id: str) -> bool:
-        """Delete a repo by its ID."""
-        return self._repos.pop(repo_id, None) is not None
+    def delete(self, item_id: str) -> bool:
+        """Delete an item by its ID."""
+        return self._items.pop(item_id, None) is not None
 
+class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], AbstractRepoMetadataRepository):
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""
-        for repo in self._repos.values():
+        for repo in self._items.values():
             if repo.root_path == root_path:
                 return repo
         return None
 
-class InMemoryPackageMetadataRepository(AbstractPackageMetadataRepository):
-    def __init__(self):
-        """Initialize the in-memory package metadata repository."""
-        self._pkgs: Dict[str, PackageMetadata] = {}
+class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata], AbstractPackageMetadataRepository):
+    pass
 
-    def get_by_id(self, package_id: str) -> Optional[PackageMetadata]:
-        """Get a package by its ID."""
-        return self._pkgs.get(package_id)
-
-    def get_list_by_ids(self, package_ids: list[str]) -> list[PackageMetadata]:
-        """Get a list of packages by their IDs."""
-        return [self._pkgs[pid] for pid in package_ids if pid in self._pkgs]
-
-    def create(self, pkg: PackageMetadata) -> PackageMetadata:
-        """Create a new package entry."""
-        self._pkgs[pkg.id] = pkg
-        return pkg
-
-    def update(self, package_id: str, data: Dict[str, Any]) -> Optional[PackageMetadata]:
-        """Update a package by its ID."""
-        pkg = self._pkgs.get(package_id)
-        if not pkg:
-            return None
-        updated = pkg.copy(update=data)
-        self._pkgs[package_id] = updated
-        return updated
-
-    def delete(self, package_id: str) -> bool:
-        """Delete a package by its ID."""
-        return self._pkgs.pop(package_id, None) is not None
-
-class InMemoryFileMetadataRepository(AbstractFileMetadataRepository):
-    def __init__(self):
-        """Initialize the in-memory file metadata repository."""
-        self._files: Dict[str, FileMetadata] = {}
-
-    def get_by_id(self, file_id: str) -> Optional[FileMetadata]:
-        """Get a file by its ID."""
-        return self._files.get(file_id)
-
-    def get_list_by_ids(self, file_ids: list[str]) -> list[FileMetadata]:
-        """Get a list of files by their IDs."""
-        return [self._files[fid] for fid in file_ids if fid in self._files]
-
-    def create(self, file: FileMetadata) -> FileMetadata:
-        """Create a new file entry."""
-        self._files[file.id] = file
-        return file
-
-    def update(self, file_id: str, data: Dict[str, Any]) -> Optional[FileMetadata]:
-        """Update a file by its ID."""
-        file = self._files.get(file_id)
-        if not file:
-            return None
-        updated = file.copy(update=data)
-        self._files[file_id] = updated
-        return updated
-
-    def delete(self, file_id: str) -> bool:
-        """Delete a file by its ID."""
-        return self._files.pop(file_id, None) is not None
-
+class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata], AbstractFileMetadataRepository):
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
         """Get a file by its project-relative path."""
-        for file in self._files.values():
+        for file in self._items.values():
             if file.path == path:
                 return file
         return None
 
-class InMemorySymbolMetadataRepository(AbstractSymbolMetadataRepository):
-    def __init__(self):
-        """Initialize the in-memory symbol metadata repository."""
-        self._symbols: Dict[str, SymbolMetadata] = {}
+class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
+    pass
 
-    def get_by_id(self, symbol_id: str) -> Optional[SymbolMetadata]:
-        """Get a symbol by its ID."""
-        return self._symbols.get(symbol_id)
-
-    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
-        """Get a list of symbols by their IDs."""
-        return [self._symbols[sid] for sid in symbol_ids if sid in self._symbols]
-
-    def create(self, symbol: SymbolMetadata) -> SymbolMetadata:
-        """Create a new symbol entry."""
-        self._symbols[symbol.id] = symbol
-        return symbol
-
-    def update(self, symbol_id: str, data: Dict[str, Any]) -> Optional[SymbolMetadata]:
-        """Update a symbol by its ID."""
-        symbol = self._symbols.get(symbol_id)
-        if not symbol:
-            return None
-        updated = symbol.copy(update=data)
-        self._symbols[symbol_id] = updated
-        return updated
-
-    def delete(self, symbol_id: str) -> bool:
-        """Delete a symbol by its ID."""
-        return self._symbols.pop(symbol_id, None) is not None
-
-class InMemorySymbolEdgeRepository(AbstractSymbolEdgeRepository):
-    def __init__(self):
-        """Initialize the in-memory symbol edge repository."""
-        self._edges: Dict[str, SymbolEdge] = {}
-
-    def get_by_id(self, edge_id: str) -> Optional[SymbolEdge]:
-        """Get a symbol edge by its ID."""
-        return self._edges.get(edge_id)
-
-    def get_list_by_ids(self, edge_ids: list[str]) -> list[SymbolEdge]:
-        """Get a list of symbol edges by their IDs."""
-        return [self._edges[eid] for eid in edge_ids if eid in self._edges]
-
-    def create(self, edge: SymbolEdge) -> SymbolEdge:
-        """Create a new symbol edge entry."""
-        self._edges[edge.id] = edge
-        return edge
-
+class InMemorySymbolEdgeRepository(InMemoryBaseRepository[SymbolEdge], AbstractSymbolEdgeRepository):
     def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[SymbolEdge]:
         """Update a symbol edge by its ID."""
-        edge = self._edges.get(edge_id)
+        edge = self._items.get(edge_id)
         if not edge:
             return None
         for k, v in data.items():
             setattr(edge, k, v)
         return edge
 
-    def delete(self, edge_id: str) -> bool:
-        """Delete a symbol edge by its ID."""
-        return self._edges.pop(edge_id, None) is not None
-
-class InMemoryImportEdgeRepository(AbstractImportEdgeRepository):
-    def __init__(self):
-        """Initialize the in-memory import edge repository."""
-        self._edges: Dict[str, ImportEdge] = {}
-
-    def get_by_id(self, edge_id: str) -> Optional[ImportEdge]:
-        """Get an import edge by its ID."""
-        return self._edges.get(edge_id)
-
-    def get_list_by_ids(self, edge_ids: list[str]) -> list[ImportEdge]:
-        """Get a list of import edges by their IDs."""
-        return [self._edges[eid] for eid in edge_ids if eid in self._edges]
-
-    def create(self, edge: ImportEdge) -> ImportEdge:
-        """Create a new import edge entry."""
-        self._edges[edge.id] = edge
-        return edge
-
+class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[ImportEdge]:
         """Update an import edge by its ID."""
-        edge = self._edges.get(edge_id)
+        edge = self._items.get(edge_id)
         if not edge:
             return None
         for k, v in data.items():
             setattr(edge, k, v)
         return edge
-
-    def delete(self, edge_id: str) -> bool:
-        """Delete an import edge by its ID."""
-        return self._edges.pop(edge_id, None) is not None
 
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
