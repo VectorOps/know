@@ -1,30 +1,5 @@
-from abc import ABC, abstractmethod
-from typing import TypeVar, Generic, List, Optional
-
-T = TypeVar('T')
-
-class AbstractCRUD(ABC, Generic[T]):
-    @abstractmethod
-    def create(self, obj: T) -> T:
-        """Create a new object."""
-        pass
-
-    @abstractmethod
-    def read(self, obj_id: str) -> Optional[T]:
-        """Read an object by its ID."""
-        pass
-
-    @abstractmethod
-    def update(self, obj_id: str, obj: T) -> T:
-        """Update an existing object."""
-        pass
-
-    @abstractmethod
-    def delete(self, obj_id: str) -> bool:
-        """Delete an object by its ID."""
-        pass
-
-    @abstractmethod
-    def list_all(self) -> List[T]:
-        """List all objects."""
-        pass
+# TODO: Implement abstract CRUD interface for models found in models.py
+# Do not create separate repositories, as data access methods might differ between models.
+# Create generic methods for get one, create, update and delete for all models in models.py that have id field.
+class DataRepository:
+    pass
