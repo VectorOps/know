@@ -4,7 +4,6 @@ from know.stores.memory import (
     InMemoryPackageMetadataRepository,
     InMemoryFileMetadataRepository,
     InMemorySymbolMetadataRepository,
-    InMemorySymbolEdgeRepository,
     InMemoryImportEdgeRepository,
 )
 from know.models import (
@@ -12,7 +11,6 @@ from know.models import (
     PackageMetadata,
     FileMetadata,
     SymbolMetadata,
-    SymbolEdge,
     ImportEdge,
 )
 from typing import Dict, Any
@@ -77,19 +75,6 @@ def test_inmemory_symbol_metadata_repository():
     assert updated.name == "sym2"
     assert repo.delete(sid) is True
     assert repo.get_by_id(sid) is None
-
-def test_inmemory_symbol_edge_repository():
-    repo = InMemorySymbolEdgeRepository()
-    eid = make_id()
-    obj = SymbolEdge(id=eid, source="s1", target="s2", type="ref")
-    created = repo.create(obj)
-    assert created == obj
-    assert repo.get_by_id(eid) == obj
-    assert repo.get_list_by_ids([eid]) == [obj]
-    updated = repo.update(eid, {"type": "def"})
-    assert updated.type == "def"
-    assert repo.delete(eid) is True
-    assert repo.get_by_id(eid) is None
 
 def test_inmemory_import_edge_repository():
     repo = InMemoryImportEdgeRepository()

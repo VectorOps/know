@@ -4,7 +4,6 @@ from know.models import (
     PackageMetadata,
     FileMetadata,
     SymbolMetadata,
-    SymbolEdge,
     ImportEdge,
 )
 from know.data import (
@@ -12,7 +11,6 @@ from know.data import (
     AbstractPackageMetadataRepository,
     AbstractFileMetadataRepository,
     AbstractSymbolMetadataRepository,
-    AbstractSymbolEdgeRepository,
     AbstractImportEdgeRepository,
     AbstractDataRepository,
 )
@@ -76,9 +74,6 @@ class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata]):
         return None
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
-    pass
-
-class InMemorySymbolEdgeRepository(InMemoryBaseRepository[SymbolEdge]):
     pass
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge]):

@@ -1,0 +1,3 @@
+#+title: Todo
+* [ ] Implement recursive parsing function. Do not parse the file if it's hash did not change.
+* [ ] Add data access helper that reads file from data store along with all symbols

@@ -1,6 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 from typing import List, Optional, Dict, Iterable
 
@@ -60,10 +59,8 @@ Vector = List[float]  # alias for clarity when embedding
 # ---------------------------------------------------------------------------
 # Core data containers
 # ---------------------------------------------------------------------------
-
-
 class RepoMetadata(BaseModel):
-    id: str
+    id: Optional[str]
     root_path: str
     remote_url: Optional[str] = None
     default_branch: str = "main"
@@ -71,16 +68,16 @@ class RepoMetadata(BaseModel):
 
 
 class PackageMetadata(BaseModel):
-    id: str
+    id: Optional[str]
     repo_id: str
     language: ProgrammingLanguage
     virtual_path: str  # import path such as "mypkg/subpkg"
-    physical_path: str  # directory relative to repo root
+    physical_path: str  # directory or file relative to repo root
     description: Optional[str] = None
 
     # Runtime links
-    imports: List["ImportEdge"] = field(default_factory=list, repr=False, compare=False)
-    imported_by: List["ImportEdge"] = field(default_factory=list, repr=False, compare=False)
+    imports: List["ImportEdge"] = Field(default_factory=list, repr=False, compare=False)
+    imported_by: List["ImportEdge"] = Field(default_factory=list, repr=False, compare=False)
 
 
 class FileMetrics(BaseModel):
@@ -91,7 +88,7 @@ class FileMetrics(BaseModel):
 
 
 class FileMetadata(BaseModel):
-    id: str
+    id: Optional[str]
     repo_id: str
     package_id: str
     path: str # project relative path
@@ -99,12 +96,11 @@ class FileMetadata(BaseModel):
     commit_hash: str
     mime_type: str
     language_guess: Optional[ProgrammingLanguage] = None
-    segments: List[FileSegment] = field(default_factory=list)
     metrics: Optional[FileMetrics] = None
 
     # Runtime links
-    package: Optional[PackageMetadata] = field(default=None, repr=False, compare=False)
-    symbols: List["SymbolMetadata"] = field(default_factory=list, repr=False, compare=False)
+    package: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
+    symbols: List["SymbolMetadata"] = Field(default_factory=list, repr=False, compare=False)
 
 
 class SymbolParameter(BaseModel):
@@ -116,16 +112,16 @@ class SymbolParameter(BaseModel):
 
 class SymbolSignature(BaseModel):
     raw: str
-    parameters: List[SymbolParameter] = field(default_factory=list)
+    parameters: List[SymbolParameter] = Field(default_factory=list)
     return_type: Optional[str] = None
-    decorators: List[str] = field(default_factory=list)
+    decorators: List[str] = Field(default_factory=list)
 
 
 class QualityScores(BaseModel):
     lint_score: Optional[float] = None
     complexity: Optional[int] = None
     coverage: Optional[float] = None
-    security_flags: List[str] = field(default_factory=list)
+    security_flags: List[str] = Field(default_factory=list)
 
 
 class SymbolEmbedding(BaseModel):
@@ -136,10 +132,12 @@ class SymbolEmbedding(BaseModel):
 
 
 class SymbolMetadata(BaseModel):
-    id: str
+    id: Optional[str]
     file_id: str
     name: str
     fqn: str
+    symbol_key: str
+    symbol_hash: str
     kind: SymbolKind
     parent_symbol_id: Optional[str] = None
 
@@ -151,36 +149,23 @@ class SymbolMetadata(BaseModel):
     end_byte: int = 0
 
     visibility: Optional[Visibility] = None
-    modifiers: List[Modifier] = field(default_factory=list)
-    embedding: Optional[SymbolEmbedding] = None
-
-    signature: Optional[SymbolSignature] = None
+    modifiers: List[Modifier] = Field(default_factory=list)
     docstring: Optional[str] = None
-    summary: Optional[str] = None
+    signature: Optional[SymbolSignature] = None
 
+    # Calculated metadata
+    embedding: Optional[SymbolEmbedding] = None
+    summary: Optional[str] = None
     quality: Optional[QualityScores] = None
 
     # Runtime links
-    file_ref: Optional[FileMetadata] = field(default=None, repr=False, compare=False)
-    parent_ref: Optional["SymbolMetadata"] = field(default=None, repr=False, compare=False)
-    children: List["SymbolMetadata"] = field(default_factory=list, repr=False, compare=False)
-
-
-class SymbolEdge(BaseModel):
-    id: str
-    from_symbol_id: str
-    to_symbol_id: str
-    edge_type: EdgeType
-    metadata: Dict[str, str] = field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
-# Import edges (package-level)
-# ---------------------------------------------------------------------------
+    file_ref: Optional[FileMetadata] = Field(default=None, repr=False, compare=False)
+    parent_ref: Optional["SymbolMetadata"] = Field(default=None, repr=False, compare=False)
+    children: List["SymbolMetadata"] = Field(default_factory=list, repr=False, compare=False)
 
 
 class ImportEdge(BaseModel):
-    id: str
+    id: Optional[str]
     from_package_id: str  # importing package
     to_package_path: str  # textual path like "fmt"; may not map to a package_id if external
     to_package_id: Optional[str] = None  # filled when the imported package exists in the same repo
@@ -188,5 +173,5 @@ class ImportEdge(BaseModel):
     dot: bool = False  # true for dot-imports (import . "pkg")
 
     # Runtime links
-    from_package_ref: Optional[PackageMetadata] = field(default=None, repr=False, compare=False)
-    to_package_ref: Optional[PackageMetadata] = field(default=None, repr=False, compare=False)
+    from_package_ref: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
+    to_package_ref: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
