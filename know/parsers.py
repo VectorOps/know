@@ -1,4 +1,8 @@
+from typing import Optional, List, Dict
+from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
+from know.models import ProgrammingLanguage, SymbolKind, Visibility, Modifier, SymbolSignature
+from know.project import Project
 
 
 # Parser-specific data structures
