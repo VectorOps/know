@@ -3,7 +3,14 @@ import ast
 from typing import Optional
 from tree_sitter import Language, Parser
 from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
-from know.models import ProgrammingLanguage, SymbolKind, Visibility, Modifier, SymbolSignature
+from know.models import (
+    ProgrammingLanguage,
+    SymbolKind,
+    Visibility,
+    Modifier,
+    SymbolSignature,
+    SymbolParameter,
+)
 from know.project import Project
 
 # Load the Tree-sitter Python parser
@@ -93,6 +100,121 @@ class PythonCodeParser(AbstractCodeParser):
         except Exception:
             return raw.strip('\'"')
 
+    # ---------------------------------------------------------------------
+    # Signature helpers
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def _annotation_to_str(node):
+        if node is None:
+            return None
+        try:
+            return ast.unparse(node)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _expr_to_str(node):
+        if node is None:
+            return None
+        try:
+            return ast.unparse(node)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _iter_defaults(defaults, total):
+        """Yield default strings aligned to the total number of args."""
+        pad = total - len(defaults)
+        for _ in range(pad):
+            yield None
+        for d in defaults:
+            try:
+                yield ast.unparse(d)
+            except Exception:
+                yield None
+
+    def _build_function_signature(self, node) -> SymbolSignature:
+        """
+        Build a SymbolSignature object for the given function / method node.
+        """
+        code = node.text.decode("utf8")
+        raw_sig = code.split(":", 1)[0]
+
+        try:
+            fn_ast = ast.parse(code).body[0]
+            if isinstance(fn_ast, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                parameters: list[SymbolParameter] = []
+
+                # Positional / default args
+                for arg, default in zip(
+                    fn_ast.args.args,
+                    self._iter_defaults(fn_ast.args.defaults, len(fn_ast.args.args)),
+                ):
+                    parameters.append(
+                        SymbolParameter(
+                            name=arg.arg,
+                            type_annotation=self._annotation_to_str(arg.annotation),
+                            default=default,
+                            doc=None,
+                        )
+                    )
+
+                # *args
+                if fn_ast.args.vararg:
+                    parameters.append(
+                        SymbolParameter(
+                            name="*" + fn_ast.args.vararg.arg,
+                            type_annotation=self._annotation_to_str(
+                                fn_ast.args.vararg.annotation
+                            ),
+                            default=None,
+                            doc=None,
+                        )
+                    )
+
+                # Keyword-only args
+                for kwarg, default in zip(
+                    fn_ast.args.kwonlyargs,
+                    self._iter_defaults(
+                        fn_ast.args.kw_defaults, len(fn_ast.args.kwonlyargs)
+                    ),
+                ):
+                    parameters.append(
+                        SymbolParameter(
+                            name=kwarg.arg,
+                            type_annotation=self._annotation_to_str(kwarg.annotation),
+                            default=default,
+                            doc=None,
+                        )
+                    )
+
+                # **kwargs
+                if fn_ast.args.kwarg:
+                    parameters.append(
+                        SymbolParameter(
+                            name="**" + fn_ast.args.kwarg.arg,
+                            type_annotation=self._annotation_to_str(
+                                fn_ast.args.kwarg.annotation
+                            ),
+                            default=None,
+                            doc=None,
+                        )
+                    )
+
+                return SymbolSignature(
+                    raw=raw_sig,
+                    parameters=parameters,
+                    return_type=self._annotation_to_str(fn_ast.returns),
+                    decorators=[self._expr_to_str(dec) for dec in fn_ast.decorator_list]
+                    if fn_ast.decorator_list
+                    else [],
+                )
+        except Exception:
+            # Fall through to minimal signature on any error
+            pass
+
+        return SymbolSignature(raw=raw_sig)
+
     def _handle_class_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         # Handle class definitions
         class_name = node.child_by_field_name('name').text.decode('utf8')
@@ -110,7 +232,7 @@ class PythonCodeParser(AbstractCodeParser):
             visibility=Visibility.PUBLIC,
             modifiers=[],
             docstring=self._extract_docstring(node),
-            signature=None,
+            signature=self._build_function_signature(node),
             children=[]
         )
         # Traverse class body to find methods and properties
@@ -138,7 +260,7 @@ class PythonCodeParser(AbstractCodeParser):
             visibility=Visibility.PUBLIC,
             modifiers=[],
             docstring=self._extract_docstring(node),
-            signature=None,
+            signature=self._build_function_signature(node),
             children=[]
         )
 
