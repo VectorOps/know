@@ -48,6 +48,13 @@ class InMemoryRepoMetadataRepository(AbstractRepoMetadataRepository):
         """Delete a repo by its ID."""
         return self._repos.pop(repo_id, None) is not None
 
+    def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
+        """Get a repo by its root path."""
+        for repo in self._repos.values():
+            if repo.root_path == root_path:
+                return repo
+        return None
+
 class InMemoryPackageMetadataRepository(AbstractPackageMetadataRepository):
     def __init__(self):
         """Initialize the in-memory package metadata repository."""

@@ -30,6 +30,11 @@ class AbstractRepoMetadataRepository(ABC):
     def delete(self, repo_id: str) -> bool:
         pass
 
+    @abstractmethod
+    def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
+        """Get a repo by its root path."""
+        pass
+
 class AbstractPackageMetadataRepository(ABC):
     @abstractmethod
     def get_by_id(self, package_id: str) -> Optional[PackageMetadata]:
