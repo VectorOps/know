@@ -152,6 +152,7 @@ class SymbolMetadata(BaseModel):
     modifiers: List[Modifier] = Field(default_factory=list)
     docstring: Optional[str] = None
     signature: Optional[SymbolSignature] = None
+    comment: Optional[str] = None
 
     # Calculated metadata
     embedding: Optional[SymbolEmbedding] = None

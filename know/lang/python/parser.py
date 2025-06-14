@@ -109,40 +109,31 @@ class PythonCodeParser(AbstractCodeParser):
     # ---------------------------------------------------------------------
     # Comment helpers
     # ---------------------------------------------------------------------
-    def _get_preceding_comment(self, line_no: int) -> Optional[str]:
+    def _get_preceding_comment(self, node) -> Optional[str]:
         """
-        Return the contiguous block of ``#`` line comments that immediately
-        precedes the given 0-based ``line_no`` (start of the symbol) or
-        ``None`` if no such block exists.
-
-        The leading ``#`` and a single following space are stripped from each
-        line.  A blank line or non-comment breaks the block.
+        Return the contiguous block of `# …` line-comments that immediately
+        precedes *node* in the same parent scope (Tree-sitter siblings).
         """
-        def _get_preceding_comment(self, node) -> Optional[str]:
-            """
-            Return the contiguous block of `# …` line-comments that immediately
-            precedes *node* in the same parent scope (Tree-sitter siblings).
-            """
-            comments: list[str] = []
-            sib = node.prev_sibling
-            while sib is not None:
-                # stop if more than one blank line apart
-                if node.start_point[0] - sib.end_point[0] > 2:
-                    break
-                if sib.type == "comment":
-                    raw = self._source_bytes[sib.start_byte : sib.end_byte].decode("utf8")
-                    comments.append(raw.lstrip("# ").rstrip())
-                    sib = sib.prev_sibling
-                    continue
-                # skip solitary newlines/indent tokens
-                if sib.type in ("newline",):
-                    sib = sib.prev_sibling
-                    continue
+        comments: list[str] = []
+        sib = node.prev_sibling
+        while sib is not None:
+            # stop if more than one blank line apart
+            if node.start_point[0] - sib.end_point[0] > 2:
                 break
-            if comments:
-                comments.reverse()
-                return "\n".join(comments).strip() or None
-            return None
+            if sib.type == "comment":
+                raw = self._source_bytes[sib.start_byte : sib.end_byte].decode("utf8")
+                comments.append(raw.lstrip("# ").rstrip())
+                sib = sib.prev_sibling
+                continue
+            # skip solitary newlines/indent tokens
+            if sib.type in ("newline",):
+                sib = sib.prev_sibling
+                continue
+            break
+        if comments:
+            comments.reverse()
+            return "\n".join(comments).strip() or None
+        return None
 
     # ---------------------------------------------------------------------
     # Signature helpers
@@ -373,7 +364,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(node),
-            comment=self._get_preceding_comment(node.start_point[0]),
+            comment=self._get_preceding_comment(node),
             children=[]
         )
         # Traverse class body to find methods and properties
@@ -404,7 +395,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(node),
-            comment=self._get_preceding_comment(node.start_point[0]),
+            comment=self._get_preceding_comment(node),
             children=[]
         )
 
@@ -487,7 +478,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(node),
-            comment=self._get_preceding_comment(node.start_point[0]),
+            comment=self._get_preceding_comment(node),
             children=[],
         )
         parsed_file.symbols.append(symbol)
