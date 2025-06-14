@@ -14,6 +14,8 @@ from know.models import (
     SymbolParameter,
 )
 from know.project import Project
+from know.parsers import CodeParserRegistry
+
 
 # Load the Tree-sitter Python parser
 LIB_PATH = Path(__file__).with_suffix("")  \
@@ -490,7 +492,3 @@ class PythonCodeParser(AbstractCodeParser):
         # Determine if the import is local by checking the project structure
         potential_path = os.path.join(project.project_path, import_path.replace('.', '/') + '.py')
         return os.path.exists(potential_path)
-
-from know.parsers import CodeParserRegistry
-
-CodeParserRegistry.register_parser(".py", PythonCodeParser())

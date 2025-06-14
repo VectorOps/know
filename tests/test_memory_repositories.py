@@ -79,12 +79,12 @@ def test_inmemory_symbol_metadata_repository():
 def test_inmemory_import_edge_repository():
     repo = InMemoryImportEdgeRepository()
     eid = make_id()
-    obj = ImportEdge(id=eid, source="f1", target="f2", type="import")
+    obj = ImportEdge(id=eid, from_package_id="f1", to_package_path="f2")
     created = repo.create(obj)
     assert created == obj
     assert repo.get_by_id(eid) == obj
     assert repo.get_list_by_ids([eid]) == [obj]
-    updated = repo.update(eid, {"type": "from-import"})
-    assert updated.type == "from-import"
+    updated = repo.update(eid, {"from_package_id": "from-import"})
+    assert updated.from_package_id == "from-import"
     assert repo.delete(eid) is True
     assert repo.get_by_id(eid) is None

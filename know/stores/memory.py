@@ -17,7 +17,7 @@ from know.data import (
 
 T = TypeVar("T")
 
-class InMemoryBaseRepository(Generic[T], AbstractRepoMetadataRepository):
+class InMemoryBaseRepository(Generic[T]):
     def __init__(self):
         """Initialize the in-memory base repository."""
         self._items: Dict[str, T] = {}
@@ -54,7 +54,7 @@ class InMemoryBaseRepository(Generic[T], AbstractRepoMetadataRepository):
         """Delete an item by its ID."""
         return self._items.pop(item_id, None) is not None
 
-class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata]):
+class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], AbstractRepoMetadataRepository):
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""
         for repo in self._items.values():
@@ -74,7 +74,12 @@ class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata]):
         return None
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
-    pass
+    def get_by_path(self, path: str) -> Optional[FileMetadata]:
+        """Get a file by its project-relative path."""
+        for file in self._items.values():
+            if file.path == path:
+                return file
+        return None
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     pass

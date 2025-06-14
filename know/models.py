@@ -78,8 +78,8 @@ class PackageMetadata(BaseModel):
     description: Optional[str] = None
 
     # Runtime links
-    imports: List["ImportEdge"] = Field(default_factory=list, repr=False, compare=False)
-    imported_by: List["ImportEdge"] = Field(default_factory=list, repr=False, compare=False)
+    imports: List["ImportEdge"] = Field(default_factory=list, repr=False)
+    imported_by: List["ImportEdge"] = Field(default_factory=list, repr=False)
 
 
 class FileMetrics(BaseModel):
@@ -101,8 +101,8 @@ class FileMetadata(BaseModel):
     metrics: Optional[FileMetrics] = None
 
     # Runtime links
-    package: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
-    symbols: List["SymbolMetadata"] = Field(default_factory=list, repr=False, compare=False)
+    package: Optional[PackageMetadata] = Field(default=None, repr=False)
+    symbols: List["SymbolMetadata"] = Field(default_factory=list, repr=False)
 
 
 class SymbolParameter(BaseModel):
@@ -162,9 +162,9 @@ class SymbolMetadata(BaseModel):
     quality: Optional[QualityScores] = None
 
     # Runtime links
-    file_ref: Optional[FileMetadata] = Field(default=None, repr=False, compare=False)
-    parent_ref: Optional["SymbolMetadata"] = Field(default=None, repr=False, compare=False)
-    children: List["SymbolMetadata"] = Field(default_factory=list, repr=False, compare=False)
+    file_ref: Optional[FileMetadata] = Field(default=None, repr=False)
+    parent_ref: Optional["SymbolMetadata"] = Field(default=None, repr=False)
+    children: List["SymbolMetadata"] = Field(default_factory=list, repr=False)
 
 
 class ImportEdge(BaseModel):
@@ -175,25 +175,6 @@ class ImportEdge(BaseModel):
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")
 
-    # Aliases for tests
-    source: Optional[str] = None
-    target: Optional[str] = None
-    type: Optional[str] = None
-
-    # ---------------------------------------------------------------------
-    # Accept "source"/"target" keys used in tests and map them to the real
-    # internal field names so validation succeeds.
-    # ---------------------------------------------------------------------
-    @model_validator(mode="before")
-    @classmethod
-    def _map_test_aliases(cls, data: Dict[str, Any]) -> Dict[str, Any]:
-        # Allow constructing the model with test-friendly aliases.
-        if "from_package_id" not in data and "source" in data:
-            data["from_package_id"] = data["source"]
-        if "to_package_path" not in data and "target" in data:
-            data["to_package_path"] = data["target"]
-        return data
-
     # Runtime links
-    from_package_ref: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
-    to_package_ref: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
+    from_package_ref: Optional[PackageMetadata] = Field(default=None)
+    to_package_ref: Optional[PackageMetadata] = Field(default=None)
