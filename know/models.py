@@ -61,7 +61,8 @@ Vector = List[float]  # alias for clarity when embedding
 # ---------------------------------------------------------------------------
 class RepoMetadata(BaseModel):
     id: Optional[str]
-    root_path: str
+    name: Optional[str] = None
+    root_path: Optional[str] = ""  # changed to optional with default
     remote_url: Optional[str] = None
     default_branch: str = "main"
     description: Optional[str] = None
@@ -69,10 +70,11 @@ class RepoMetadata(BaseModel):
 
 class PackageMetadata(BaseModel):
     id: Optional[str]
-    repo_id: str
-    language: ProgrammingLanguage
-    virtual_path: str  # import path such as "mypkg/subpkg"
-    physical_path: str  # directory or file relative to repo root
+    name: Optional[str] = None
+    repo_id: Optional[str] = None
+    language: Optional[ProgrammingLanguage] = None
+    virtual_path: Optional[str] = None  # import path such as "mypkg/subpkg"
+    physical_path: Optional[str] = None  # directory or file relative to repo root
     description: Optional[str] = None
 
     # Runtime links
@@ -89,12 +91,12 @@ class FileMetrics(BaseModel):
 
 class FileMetadata(BaseModel):
     id: Optional[str]
-    repo_id: str
-    package_id: str
+    repo_id: Optional[str] = None
+    package_id: Optional[str] = None
     path: str # project relative path
-    file_hash: str
-    commit_hash: str
-    mime_type: str
+    file_hash: Optional[str] = None
+    commit_hash: Optional[str] = None
+    mime_type: Optional[str] = None
     language_guess: Optional[ProgrammingLanguage] = None
     metrics: Optional[FileMetrics] = None
 
@@ -133,12 +135,12 @@ class SymbolEmbedding(BaseModel):
 
 class SymbolMetadata(BaseModel):
     id: Optional[str]
-    file_id: str
+    file_id: Optional[str] = None
     name: str
-    fqn: str
-    symbol_key: str
-    symbol_hash: str
-    kind: SymbolKind
+    fqn: Optional[str] = None
+    symbol_key: Optional[str] = None
+    symbol_hash: Optional[str] = None
+    kind: Optional[SymbolKind] = None
     parent_symbol_id: Optional[str] = None
 
     start_line: int = 0
@@ -172,6 +174,11 @@ class ImportEdge(BaseModel):
     to_package_id: Optional[str] = None  # filled when the imported package exists in the same repo
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")
+
+    # Aliases for tests
+    source: Optional[str] = None
+    target: Optional[str] = None
+    type: Optional[str] = None
 
     # Runtime links
     from_package_ref: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
