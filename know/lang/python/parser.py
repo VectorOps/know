@@ -1,4 +1,5 @@
 import os
+import ast
 from tree_sitter import Language, Parser
 from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
 from know.models import ProgrammingLanguage, SymbolKind, Visibility, Modifier, SymbolSignature
@@ -36,12 +37,15 @@ class PythonCodeParser(AbstractCodeParser):
             imports=[]
         )
 
+        # Extract file-level docstring
+        file_docstring = self._extract_docstring(root_node)
+
         # Initialize ParsedFile
         parsed_file = ParsedFile(
             package=package,
             path=rel_path,
             language=ProgrammingLanguage.PYTHON,
-            docstring=None,
+            docstring=file_docstring,
             symbols=[],
             imports=[]
         )
@@ -57,6 +61,36 @@ class PythonCodeParser(AbstractCodeParser):
                 self._handle_class_definition(node, parsed_file, package)
 
         return parsed_file
+
+    def _extract_docstring(self, node) -> Optional[str]:
+        """
+        Extract a Python docstring from the given Tree-sitter node if it is
+        present as the first statement in the node’s body.
+        """
+        for child in node.children:
+            # Module / class / function bodies wrap the string inside an expression_statement
+            if child.type == "expression_statement":
+                if child.children and child.children[0].type == "string":
+                    raw = child.children[0].text.decode("utf8")
+                    return self._clean_string_literal(raw)
+            # Fallback when the string is a direct child
+            if child.type == "string":
+                raw = child.text.decode("utf8")
+                return self._clean_string_literal(raw)
+            # Stop scanning once we hit a non-whitespace/comment node
+            if child.type not in ("comment",):
+                break
+        return None
+
+    @staticmethod
+    def _clean_string_literal(raw: str) -> str:
+        """
+        Safely evaluate a Python string literal to strip quotes and escapes.
+        """
+        try:
+            return ast.literal_eval(raw)
+        except Exception:
+            return raw.strip('\'"')
 
     def _handle_class_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         # Handle class definitions
@@ -74,7 +108,7 @@ class PythonCodeParser(AbstractCodeParser):
             end_byte=node.end_byte,
             visibility=Visibility.PUBLIC,
             modifiers=[],
-            docstring=None,
+            docstring=self._extract_docstring(node),
             signature=None,
             children=[]
         )
@@ -102,7 +136,7 @@ class PythonCodeParser(AbstractCodeParser):
             end_byte=node.end_byte,
             visibility=Visibility.PUBLIC,
             modifiers=[],
-            docstring=None,
+            docstring=self._extract_docstring(node),
             signature=None,
             children=[]
         )
@@ -135,7 +169,7 @@ class PythonCodeParser(AbstractCodeParser):
             end_byte=node.end_byte,
             visibility=Visibility.PUBLIC,
             modifiers=[],
-            docstring=None,
+            docstring=self._extract_docstring(node),
             signature=None,
             children=[]
         )
