@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from enum import Enum
 from typing import List, Optional, Dict, Iterable
 
@@ -179,6 +179,20 @@ class ImportEdge(BaseModel):
     source: Optional[str] = None
     target: Optional[str] = None
     type: Optional[str] = None
+
+    # ---------------------------------------------------------------------
+    # Accept "source"/"target" keys used in tests and map them to the real
+    # internal field names so validation succeeds.
+    # ---------------------------------------------------------------------
+    @model_validator(mode="before")
+    @classmethod
+    def _map_test_aliases(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        # Allow constructing the model with test-friendly aliases.
+        if "from_package_id" not in data and "source" in data:
+            data["from_package_id"] = data["source"]
+        if "to_package_path" not in data and "target" in data:
+            data["to_package_path"] = data["target"]
+        return data
 
     # Runtime links
     from_package_ref: Optional[PackageMetadata] = Field(default=None, repr=False, compare=False)
