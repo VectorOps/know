@@ -13,9 +13,7 @@ from know.data import (
     AbstractSymbolMetadataRepository,
     AbstractImportEdgeRepository,
     AbstractDataRepository,
-    AbstractSymbolEdgeRepository,
 )
-from know.models import SymbolEdge
 
 T = TypeVar("T")
 
@@ -81,11 +79,6 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     pass
 
-class InMemorySymbolEdgeRepository(InMemoryBaseRepository[SymbolEdge], AbstractSymbolEdgeRepository):
-    """In-memory store for SymbolEdge entities."""
-    pass
-
-
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
         """Initialize the in-memory data repository."""
@@ -93,7 +86,6 @@ class InMemoryDataRepository(AbstractDataRepository):
         self._package = InMemoryPackageMetadataRepository()
         self._file = InMemoryFileMetadataRepository()
         self._symbol = InMemorySymbolMetadataRepository()
-        self._symboledge = InMemorySymbolEdgeRepository()
         self._importedge = InMemoryImportEdgeRepository()
 
     @property
@@ -115,11 +107,6 @@ class InMemoryDataRepository(AbstractDataRepository):
     def symbol(self) -> AbstractSymbolMetadataRepository:
         """Access the symbol metadata repository."""
         return self._symbol
-
-    @property
-    def symboledge(self) -> AbstractSymbolEdgeRepository:
-        """Access the symbol edge repository."""
-        return self._symboledge
 
     @property
     def importedge(self) -> AbstractImportEdgeRepository:
