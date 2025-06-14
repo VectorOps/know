@@ -54,7 +54,39 @@ class PythonCodeParser(AbstractCodeParser):
             elif node.type == 'function_definition':
                 self._handle_function_definition(node, parsed_file, package)
 
+        # Traverse the syntax tree and populate Parsed structures
+        root_node = tree.root_node
+        for node in root_node.children:
+            if node.type == 'import_statement':
+                self._handle_import_statement(node, parsed_file, project)
+            elif node.type == 'function_definition':
+                self._handle_function_definition(node, parsed_file, package)
+            elif node.type == 'class_definition':
+                self._handle_class_definition(node, parsed_file, package)
+
         return parsed_file
+
+    def _handle_class_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
+        # Handle class definitions
+        class_name = node.child_by_field_name('name').text.decode('utf8')
+        symbol = ParsedSymbol(
+            name=class_name,
+            fqn=f"{package.virtual_path}.{class_name}",
+            body=node.text.decode('utf8'),
+            key=class_name,
+            hash='',
+            kind=SymbolKind.CLASS,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=Visibility.PUBLIC,
+            modifiers=[],
+            docstring=None,
+            signature=None,
+            children=[]
+        )
+        parsed_file.symbols.append(symbol)
 
     def _handle_import_statement(self, node, parsed_file: ParsedFile, project: Project):
         # Handle import statements
