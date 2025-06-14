@@ -50,9 +50,6 @@ class CodeParserRegistry:
         return cls._parsers.get(ext)
 
 
-# moved to helpers.py
-
-
 def parse_path(project):
     """
     Recursively parse all files in the project's repo root using registered parsers.
@@ -67,6 +64,7 @@ def parse_path(project):
         for filename in filenames:
             abs_path = os.path.join(dirpath, filename)
             rel_path = os.path.relpath(abs_path, repo_root)
+
             ext = os.path.splitext(filename)[1].lower()
             parser = CodeParserRegistry.get_parser(ext)
             if parser is None:
@@ -74,7 +72,7 @@ def parse_path(project):
 
             # Compute file hash
             file_hash = compute_file_hash(abs_path)
-            file_meta: Optional[FileMetadata] = file_repo.get_by_path(rel_path)
+            file_meta = file_repo.get_by_path(rel_path)
             if file_meta and file_meta.file_hash == file_hash:
                 # File unchanged, skip
                 continue
