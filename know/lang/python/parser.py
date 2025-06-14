@@ -28,19 +28,18 @@ class PythonCodeParser(AbstractCodeParser):
     def __init__(self):
         self.parser = Parser()
         self.parser.set_language(PY_LANGUAGE)
-        # Cache file lines during `parse` for fast preceding-comment lookup.
-        self._source_lines: list[str] = []
+        # Cache file bytes during `parse` for fast preceding-comment lookup.
+        self._source_bytes: bytes = b""
 
     def parse(self, project: Project, rel_path: str) -> ParsedFile:
-        # Read the file content
+        # Read the file content as bytes
         file_path = os.path.join(project.project_path, rel_path)
-        with open(file_path, 'r') as file:
-            source_code = file.read()
-        # Store lines once so helpers can access comment text cheaply.
-        self._source_lines = source_code.splitlines()
+        with open(file_path, "rb") as file:
+            source_bytes = file.read()
+        self._source_bytes = source_bytes                # cache for comment lookup
 
         # Parse the source code
-        tree = self.parser.parse(bytes(source_code, "utf8"))
+        tree = self.parser.parse(source_bytes)
         root_node = tree.root_node
 
         # Create a new ParsedPackage instance
@@ -119,34 +118,31 @@ class PythonCodeParser(AbstractCodeParser):
         The leading ``#`` and a single following space are stripped from each
         line.  A blank line or non-comment breaks the block.
         """
-        if not self._source_lines:
+        def _get_preceding_comment(self, node) -> Optional[str]:
+            """
+            Return the contiguous block of `# …` line-comments that immediately
+            precedes *node* in the same parent scope (Tree-sitter siblings).
+            """
+            comments: list[str] = []
+            sib = node.prev_sibling
+            while sib is not None:
+                # stop if more than one blank line apart
+                if node.start_point[0] - sib.end_point[0] > 2:
+                    break
+                if sib.type == "comment":
+                    raw = self._source_bytes[sib.start_byte : sib.end_byte].decode("utf8")
+                    comments.append(raw.lstrip("# ").rstrip())
+                    sib = sib.prev_sibling
+                    continue
+                # skip solitary newlines/indent tokens
+                if sib.type in ("newline",):
+                    sib = sib.prev_sibling
+                    continue
+                break
+            if comments:
+                comments.reverse()
+                return "\n".join(comments).strip() or None
             return None
-
-        comments: list[str] = []
-        i = line_no - 1
-        while i >= 0:
-            raw = self._source_lines[i]
-            stripped = raw.lstrip()
-            if stripped.startswith("#"):
-                comments.append(stripped.lstrip("# ").rstrip())
-                i -= 1
-                continue
-            if stripped == "" and comments:
-                # allow a single blank separating lines inside the comment block
-                comments.append("")
-                i -= 1
-                continue
-            break
-
-        # Trim trailing blank lines
-        while comments and comments[-1] == "":
-            comments.pop()
-
-        if comments:
-            comments.reverse()
-            joined = "\n".join(comments).strip()
-            return joined or None
-        return None
 
     # ---------------------------------------------------------------------
     # Signature helpers
