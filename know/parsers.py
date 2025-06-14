@@ -1,7 +1,10 @@
-
+import os
+import hashlib
+from typing import Dict, Type, Optional
 from abc import ABC, abstractmethod
-from know.models import FileMetadata
+from know.models import FileMetadata, SymbolMetadata
 from know.project import Project
+
 
 class AbstractCodeParser(ABC):
     """
@@ -26,11 +29,6 @@ class AbstractCodeParser(ABC):
         pass
 
 
-import os
-import hashlib
-from typing import Dict, Type, Optional
-from know.models import FileMetadata, SymbolMetadata
-
 class CodeParserRegistry:
     """
     Singleton registry mapping file extensions to CodeParser implementations.
@@ -51,6 +49,7 @@ class CodeParserRegistry:
     def get_parser(cls, ext: str) -> Optional[AbstractCodeParser]:
         return cls._parsers.get(ext)
 
+
 def compute_file_hash(abs_path: str) -> str:
     """Compute SHA256 hash of a file's contents."""
     sha256 = hashlib.sha256()
@@ -58,6 +57,7 @@ def compute_file_hash(abs_path: str) -> str:
         for chunk in iter(lambda: f.read(8192), b""):
             sha256.update(chunk)
     return sha256.hexdigest()
+
 
 def parse_path(project):
     """
