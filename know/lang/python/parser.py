@@ -322,7 +322,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=None,
             signature=None,
-            comment=self._get_preceding_comment(node.start_point[0]),
+            comment=self._get_preceding_comment(node),
             children=[],
         )
 
