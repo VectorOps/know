@@ -1,5 +1,6 @@
 import os
 import ast
+from typing import Optional
 from tree_sitter import Language, Parser
 from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
 from know.models import ProgrammingLanguage, SymbolKind, Visibility, Modifier, SymbolSignature
@@ -28,6 +29,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Parse the source code
         tree = self.parser.parse(bytes(source_code, "utf8"))
+        root_node = tree.root_node
 
         # Create a new ParsedPackage instance
         package = ParsedPackage(
@@ -51,7 +53,6 @@ class PythonCodeParser(AbstractCodeParser):
         )
 
         # Traverse the syntax tree and populate Parsed structures
-        root_node = tree.root_node
         for node in root_node.children:
             if node.type == 'import_statement':
                 self._handle_import_statement(node, parsed_file, project)
