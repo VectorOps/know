@@ -19,7 +19,7 @@ from know.data import (
 
 T = TypeVar("T")
 
-class InMemoryBaseRepository(Generic[T]):
+class InMemoryBaseRepository(Generic[T], AbstractRepoMetadataRepository):
     def __init__(self):
         """Initialize the in-memory base repository."""
         self._items: Dict[str, T] = {}
