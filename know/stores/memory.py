@@ -13,7 +13,9 @@ from know.data import (
     AbstractSymbolMetadataRepository,
     AbstractImportEdgeRepository,
     AbstractDataRepository,
+    AbstractSymbolEdgeRepository,
 )
+from know.models import SymbolEdge
 
 T = TypeVar("T")
 
@@ -76,7 +78,11 @@ class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata]):
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     pass
 
-class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge]):
+class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
+    pass
+
+class InMemorySymbolEdgeRepository(InMemoryBaseRepository[SymbolEdge], AbstractSymbolEdgeRepository):
+    """In-memory store for SymbolEdge entities."""
     pass
 
 
