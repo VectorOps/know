@@ -26,9 +26,82 @@ class AbstractCodeParser(ABC):
         pass
 
 
+import os
+import hashlib
+from typing import Dict, Type, Optional
+from know.models import FileMetadata, SymbolMetadata
+
+class CodeParserRegistry:
+    """
+    Singleton registry mapping file extensions to CodeParser implementations.
+    """
+    _instance = None
+    _parsers: Dict[str, AbstractCodeParser] = {}
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(CodeParserRegistry, cls).__new__(cls)
+        return cls._instance
+
+    @classmethod
+    def register_parser(cls, ext: str, parser: AbstractCodeParser) -> None:
+        cls._parsers[ext] = parser
+
+    @classmethod
+    def get_parser(cls, ext: str) -> Optional[AbstractCodeParser]:
+        return cls._parsers.get(ext)
+
+def compute_file_hash(abs_path: str) -> str:
+    """Compute SHA256 hash of a file's contents."""
+    sha256 = hashlib.sha256()
+    with open(abs_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
 def parse_path(project):
-    # TODO: Implement a function that recursively goes through files of the RepoMetadata
-    # For each file, call concrete implementation of the file parsing function. Create a singleton helper class that maps file extensions to concrete CodeParser implementations.
-    # Parsers will return partially filled FileMetadata with all nested structures. We will want to create or update or delete records in the database by using corresponding repositories for FileMetadata and SymbolMetadata.
-    # For FileMetadata check if file_hash has changed. If it did not - skip the file.
-    # For SymbolMetadata, check if symbol_hash has changed. If it is - we will need to reclculate various SymbolMetadata via new "populate_symbol_meta" function before saving symbols recursively.
+    """
+    Recursively parse all files in the project's repo root using registered parsers.
+    For each file, if a parser exists for its extension, parse and update FileMetadata and SymbolMetadata as needed.
+    """
+    repo = project.get_repo()
+    repo_root = repo.root_path
+    file_repo = project.data.file
+    symbol_repo = project.data.symbol
+
+    for dirpath, _, filenames in os.walk(repo_root):
+        for filename in filenames:
+            abs_path = os.path.join(dirpath, filename)
+            rel_path = os.path.relpath(abs_path, repo_root)
+            ext = os.path.splitext(filename)[1].lower()
+            parser = CodeParserRegistry.get_parser(ext)
+            if parser is None:
+                continue
+
+            # Compute file hash
+            file_hash = compute_file_hash(abs_path)
+            file_meta: Optional[FileMetadata] = file_repo.get_by_path(rel_path)
+            if file_meta and file_meta.file_hash == file_hash:
+                # File unchanged, skip
+                continue
+
+            # Parse file
+            parsed_file_meta = parser.parse(project, rel_path)
+            parsed_file_meta.file_hash = file_hash
+
+            # Create or update FileMetadata
+            if file_meta:
+                file_repo.update(file_meta.id, parsed_file_meta.dict())
+            else:
+                file_repo.create(parsed_file_meta)
+
+            # Handle SymbolMetadata
+            for symbol in parsed_file_meta.symbols:
+                existing_symbol = symbol_repo.get_by_id(symbol.id) if symbol.id else None
+                if existing_symbol and existing_symbol.symbol_hash == symbol.symbol_hash:
+                    continue  # Symbol unchanged
+                # TODO: Call populate_symbol_meta(symbol) here if/when implemented
+                if existing_symbol:
+                    symbol_repo.update(existing_symbol.id, symbol.dict())
+                else:
+                    symbol_repo.create(symbol)
