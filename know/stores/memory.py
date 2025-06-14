@@ -120,7 +120,7 @@ class InMemoryFileMetadataRepository(AbstractFileMetadataRepository):
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
         """Get a file by its project-relative path."""
         for file in self._files.values():
-            if getattr(file, "path", None) == path:
+            if file.path == path:
                 return file
         return None
 
