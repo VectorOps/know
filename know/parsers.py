@@ -39,7 +39,7 @@ class ParsedSymbol(BaseModel):
     docstring: Optional[str] = None
     signature: Optional[SymbolSignature] = None
 
-    children: List[ParsedSymbol] = Field(default_factory=list, repr=False, compare=False)
+    children: List['ParsedSymbol'] = Field(default_factory=list, repr=False, compare=False)
 
 
 class ParsedFile(BaseModel):
