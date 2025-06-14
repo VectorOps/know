@@ -228,14 +228,20 @@ class PythonCodeParser(AbstractCodeParser):
         """Return True if the given identifier looks like a constant (ALL_CAPS)."""
         return bool(cls._CONST_RE.match(name))
 
-    def _create_constant_symbol(
+    def _create_assignment_symbol(
         self,
         name: str,
         node,
         package: ParsedPackage,
         class_name: Optional[str] = None,
     ) -> ParsedSymbol:
-        """Create a ParsedSymbol instance for a constant."""
+        """
+        Create a ParsedSymbol instance for an assignment.
+
+        Constant-like ALL_CAPS identifiers are marked as CONSTANT, everything
+        else is recorded as VARIABLE.
+        """
+        kind = SymbolKind.CONSTANT if self._is_constant_name(name) else SymbolKind.VARIABLE
         fqn = (
             f"{package.virtual_path}.{class_name}.{name}"
             if class_name
@@ -247,7 +253,7 @@ class PythonCodeParser(AbstractCodeParser):
             body=node.text.decode("utf8"),
             key=name,
             hash="",
-            kind=SymbolKind.CONSTANT,
+            kind=kind,
             start_line=node.start_point[0],
             end_line=node.end_point[0],
             start_byte=node.start_byte,
@@ -267,28 +273,26 @@ class PythonCodeParser(AbstractCodeParser):
         class_symbol: Optional[ParsedSymbol] = None,
     ):
         """
-        Handle top-level or class-level assignments and capture constants.
+        Handle top-level or class-level assignments and create symbols.
 
-        An assignment whose first target identifier is written in ALL_CAPS is
-        treated as a constant definition.
+        Constant-like ALL_CAPS identifiers are marked as SymbolKind.CONSTANT,
+        everything else is SymbolKind.VARIABLE.
         """
         target_node = node.child_by_field_name("left") or node.children[0]
         if target_node.type != "identifier":
             return
         name = target_node.text.decode("utf8")
-        if not self._is_constant_name(name):
-            return
 
-        const_symbol = self._create_constant_symbol(
+        assign_symbol = self._create_assignment_symbol(
             name,
             node,
             package,
             class_symbol.name if class_symbol else None,
         )
         if class_symbol:
-            class_symbol.children.append(const_symbol)
+            class_symbol.children.append(assign_symbol)
         else:
-            parsed_file.symbols.append(const_symbol)
+            parsed_file.symbols.append(assign_symbol)
 
     def _handle_class_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         # Handle class definitions
