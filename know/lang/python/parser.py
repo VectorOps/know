@@ -28,12 +28,16 @@ class PythonCodeParser(AbstractCodeParser):
     def __init__(self):
         self.parser = Parser()
         self.parser.set_language(PY_LANGUAGE)
+        # Cache file lines during `parse` for fast preceding-comment lookup.
+        self._source_lines: list[str] = []
 
     def parse(self, project: Project, rel_path: str) -> ParsedFile:
         # Read the file content
         file_path = os.path.join(project.project_path, rel_path)
         with open(file_path, 'r') as file:
             source_code = file.read()
+        # Store lines once so helpers can access comment text cheaply.
+        self._source_lines = source_code.splitlines()
 
         # Parse the source code
         tree = self.parser.parse(bytes(source_code, "utf8"))
@@ -102,6 +106,47 @@ class PythonCodeParser(AbstractCodeParser):
             return ast.literal_eval(raw)
         except Exception:
             return raw.strip('\'"')
+
+    # ---------------------------------------------------------------------
+    # Comment helpers
+    # ---------------------------------------------------------------------
+    def _get_preceding_comment(self, line_no: int) -> Optional[str]:
+        """
+        Return the contiguous block of ``#`` line comments that immediately
+        precedes the given 0-based ``line_no`` (start of the symbol) or
+        ``None`` if no such block exists.
+
+        The leading ``#`` and a single following space are stripped from each
+        line.  A blank line or non-comment breaks the block.
+        """
+        if not self._source_lines:
+            return None
+
+        comments: list[str] = []
+        i = line_no - 1
+        while i >= 0:
+            raw = self._source_lines[i]
+            stripped = raw.lstrip()
+            if stripped.startswith("#"):
+                comments.append(stripped.lstrip("# ").rstrip())
+                i -= 1
+                continue
+            if stripped == "" and comments:
+                # allow a single blank separating lines inside the comment block
+                comments.append("")
+                i -= 1
+                continue
+            break
+
+        # Trim trailing blank lines
+        while comments and comments[-1] == "":
+            comments.pop()
+
+        if comments:
+            comments.reverse()
+            joined = "\n".join(comments).strip()
+            return joined or None
+        return None
 
     # ---------------------------------------------------------------------
     # Signature helpers
@@ -281,6 +326,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=None,
             signature=None,
+            comment=self._get_preceding_comment(node.start_point[0]),
             children=[],
         )
 
@@ -331,6 +377,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(node),
+            comment=self._get_preceding_comment(node.start_point[0]),
             children=[]
         )
         # Traverse class body to find methods and properties
@@ -361,6 +408,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(node),
+            comment=self._get_preceding_comment(node.start_point[0]),
             children=[]
         )
 
@@ -443,6 +491,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(node),
+            comment=self._get_preceding_comment(node.start_point[0]),
             children=[],
         )
         parsed_file.symbols.append(symbol)
