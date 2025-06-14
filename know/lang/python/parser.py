@@ -1,5 +1,6 @@
 import os
 import ast
+import re
 from typing import Optional
 from tree_sitter import Language, Parser
 from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
@@ -67,6 +68,8 @@ class PythonCodeParser(AbstractCodeParser):
                 self._handle_function_definition(node, parsed_file, package)
             elif node.type == 'class_definition':
                 self._handle_class_definition(node, parsed_file, package)
+            elif node.type == 'assignment':
+                self._handle_assignment(node, parsed_file, package)
 
         return parsed_file
 
@@ -215,6 +218,78 @@ class PythonCodeParser(AbstractCodeParser):
 
         return SymbolSignature(raw=raw_sig)
 
+    # ---------------------------------------------------------------------
+    # Constant helpers
+    # ---------------------------------------------------------------------
+    _CONST_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+    @classmethod
+    def _is_constant_name(cls, name: str) -> bool:
+        """Return True if the given identifier looks like a constant (ALL_CAPS)."""
+        return bool(cls._CONST_RE.match(name))
+
+    def _create_constant_symbol(
+        self,
+        name: str,
+        node,
+        package: ParsedPackage,
+        class_name: Optional[str] = None,
+    ) -> ParsedSymbol:
+        """Create a ParsedSymbol instance for a constant."""
+        fqn = (
+            f"{package.virtual_path}.{class_name}.{name}"
+            if class_name
+            else f"{package.virtual_path}.{name}"
+        )
+        return ParsedSymbol(
+            name=name,
+            fqn=fqn,
+            body=node.text.decode("utf8"),
+            key=name,
+            hash="",
+            kind=SymbolKind.CONSTANT,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=Visibility.PUBLIC,
+            modifiers=[],
+            docstring=None,
+            signature=None,
+            children=[],
+        )
+
+    def _handle_assignment(
+        self,
+        node,
+        parsed_file: ParsedFile,
+        package: ParsedPackage,
+        class_symbol: Optional[ParsedSymbol] = None,
+    ):
+        """
+        Handle top-level or class-level assignments and capture constants.
+
+        An assignment whose first target identifier is written in ALL_CAPS is
+        treated as a constant definition.
+        """
+        target_node = node.child_by_field_name("left") or node.children[0]
+        if target_node.type != "identifier":
+            return
+        name = target_node.text.decode("utf8")
+        if not self._is_constant_name(name):
+            return
+
+        const_symbol = self._create_constant_symbol(
+            name,
+            node,
+            package,
+            class_symbol.name if class_symbol else None,
+        )
+        if class_symbol:
+            class_symbol.children.append(const_symbol)
+        else:
+            parsed_file.symbols.append(const_symbol)
+
     def _handle_class_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         # Handle class definitions
         class_name = node.child_by_field_name('name').text.decode('utf8')
@@ -240,6 +315,8 @@ class PythonCodeParser(AbstractCodeParser):
             if child.type == 'function_definition':
                 method_symbol = self._create_function_symbol(child, package, class_name)
                 symbol.children.append(method_symbol)
+            elif child.type == 'assignment':
+                self._handle_assignment(child, parsed_file, package, symbol)
 
         parsed_file.symbols.append(symbol)
 
