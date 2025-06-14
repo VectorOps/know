@@ -77,6 +77,11 @@ class AbstractFileMetadataRepository(ABC):
     def delete(self, file_id: str) -> bool:
         pass
 
+    @abstractmethod
+    def get_by_path(self, path: str) -> Optional[FileMetadata]:
+        """Get a file by its project-relative path."""
+        pass
+
 class AbstractSymbolMetadataRepository(ABC):
     @abstractmethod
     def get_by_id(self, symbol_id: str) -> Optional[SymbolMetadata]:

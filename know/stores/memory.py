@@ -117,6 +117,13 @@ class InMemoryFileMetadataRepository(AbstractFileMetadataRepository):
         """Delete a file by its ID."""
         return self._files.pop(file_id, None) is not None
 
+    def get_by_path(self, path: str) -> Optional[FileMetadata]:
+        """Get a file by its project-relative path."""
+        for file in self._files.values():
+            if getattr(file, "path", None) == path:
+                return file
+        return None
+
 class InMemorySymbolMetadataRepository(AbstractSymbolMetadataRepository):
     def __init__(self):
         """Initialize the in-memory symbol metadata repository."""
