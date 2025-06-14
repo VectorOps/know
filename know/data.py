@@ -15,7 +15,7 @@ class AbstractRepoMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_ids(self, repo_ids: list[str]) -> list[RepoMetadata]:
+    def get_list_by_ids(self, repo_ids: list[str]) -> list[RepoMetadata]:
         pass
 
     @abstractmethod
@@ -36,7 +36,7 @@ class AbstractPackageMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_ids(self, package_ids: list[str]) -> list[PackageMetadata]:
+    def get_list_by_ids(self, package_ids: list[str]) -> list[PackageMetadata]:
         pass
 
     @abstractmethod
@@ -57,7 +57,7 @@ class AbstractFileMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_ids(self, file_ids: list[str]) -> list[FileMetadata]:
+    def get_list_by_ids(self, file_ids: list[str]) -> list[FileMetadata]:
         pass
 
     @abstractmethod
@@ -78,7 +78,7 @@ class AbstractSymbolMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
+    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         pass
 
     @abstractmethod
@@ -99,7 +99,7 @@ class AbstractSymbolEdgeRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_ids(self, edge_ids: list[str]) -> list[SymbolEdge]:
+    def get_list_by_ids(self, edge_ids: list[str]) -> list[SymbolEdge]:
         pass
 
     @abstractmethod
@@ -120,7 +120,7 @@ class AbstractImportEdgeRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_ids(self, edge_ids: list[str]) -> list[ImportEdge]:
+    def get_list_by_ids(self, edge_ids: list[str]) -> list[ImportEdge]:
         pass
 
     @abstractmethod
