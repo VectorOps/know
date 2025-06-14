@@ -11,7 +11,11 @@ from know.models import (
 
 class AbstractRepoMetadataRepository(ABC):
     @abstractmethod
-    def get_one(self, repo_id: str) -> Optional[RepoMetadata]:
+    def get_by_id(self, repo_id: str) -> Optional[RepoMetadata]:
+        pass
+
+    @abstractmethod
+    def get_by_ids(self, repo_ids: list[str]) -> list[RepoMetadata]:
         pass
 
     @abstractmethod
@@ -28,7 +32,11 @@ class AbstractRepoMetadataRepository(ABC):
 
 class AbstractPackageMetadataRepository(ABC):
     @abstractmethod
-    def get_one(self, package_id: str) -> Optional[PackageMetadata]:
+    def get_by_id(self, package_id: str) -> Optional[PackageMetadata]:
+        pass
+
+    @abstractmethod
+    def get_by_ids(self, package_ids: list[str]) -> list[PackageMetadata]:
         pass
 
     @abstractmethod
@@ -45,7 +53,11 @@ class AbstractPackageMetadataRepository(ABC):
 
 class AbstractFileMetadataRepository(ABC):
     @abstractmethod
-    def get_one(self, file_id: str) -> Optional[FileMetadata]:
+    def get_by_id(self, file_id: str) -> Optional[FileMetadata]:
+        pass
+
+    @abstractmethod
+    def get_by_ids(self, file_ids: list[str]) -> list[FileMetadata]:
         pass
 
     @abstractmethod
@@ -62,7 +74,11 @@ class AbstractFileMetadataRepository(ABC):
 
 class AbstractSymbolMetadataRepository(ABC):
     @abstractmethod
-    def get_one(self, symbol_id: str) -> Optional[SymbolMetadata]:
+    def get_by_id(self, symbol_id: str) -> Optional[SymbolMetadata]:
+        pass
+
+    @abstractmethod
+    def get_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         pass
 
     @abstractmethod
@@ -79,7 +95,11 @@ class AbstractSymbolMetadataRepository(ABC):
 
 class AbstractSymbolEdgeRepository(ABC):
     @abstractmethod
-    def get_one(self, edge_id: str) -> Optional[SymbolEdge]:
+    def get_by_id(self, edge_id: str) -> Optional[SymbolEdge]:
+        pass
+
+    @abstractmethod
+    def get_by_ids(self, edge_ids: list[str]) -> list[SymbolEdge]:
         pass
 
     @abstractmethod
@@ -96,7 +116,11 @@ class AbstractSymbolEdgeRepository(ABC):
 
 class AbstractImportEdgeRepository(ABC):
     @abstractmethod
-    def get_one(self, edge_id: str) -> Optional[ImportEdge]:
+    def get_by_id(self, edge_id: str) -> Optional[ImportEdge]:
+        pass
+
+    @abstractmethod
+    def get_by_ids(self, edge_ids: list[str]) -> list[ImportEdge]:
         pass
 
     @abstractmethod
