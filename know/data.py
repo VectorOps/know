@@ -1,4 +1,5 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
+from abc import ABC, abstractmethod
 from know.models import (
     RepoMetadata,
     PackageMetadata,
@@ -8,160 +9,135 @@ from know.models import (
     ImportEdge,
 )
 
-# In-memory storage for demonstration purposes.
-# In a real implementation, this would be replaced with persistent storage.
-_repo_store: Dict[str, RepoMetadata] = {}
-_package_store: Dict[str, PackageMetadata] = {}
-_file_store: Dict[str, FileMetadata] = {}
-_symbol_store: Dict[str, SymbolMetadata] = {}
-_symboledge_store: Dict[str, SymbolEdge] = {}
-_importedge_store: Dict[str, ImportEdge] = {}
+class AbstractRepoMetadataRepository(ABC):
+    @abstractmethod
+    def get_one(self, repo_id: str) -> Optional[RepoMetadata]:
+        pass
 
-class RepoMetadataRepository:
-    @staticmethod
-    def get_one(repo_id: str) -> Optional[RepoMetadata]:
-        return _repo_store.get(repo_id)
+    @abstractmethod
+    def create(self, repo: RepoMetadata) -> RepoMetadata:
+        pass
 
-    @staticmethod
-    def create(repo: RepoMetadata) -> RepoMetadata:
-        _repo_store[repo.id] = repo
-        return repo
+    @abstractmethod
+    def update(self, repo_id: str, data: Dict[str, Any]) -> Optional[RepoMetadata]:
+        pass
 
-    @staticmethod
-    def update(repo_id: str, data: Dict[str, Any]) -> Optional[RepoMetadata]:
-        repo = _repo_store.get(repo_id)
-        if not repo:
-            return None
-        updated = repo.copy(update=data)
-        _repo_store[repo_id] = updated
-        return updated
+    @abstractmethod
+    def delete(self, repo_id: str) -> bool:
+        pass
 
-    @staticmethod
-    def delete(repo_id: str) -> bool:
-        return _repo_store.pop(repo_id, None) is not None
+class AbstractPackageMetadataRepository(ABC):
+    @abstractmethod
+    def get_one(self, package_id: str) -> Optional[PackageMetadata]:
+        pass
 
-class PackageMetadataRepository:
-    @staticmethod
-    def get_one(package_id: str) -> Optional[PackageMetadata]:
-        return _package_store.get(package_id)
+    @abstractmethod
+    def create(self, pkg: PackageMetadata) -> PackageMetadata:
+        pass
 
-    @staticmethod
-    def create(pkg: PackageMetadata) -> PackageMetadata:
-        _package_store[pkg.id] = pkg
-        return pkg
+    @abstractmethod
+    def update(self, package_id: str, data: Dict[str, Any]) -> Optional[PackageMetadata]:
+        pass
 
-    @staticmethod
-    def update(package_id: str, data: Dict[str, Any]) -> Optional[PackageMetadata]:
-        pkg = _package_store.get(package_id)
-        if not pkg:
-            return None
-        updated = pkg.copy(update=data)
-        _package_store[package_id] = updated
-        return updated
+    @abstractmethod
+    def delete(self, package_id: str) -> bool:
+        pass
 
-    @staticmethod
-    def delete(package_id: str) -> bool:
-        return _package_store.pop(package_id, None) is not None
+class AbstractFileMetadataRepository(ABC):
+    @abstractmethod
+    def get_one(self, file_id: str) -> Optional[FileMetadata]:
+        pass
 
-class FileMetadataRepository:
-    @staticmethod
-    def get_one(file_id: str) -> Optional[FileMetadata]:
-        return _file_store.get(file_id)
+    @abstractmethod
+    def create(self, file: FileMetadata) -> FileMetadata:
+        pass
 
-    @staticmethod
-    def create(file: FileMetadata) -> FileMetadata:
-        _file_store[file.id] = file
-        return file
+    @abstractmethod
+    def update(self, file_id: str, data: Dict[str, Any]) -> Optional[FileMetadata]:
+        pass
 
-    @staticmethod
-    def update(file_id: str, data: Dict[str, Any]) -> Optional[FileMetadata]:
-        file = _file_store.get(file_id)
-        if not file:
-            return None
-        updated = file.copy(update=data)
-        _file_store[file_id] = updated
-        return updated
+    @abstractmethod
+    def delete(self, file_id: str) -> bool:
+        pass
 
-    @staticmethod
-    def delete(file_id: str) -> bool:
-        return _file_store.pop(file_id, None) is not None
+class AbstractSymbolMetadataRepository(ABC):
+    @abstractmethod
+    def get_one(self, symbol_id: str) -> Optional[SymbolMetadata]:
+        pass
 
-class SymbolMetadataRepository:
-    @staticmethod
-    def get_one(symbol_id: str) -> Optional[SymbolMetadata]:
-        return _symbol_store.get(symbol_id)
+    @abstractmethod
+    def create(self, symbol: SymbolMetadata) -> SymbolMetadata:
+        pass
 
-    @staticmethod
-    def create(symbol: SymbolMetadata) -> SymbolMetadata:
-        _symbol_store[symbol.id] = symbol
-        return symbol
+    @abstractmethod
+    def update(self, symbol_id: str, data: Dict[str, Any]) -> Optional[SymbolMetadata]:
+        pass
 
-    @staticmethod
-    def update(symbol_id: str, data: Dict[str, Any]) -> Optional[SymbolMetadata]:
-        symbol = _symbol_store.get(symbol_id)
-        if not symbol:
-            return None
-        updated = symbol.copy(update=data)
-        _symbol_store[symbol_id] = updated
-        return updated
+    @abstractmethod
+    def delete(self, symbol_id: str) -> bool:
+        pass
 
-    @staticmethod
-    def delete(symbol_id: str) -> bool:
-        return _symbol_store.pop(symbol_id, None) is not None
+class AbstractSymbolEdgeRepository(ABC):
+    @abstractmethod
+    def get_one(self, edge_id: str) -> Optional[SymbolEdge]:
+        pass
 
-class SymbolEdgeRepository:
-    @staticmethod
-    def get_one(edge_id: str) -> Optional[SymbolEdge]:
-        return _symboledge_store.get(edge_id)
+    @abstractmethod
+    def create(self, edge: SymbolEdge) -> SymbolEdge:
+        pass
 
-    @staticmethod
-    def create(edge: SymbolEdge) -> SymbolEdge:
-        _symboledge_store[edge.id] = edge
-        return edge
+    @abstractmethod
+    def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[SymbolEdge]:
+        pass
 
-    @staticmethod
-    def update(edge_id: str, data: Dict[str, Any]) -> Optional[SymbolEdge]:
-        edge = _symboledge_store.get(edge_id)
-        if not edge:
-            return None
-        for k, v in data.items():
-            setattr(edge, k, v)
-        _symboledge_store[edge_id] = edge
-        return edge
+    @abstractmethod
+    def delete(self, edge_id: str) -> bool:
+        pass
 
-    @staticmethod
-    def delete(edge_id: str) -> bool:
-        return _symboledge_store.pop(edge_id, None) is not None
+class AbstractImportEdgeRepository(ABC):
+    @abstractmethod
+    def get_one(self, edge_id: str) -> Optional[ImportEdge]:
+        pass
 
-class ImportEdgeRepository:
-    @staticmethod
-    def get_one(edge_id: str) -> Optional[ImportEdge]:
-        return _importedge_store.get(edge_id)
+    @abstractmethod
+    def create(self, edge: ImportEdge) -> ImportEdge:
+        pass
 
-    @staticmethod
-    def create(edge: ImportEdge) -> ImportEdge:
-        _importedge_store[edge.id] = edge
-        return edge
+    @abstractmethod
+    def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[ImportEdge]:
+        pass
 
-    @staticmethod
-    def update(edge_id: str, data: Dict[str, Any]) -> Optional[ImportEdge]:
-        edge = _importedge_store.get(edge_id)
-        if not edge:
-            return None
-        for k, v in data.items():
-            setattr(edge, k, v)
-        _importedge_store[edge_id] = edge
-        return edge
+    @abstractmethod
+    def delete(self, edge_id: str) -> bool:
+        pass
 
-    @staticmethod
-    def delete(edge_id: str) -> bool:
-        return _importedge_store.pop(edge_id, None) is not None
+class AbstractDataRepository(ABC):
+    @property
+    @abstractmethod
+    def repo(self) -> AbstractRepoMetadataRepository:
+        pass
 
-# Optionally, a facade for all repositories
-class DataRepository:
-    repo = RepoMetadataRepository
-    package = PackageMetadataRepository
-    file = FileMetadataRepository
-    symbol = SymbolMetadataRepository
-    symboledge = SymbolEdgeRepository
-    importedge = ImportEdgeRepository
+    @property
+    @abstractmethod
+    def package(self) -> AbstractPackageMetadataRepository:
+        pass
+
+    @property
+    @abstractmethod
+    def file(self) -> AbstractFileMetadataRepository:
+        pass
+
+    @property
+    @abstractmethod
+    def symbol(self) -> AbstractSymbolMetadataRepository:
+        pass
+
+    @property
+    @abstractmethod
+    def symboledge(self) -> AbstractSymbolEdgeRepository:
+        pass
+
+    @property
+    @abstractmethod
+    def importedge(self) -> AbstractImportEdgeRepository:
+        pass
