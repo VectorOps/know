@@ -86,7 +86,34 @@ class PythonCodeParser(AbstractCodeParser):
             signature=None,
             children=[]
         )
+        # Traverse class body to find methods and properties
+        for child in node.children:
+            if child.type == 'function_definition':
+                method_symbol = self._create_function_symbol(child, package, class_name)
+                symbol.children.append(method_symbol)
+
         parsed_file.symbols.append(symbol)
+
+    def _create_function_symbol(self, node, package: ParsedPackage, class_name: str) -> ParsedSymbol:
+        # Create a symbol for a function or method
+        method_name = node.child_by_field_name('name').text.decode('utf8')
+        return ParsedSymbol(
+            name=method_name,
+            fqn=f"{package.virtual_path}.{class_name}.{method_name}",
+            body=node.text.decode('utf8'),
+            key=method_name,
+            hash='',
+            kind=SymbolKind.METHOD,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=Visibility.PUBLIC,
+            modifiers=[],
+            docstring=None,
+            signature=None,
+            children=[]
+        )
 
     def _handle_import_statement(self, node, parsed_file: ParsedFile, project: Project):
         # Handle import statements
