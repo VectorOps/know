@@ -77,6 +77,16 @@ class PythonCodeParser(AbstractCodeParser):
         Extract a Python docstring from the given Tree-sitter node if it is
         present as the first statement in the node’s body.
         """
+        # When we are handed a *definition* node, the real statements (and thus
+        # the docstring) are placed inside its indented `block` child.  Drill
+        # down to that block first, then continue with the usual scan logic.
+        if node.type in ("function_definition", "class_definition"):
+            body_node = next((c for c in node.children if c.type == "block"), None)
+            if body_node is not None:
+                return self._extract_docstring(body_node)
+            # No block means no body → no docstring
+            return None
+
         for child in node.children:
             # Module / class / function bodies wrap the string inside an expression_statement
             if child.type == "expression_statement":
@@ -393,6 +403,7 @@ class PythonCodeParser(AbstractCodeParser):
         )
         # Traverse class body to find methods and properties
         for child in node.children:
+            print(child)
             if child.type == 'function_definition':
                 method_symbol = self._create_function_symbol(child, package, class_name)
                 symbol.children.append(method_symbol)
@@ -528,41 +539,9 @@ class PythonCodeParser(AbstractCodeParser):
         if inner is None:  # corrupt / unexpected – skip
             return
 
-        # ----- decorated *function* ----------------------------------------
         if inner.type == "function_definition":
-            func_name = inner.child_by_field_name("name").text.decode("utf8")
-            fqn = (
-                f"{package.virtual_path}.{class_symbol.name}.{func_name}"
-                if class_symbol
-                else f"{package.virtual_path}.{func_name}"
-            )
-            symbol = ParsedSymbol(
-                name=func_name,
-                fqn=fqn,
-                body=node.text.decode("utf8"),          # includes decorators
-                key=func_name,
-                hash="",
-                kind=SymbolKind.METHOD if class_symbol else SymbolKind.FUNCTION,
-                start_line=node.start_point[0],
-                end_line=node.end_point[0],
-                start_byte=node.start_byte,
-                end_byte=node.end_byte,
-                visibility=self._infer_visibility(func_name),
-                modifiers=[],
-                docstring=self._extract_docstring(inner),
-                signature=self._build_function_signature(node),  # pass wrapper -> decorators kept
-                comment=self._get_preceding_comment(node),
-                children=[],
-            )
-            if class_symbol:
-                class_symbol.children.append(symbol)
-            else:
-                parsed_file.symbols.append(symbol)
-
-        # ----- decorated *class* -------------------------------------------
+            self._handle_function_definition(inner, parsed_file, package)
         elif inner.type == "class_definition":
-            # Re-use existing class handler; decorators won’t appear in the
-            # signature for now, but the class will be indexed.
             self._handle_class_definition(inner, parsed_file, package)
 
     def _is_local_import(self, import_path: str, project: Project) -> bool:
