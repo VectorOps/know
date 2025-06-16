@@ -2,8 +2,8 @@ import os
 import ast
 import re
 from typing import Optional
-from pathlib import Path
-from tree_sitter import Language, Parser
+from tree_sitter import Parser
+from tree_sitter_languages import get_language
 from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
 from know.models import (
     ProgrammingLanguage,
@@ -17,17 +17,7 @@ from know.project import Project
 from know.parsers import CodeParserRegistry
 
 
-# Load the Tree-sitter Python parser
-LIB_PATH = Path(__file__).with_suffix("")  \
-            .parent / "build" / "my-languages.so"
-
-if not LIB_PATH.exists():                       # ← build only once
-    Language.build_library(
-        str(LIB_PATH),
-        ['vendor/tree-sitter-python']
-    )
-
-PY_LANGUAGE = Language(str(LIB_PATH), 'python')
+PY_LANGUAGE = get_language("python")
 
 class PythonCodeParser(AbstractCodeParser):
     def __init__(self):
