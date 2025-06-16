@@ -416,8 +416,7 @@ class PythonCodeParser(AbstractCodeParser):
                 inner = next((c for c in child.children
                               if c.type == 'function_definition'), None)
                 if inner is not None:
-                    # Pass the decorated_definition node, not just the inner function
-                    method_symbol = self._create_function_symbol(child, package, class_name)
+                    method_symbol = self._create_function_symbol(inner, package, class_name)
                     symbol.children.append(method_symbol)
 
             elif child.type == 'assignment':
@@ -540,24 +539,22 @@ class PythonCodeParser(AbstractCodeParser):
     ):
         """
         Handle a `decorated_definition` wrapper.
-        Create the symbol from the outer node so decorators are included in the body/signature.
+        Unwrap the enclosed `function_definition` or `class_definition`
+        while keeping the outer node’s text (so decorators are preserved
+        in `body` and available to `_build_function_signature`).
         """
         # Find the real definition wrapped by the decorators
         inner = next(
             (c for c in node.children if c.type in ("function_definition", "class_definition")),
             None,
         )
-        if inner is None:
+        if inner is None:  # corrupt / unexpected – skip
             return
 
         if inner.type == "function_definition":
-            symbol = self._create_function_symbol(node, package, class_symbol.name if class_symbol else None)
-            if class_symbol:
-                class_symbol.children.append(symbol)
-            else:
-                parsed_file.symbols.append(symbol)
+            self._handle_function_definition(inner, parsed_file, package)
         elif inner.type == "class_definition":
-            self._handle_class_definition(node, parsed_file, package)
+            self._handle_class_definition(inner, parsed_file, package)
 
     def _is_local_import(self, import_path: str, project: Project) -> bool:
         # Determine if the import is local by checking the project structure
