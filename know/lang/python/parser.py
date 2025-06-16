@@ -2,8 +2,8 @@ import os
 import ast
 import re
 from typing import Optional
-from tree_sitter import Parser
-from tree_sitter_languages import get_language
+from tree_sitter import Parser, Language
+import tree_sitter_python as tspython
 from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
 from know.models import (
     ProgrammingLanguage,
@@ -17,12 +17,12 @@ from know.project import Project
 from know.parsers import CodeParserRegistry
 
 
-PY_LANGUAGE = get_language("python")
+PY_LANGUAGE = Language(tspython.language())
+
 
 class PythonCodeParser(AbstractCodeParser):
     def __init__(self):
-        self.parser = Parser()
-        self.parser.set_language(PY_LANGUAGE)
+        self.parser = Parser(PY_LANGUAGE)
         # Cache file bytes during `parse` for fast preceding-comment lookup.
         self._source_bytes: bytes = b""
 
@@ -60,6 +60,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
+            print(node)
             if node.type == 'import_statement':
                 self._handle_import_statement(node, parsed_file, project)
             elif node.type == 'function_definition':
