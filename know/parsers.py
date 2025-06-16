@@ -18,7 +18,7 @@ class ParsedPackage(BaseModel):
     language: ProgrammingLanguage
     path: str # relative path to package
     virtual_path: str # syntax specific virtual path to package
-    imports: List[ParsedImportEdge] = Field(default_factory=list, repr=False, compare=False)
+    imports: List[ParsedImportEdge] = Field(default_factory=list)
 
 
 class ParsedSymbol(BaseModel):
@@ -39,7 +39,7 @@ class ParsedSymbol(BaseModel):
     docstring: Optional[str] = None
     signature: Optional[SymbolSignature] = None
 
-    children: List['ParsedSymbol'] = Field(default_factory=list, repr=False, compare=False)
+    children: List['ParsedSymbol'] = Field(default_factory=list)
 
 
 class ParsedFile(BaseModel):
@@ -48,9 +48,9 @@ class ParsedFile(BaseModel):
     language: ProgrammingLanguage
     docstring: Optional[str] = None
 
-    symbols: List[ParsedSymbol] = Field(default_factory=list, repr=False, compare=False)
+    symbols: List[ParsedSymbol] = Field(default_factory=list)
     # TODO: Populate with links to packages
-    imports: List[ParsedImportEdge] = Field(default_factory=list, repr=False, compare=False)
+    imports: List[ParsedImportEdge] = Field(default_factory=list)
 
 
 # Abstract base parser class

@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 from types import SimpleNamespace
+from devtools import pprint
 
 from know.lang.python.parser import PythonCodeParser
 from know.models import ProgrammingLanguage, SymbolKind
@@ -30,6 +31,7 @@ def test_python_parser_on_simple_file():
     parser       = PythonCodeParser()
 
     parsed_file = parser.parse(project, "simple.py")
+    pprint(parsed_file)
 
     # ------------------------------------------------------------------ #
     # Basic assertions
