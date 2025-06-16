@@ -412,11 +412,16 @@ class PythonCodeParser(AbstractCodeParser):
                 method_symbol = self._create_function_symbol(child, package, class_name)
                 symbol.children.append(method_symbol)
 
-            elif child.type == 'decorated_definition':
+            elif child.type == "decorated_definition":
                 inner = next((c for c in child.children
                               if c.type == 'function_definition'), None)
                 if inner is not None:
+                    # build the symbol from the inner node (for name, etc.)
                     method_symbol = self._create_function_symbol(inner, package, class_name)
+                    # but make sure decorators are kept in raw fields
+                    outer_text = child.text.decode("utf8")
+                    method_symbol.body = outer_text
+                    method_symbol.signature = self._build_function_signature(child)
                     symbol.children.append(method_symbol)
 
             elif child.type == 'assignment':
@@ -538,23 +543,31 @@ class PythonCodeParser(AbstractCodeParser):
         class_symbol: Optional[ParsedSymbol] = None,
     ):
         """
-        Handle a `decorated_definition` wrapper.
-        Unwrap the enclosed `function_definition` or `class_definition`
-        while keeping the outer node’s text (so decorators are preserved
-        in `body` and available to `_build_function_signature`).
+        Create symbols for a `decorated_definition`, keeping decorators
+        in `body` and `signature.raw`.
         """
-        # Find the real definition wrapped by the decorators
-        inner = next(
-            (c for c in node.children if c.type in ("function_definition", "class_definition")),
-            None,
-        )
-        if inner is None:  # corrupt / unexpected – skip
+        inner = next((c for c in node.children
+                      if c.type in ("function_definition", "class_definition")), None)
+        if inner is None:
             return
 
         if inner.type == "function_definition":
-            self._handle_function_definition(inner, parsed_file, package)
+            # Use inner node to fetch name etc.
+            symbol = self._create_function_symbol(inner, package,
+                                                  class_symbol.name if class_symbol else None)
+            # Overwrite body / signature with outer (decorated) text
+            outer_text = node.text.decode("utf8")
+            symbol.body = outer_text
+            symbol.signature = self._build_function_signature(node)
+
+            if class_symbol:
+                class_symbol.children.append(symbol)
+            else:
+                parsed_file.symbols.append(symbol)
+
         elif inner.type == "class_definition":
-            self._handle_class_definition(inner, parsed_file, package)
+            # Re-use existing handler but guarantee it receives the *outer* node
+            self._handle_class_definition(node, parsed_file, package)
 
     def _is_local_import(self, import_path: str, project: Project) -> bool:
         # Determine if the import is local by checking the project structure
