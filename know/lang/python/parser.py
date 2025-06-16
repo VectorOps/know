@@ -203,6 +203,49 @@ class PythonCodeParser(AbstractCodeParser):
                 return code[def_idx:i].rstrip()
         return code[def_idx:].rstrip()
 
+    # ---------------------------------------------------------------------
+    # Class-signature raw text helper
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def _extract_class_signature_raw(code: str) -> str:
+        """Return the `class …` header (incl. base list) without the trailing colon."""
+        cls_idx: int = code.find("class ")
+        if cls_idx == -1:
+            return code
+        depth = 0
+        for i in range(cls_idx, len(code)):
+            ch = code[i]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            elif ch == ":" and depth == 0:
+                return code[cls_idx:i].rstrip()
+        return code[cls_idx:].rstrip()
+
+    def _build_class_signature(self, node) -> SymbolSignature:
+        """Build a SymbolSignature for a class definition (not its constructor)."""
+        code = node.text.decode("utf8")
+        raw_sig = self._extract_class_signature_raw(code)
+
+        try:
+            cls_ast = ast.parse(code).body[0]
+            if isinstance(cls_ast, ast.ClassDef):
+                return SymbolSignature(
+                    raw=raw_sig,
+                    parameters=[],
+                    return_type=None,
+                    decorators=[
+                        self._expr_to_str(dec) for dec in cls_ast.decorator_list
+                    ]
+                    if cls_ast.decorator_list
+                    else [],
+                )
+        except Exception:
+            pass
+
+        return SymbolSignature(raw=raw_sig)
+
     def _build_function_signature(self, node) -> SymbolSignature:
         """
         Build a SymbolSignature object for the given function / method node.
@@ -398,7 +441,7 @@ class PythonCodeParser(AbstractCodeParser):
             visibility=self._infer_visibility(class_name),
             modifiers=[],
             docstring=self._extract_docstring(node),
-            signature=self._build_function_signature(node),
+            signature=self._build_class_signature(node),
             comment=self._get_preceding_comment(node),
             children=[]
         )
