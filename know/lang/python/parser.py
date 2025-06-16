@@ -60,10 +60,9 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
+            print(node)
             if node.type in ('import_statement', 'import_from_statement'):
                 self._handle_import_statement(node, parsed_file, project)
-            elif node.type == 'decorated_definition':
-                self._handle_decorated_definition(node, parsed_file, package)
             elif node.type == 'function_definition':
                 self._handle_function_definition(node, parsed_file, package)
             elif node.type == 'class_definition':
@@ -366,9 +365,7 @@ class PythonCodeParser(AbstractCodeParser):
         )
         # Traverse class body to find methods and properties
         for child in node.children:
-            if child.type == 'decorated_definition':
-                self._handle_decorated_definition(child, parsed_file, package, symbol)
-            elif child.type == 'function_definition':
+            if child.type == 'function_definition':
                 method_symbol = self._create_function_symbol(child, package, class_name)
                 symbol.children.append(method_symbol)
             elif child.type == 'assignment':
@@ -398,6 +395,90 @@ class PythonCodeParser(AbstractCodeParser):
             children=[]
         )
 
+    def _handle_import_statement(self, node, parsed_file: ParsedFile, project: Project):
+        """
+        Handle `import` / `from … import …` statements and populate alias & dot flags.
+
+        alias:
+            - For `import pkg as alias`      → "alias"
+            - For `from pkg import name as a`→ "a"
+            - Otherwise                     → None
+
+        dot:
+            - True  when the statement is a relative import (leading dots)
+            - False otherwise
+        """
+        raw_stmt = node.text.decode("utf8")
+
+        # Defaults
+        import_path: str | None = None
+        alias: str | None = None
+        dot: bool = False
+
+        # Parse with `ast` for a robust extraction
+        try:
+            stmt_node = ast.parse(raw_stmt).body[0]  # type: ignore[index]
+            if isinstance(stmt_node, ast.Import):
+                if stmt_node.names:
+                    first_alias = stmt_node.names[0]
+                    import_path = first_alias.name
+                    alias = first_alias.asname
+            elif isinstance(stmt_node, ast.ImportFrom):
+                level_prefix = "." * stmt_node.level if stmt_node.level else ""
+                module_part = stmt_node.module or ""
+                import_path = f"{level_prefix}{module_part}"
+                dot = stmt_node.level > 0
+                if stmt_node.names:
+                    alias = stmt_node.names[0].asname
+        except Exception:
+            # Fallback to raw text on parse error
+            import_path = raw_stmt
+
+        # Determine locality (strip leading dots for filesystem check)
+        is_local = self._is_local_import(import_path.lstrip(".") if import_path else "", project)
+
+        import_edge = ParsedImportEdge(
+            path=import_path if is_local else None,
+            virtual_path=import_path or raw_stmt,
+            alias=alias,
+            dot=dot,
+            external=not is_local,
+        )
+        parsed_file.imports.append(import_edge)
+
+    def _handle_function_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
+        """
+        Handle top-level function definitions.
+
+        The function name is decoded once and reused to minimise repeated
+        byte-to-str conversions, slightly improving performance for large files.
+        """
+        func_name_node = node.child_by_field_name("name")
+        if func_name_node is None:
+            # Malformed node – skip to remain resilient to parser errors.
+            return
+        func_name = func_name_node.text.decode("utf8")
+
+        symbol = ParsedSymbol(
+            name=func_name,
+            fqn=f"{package.virtual_path}.{func_name}",
+            body=node.text.decode("utf8"),
+            key=func_name,
+            hash="",
+            kind=SymbolKind.FUNCTION,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=self._infer_visibility(func_name),
+            modifiers=[],
+            docstring=self._extract_docstring(node),
+            signature=self._build_function_signature(node),
+            comment=self._get_preceding_comment(node),
+            children=[],
+        )
+        parsed_file.symbols.append(symbol)
+
     def _handle_decorated_definition(
         self,
         node,
@@ -406,7 +487,7 @@ class PythonCodeParser(AbstractCodeParser):
         class_symbol: Optional[ParsedSymbol] = None,
     ):
         """
-        Handle a `decorated_definition` wrapper.  
+        Handle a `decorated_definition` wrapper.
         Unwrap the enclosed `function_definition` or `class_definition`
         while keeping the outer node’s text (so decorators are preserved
         in `body` and available to `_build_function_signature`).
@@ -455,39 +536,6 @@ class PythonCodeParser(AbstractCodeParser):
             # Re-use existing class handler; decorators won’t appear in the
             # signature for now, but the class will be indexed.
             self._handle_class_definition(inner, parsed_file, package)
-
-    def _handle_function_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
-        """
-        Handle top-level function definitions.
-
-        The function name is decoded once and reused to minimise repeated
-        byte-to-str conversions, slightly improving performance for large files.
-        """
-        func_name_node = node.child_by_field_name("name")
-        if func_name_node is None:
-            # Malformed node – skip to remain resilient to parser errors.
-            return
-        func_name = func_name_node.text.decode("utf8")
-
-        symbol = ParsedSymbol(
-            name=func_name,
-            fqn=f"{package.virtual_path}.{func_name}",
-            body=node.text.decode("utf8"),
-            key=func_name,
-            hash="",
-            kind=SymbolKind.FUNCTION,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
-            visibility=self._infer_visibility(func_name),
-            modifiers=[],
-            docstring=self._extract_docstring(node),
-            signature=self._build_function_signature(node),
-            comment=self._get_preceding_comment(node),
-            children=[],
-        )
-        parsed_file.symbols.append(symbol)
 
     def _is_local_import(self, import_path: str, project: Project) -> bool:
         # Determine if the import is local by checking the project structure
