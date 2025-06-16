@@ -60,7 +60,6 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
-            print(node)
             if node.type in ('import_statement', 'import_from_statement'):
                 self._handle_import_statement(node, parsed_file, project)
             elif node.type == 'function_definition':
@@ -69,6 +68,8 @@ class PythonCodeParser(AbstractCodeParser):
                 self._handle_class_definition(node, parsed_file, package)
             elif node.type == 'assignment':
                 self._handle_assignment(node, parsed_file, package)
+            elif node.type == 'decorated_definition':
+                self._handle_decorated_definition(node, parsed_file, package)
 
         return parsed_file
 
@@ -402,11 +403,22 @@ class PythonCodeParser(AbstractCodeParser):
             children=[]
         )
         # Traverse class body to find methods and properties
-        for child in node.children:
-            print(child)
+        # Tree-sitter puts all class statements inside the single “block” child.
+        block = next((c for c in node.children if c.type == "block"), None)
+        body_children = block.children if block is not None else node.children
+
+        for child in body_children:
             if child.type == 'function_definition':
                 method_symbol = self._create_function_symbol(child, package, class_name)
                 symbol.children.append(method_symbol)
+
+            elif child.type == 'decorated_definition':
+                inner = next((c for c in child.children
+                              if c.type == 'function_definition'), None)
+                if inner is not None:
+                    method_symbol = self._create_function_symbol(inner, package, class_name)
+                    symbol.children.append(method_symbol)
+
             elif child.type == 'assignment':
                 self._handle_assignment(child, parsed_file, package, symbol)
 
