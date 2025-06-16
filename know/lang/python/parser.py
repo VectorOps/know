@@ -164,12 +164,40 @@ class PythonCodeParser(AbstractCodeParser):
             except Exception:
                 yield None
 
+    # ---------------------------------------------------------------------
+    # Function-signature raw text helper
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def _extract_signature_raw(code: str) -> str:
+        """
+        Return the full `def …` signature, including parameters and optional
+        return-annotation, but *without* the trailing colon.
+
+        Works even when type annotations contain colons (e.g. ``c: str``) by
+        only stopping at a colon whose parenthesis-depth is zero.
+        """
+        def_idx: int = code.find("def ")
+        if def_idx == -1:
+            return code            # fallback – shouldn’t happen
+
+        depth = 0
+        for i in range(def_idx, len(code)):
+            ch = code[i]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            elif ch == ":" and depth == 0:
+                # reached the colon that terminates the signature
+                return code[def_idx:i].rstrip()
+        return code[def_idx:].rstrip()
+
     def _build_function_signature(self, node) -> SymbolSignature:
         """
         Build a SymbolSignature object for the given function / method node.
         """
         code = node.text.decode("utf8")
-        raw_sig = code.split(":", 1)[0]
+        raw_sig = self._extract_signature_raw(code)
 
         try:
             fn_ast = ast.parse(code).body[0]
