@@ -65,7 +65,7 @@ class PythonCodeParser(AbstractCodeParser):
         for node in root_node.children:
             # print(node)
             if node.type in ('import_statement', 'import_from_statement'):
-                self._handle_import_statement(node, parsed_file, project)
+                self._handle_import_statement(node, parsed_file, package, project)
             elif node.type == 'function_definition':
                 self._handle_function_definition(node, parsed_file, package)
             elif node.type == 'class_definition':
@@ -521,7 +521,7 @@ class PythonCodeParser(AbstractCodeParser):
             children=[]
         )
 
-    def _handle_import_statement(self, node, parsed_file: ParsedFile, project: Project):
+    def _handle_import_statement(self, node, parsed_file: ParsedFile, package: ParsedPackage, project: Project):
         """
         Handle `import` / `from … import …` statements and populate alias & dot flags.
 
@@ -571,6 +571,7 @@ class PythonCodeParser(AbstractCodeParser):
             external=not is_local,
         )
         parsed_file.imports.append(import_edge)
+        package.imports.append(import_edge)
 
     def _handle_function_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         """
