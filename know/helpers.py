@@ -10,8 +10,16 @@ def compute_file_hash(abs_path: str) -> str:
     return sha256.hexdigest()
 
 
-def compute_symbol_hash(symbol: str) -> str:
+from typing import Union
+
+def compute_symbol_hash(symbol: Union[str, bytes]) -> str:
+    """
+    Return the SHA-256 hex-digest of *symbol*.
+    Accepts either ``str`` (automatically UTF-8-encoded) or raw ``bytes``.
+    """
     sha256 = hashlib.sha256()
+    if isinstance(symbol, str):
+        symbol = symbol.encode("utf-8")
     sha256.update(symbol)
     return sha256.hexdigest()
 

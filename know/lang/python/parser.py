@@ -18,6 +18,7 @@ from know.models import (
 from know.project import Project
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger
+from know.helpers import compute_file_hash, compute_symbol_hash
 
 
 PY_LANGUAGE = Language(tspython.language())
@@ -35,6 +36,11 @@ class PythonCodeParser(AbstractCodeParser):
         with open(file_path, "rb") as file:
             source_bytes = file.read()
         self._source_bytes = source_bytes                # cache for comment lookup
+
+        # ------------------------------------------------------------------
+        # File hash
+        # ------------------------------------------------------------------
+        file_hash: str = compute_file_hash(file_path)
 
         # Parse the source code
         tree = self.parser.parse(source_bytes)
@@ -57,6 +63,7 @@ class PythonCodeParser(AbstractCodeParser):
             path=rel_path,
             language=ProgrammingLanguage.PYTHON,
             docstring=file_docstring,
+            file_hash=file_hash,
             symbols=[],
             imports=[]
         )
@@ -408,7 +415,7 @@ class PythonCodeParser(AbstractCodeParser):
             fqn=fqn,
             body=node.text.decode("utf8"),
             key=name,
-            hash="",
+            hash=compute_symbol_hash(node.text),
             kind=kind,
             start_line=node.start_point[0],
             end_line=node.end_point[0],
@@ -462,7 +469,7 @@ class PythonCodeParser(AbstractCodeParser):
             fqn=f"{package.virtual_path}.{class_name}",
             body=wrapper.text.decode('utf8'),
             key=class_name,
-            hash='',
+            hash=compute_symbol_hash(wrapper.text),
             kind=SymbolKind.CLASS,
             start_line=wrapper.start_point[0],
             end_line=wrapper.end_point[0],
@@ -512,7 +519,7 @@ class PythonCodeParser(AbstractCodeParser):
             fqn=f"{package.virtual_path}.{class_name}.{method_name}",
             body=wrapper.text.decode('utf8'),
             key=method_name,
-            hash='',
+            hash=compute_symbol_hash(wrapper.text),
             kind=SymbolKind.METHOD,
             start_line=wrapper.start_point[0],
             end_line=wrapper.end_point[0],
@@ -605,7 +612,7 @@ class PythonCodeParser(AbstractCodeParser):
             fqn=f"{package.virtual_path}.{func_name}",
             body=wrapper.text.decode("utf8"),
             key=func_name,
-            hash="",
+            hash=compute_symbol_hash(wrapper.text),
             kind=SymbolKind.FUNCTION,
             start_line=wrapper.start_point[0],
             end_line=wrapper.end_point[0],

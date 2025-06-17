@@ -48,6 +48,8 @@ class ParsedFile(BaseModel):
     language: ProgrammingLanguage
     docstring: Optional[str] = None
 
+    file_hash: Optional[str] = None      # NEW – SHA-256 of full file
+
     symbols: List[ParsedSymbol] = Field(default_factory=list)
     # TODO: Populate with links to packages
     imports: List[ParsedImportEdge] = Field(default_factory=list)
