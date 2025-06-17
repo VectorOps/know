@@ -31,7 +31,8 @@ def test_python_parser_on_simple_file():
     parser       = PythonCodeParser()
 
     parsed_file = parser.parse(project, "simple.py")
-    #pprint(parsed_file)
+    pprint(parsed_file)
+    raise
 
     # ------------------------------------------------------------------ #
     # Basic assertions

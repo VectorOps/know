@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from os import getcwd
 import foobar
-from .foobuz import abc
+from .foobuz import abc as d
 
 # Comment
 CONST = "abc"
