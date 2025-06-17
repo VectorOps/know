@@ -48,8 +48,54 @@ dictConfig(LOGGING_CONFIG)
 # --------------------------------------------------------------------------- #
 logger: logging.Logger = logging.getLogger("know")
 
+class KnowLogger:
+    """
+    Class-based logging interface for the ``know`` library.
+    """
+    _logger: logging.Logger = logger
+
+    # ------------------------------------------------------------------ #
+    # Standard logging wrappers
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def debug(cls, msg: str, *args, **kwargs) -> None:
+        cls._logger.debug(msg, *args, **kwargs)
+
+    @classmethod
+    def info(cls, msg: str, *args, **kwargs) -> None:
+        cls._logger.info(msg, *args, **kwargs)
+
+    @classmethod
+    def warning(cls, msg: str, *args, **kwargs) -> None:
+        cls._logger.warning(msg, *args, **kwargs)
+
+    @classmethod
+    def error(cls, msg: str, *args, **kwargs) -> None:
+        cls._logger.error(msg, *args, **kwargs)
+
+    @classmethod
+    def critical(cls, msg: str, *args, **kwargs) -> None:
+        cls._logger.critical(msg, *args, **kwargs)
+
+    # ------------------------------------------------------------------ #
+    # Structured event logging
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def log_event(
+        cls,
+        event_type: str,
+        data: Optional[Dict[str, Any]] = None,
+        *,
+        level: int = logging.INFO,
+        log: logging.Logger | None = None,
+    ) -> None:
+        payload: Dict[str, Any] = {"event": event_type}
+        if data:
+            payload["data"] = data
+        (log or cls._logger).log(level, json.dumps(payload, default=str))
+
 # --------------------------------------------------------------------------- #
-# Structured logging helper
+# Backwards-compat functional helper (can be removed later)
 # --------------------------------------------------------------------------- #
 def log_event(
     event_type: str,
@@ -58,17 +104,5 @@ def log_event(
     level: int = logging.INFO,
     log: logging.Logger | None = None,
 ) -> None:
-    """
-    Emit a structured log entry.
-
-    Args:
-        event_type:  Short identifier of the event, e.g. ``"FILE_PARSED"``.
-        data:        Optional JSON-serialisable payload with event details.
-        level:       Standard ``logging`` level (default: ``logging.INFO``).
-        log:         Custom logger to use; defaults to the shared ``know`` logger.
-    """
-    payload: Dict[str, Any] = {"event": event_type}
-    if data:
-        payload["data"] = data
-
-    (log or logger).log(level, json.dumps(payload, default=str))
+    """Deprecated – use ``KnowLogger.log_event`` instead."""
+    KnowLogger.log_event(event_type, data, level=level, log=log)

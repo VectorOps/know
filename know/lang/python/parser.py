@@ -16,7 +16,7 @@ from know.models import (
 )
 from know.project import Project
 from know.parsers import CodeParserRegistry
-from know.logger import log_event
+from know.logger import KnowLogger
 
 
 PY_LANGUAGE = Language(tspython.language())
@@ -85,7 +85,7 @@ class PythonCodeParser(AbstractCodeParser):
             # NEW: structured debug log for unknown / unhandled node types
             # -----------------------------------------------------------------
             else:
-                log_event(
+                KnowLogger.log_event(
                     "UNKNOWN_NODE",
                     {
                         "path": rel_path,
