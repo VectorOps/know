@@ -2,6 +2,7 @@ import os
 import ast
 import re
 import logging
+from pathlib import Path
 from typing import Optional
 from tree_sitter import Parser, Language
 import tree_sitter_python as tspython
@@ -634,6 +635,38 @@ class PythonCodeParser(AbstractCodeParser):
             self._handle_class_definition(inner, parsed_file, package)
 
     def _is_local_import(self, import_path: str, project: Project) -> bool:
-        # Determine if the import is local by checking the project structure
-        potential_path = os.path.join(project.project_path, import_path.replace('.', '/') + '.py')
-        return os.path.exists(potential_path)
+        """
+        Heuristically decide whether *import_path* refers to a module / package
+        that lives inside the current project directory.
+
+        – Walks every dotted-path prefix and looks for
+          • <prefix>.py  |  <prefix>.pyc  |  <prefix>.so  |  <prefix>.pyd
+          • <prefix>/__init__.py
+        – Ignores matches that reside inside typical in-project virtual-env
+          directories ('.venv', 'venv', 'env', '.env').
+        – Returns True on the first match, False otherwise.
+        """
+        if not import_path:
+            return False
+
+        project_root = Path(project.project_path).resolve()
+        skip_dirs = {".venv", "venv", "env", ".env"}
+        parts = import_path.split(".")
+
+        for idx in range(1, len(parts) + 1):
+            candidate_dir = project_root.joinpath(*parts[:idx])
+
+            # Skip anything inside an in-project virtual-environment
+            if any(seg in skip_dirs for seg in candidate_dir.parts):
+                continue
+
+            # Package directory with __init__.py
+            if candidate_dir.is_dir() and (candidate_dir / "__init__.py").exists():
+                return True
+
+            # Single file module (source, byte-code, compiled extension)
+            for suffix in (".py", ".pyc", ".so", ".pyd"):
+                if candidate_dir.with_suffix(suffix).exists():
+                    return True
+
+        return False
