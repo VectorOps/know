@@ -78,12 +78,7 @@ class PythonCodeParser(AbstractCodeParser):
                 if assign_child is not None:
                     self._handle_assignment(assign_child, parsed_file, package)
             elif node.type == "comment":
-                # TODO: Log comments?
                 pass
-
-            # -----------------------------------------------------------------
-            # NEW: structured debug log for unknown / unhandled node types
-            # -----------------------------------------------------------------
             else:
                 KnowLogger.log_event(
                     "UNKNOWN_NODE",

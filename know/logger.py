@@ -93,16 +93,3 @@ class KnowLogger:
         if data:
             payload["data"] = data
         (log or cls._logger).log(level, json.dumps(payload, default=str))
-
-# --------------------------------------------------------------------------- #
-# Backwards-compat functional helper (can be removed later)
-# --------------------------------------------------------------------------- #
-def log_event(
-    event_type: str,
-    data: Optional[Dict[str, Any]] = None,
-    *,
-    level: int = logging.INFO,
-    log: logging.Logger | None = None,
-) -> None:
-    """Deprecated – use ``KnowLogger.log_event`` instead."""
-    KnowLogger.log_event(event_type, data, level=level, log=log)
