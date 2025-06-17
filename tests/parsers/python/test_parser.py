@@ -46,6 +46,21 @@ def test_python_parser_on_simple_file():
     assert len(parsed_file.imports) == 3
 
     # ------------------------------------------------------------------ #
+    # Local-package (relative) import                                    #
+    # ------------------------------------------------------------------ #
+    # Ensure that the relative import  `from .foobuz import abc`
+    # is recognised as *local* (external == False) and that its path is
+    # preserved.
+    rel_import = next(
+        (imp for imp in parsed_file.imports if imp.virtual_path.startswith(".foobuz")),
+        None,
+    )
+    assert rel_import is not None, "Relative import '.foobuz' not found"
+    assert rel_import.external is False          # must be classified local
+    assert rel_import.dot is True                # leading dot present
+    assert rel_import.path == ".foobuz"          # stored canonical path
+
+    # ------------------------------------------------------------------ #
     # Top-level symbols
     # ------------------------------------------------------------------ #
     # Expected symbols: CONST, fn, _foo, decorated, double_decorated, Test, Foobar
