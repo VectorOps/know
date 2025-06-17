@@ -6,6 +6,7 @@ This document outlines the coding conventions and best practices for Python appl
 
 ## Table of Contents
 
+- [Conventions](#conventions)
 - [Project Structure](#project-structure)
 - [Type Hints](#type-hints)
 - [API Development with FastAPI](#api-development-with-fastapi)
@@ -15,6 +16,12 @@ This document outlines the coding conventions and best practices for Python appl
 - [Scalability Considerations](#scalability-considerations)
 - [Testing](#testing)
 
+
+## Conventions
+
+1. If you want to run a tool, such as test - always prefix the tool with `uv run` as project is managed by uv package manager. For example, instead of `pytest` run `uv run pytest`.
+
+2. If you want to install package using `pip`, use `uv pip`. For example, instead of `pip install foo`, run `uv pip install foo`.
 
 ## Project Structure
 
