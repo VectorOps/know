@@ -35,7 +35,7 @@ LOGGING_CONFIG: Dict[str, Any] = {
         # Library-wide root logger
         "know": {
             "handlers": ["console"],
-            "level": "INFO",
+            "level": "DEBUG",
             "propagate": False,
         },
     },
