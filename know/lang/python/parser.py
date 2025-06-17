@@ -93,6 +93,11 @@ class PythonCodeParser(AbstractCodeParser):
                     level=logging.DEBUG,
                 )
 
+        # ------------------------------------------------------------------
+        # Sync package-level imports with file-level imports
+        # ------------------------------------------------------------------
+        package.imports = list(parsed_file.imports)
+        
         return parsed_file
 
     def _extract_docstring(self, node) -> Optional[str]:
