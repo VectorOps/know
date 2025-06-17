@@ -568,8 +568,15 @@ class PythonCodeParser(AbstractCodeParser):
         # Determine locality (strip leading dots for filesystem check)
         is_local = self._is_local_import(import_path.lstrip(".") if import_path else "", project)
 
+        resolved_path: Optional[str] = None
+        if is_local:
+            # strip leading dots (relative-import syntax) before lookup
+            resolved_path = self._resolve_local_import_path(
+                import_path.lstrip(".") if import_path else "", project
+            )
+
         import_edge = ParsedImportEdge(
-            path=import_path if is_local else None,
+            path=resolved_path,
             virtual_path=import_path or raw_stmt,
             alias=alias,
             dot=dot,
@@ -638,6 +645,38 @@ class PythonCodeParser(AbstractCodeParser):
             self._handle_function_definition(inner, parsed_file, package)
         elif inner.type == "class_definition":
             self._handle_class_definition(inner, parsed_file, package)
+
+    def _resolve_local_import_path(self, import_path: str, project: Project) -> Optional[str]:
+        """
+        Return the project-relative file / directory path that backs *import_path*
+        (e.g.  "pkg.mod" → "pkg/mod.py" or "pkg/__init__.py").
+        Returns None when no in-project artefact could be located.
+        """
+        if not import_path:
+            return None
+
+        project_root = Path(project.project_path).resolve()
+        skip_dirs = {".venv", "venv", "env", ".env"}
+        parts = import_path.split(".")
+
+        for idx in range(1, len(parts) + 1):
+            candidate = project_root.joinpath(*parts[:idx])
+
+            # ignore anything living inside a venv
+            if any(seg in skip_dirs for seg in candidate.parts):
+                continue
+
+            # package directory
+            if candidate.is_dir() and (candidate / "__init__.py").exists():
+                return candidate.relative_to(project_root).as_posix()
+
+            # single-file module – try the common suffixes
+            for suffix in (".py", ".pyc", ".so", ".pyd"):
+                file_candidate = candidate.with_suffix(suffix)
+                if file_candidate.exists():
+                    return file_candidate.relative_to(project_root).as_posix()
+
+        return None
 
     def _is_local_import(self, import_path: str, project: Project) -> bool:
         """
