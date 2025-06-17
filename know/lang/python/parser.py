@@ -1,6 +1,7 @@
 import os
 import ast
 import re
+import logging
 from typing import Optional
 from tree_sitter import Parser, Language
 import tree_sitter_python as tspython
@@ -15,6 +16,7 @@ from know.models import (
 )
 from know.project import Project
 from know.parsers import CodeParserRegistry
+from know.logger import log_event
 
 
 PY_LANGUAGE = Language(tspython.language())
@@ -75,6 +77,22 @@ class PythonCodeParser(AbstractCodeParser):
                 assign_child = next((c for c in node.children if c.type == "assignment"), None)
                 if assign_child is not None:
                     self._handle_assignment(assign_child, parsed_file, package)
+
+            # -----------------------------------------------------------------
+            # NEW: structured debug log for unknown / unhandled node types
+            # -----------------------------------------------------------------
+            else:
+                log_event(
+                    "UNKNOWN_NODE",
+                    {
+                        "path": rel_path,
+                        "type": node.type,
+                        "line": node.start_point[0] + 1,      # convert to 1-based line
+                        "byte_offset": node.start_byte,
+                        "raw": node.text.decode("utf8", errors="replace"),
+                    },
+                    level=logging.DEBUG,
+                )
 
         return parsed_file
 
