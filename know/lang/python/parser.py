@@ -60,7 +60,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
-            print(node)
+            # print(node)
             if node.type in ('import_statement', 'import_from_statement'):
                 self._handle_import_statement(node, parsed_file, project)
             elif node.type == 'function_definition':
@@ -71,6 +71,10 @@ class PythonCodeParser(AbstractCodeParser):
                 self._handle_assignment(node, parsed_file, package)
             elif node.type == 'decorated_definition':
                 self._handle_decorated_definition(node, parsed_file, package)
+            elif node.type == "expression_statement":
+                assign_child = next((c for c in node.children if c.type == "assignment"), None)
+                if assign_child is not None:
+                    self._handle_assignment(assign_child, parsed_file, package)
 
         return parsed_file
 
@@ -410,7 +414,7 @@ class PythonCodeParser(AbstractCodeParser):
         everything else is SymbolKind.VARIABLE.
         """
         target_node = node.child_by_field_name("left") or node.children[0]
-        print(node, target_node)
+        # print(node, target_node)
         if target_node.type != "identifier":
             return
         name = target_node.text.decode("utf8")
@@ -468,6 +472,11 @@ class PythonCodeParser(AbstractCodeParser):
 
             elif child.type == 'assignment':
                 self._handle_assignment(child, parsed_file, package, symbol)
+
+            elif child.type == "expression_statement":
+                assign_node = next((c for c in child.children if c.type == "assignment"), None)
+                if assign_node is not None:
+                    self._handle_assignment(assign_node, parsed_file, package, symbol)
 
         parsed_file.symbols.append(symbol)
 
