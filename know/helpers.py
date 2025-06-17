@@ -1,4 +1,5 @@
 import hashlib
+from typing import Union
 
 
 def compute_file_hash(abs_path: str) -> str:
@@ -10,7 +11,6 @@ def compute_file_hash(abs_path: str) -> str:
     return sha256.hexdigest()
 
 
-from typing import Union
 
 def compute_symbol_hash(symbol: Union[str, bytes]) -> str:
     """
