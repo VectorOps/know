@@ -425,23 +425,25 @@ class PythonCodeParser(AbstractCodeParser):
             parsed_file.symbols.append(assign_symbol)
 
     def _handle_class_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
+        # Utility: determine decorated wrapper
+        wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Handle class definitions
         class_name = node.child_by_field_name('name').text.decode('utf8')
         symbol = ParsedSymbol(
             name=class_name,
             fqn=f"{package.virtual_path}.{class_name}",
-            body=node.text.decode('utf8'),
+            body=wrapper.text.decode('utf8'),
             key=class_name,
             hash='',
             kind=SymbolKind.CLASS,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
+            start_line=wrapper.start_point[0],
+            end_line=wrapper.end_point[0],
+            start_byte=wrapper.start_byte,
+            end_byte=wrapper.end_byte,
             visibility=self._infer_visibility(class_name),
             modifiers=[],
             docstring=self._extract_docstring(node),
-            signature=self._build_class_signature(node),
+            signature=self._build_class_signature(wrapper),
             comment=self._get_preceding_comment(node),
             children=[]
         )
@@ -468,23 +470,25 @@ class PythonCodeParser(AbstractCodeParser):
         parsed_file.symbols.append(symbol)
 
     def _create_function_symbol(self, node, package: ParsedPackage, class_name: str) -> ParsedSymbol:
+        # Utility: determine decorated wrapper
+        wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
         method_name = node.child_by_field_name('name').text.decode('utf8')
         return ParsedSymbol(
             name=method_name,
             fqn=f"{package.virtual_path}.{class_name}.{method_name}",
-            body=node.text.decode('utf8'),
+            body=wrapper.text.decode('utf8'),
             key=method_name,
             hash='',
             kind=SymbolKind.METHOD,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
+            start_line=wrapper.start_point[0],
+            end_line=wrapper.end_point[0],
+            start_byte=wrapper.start_byte,
+            end_byte=wrapper.end_byte,
             visibility=self._infer_visibility(method_name),
             modifiers=[],
             docstring=self._extract_docstring(node),
-            signature=self._build_function_signature(node),
+            signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
             children=[]
         )
@@ -547,6 +551,9 @@ class PythonCodeParser(AbstractCodeParser):
         The function name is decoded once and reused to minimise repeated
         byte-to-str conversions, slightly improving performance for large files.
         """
+        # Utility: determine decorated wrapper
+        wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
+
         func_name_node = node.child_by_field_name("name")
         if func_name_node is None:
             # Malformed node – skip to remain resilient to parser errors.
@@ -556,18 +563,18 @@ class PythonCodeParser(AbstractCodeParser):
         symbol = ParsedSymbol(
             name=func_name,
             fqn=f"{package.virtual_path}.{func_name}",
-            body=node.text.decode("utf8"),
+            body=wrapper.text.decode("utf8"),
             key=func_name,
             hash="",
             kind=SymbolKind.FUNCTION,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
+            start_line=wrapper.start_point[0],
+            end_line=wrapper.end_point[0],
+            start_byte=wrapper.start_byte,
+            end_byte=wrapper.end_byte,
             visibility=self._infer_visibility(func_name),
             modifiers=[],
             docstring=self._extract_docstring(node),
-            signature=self._build_function_signature(node),
+            signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
             children=[],
         )
