@@ -60,6 +60,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
+            print(node)
             if node.type in ('import_statement', 'import_from_statement'):
                 self._handle_import_statement(node, parsed_file, project)
             elif node.type == 'function_definition':
@@ -409,6 +410,7 @@ class PythonCodeParser(AbstractCodeParser):
         everything else is SymbolKind.VARIABLE.
         """
         target_node = node.child_by_field_name("left") or node.children[0]
+        print(node, target_node)
         if target_node.type != "identifier":
             return
         name = target_node.text.decode("utf8")
