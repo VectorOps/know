@@ -646,71 +646,47 @@ class PythonCodeParser(AbstractCodeParser):
         elif inner.type == "class_definition":
             self._handle_class_definition(inner, parsed_file, package)
 
-    def _resolve_local_import_path(self, import_path: str, project: Project) -> Optional[str]:
+    # ------------------------------------------------------------------ #
+    # Module-resolution helper                                           #
+    # ------------------------------------------------------------------ #
+    _VENV_DIRS: set[str] = {".venv", "venv", "env", ".env"}
+    _MODULE_SUFFIXES: tuple[str, ...] = (".py", ".pyc", ".so", ".pyd")
+
+    def _locate_module_path(self, import_path: str, project: Project) -> Optional[Path]:
         """
-        Return the project-relative file / directory path that backs *import_path*
-        (e.g.  "pkg.mod" → "pkg/mod.py" or "pkg/__init__.py").
-        Returns None when no in-project artefact could be located.
+        Return the *absolute* Path of the first package / module that matches
+        *import_path* inside the given *project*.  None when no artefact found.
         """
         if not import_path:
             return None
 
         project_root = Path(project.project_path).resolve()
-        skip_dirs = {".venv", "venv", "env", ".env"}
         parts = import_path.split(".")
 
         for idx in range(1, len(parts) + 1):
             candidate = project_root.joinpath(*parts[:idx])
 
-            # ignore anything living inside a venv
-            if any(seg in skip_dirs for seg in candidate.parts):
+            # ignore anything inside a (local) virtual-env
+            if any(seg in self._VENV_DIRS for seg in candidate.parts):
                 continue
 
             # package directory
             if candidate.is_dir() and (candidate / "__init__.py").exists():
-                return candidate.relative_to(project_root).as_posix()
+                return candidate
 
-            # single-file module – try the common suffixes
-            for suffix in (".py", ".pyc", ".so", ".pyd"):
+            # single-file module
+            for suffix in self._MODULE_SUFFIXES:
                 file_candidate = candidate.with_suffix(suffix)
                 if file_candidate.exists():
-                    return file_candidate.relative_to(project_root).as_posix()
-
+                    return file_candidate
         return None
 
-    def _is_local_import(self, import_path: str, project: Project) -> bool:
-        """
-        Heuristically decide whether *import_path* refers to a module / package
-        that lives inside the current project directory.
-
-        – Walks every dotted-path prefix and looks for
-          • <prefix>.py  |  <prefix>.pyc  |  <prefix>.so  |  <prefix>.pyd
-          • <prefix>/__init__.py
-        – Ignores matches that reside inside typical in-project virtual-env
-          directories ('.venv', 'venv', 'env', '.env').
-        – Returns True on the first match, False otherwise.
-        """
-        if not import_path:
-            return False
-
+    def _resolve_local_import_path(self, import_path: str, project: Project) -> Optional[str]:
+        path_obj = self._locate_module_path(import_path, project)
+        if path_obj is None:
+            return None
         project_root = Path(project.project_path).resolve()
-        skip_dirs = {".venv", "venv", "env", ".env"}
-        parts = import_path.split(".")
+        return path_obj.relative_to(project_root).as_posix()
 
-        for idx in range(1, len(parts) + 1):
-            candidate_dir = project_root.joinpath(*parts[:idx])
-
-            # Skip anything inside an in-project virtual-environment
-            if any(seg in skip_dirs for seg in candidate_dir.parts):
-                continue
-
-            # Package directory with __init__.py
-            if candidate_dir.is_dir() and (candidate_dir / "__init__.py").exists():
-                return True
-
-            # Single file module (source, byte-code, compiled extension)
-            for suffix in (".py", ".pyc", ".so", ".pyd"):
-                if candidate_dir.with_suffix(suffix).exists():
-                    return True
-
-        return False
+    def _is_local_import(self, import_path: str, project: Project) -> bool:
+        return self._locate_module_path(import_path, project) is not None
