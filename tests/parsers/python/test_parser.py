@@ -48,8 +48,8 @@ def test_python_parser_on_simple_file():
     # ------------------------------------------------------------------ #
     # Top-level symbols
     # ------------------------------------------------------------------ #
-    # Expected symbols: CONST, fn, foo, decorated, Test
-    assert len(parsed_file.symbols) == 5
+    # Expected symbols: CONST, fn, _foo, decorated, double_decorated, Test, Foobar
+    assert len(parsed_file.symbols) == 7  # CONST, fn, _foo, decorated, double_decorated, Test, Foobar
     top_level = {sym.name: sym for sym in parsed_file.symbols}
 
     # Constant
@@ -57,7 +57,7 @@ def test_python_parser_on_simple_file():
     assert top_level["CONST"].kind == SymbolKind.CONSTANT
 
     # Functions
-    for fn_name in ("fn", "foo", "decorated"):
+    for fn_name in ("fn", "_foo", "decorated", "double_decorated"):
         assert fn_name in top_level
         assert top_level[fn_name].kind == SymbolKind.FUNCTION
 
@@ -68,8 +68,11 @@ def test_python_parser_on_simple_file():
     child_names = {c.name for c in test_cls.children}
     assert child_names == {"ABC", "__init__", "method", "get"}
 
+    assert "Foobar" in top_level
+    assert top_level["Foobar"].kind == SymbolKind.CLASS
+
     # ------------------------------------------------------------------ #
     # Docstrings
     # ------------------------------------------------------------------ #
     assert top_level["fn"].docstring == "docstring!"
-    assert "Multiline" in (top_level["foo"].docstring or "")
+    assert "Multiline" in (top_level["_foo"].docstring or "")
