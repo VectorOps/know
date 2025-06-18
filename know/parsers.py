@@ -49,6 +49,7 @@ class ParsedFile(BaseModel):
     docstring: Optional[str] = None
 
     file_hash: Optional[str] = None      # NEW – SHA-256 of full file
+    last_updated: Optional[float] = None   # filesystem modification time
 
     symbols: List[ParsedSymbol] = Field(default_factory=list)
     # TODO: Populate with links to packages

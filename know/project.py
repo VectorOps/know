@@ -56,6 +56,7 @@ def scan_project_directory(project: "Project") -> None:
 
     for path in root.rglob("*"):
         rel_path = path.relative_to(root)
+        mod_time: float = path.stat().st_mtime
 
         # Skip ignored directories
         if any(part in IGNORED_DIRS for part in rel_path.parts):
@@ -73,11 +74,10 @@ def scan_project_directory(project: "Project") -> None:
             logger.debug(f"No parser registered for {rel_path}")
             continue
 
-        # ── Hash-based change detection ───────────────────────────────────────
-        file_hash: str = compute_file_hash(str(path))
+        # ── mtime-based change detection ───────────────────────────────────────
         file_repo = project.data_repository.file
         existing_meta = file_repo.get_by_path(str(rel_path))
-        if existing_meta and existing_meta.file_hash == file_hash:
+        if existing_meta and existing_meta.last_updated == mod_time:
             logger.debug(f"Unchanged file {rel_path}, skipping parse.")
             continue
 
@@ -87,9 +87,10 @@ def scan_project_directory(project: "Project") -> None:
             logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
 
         # ── Persist current hash for future scans ─────────────────────────────
+        file_hash: str = compute_file_hash(str(path))
         meta = file_repo.get_by_path(str(rel_path))
         if meta:
-            file_repo.update(meta.id, {"file_hash": file_hash})
+            file_repo.update(meta.id, {"file_hash": file_hash, "last_updated": mod_time})
         else:
             file_repo.create(
                 FileMetadata(
@@ -97,6 +98,7 @@ def scan_project_directory(project: "Project") -> None:
                     repo_id=project.get_repo().id,
                     path=str(rel_path),
                     file_hash=file_hash,
+                    last_updated=mod_time,
                 )
             )
 
@@ -146,6 +148,7 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
             {
                 "package_id": pkg_meta.id,
                 "file_hash": parsed_file.file_hash,
+                "last_updated": parsed_file.last_updated,
                 "language_guess": parsed_file.language,
             },
         )
@@ -156,6 +159,7 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
             package_id=pkg_meta.id,
             path=parsed_file.path,
             file_hash=parsed_file.file_hash,
+            last_updated=parsed_file.last_updated,
             language_guess=parsed_file.language,
         )
         file_repo.create(file_meta)

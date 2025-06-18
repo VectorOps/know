@@ -33,6 +33,7 @@ class PythonCodeParser(AbstractCodeParser):
     def parse(self, project: Project, rel_path: str) -> ParsedFile:
         # Read the file content as bytes
         file_path = os.path.join(project.project_path, rel_path)
+        mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
             source_bytes = file.read()
         self._source_bytes = source_bytes                # cache for comment lookup
@@ -40,7 +41,6 @@ class PythonCodeParser(AbstractCodeParser):
         # ------------------------------------------------------------------
         # File hash
         # ------------------------------------------------------------------
-        file_hash: str = compute_file_hash(file_path)
 
         # Parse the source code
         tree = self.parser.parse(source_bytes)
@@ -63,7 +63,8 @@ class PythonCodeParser(AbstractCodeParser):
             path=rel_path,
             language=ProgrammingLanguage.PYTHON,
             docstring=file_docstring,
-            file_hash=file_hash,
+            file_hash=compute_file_hash(file_path),
+            last_updated=mtime,
             symbols=[],
             imports=[]
         )
