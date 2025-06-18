@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 from pathlib import Path
 from typing import Union
 
@@ -59,3 +60,11 @@ def parse_gitignore(root_path: str | Path) -> list[str]:
             if line and not line.startswith("#"):
                 patterns.append(line)
     return patterns
+
+
+def generate_id() -> str:
+    """
+    Return a new unique identifier as a string.
+    Centralised helper so code never calls ``uuid.uuid4`` directly.
+    """
+    return str(uuid.uuid4())

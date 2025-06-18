@@ -1,4 +1,3 @@
-import uuid
 from pathlib import Path
 from typing import Optional
 from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge
@@ -6,7 +5,7 @@ from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.logger import KnowLogger as logger
-from know.helpers import parse_gitignore, compute_file_hash
+from know.helpers import parse_gitignore, compute_file_hash, generate_id
 
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
 
@@ -94,7 +93,7 @@ def scan_project_directory(project: "Project") -> None:
         else:
             file_repo.create(
                 FileMetadata(
-                    id=str(uuid.uuid4()),
+                    id=generate_id(),
                     repo_id=project.get_repo().id,
                     path=str(rel_path),
                     file_hash=file_hash,
@@ -128,7 +127,7 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
         )
     else:
         pkg_meta = PackageMetadata(
-            id=str(uuid.uuid4()),
+            id=generate_id(),
             repo_id=project.get_repo().id,
             name=(parsed_file.package.virtual_path or "").split("/")[-1],
             language=parsed_file.package.language,
@@ -152,7 +151,7 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
         )
     else:
         file_meta = FileMetadata(
-            id=str(uuid.uuid4()),
+            id=generate_id(),
             repo_id=project.get_repo().id,
             package_id=pkg_meta.id,
             path=parsed_file.path,
@@ -197,7 +196,7 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
             import_repo.update(existing_by_key[key].id, kwargs)   # type: ignore[arg-type]
         else:
             import_repo.create(
-                ImportEdge(id=str(uuid.uuid4()), **kwargs)        # type: ignore[arg-type]
+                ImportEdge(id=generate_id(), **kwargs)        # type: ignore[arg-type]
             )
 
     # Delete edges that no longer exist
@@ -243,7 +242,7 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
             symbol_repo.update(existing.id, sm_kwargs)
             sym_id = existing.id
         else:
-            sm = SymbolMetadata(id=str(uuid.uuid4()), **sm_kwargs)
+            sm = SymbolMetadata(id=generate_id(), **sm_kwargs)
             symbol_repo.create(sm)
             sym_id = sm.id  # type: ignore[attr-defined]
             # cache the newly-created symbol for potential children look-ups
@@ -276,7 +275,7 @@ def init_project(settings: ProjectSettings) -> Project:
     if not repo_metadata:
         # Create new RepoMetadata
         repo_metadata = RepoMetadata(
-            id=settings.project_id or str(uuid.uuid4()),
+            id=settings.project_id or generate_id(),
             root_path=settings.project_path,
         )
         repo_repository.create(repo_metadata)
