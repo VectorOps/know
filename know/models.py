@@ -95,6 +95,7 @@ class FileMetadata(BaseModel):
     package_id: Optional[str] = None
     path: str # project relative path
     file_hash: Optional[str] = None
+    last_updated: Optional[float] = None   # POSIX mtime (seconds)
     commit_hash: Optional[str] = None
     mime_type: Optional[str] = None
     language_guess: Optional[ProgrammingLanguage] = None
