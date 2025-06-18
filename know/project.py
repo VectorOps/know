@@ -1,11 +1,11 @@
 import uuid
 from pathlib import Path
-from know.models import RepoMetadata
+from know.models import RepoMetadata, FileMetadata
 from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger as logger
-from know.helpers import parse_gitignore
+from know.helpers import parse_gitignore, compute_file_hash
 
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
 
@@ -73,10 +73,32 @@ def scan_project_directory(project: "Project") -> None:
             logger.debug(f"No parser registered for {rel_path}")
             continue
 
+        # ── Hash-based change detection ───────────────────────────────────────
+        file_hash: str = compute_file_hash(str(path))
+        file_repo = project.data_repository.file
+        existing_meta = file_repo.get_by_path(str(rel_path))
+        if existing_meta and existing_meta.file_hash == file_hash:
+            logger.debug(f"Unchanged file {rel_path}, skipping parse.")
+            continue
+
         try:
             parser.parse(project, str(rel_path))
         except Exception as exc:
             logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
+
+        # ── Persist current hash for future scans ─────────────────────────────
+        meta = file_repo.get_by_path(str(rel_path))
+        if meta:
+            file_repo.update(meta.id, {"file_hash": file_hash})
+        else:
+            file_repo.create(
+                FileMetadata(
+                    id=str(uuid.uuid4()),
+                    repo_id=project.get_repo().id,
+                    path=str(rel_path),
+                    file_hash=file_hash,
+                )
+            )
 
 
 def init_project(settings: ProjectSettings) -> Project:
