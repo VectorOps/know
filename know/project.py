@@ -1,9 +1,10 @@
 import uuid
 from pathlib import Path
-from know.models import RepoMetadata, FileMetadata
+from typing import Optional
+from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata
 from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
-from know.parsers import CodeParserRegistry
+from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore, compute_file_hash
 
@@ -99,6 +100,114 @@ def scan_project_directory(project: "Project") -> None:
                     file_hash=file_hash,
                 )
             )
+
+
+def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
+    """
+    Persist *parsed_file* (package → file → symbols) into the
+    project's data-repository. If an entity already exists it is
+    updated, otherwise it is created (“upsert”).
+    """
+    repo_store = project.data_repository
+
+    # ── Package ─────────────────────────────────────────────────────────────
+    pkg_repo = repo_store.package
+    pkg_meta = None
+    if hasattr(pkg_repo, "get_by_path"):
+        pkg_meta = pkg_repo.get_by_path(parsed_file.package.path)
+
+    if pkg_meta:
+        pkg_repo.update(
+            pkg_meta.id,
+            {
+                "name": (parsed_file.package.virtual_path or "").split("/")[-1],
+                "language": parsed_file.package.language,
+                "virtual_path": parsed_file.package.virtual_path,
+                "physical_path": parsed_file.package.path,
+            },
+        )
+    else:
+        pkg_meta = PackageMetadata(
+            id=str(uuid.uuid4()),
+            repo_id=project.get_repo().id,
+            name=(parsed_file.package.virtual_path or "").split("/")[-1],
+            language=parsed_file.package.language,
+            virtual_path=parsed_file.package.virtual_path,
+            physical_path=parsed_file.package.path,
+        )
+        pkg_repo.create(pkg_meta)
+
+    # ── File ────────────────────────────────────────────────────────────────
+    file_repo = repo_store.file
+    file_meta = file_repo.get_by_path(parsed_file.path)  # get_by_path exists in memory repo
+
+    if file_meta:
+        file_repo.update(
+            file_meta.id,
+            {
+                "package_id": pkg_meta.id,
+                "file_hash": parsed_file.file_hash,
+                "language_guess": parsed_file.language,
+            },
+        )
+    else:
+        file_meta = FileMetadata(
+            id=str(uuid.uuid4()),
+            repo_id=project.get_repo().id,
+            package_id=pkg_meta.id,
+            path=parsed_file.path,
+            file_hash=parsed_file.file_hash,
+            language_guess=parsed_file.language,
+        )
+        file_repo.create(file_meta)
+
+    # ── Symbols (recursive) ─────────────────────────────────────────────────
+    symbol_repo = repo_store.symbol
+
+    def _upsert_symbol(sym: ParsedSymbol, parent_id: Optional[str] = None) -> str:
+        """
+        Persist a single ParsedSymbol and recurse through its children.
+        Returns the id of the upserted SymbolMetadata (needed for parenting).
+        """
+        existing = None
+        if hasattr(symbol_repo, "get_by_path") and sym.key:
+            # Optional helper available only in memory implementation
+            existing = symbol_repo.get_by_path(sym.key)
+
+        sm_kwargs = {
+            "file_id": file_meta.id,
+            "name": sym.name,
+            "fqn": sym.fqn,
+            "symbol_key": sym.key,
+            "symbol_hash": sym.hash,
+            "kind": sym.kind,
+            "parent_symbol_id": parent_id,
+            "start_line": sym.start_line,
+            "end_line": sym.end_line,
+            "start_byte": sym.start_byte,
+            "end_byte": sym.end_byte,
+            "visibility": sym.visibility,
+            "modifiers": sym.modifiers,
+            "docstring": sym.docstring,
+            "signature": sym.signature,
+        }
+
+        if existing:
+            symbol_repo.update(existing.id, sm_kwargs)
+            sym_id = existing.id
+        else:
+            sm = SymbolMetadata(id=str(uuid.uuid4()), **sm_kwargs)
+            symbol_repo.create(sm)
+            sym_id = sm.id  # type: ignore[attr-defined]
+
+        # Recurse through children
+        for child in sym.children:
+            _upsert_symbol(child, sym_id)
+
+        return sym_id
+
+    for top_level_symbol in parsed_file.symbols:
+        _upsert_symbol(top_level_symbol)
 
 
 def init_project(settings: ProjectSettings) -> Project:
