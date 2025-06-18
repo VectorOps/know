@@ -74,12 +74,12 @@ class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata]):
         return None
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
-    def get_by_path(self, path: str) -> Optional[FileMetadata]:
-        """Get a file by its project-relative path."""
-        for file in self._items.values():
-            if file.path == path:
-                return file
-        return None
+    # ------------------------------------------------------------------  
+    # AbstractSymbolMetadataRepository interface implementation  
+    # ------------------------------------------------------------------  
+    def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
+        """Return all symbols that belong to the given *file_id*."""
+        return [sym for sym in self._items.values() if sym.file_id == file_id]
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     pass
