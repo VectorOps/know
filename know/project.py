@@ -1,6 +1,7 @@
 import uuid
 from know.models import RepoMetadata
-from know.stores.memory import InMemoryRepoMetadataRepository
+from know.data import AbstractDataRepository
+from know.stores.memory import InMemoryDataRepository
 
 
 class ProjectSettings:
@@ -14,9 +15,9 @@ class Project:
     Represents a single project and offers various APIs to get information
     about the project or notify of project file changes.
     """
-    def __init__(self, settings: ProjectSettings, repo_repository: InMemoryRepoMetadataRepository, repo_metadata: RepoMetadata):
+    def __init__(self, settings: ProjectSettings, data_repository: AbstractDataRepository, repo_metadata: RepoMetadata):
         self.settings = settings
-        self.repo_repository = repo_repository
+        self.data_repository = data_repository
         self._repo_metadata = repo_metadata
 
     def get_repo(self) -> RepoMetadata:
@@ -31,7 +32,8 @@ def init_project(settings: ProjectSettings) -> Project:
     If it does not exist - creates a new RepoMetadata and sets that on Project instance that's returned.
     Finally, kicks off a function to recursively scan the project directory.
     """
-    repo_repository = InMemoryRepoMetadataRepository()
+    data_repository = InMemoryDataRepository()
+    repo_repository = data_repository.repo
     repo_metadata = None
 
     if settings.project_id:
@@ -46,7 +48,7 @@ def init_project(settings: ProjectSettings) -> Project:
         )
         repo_repository.create(repo_metadata)
 
-    project = Project(settings, repo_repository, repo_metadata)
+    project = Project(settings, data_repository, repo_metadata)
 
     # TODO: Recursively scan the project directory (not implemented here)
     # scan_project_directory(settings.project_path)
