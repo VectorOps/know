@@ -2,7 +2,7 @@ from typing import Optional, List, Dict
 from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 from know.models import ProgrammingLanguage, SymbolKind, Visibility, Modifier, SymbolSignature
-from know.project import Project
+from know.settings import ProjectSettings
 
 
 # Parser-specific data structures
@@ -66,7 +66,7 @@ class AbstractCodeParser(ABC):
     """
 
     @abstractmethod
-    def parse(self, project: Project, rel_path: str) -> ParsedFile:
+    def parse(self, project: ProjectSettings, rel_path: str) -> ParsedFile:
         """
         Parse the file at the given relative path within the project.
 

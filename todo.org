@@ -1,4 +1,5 @@
 #+title: Todo
-* [ ] Fix python decorators to be included in raw symbol output
-* [ ] Implement recursive parsing function. Do not parse the file if it's hash did not change.
+* [X] Fix python decorators to be included in raw symbol output
+* [X] Implement recursive parsing function. Do not parse the file if it's hash did not change.
 * [ ] Add data access helper that reads file from data store along with all symbols
+* [ ] Need to delete files and packages that are no longer exist on the disk

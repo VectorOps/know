@@ -44,6 +44,11 @@ class AbstractPackageMetadataRepository(ABC):
         pass
 
     @abstractmethod
+    def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
+        """Get a repo by its root path."""
+        pass
+
+    @abstractmethod
     def create(self, pkg: PackageMetadata) -> PackageMetadata:
         pass
 
@@ -91,6 +96,11 @@ class AbstractSymbolMetadataRepository(ABC):
         pass
 
     @abstractmethod
+    def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
+        """Get symbols for a file"""
+        pass
+
+    @abstractmethod
     def create(self, symbol: SymbolMetadata) -> SymbolMetadata:
         pass
 
@@ -109,6 +119,10 @@ class AbstractImportEdgeRepository(ABC):
 
     @abstractmethod
     def get_list_by_ids(self, edge_ids: list[str]) -> list[ImportEdge]:
+        pass
+
+    @abstractmethod
+    def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
         pass
 
     @abstractmethod

@@ -15,7 +15,7 @@ from know.models import (
     SymbolSignature,
     SymbolParameter,
 )
-from know.project import Project
+from know.settings import ProjectSettings
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger
 from know.helpers import compute_file_hash, compute_symbol_hash
@@ -30,7 +30,7 @@ class PythonCodeParser(AbstractCodeParser):
         # Cache file bytes during `parse` for fast preceding-comment lookup.
         self._source_bytes: bytes = b""
 
-    def parse(self, project: Project, rel_path: str) -> ParsedFile:
+    def parse(self, project: ProjectSettings, rel_path: str) -> ParsedFile:
         # Read the file content as bytes
         file_path = os.path.join(project.project_path, rel_path)
         mtime: float = os.path.getmtime(file_path)
@@ -534,7 +534,7 @@ class PythonCodeParser(AbstractCodeParser):
             children=[]
         )
 
-    def _handle_import_statement(self, node, parsed_file: ParsedFile, project: Project):
+    def _handle_import_statement(self, node, parsed_file: ParsedFile, project: ProjectSettings):
         """
         Handle `import` / `from … import …` statements and populate alias & dot flags.
 
@@ -660,7 +660,7 @@ class PythonCodeParser(AbstractCodeParser):
     _VENV_DIRS: set[str] = {".venv", "venv", "env", ".env"}
     _MODULE_SUFFIXES: tuple[str, ...] = (".py", ".pyc", ".so", ".pyd")
 
-    def _locate_module_path(self, import_path: str, project: Project) -> Optional[Path]:
+    def _locate_module_path(self, import_path: str, project: ProjectSettings) -> Optional[Path]:
         """
         Return the *absolute* Path of the first package / module that matches
         *import_path* inside the given *project*.  None when no artefact found.
@@ -689,12 +689,12 @@ class PythonCodeParser(AbstractCodeParser):
                     return file_candidate
         return None
 
-    def _resolve_local_import_path(self, import_path: str, project: Project) -> Optional[str]:
+    def _resolve_local_import_path(self, import_path: str, project: ProjectSettings) -> Optional[str]:
         path_obj = self._locate_module_path(import_path, project)
         if path_obj is None:
             return None
         project_root = Path(project.project_path).resolve()
         return path_obj.relative_to(project_root).as_posix()
 
-    def _is_local_import(self, import_path: str, project: Project) -> bool:
+    def _is_local_import(self, import_path: str, project: ProjectSettings) -> bool:
         return self._locate_module_path(import_path, project) is not None

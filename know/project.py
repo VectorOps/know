@@ -3,17 +3,12 @@ from typing import Optional
 from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge
 from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
-from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
+from know.parsers import ParsedFile, ParsedSymbol, ParsedImportEdge
+from know.parser_registry import CodeParserRegistry
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
 
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
-
-
-class ProjectSettings:
-    def __init__(self, project_path: str = None, project_id: str = None):
-        self.project_path = project_path
-        self.project_id = project_id
 
 
 class Project:
@@ -31,7 +26,7 @@ class Project:
         return self._repo_metadata
 
 
-def scan_project_directory(project: "Project") -> None:
+def scan_project_directory(project: Project) -> None:
     """
     Recursively walk the project directory, parse every supported source file
     and store parsing results via the project-wide data repository.
@@ -56,7 +51,6 @@ def scan_project_directory(project: "Project") -> None:
 
     for path in root.rglob("*"):
         rel_path = path.relative_to(root)
-        mod_time: float = path.stat().st_mtime
 
         # Skip ignored directories
         if any(part in IGNORED_DIRS for part in rel_path.parts):
@@ -69,41 +63,35 @@ def scan_project_directory(project: "Project") -> None:
         if not path.is_file():
             continue
 
+        # ── mtime-based change detection ───────────────────────────────────────
+        file_repo = project.data_repository.file
+        existing_meta = file_repo.get_by_path(str(rel_path))
+
+        if existing_meta:
+            mod_time: float = path.stat().st_mtime
+            if existing_meta.last_updated == mod_time:
+                logger.debug(f"Unchanged file {rel_path}, skipping parse.")
+                continue
+
+            file_hash: str = compute_file_hash(str(path))
+            # TODO: Do we even need this?
+            if existing_meta and existing_meta.file_hash == file_hash:
+                logger.debug(f"Unchanged file {rel_path}, skipping parse.")
+                continue
+
         parser = CodeParserRegistry.get_parser(path.suffix)
         if parser is None:
             logger.debug(f"No parser registered for {rel_path}")
             continue
 
-        # ── mtime-based change detection ───────────────────────────────────────
-        file_repo = project.data_repository.file
-        existing_meta = file_repo.get_by_path(str(rel_path))
-        if existing_meta and existing_meta.last_updated == mod_time:
-            logger.debug(f"Unchanged file {rel_path}, skipping parse.")
-            continue
-
         try:
-            parser.parse(project, str(rel_path))
+            parsed_file = parser.parse(project, str(rel_path))
+            upsert_parsed_file(project, parsed_file)
         except Exception as exc:
             logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
 
-        # ── Persist current hash for future scans ─────────────────────────────
-        file_hash: str = compute_file_hash(str(path))
-        meta = file_repo.get_by_path(str(rel_path))
-        if meta:
-            file_repo.update(meta.id, {"file_hash": file_hash, "last_updated": mod_time})
-        else:
-            file_repo.create(
-                FileMetadata(
-                    id=generate_id(),
-                    repo_id=project.get_repo().id,
-                    path=str(rel_path),
-                    file_hash=file_hash,
-                    last_updated=mod_time,
-                )
-            )
 
-
-def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
+def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
     """
     Persist *parsed_file* (package → file → symbols) into the
     project's data-repository. If an entity already exists it is
