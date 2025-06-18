@@ -1,10 +1,10 @@
 import uuid
 from pathlib import Path
 from typing import Optional
-from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata
+from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge
 from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
-from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol
+from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore, compute_file_hash
 
