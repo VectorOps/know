@@ -1,4 +1,5 @@
 import hashlib
+from pathlib import Path
 from typing import Union
 
 
@@ -32,3 +33,29 @@ def get_symbol_key(symbol):
         name = parent + "." + name
         parent = parent.parent_ref
     return name
+
+
+def parse_gitignore(root_path: str | Path) -> list[str]:
+    """
+    Return list of ignore patterns extracted from “.gitignore” located in *root_path*.
+
+    The logic matches previous inline implementation:
+      • Reads <root_path>/.gitignore if it exists.
+      • Strips whitespace, skips blank lines and comments (# …).
+      • Negation patterns (!pattern) are NOT handled.
+
+    Args:
+        root_path: Repository root as str or pathlib.Path.
+
+    Returns:
+        List of glob-style patterns to ignore.
+    """
+    root_path = Path(root_path)
+    gitignore_file = root_path / ".gitignore"
+    patterns: list[str] = []
+    if gitignore_file.exists():
+        for line in gitignore_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                patterns.append(line)
+    return patterns

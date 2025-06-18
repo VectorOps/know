@@ -5,6 +5,7 @@ from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger as logger
+from know.helpers import parse_gitignore
 
 
 class ProjectSettings:
