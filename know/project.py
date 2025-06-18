@@ -161,6 +161,50 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
         )
         file_repo.create(file_meta)
 
+    # ── Import edges (package-level) ─────────────────────────────────────────
+    import_repo = repo_store.importedge
+
+    # Existing edges from this package
+    existing_edges = import_repo.get_list_by_source_package_id(pkg_meta.id)
+    existing_by_key: dict[tuple[str | None, str | None, bool], ImportEdge] = {
+        (e.to_package_path, e.alias, e.dot): e for e in existing_edges
+    }
+
+    # Helper: resolve internal package_id if we already know about the target package
+    def _resolve_to_package_id(parsed_imp: ParsedImportEdge) -> str | None:
+        if parsed_imp.external or not parsed_imp.path:
+            return None
+        # naive physical-path match
+        for pkg in repo_store.package._items.values():          # type: ignore[attr-defined]
+            if pkg.physical_path == parsed_imp.path:
+                return pkg.id
+        return None
+
+    new_keys: set[tuple[str | None, str | None, bool]] = set()
+    for imp in parsed_file.package.imports:
+        key = (imp.virtual_path, imp.alias, imp.dot)
+        new_keys.add(key)
+
+        kwargs = dict(
+            from_package_id=pkg_meta.id,
+            to_package_path=imp.virtual_path,
+            to_package_id=_resolve_to_package_id(imp),
+            alias=imp.alias,
+            dot=imp.dot,
+        )
+
+        if key in existing_by_key:
+            import_repo.update(existing_by_key[key].id, kwargs)   # type: ignore[arg-type]
+        else:
+            import_repo.create(
+                ImportEdge(id=str(uuid.uuid4()), **kwargs)        # type: ignore[arg-type]
+            )
+
+    # Delete edges that no longer exist
+    for key, edge in existing_by_key.items():
+        if key not in new_keys:
+            import_repo.delete(edge.id)
+
     # ── Symbols (recursive) ─────────────────────────────────────────────────
     symbol_repo = repo_store.symbol
 

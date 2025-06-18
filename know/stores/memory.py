@@ -74,15 +74,14 @@ class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata]):
         return None
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
-    # ------------------------------------------------------------------  
-    # AbstractSymbolMetadataRepository interface implementation  
-    # ------------------------------------------------------------------  
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
         """Return all symbols that belong to the given *file_id*."""
         return [sym for sym in self._items.values() if sym.file_id == file_id]
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
-    pass
+    def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
+        """Return all import-edges whose *from_package_id* equals *package_id*."""
+        return [edge for edge in self._items.values() if edge.from_package_id == package_id]
 
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
