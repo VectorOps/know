@@ -63,7 +63,15 @@ class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], Abstr
         return None
 
 class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata], AbstractPackageMetadataRepository):
-    pass
+    # NEW ------------------------------------------------------------
+    def get_by_path(self, path: str) -> Optional[PackageMetadata]:
+        """
+        Return the first PackageMetadata whose physical_path equals *path*.
+        """
+        for pkg in self._items.values():
+            if pkg.physical_path == path:
+                return pkg
+        return None
 
 class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata]):
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
