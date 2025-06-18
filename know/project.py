@@ -7,6 +7,8 @@ from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore
 
+IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
+
 
 class ProjectSettings:
     def __init__(self, project_path: str = None, project_id: str = None):
@@ -48,22 +50,15 @@ def scan_project_directory(project: "Project") -> None:
         return
 
     root = Path(root_path).resolve()
-    ignore_dirs: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
 
-    # Load .gitignore patterns (simple glob matching – no ! negation support)
-    gitignore_patterns: list[str] = []
-    gitignore_file = root / ".gitignore"
-    if gitignore_file.exists():
-        for line in gitignore_file.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#"):
-                gitignore_patterns.append(line)
+    # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
+    gitignore_patterns: list[str] = parse_gitignore(root)
 
     for path in root.rglob("*"):
         rel_path = path.relative_to(root)
 
         # Skip ignored directories
-        if any(part in ignore_dirs for part in rel_path.parts):
+        if any(part in IGNORED_DIRS for part in rel_path.parts):
             continue
 
         # Skip gitignored files/dirs
