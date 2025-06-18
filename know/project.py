@@ -164,15 +164,18 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
     # ── Symbols (recursive) ─────────────────────────────────────────────────
     symbol_repo = repo_store.symbol
 
+    # Retrieve all existing symbols for this file once
+    existing_symbols = symbol_repo.get_list_by_file_id(file_meta.id)
+    existing_by_key: dict[str, SymbolMetadata] = {
+        sym.symbol_key: sym for sym in existing_symbols if sym.symbol_key
+    }
+
     def _upsert_symbol(sym: ParsedSymbol, parent_id: Optional[str] = None) -> str:
         """
         Persist a single ParsedSymbol and recurse through its children.
         Returns the id of the upserted SymbolMetadata (needed for parenting).
         """
-        existing = None
-        if hasattr(symbol_repo, "get_by_path") and sym.key:
-            # Optional helper available only in memory implementation
-            existing = symbol_repo.get_by_path(sym.key)
+        existing = existing_by_key.get(sym.key)
 
         sm_kwargs = {
             "file_id": file_meta.id,
@@ -199,8 +202,9 @@ def upsert_parsed_file(project: "Project", parsed_file: ParsedFile) -> None:
             sm = SymbolMetadata(id=str(uuid.uuid4()), **sm_kwargs)
             symbol_repo.create(sm)
             sym_id = sm.id  # type: ignore[attr-defined]
+            # cache the newly-created symbol for potential children look-ups
+            existing_by_key[sym.key] = sm  # type: ignore[assignment]
 
-        # Recurse through children
         for child in sym.children:
             _upsert_symbol(child, sym_id)
 
