@@ -63,7 +63,7 @@ def scan_project_directory(project: Project) -> None:
         if not path.is_file():
             continue
 
-        # ── mtime-based change detection ───────────────────────────────────────
+        # mtime-based change detection
         file_repo = project.data_repository.file
         existing_meta = file_repo.get_by_path(str(rel_path))
 
@@ -101,9 +101,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
     # ── Package ─────────────────────────────────────────────────────────────
     pkg_repo = repo_store.package
-    pkg_meta = None
-    if hasattr(pkg_repo, "get_by_path"):
-        pkg_meta = pkg_repo.get_by_path(parsed_file.package.path)
+    pkg_meta = pkg_repo.get_by_path(parsed_file.package.path)
 
     if pkg_meta:
         pkg_repo.update(
@@ -124,11 +122,11 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
             virtual_path=parsed_file.package.virtual_path,
             physical_path=parsed_file.package.path,
         )
-        pkg_repo.create(pkg_meta)
+        pkg_meta = pkg_repo.create(pkg_meta)
 
     # ── File ────────────────────────────────────────────────────────────────
     file_repo = repo_store.file
-    file_meta = file_repo.get_by_path(parsed_file.path)  # get_by_path exists in memory repo
+    file_meta = file_repo.get_by_path(parsed_file.path)
 
     if file_meta:
         file_repo.update(
@@ -150,7 +148,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
             last_updated=parsed_file.last_updated,
             language_guess=parsed_file.language,
         )
-        file_repo.create(file_meta)
+        file_meta = file_repo.create(file_meta)
 
     # ── Import edges (package-level) ─────────────────────────────────────────
     import_repo = repo_store.importedge
@@ -165,7 +163,9 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
     def _resolve_to_package_id(parsed_imp: ParsedImportEdge) -> str | None:
         if parsed_imp.external or not parsed_imp.path:
             return None
+
         # naive physical-path match
+        # TODO: Fix me to use data to search package by path
         for pkg in repo_store.package._items.values():          # type: ignore[attr-defined]
             if pkg.physical_path == parsed_imp.path:
                 return pkg.id

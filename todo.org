@@ -2,4 +2,7 @@
 * [X] Fix python decorators to be included in raw symbol output
 * [X] Implement recursive parsing function. Do not parse the file if it's hash did not change.
 * [ ] Add data access helper that reads file from data store along with all symbols
-* [ ] Need to delete files and packages that are no longer exist on the disk
+* [ ] Need to delete files, packages, symbols, etc that are no longer exist on the disk
+* [ ] Create a helper to compare two BaseModel objects and find field differences in dict.
+* [ ] Create helper methods to return models from parser objects
+* [ ] Fix _resolve_to_package_id to use data repository
