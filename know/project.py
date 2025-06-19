@@ -161,15 +161,15 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
     # Helper: resolve internal package_id if we already know about the target package
     def _resolve_to_package_id(parsed_imp: ParsedImportEdge) -> str | None:
+        """
+        Map a ParsedImportEdge to an existing internal PackageMetadata.id
+        (or None when the import is external / unknown).
+        """
         if parsed_imp.external or not parsed_imp.path:
             return None
 
-        # naive physical-path match
-        # TODO: Fix me to use data to search package by path
-        for pkg in repo_store.package._items.values():          # type: ignore[attr-defined]
-            if pkg.physical_path == parsed_imp.path:
-                return pkg.id
-        return None
+        pkg = repo_store.package.get_by_path(parsed_imp.path)
+        return pkg.id if pkg else None
 
     new_keys: set[tuple[str | None, str | None, bool]] = set()
     for imp in parsed_file.package.imports:
