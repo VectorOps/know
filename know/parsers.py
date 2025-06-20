@@ -23,19 +23,12 @@ class ParsedImportEdge(BaseModel):
     dot: bool = False  # true for dot-imports (import . "pkg")
     external: bool
 
-    # ------------------------------------------------------------------
-    # Conversion helpers
-    # ------------------------------------------------------------------
-    def to_metadata(self, from_package_id: str) -> dict[str, Any]:
-        """
-        Convert this ParsedImportEdge into a persistable ImportEdge model.
-        """
+    def to_dict(self) -> dict[str, Any]:
         return {
-            "from_package_id": from_package_id,
             "to_package_path": self.virtual_path,
             "alias": self.alias,
             "dot": self.dot,
-            "to_package_id": None,   # filled later
+            "external": self.external,
         }
 
 
@@ -45,21 +38,13 @@ class ParsedPackage(BaseModel):
     virtual_path: str # syntax specific virtual path to package
     imports: List[ParsedImportEdge] = Field(default_factory=list)
 
-    def to_metadata(self, repo_id: str | None = None) -> dict[str, Any]:
-        """
-        Convert this ParsedPackage – including *its* ParsedImportEdge list –
-        into a PackageMetadata instance.
-        """
-        pkg_dict = {
-            "repo_id": repo_id,
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": (self.virtual_path or "").split("/")[-1],
             "language": self.language,
             "virtual_path": self.virtual_path,
             "physical_path": self.path,
         }
-        pkg_dict["imports"] = [
-            imp.to_metadata(from_package_id="") for imp in self.imports
-        ]
-        return pkg_dict
 
 
 class ParsedSymbol(BaseModel):
@@ -79,24 +64,12 @@ class ParsedSymbol(BaseModel):
     modifiers: List[Modifier] = Field(default_factory=list)
     docstring: Optional[str] = None
     signature: Optional[SymbolSignature] = None
+    comment: Optional[str] = None
 
     children: List['ParsedSymbol'] = Field(default_factory=list)
 
-    def to_metadata(
-        self,
-        file_id: str | None = None,
-        parent_symbol_id: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Recursively convert this ParsedSymbol (and its children) into the
-        SymbolMetadata tree that can be stored in the data-repository.
-        """
-        # Convert children first
-        child_dicts = [child.to_metadata(file_id=file_id) for child in self.children]
-
-        sym_dict = {
-            "file_id": file_id,
-            "parent_symbol_id": parent_symbol_id,
+    def to_dict(self) -> dict[str, Any]:
+        return {
             "name": self.name,
             "fqn": self.fqn,
             "symbol_key": self.key,
@@ -107,13 +80,11 @@ class ParsedSymbol(BaseModel):
             "start_byte": self.start_byte,
             "end_byte": self.end_byte,
             "visibility": self.visibility,
-            "modifiers": self.modifiers,
+            "modifiers": list(self.modifiers),
             "docstring": self.docstring,
             "signature": self.signature,
-            "comment": getattr(self, "comment", None),
-            "children": child_dicts,
+            "comment": self.comment,
         }
-        return sym_dict
 
 
 class ParsedFile(BaseModel):
@@ -129,27 +100,13 @@ class ParsedFile(BaseModel):
     # TODO: Populate with links to packages
     imports: List[ParsedImportEdge] = Field(default_factory=list)
 
-    def to_metadata(
-        self,
-        repo_id: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Convert the whole ParsedFile (incl. package, symbols & imports) into
-        a FileMetadata object.  Nested PackageMetadata and SymbolMetadata
-        objects are embedded into their respective runtime-link fields so
-        callers can decide later whether/how to persist them.
-        """
-        pkg_dict = self.package.to_metadata(repo_id=repo_id)
-        file_dict = {
-            "repo_id": repo_id,
-            "package": pkg_dict,
+    def to_dict(self) -> dict[str, Any]:
+        return {
             "path": self.path,
             "file_hash": self.file_hash,
             "last_updated": self.last_updated,
             "language_guess": self.language,
         }
-        file_dict["symbols"] = [sym.to_metadata(file_id=None) for sym in self.symbols]
-        return file_dict
 
 
 # Abstract base parser class

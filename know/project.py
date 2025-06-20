@@ -7,6 +7,7 @@ from know.parsers import ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.parser_registry import CodeParserRegistry
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
+from know.settings import ProjectSettings
 
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
 
@@ -103,51 +104,26 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
     pkg_repo = repo_store.package
     pkg_meta = pkg_repo.get_by_path(parsed_file.package.path)
 
+    pkg_data = parsed_file.package.to_dict()
+    pkg_data["repo_id"] = project.get_repo().id
+
     if pkg_meta:
-        pkg_repo.update(
-            pkg_meta.id,
-            {
-                "name": (parsed_file.package.virtual_path or "").split("/")[-1],
-                "language": parsed_file.package.language,
-                "virtual_path": parsed_file.package.virtual_path,
-                "physical_path": parsed_file.package.path,
-            },
-        )
+        pkg_repo.update(pkg_meta.id, pkg_data)
     else:
-        pkg_meta = PackageMetadata(
-            id=generate_id(),
-            repo_id=project.get_repo().id,
-            name=(parsed_file.package.virtual_path or "").split("/")[-1],
-            language=parsed_file.package.language,
-            virtual_path=parsed_file.package.virtual_path,
-            physical_path=parsed_file.package.path,
-        )
+        pkg_meta = PackageMetadata(id=generate_id(), **pkg_data)
         pkg_meta = pkg_repo.create(pkg_meta)
 
     # ── File ────────────────────────────────────────────────────────────────
     file_repo = repo_store.file
     file_meta = file_repo.get_by_path(parsed_file.path)
 
+    file_data = parsed_file.to_dict()
+    file_data.update({"package_id": pkg_meta.id, "repo_id": project.get_repo().id})
+
     if file_meta:
-        file_repo.update(
-            file_meta.id,
-            {
-                "package_id": pkg_meta.id,
-                "file_hash": parsed_file.file_hash,
-                "last_updated": parsed_file.last_updated,
-                "language_guess": parsed_file.language,
-            },
-        )
+        file_repo.update(file_meta.id, file_data)
     else:
-        file_meta = FileMetadata(
-            id=generate_id(),
-            repo_id=project.get_repo().id,
-            package_id=pkg_meta.id,
-            path=parsed_file.path,
-            file_hash=parsed_file.file_hash,
-            last_updated=parsed_file.last_updated,
-            language_guess=parsed_file.language,
-        )
+        file_meta = FileMetadata(id=generate_id(), **file_data)
         file_meta = file_repo.create(file_meta)
 
     # ── Import edges (package-level) ─────────────────────────────────────────
