@@ -73,6 +73,23 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                 return pkg
         return None
 
+    # NEW ------------------------------------------------------------
+    def delete_orphaned(
+        self,
+        file_repo: AbstractFileMetadataRepository,
+    ) -> int:
+        """
+        Delete every PackageMetadata that is not referenced by any
+        FileMetadata in *file_repo*.  Returns the number of deletions.
+        """
+        removed = 0
+        # iterate over a *copy* of keys so we can mutate the dict safely
+        for pkg_id in list(self._items.keys()):
+            if not file_repo.get_list_by_package_id(pkg_id):
+                self.delete(pkg_id)
+                removed += 1
+        return removed
+
 class InMemoryFileMetadataRepository(
     InMemoryBaseRepository[FileMetadata],
     AbstractFileMetadataRepository,
@@ -87,6 +104,10 @@ class InMemoryFileMetadataRepository(
     def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
         """Return all files whose ``repo_id`` matches *repo_id*."""
         return [f for f in self._items.values() if f.repo_id == repo_id]
+
+    def get_list_by_package_id(self, package_id: str) -> list[FileMetadata]:
+        """Return all files whose ``package_id`` matches *package_id*."""
+        return [f for f in self._items.values() if f.package_id == package_id]
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:

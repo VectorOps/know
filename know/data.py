@@ -7,6 +7,9 @@ from know.models import (
     SymbolMetadata,
     ImportEdge,
 )
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:                      # new
+    from .data import AbstractFileMetadataRepository  # type: ignore  # noqa: E402
 
 class AbstractRepoMetadataRepository(ABC):
     @abstractmethod
@@ -60,6 +63,18 @@ class AbstractPackageMetadataRepository(ABC):
     def delete(self, package_id: str) -> bool:
         pass
 
+    @abstractmethod
+    def delete_orphaned(
+        self,
+        file_repo: "AbstractFileMetadataRepository",
+    ) -> int:
+        """
+        Delete every PackageMetadata for which *file_repo* contains
+        no FileMetadata whose ``package_id`` matches the package’s id.
+        Returns the number of deleted packages.
+        """
+        pass
+
 class AbstractFileMetadataRepository(ABC):
     @abstractmethod
     def get_by_id(self, file_id: str) -> Optional[FileMetadata]:
@@ -89,6 +104,11 @@ class AbstractFileMetadataRepository(ABC):
     @abstractmethod
     def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
         """Return **all** FileMetadata instances that belong to *repo_id*."""
+        pass
+
+    @abstractmethod
+    def get_list_by_package_id(self, package_id: str) -> list[FileMetadata]:
+        """Return **all** FileMetadata instances that belong to *package_id*."""
         pass
 
 class AbstractSymbolMetadataRepository(ABC):
