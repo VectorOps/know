@@ -45,19 +45,24 @@ class ParsedPackage(BaseModel):
     virtual_path: str # syntax specific virtual path to package
     imports: List[ParsedImportEdge] = Field(default_factory=list)
 
-    def to_metadata(self, *, repo_id: str | None = None) -> PackageMetadata:
+    def to_metadata(self, repo_id: str | None = None) -> PackageMetadata:
         """
-        Convert this ParsedPackage into a PackageMetadata instance.
-        Note: *id* and runtime links are intentionally left blank – they
-        are filled by the data-repository layer.
+        Convert this ParsedPackage – including *its* ParsedImportEdge list –
+        into a PackageMetadata instance.
         """
-        return PackageMetadata(
+        pkg_meta = PackageMetadata(
             repo_id=repo_id,
             language=self.language,
             virtual_path=self.virtual_path,
             physical_path=self.path,
-            # name/description can be enriched later
         )
+
+        # Convert and attach imports (use empty string as placeholder for
+        # *from_package_id* because the actual id is assigned later).
+        pkg_meta.imports = [
+            imp.to_metadata(from_package_id="") for imp in self.imports
+        ]
+        return pkg_meta
 
 
 class ParsedSymbol(BaseModel):
@@ -82,7 +87,6 @@ class ParsedSymbol(BaseModel):
 
     def to_metadata(
         self,
-        *,
         file_id: str | None = None,
         parent_symbol_id: str | None = None,
     ) -> SymbolMetadata:
@@ -132,7 +136,6 @@ class ParsedFile(BaseModel):
 
     def to_metadata(
         self,
-        *,
         repo_id: str | None = None,
     ) -> FileMetadata:
         """
@@ -157,11 +160,6 @@ class ParsedFile(BaseModel):
         # Symbols
         file_meta.symbols = [
             sym.to_metadata(file_id=file_meta.id) for sym in self.symbols
-        ]
-
-        # Imports
-        file_meta.package.imports = [
-            imp.to_metadata(from_package_id=pkg_meta.id) for imp in self.package.imports
         ]
 
         return file_meta
