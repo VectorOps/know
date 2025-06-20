@@ -1,11 +1,5 @@
 import pytest
-from know.stores.memory import (
-    InMemoryRepoMetadataRepository,
-    InMemoryPackageMetadataRepository,
-    InMemoryFileMetadataRepository,
-    InMemorySymbolMetadataRepository,
-    InMemoryImportEdgeRepository,
-)
+from know.stores.memory import InMemoryDataRepository
 from know.models import (
     RepoMetadata,
     PackageMetadata,
@@ -19,72 +13,83 @@ import uuid
 def make_id() -> str:
     return str(uuid.uuid4())
 
-def test_inmemory_repo_metadata_repository():
-    repo = InMemoryRepoMetadataRepository()
+def _new_data_repo():
+    # each test gets a fresh, empty in-memory DB
+    return InMemoryDataRepository()
+
+
+def test_repo_metadata_repository():
+    data = _new_data_repo()
+    repo_repo = data.repo
+
     rid = make_id()
-    obj = RepoMetadata(id=rid, name="repo1")
-    # Create
-    created = repo.create(obj)
-    assert created == obj
-    # Get by id
-    assert repo.get_by_id(rid) == obj
-    # Get list by ids
-    assert repo.get_list_by_ids([rid]) == [obj]
-    # Update
-    updated = repo.update(rid, {"name": "repo2"})
-    assert updated.name == "repo2"
-    # Delete
-    assert repo.delete(rid) is True
-    assert repo.get_by_id(rid) is None
+    obj = RepoMetadata(id=rid, name="repo1", root_path="/tmp/repo1")
 
-def test_inmemory_package_metadata_repository():
-    repo = InMemoryPackageMetadataRepository()
-    pid = make_id()
-    obj = PackageMetadata(id=pid, name="pkg1")
-    created = repo.create(obj)
-    assert created == obj
-    assert repo.get_by_id(pid) == obj
-    assert repo.get_list_by_ids([pid]) == [obj]
-    updated = repo.update(pid, {"name": "pkg2"})
-    assert updated.name == "pkg2"
-    assert repo.delete(pid) is True
-    assert repo.get_by_id(pid) is None
+    # create / fetch
+    assert repo_repo.create(obj) is obj
+    assert repo_repo.get_by_id(rid) is obj
+    assert repo_repo.get_list_by_ids([rid]) == [obj]
+    # specialised method
+    assert repo_repo.get_by_path("/tmp/repo1") is obj
+    # update / delete
+    assert repo_repo.update(rid, {"name": "repo2"}).name == "repo2"
+    assert repo_repo.delete(rid) is True
+    assert repo_repo.get_by_id(rid) is None
 
-def test_inmemory_file_metadata_repository():
-    repo = InMemoryFileMetadataRepository()
-    fid = make_id()
-    obj = FileMetadata(id=fid, path="file1.py")
-    created = repo.create(obj)
-    assert created == obj
-    assert repo.get_by_id(fid) == obj
-    assert repo.get_list_by_ids([fid]) == [obj]
-    updated = repo.update(fid, {"path": "file2.py"})
-    assert updated.path == "file2.py"
-    assert repo.delete(fid) is True
-    assert repo.get_by_id(fid) is None
 
-def test_inmemory_symbol_metadata_repository():
-    repo = InMemorySymbolMetadataRepository()
-    sid = make_id()
-    obj = SymbolMetadata(id=sid, name="sym1")
-    created = repo.create(obj)
-    assert created == obj
-    assert repo.get_by_id(sid) == obj
-    assert repo.get_list_by_ids([sid]) == [obj]
-    updated = repo.update(sid, {"name": "sym2"})
-    assert updated.name == "sym2"
-    assert repo.delete(sid) is True
-    assert repo.get_by_id(sid) is None
+def test_package_metadata_repository():
+    data = _new_data_repo()
+    pkg_repo, file_repo = data.package, data.file
 
-def test_inmemory_import_edge_repository():
-    repo = InMemoryImportEdgeRepository()
-    eid = make_id()
-    obj = ImportEdge(id=eid, from_package_id="f1", to_package_path="f2")
-    created = repo.create(obj)
-    assert created == obj
-    assert repo.get_by_id(eid) == obj
-    assert repo.get_list_by_ids([eid]) == [obj]
-    updated = repo.update(eid, {"from_package_id": "from-import"})
-    assert updated.from_package_id == "from-import"
-    assert repo.delete(eid) is True
-    assert repo.get_by_id(eid) is None
+    orphan_id = make_id()
+    used_id   = make_id()
+    pkg_repo.create(PackageMetadata(id=orphan_id, name="orphan", physical_path="pkg/orphan"))
+    pkg_repo.create(PackageMetadata(id=used_id,   name="used",   physical_path="pkg/used"))
+
+    # add a file that references the “used” package, leaving the first one orphaned
+    file_repo.create(FileMetadata(id=make_id(), path="pkg/used/a.py", package_id=used_id))
+
+    assert pkg_repo.get_by_path("pkg/used").id == used_id
+    # delete_orphaned should remove only the orphan package
+    assert pkg_repo.delete_orphaned() == 1
+    assert pkg_repo.get_by_id(orphan_id) is None
+    assert pkg_repo.get_by_id(used_id) is not None
+    # update / delete
+    assert pkg_repo.update(used_id, {"name": "renamed"}).name == "renamed"
+    assert pkg_repo.delete(used_id) is True
+
+
+def test_file_metadata_repository():
+    data = _new_data_repo()
+    file_repo = data.file
+    rid, pid, fid = make_id(), make_id(), make_id()
+    obj = FileMetadata(id=fid, repo_id=rid, package_id=pid, path="src/file.py")
+
+    file_repo.create(obj)
+    assert file_repo.get_by_path("src/file.py") is obj
+    assert file_repo.get_list_by_repo_id(rid) == [obj]
+    assert file_repo.get_list_by_package_id(pid) == [obj]
+    assert file_repo.update(fid, {"path": "src/other.py"}).path == "src/other.py"
+    assert file_repo.delete(fid) is True
+
+
+def test_symbol_metadata_repository():
+    data = _new_data_repo()
+    sym_repo = data.symbol
+    fid, sid = make_id(), make_id()
+    sym_repo.create(SymbolMetadata(id=sid, name="sym", file_id=fid))
+
+    assert sym_repo.get_list_by_file_id(fid)[0].id == sid
+    assert sym_repo.update(sid, {"name": "sym2"}).name == "sym2"
+    assert sym_repo.delete(sid) is True
+
+
+def test_import_edge_repository():
+    data = _new_data_repo()
+    edge_repo = data.importedge
+    eid, from_pid = make_id(), make_id()
+    edge_repo.create(ImportEdge(id=eid, from_package_id=from_pid, to_package_path="pkg/other"))
+
+    assert edge_repo.get_list_by_source_package_id(from_pid)[0].id == eid
+    assert edge_repo.update(eid, {"alias": "aliaspkg"}).alias == "aliaspkg"
+    assert edge_repo.delete(eid) is True
