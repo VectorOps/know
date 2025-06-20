@@ -73,13 +73,20 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                 return pkg
         return None
 
-class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata]):
+class InMemoryFileMetadataRepository(
+    InMemoryBaseRepository[FileMetadata],
+    AbstractFileMetadataRepository,
+):
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
         """Get a file by its project-relative path."""
         for file in self._items.values():
             if file.path == path:
                 return file
         return None
+
+    def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
+        """Return all files whose ``repo_id`` matches *repo_id*."""
+        return [f for f in self._items.values() if f.repo_id == repo_id]
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:

@@ -86,6 +86,11 @@ class AbstractFileMetadataRepository(ABC):
         """Get a file by its project-relative path."""
         pass
 
+    @abstractmethod
+    def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
+        """Return **all** FileMetadata instances that belong to *repo_id*."""
+        pass
+
 class AbstractSymbolMetadataRepository(ABC):
     @abstractmethod
     def get_by_id(self, symbol_id: str) -> Optional[SymbolMetadata]:
