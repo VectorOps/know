@@ -66,13 +66,7 @@ class AbstractPackageMetadataRepository(ABC):
     @abstractmethod
     def delete_orphaned(
         self,
-        file_repo: "AbstractFileMetadataRepository",
     ) -> int:
-        """
-        Delete every PackageMetadata for which *file_repo* contains
-        no FileMetadata whose ``package_id`` matches the package’s id.
-        Returns the number of deleted packages.
-        """
         pass
 
 class AbstractFileMetadataRepository(ABC):

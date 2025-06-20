@@ -117,7 +117,7 @@ def scan_project_directory(project: Project) -> None:
     #  Remove PackageMetadata entries that lost all their files
     # ------------------------------------------------------------------
     package_repo = project.data_repository.package
-    removed_pkgs = package_repo.delete_orphaned(file_repo)
+    removed_pkgs = package_repo.delete_orphaned()
     if removed_pkgs:
         logger.debug(f"Deleted {removed_pkgs} orphaned packages.")
 
