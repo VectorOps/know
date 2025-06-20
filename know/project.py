@@ -113,6 +113,14 @@ def scan_project_directory(project: Project) -> None:
             # 2) delete the file metadata itself
             file_repo.delete(fm.id)
 
+    # ------------------------------------------------------------------
+    #  Remove PackageMetadata entries that lost all their files
+    # ------------------------------------------------------------------
+    package_repo = project.data_repository.package
+    removed_pkgs = package_repo.delete_orphaned(file_repo)
+    if removed_pkgs:
+        logger.debug(f"Deleted {removed_pkgs} orphaned packages.")
+
 
 def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
     """
