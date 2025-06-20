@@ -1,7 +1,17 @@
 from typing import Optional, List, Dict
 from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
-from know.models import ProgrammingLanguage, SymbolKind, Visibility, Modifier, SymbolSignature
+from know.models import (
+    ProgrammingLanguage,
+    SymbolKind,
+    Visibility,
+    Modifier,
+    SymbolSignature,
+    PackageMetadata,
+    FileMetadata,
+    SymbolMetadata,
+    ImportEdge,
+)
 from know.settings import ProjectSettings
 
 
@@ -13,12 +23,41 @@ class ParsedImportEdge(BaseModel):
     dot: bool = False  # true for dot-imports (import . "pkg")
     external: bool
 
+    # ------------------------------------------------------------------
+    # Conversion helpers
+    # ------------------------------------------------------------------
+    def to_metadata(self, from_package_id: str) -> ImportEdge:
+        """
+        Convert this ParsedImportEdge into a persistable ImportEdge model.
+        """
+        return ImportEdge(
+            from_package_id=from_package_id,
+            to_package_path=self.virtual_path,
+            alias=self.alias,
+            dot=self.dot,
+            # to_package_id is filled later – leave None here
+        )
+
 
 class ParsedPackage(BaseModel):
     language: ProgrammingLanguage
     path: str # relative path to package
     virtual_path: str # syntax specific virtual path to package
     imports: List[ParsedImportEdge] = Field(default_factory=list)
+
+    def to_metadata(self, *, repo_id: str | None = None) -> PackageMetadata:
+        """
+        Convert this ParsedPackage into a PackageMetadata instance.
+        Note: *id* and runtime links are intentionally left blank – they
+        are filled by the data-repository layer.
+        """
+        return PackageMetadata(
+            repo_id=repo_id,
+            language=self.language,
+            virtual_path=self.virtual_path,
+            physical_path=self.path,
+            # name/description can be enriched later
+        )
 
 
 class ParsedSymbol(BaseModel):
@@ -41,6 +80,42 @@ class ParsedSymbol(BaseModel):
 
     children: List['ParsedSymbol'] = Field(default_factory=list)
 
+    def to_metadata(
+        self,
+        *,
+        file_id: str | None = None,
+        parent_symbol_id: str | None = None,
+    ) -> SymbolMetadata:
+        """
+        Recursively convert this ParsedSymbol (and its children) into the
+        SymbolMetadata tree that can be stored in the data-repository.
+        """
+        # Convert children first
+        child_metas: list[SymbolMetadata] = [
+            child.to_metadata(file_id=file_id) for child in self.children
+        ]
+
+        sym_meta = SymbolMetadata(
+            file_id=file_id,
+            parent_symbol_id=parent_symbol_id,
+            name=self.name,
+            fqn=self.fqn,
+            symbol_key=self.key,
+            symbol_hash=self.hash,
+            kind=self.kind,
+            start_line=self.start_line,
+            end_line=self.end_line,
+            start_byte=self.start_byte,
+            end_byte=self.end_byte,
+            visibility=self.visibility,
+            modifiers=self.modifiers,
+            docstring=self.docstring,
+            signature=self.signature,
+            comment=getattr(self, "comment", None),
+            children=child_metas,
+        )
+        return sym_meta
+
 
 class ParsedFile(BaseModel):
     package: ParsedPackage
@@ -54,6 +129,42 @@ class ParsedFile(BaseModel):
     symbols: List[ParsedSymbol] = Field(default_factory=list)
     # TODO: Populate with links to packages
     imports: List[ParsedImportEdge] = Field(default_factory=list)
+
+    def to_metadata(
+        self,
+        *,
+        repo_id: str | None = None,
+    ) -> FileMetadata:
+        """
+        Convert the whole ParsedFile (incl. package, symbols & imports) into
+        a FileMetadata object.  Nested PackageMetadata and SymbolMetadata
+        objects are embedded into their respective runtime-link fields so
+        callers can decide later whether/how to persist them.
+        """
+        # Package
+        pkg_meta = self.package.to_metadata(repo_id=repo_id)
+
+        # File
+        file_meta = FileMetadata(
+            repo_id=repo_id,
+            package=pkg_meta,
+            path=self.path,
+            file_hash=self.file_hash,
+            last_updated=self.last_updated,
+            language_guess=self.language,
+        )
+
+        # Symbols
+        file_meta.symbols = [
+            sym.to_metadata(file_id=file_meta.id) for sym in self.symbols
+        ]
+
+        # Imports
+        file_meta.package.imports = [
+            imp.to_metadata(from_package_id=pkg_meta.id) for imp in self.package.imports
+        ]
+
+        return file_meta
 
 
 # Abstract base parser class
