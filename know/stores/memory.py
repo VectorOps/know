@@ -14,13 +14,21 @@ from know.data import (
     AbstractImportEdgeRepository,
     AbstractDataRepository,
 )
+from dataclasses import dataclass, field
 
 T = TypeVar("T")
 
+@dataclass
+class _MemoryTables:
+    repos:   dict[str, RepoMetadata]   = field(default_factory=dict)
+    packages:dict[str, PackageMetadata]= field(default_factory=dict)
+    files:   dict[str, FileMetadata]   = field(default_factory=dict)
+    symbols: dict[str, SymbolMetadata] = field(default_factory=dict)
+    edges:   dict[str, ImportEdge]     = field(default_factory=dict)
+
 class InMemoryBaseRepository(Generic[T]):
-    def __init__(self):
-        """Initialize the in-memory base repository."""
-        self._items: Dict[str, T] = {}
+    def __init__(self, table: Dict[str, T]):
+        self._items = table
 
     def get_by_id(self, item_id: str) -> Optional[T]:
         """Get an item by its ID."""
@@ -55,6 +63,9 @@ class InMemoryBaseRepository(Generic[T]):
         return self._items.pop(item_id, None) is not None
 
 class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], AbstractRepoMetadataRepository):
+    def __init__(self, tables: _MemoryTables):
+        super().__init__(tables.repos)
+
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""
         for repo in self._items.values():
@@ -63,7 +74,10 @@ class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], Abstr
         return None
 
 class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata], AbstractPackageMetadataRepository):
-    # NEW ------------------------------------------------------------
+    def __init__(self, tables: _MemoryTables):
+        super().__init__(tables.packages)
+        self._file_items = tables.files
+
     def get_by_path(self, path: str) -> Optional[PackageMetadata]:
         """
         Return the first PackageMetadata whose physical_path equals *path*.
@@ -73,19 +87,17 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                 return pkg
         return None
 
-    # NEW ------------------------------------------------------------
     def delete_orphaned(
         self,
-        file_repo: AbstractFileMetadataRepository,
     ) -> int:
         """
         Delete every PackageMetadata that is not referenced by any
         FileMetadata in *file_repo*.  Returns the number of deletions.
         """
+        used_pkg_ids = {f.package_id for f in self._file_items.values() if f.package_id}
         removed = 0
-        # iterate over a *copy* of keys so we can mutate the dict safely
-        for pkg_id in list(self._items.keys()):
-            if not file_repo.get_list_by_package_id(pkg_id):
+        for pkg_id in list(self._items):
+            if pkg_id not in used_pkg_ids:
                 self.delete(pkg_id)
                 removed += 1
         return removed
@@ -94,6 +106,9 @@ class InMemoryFileMetadataRepository(
     InMemoryBaseRepository[FileMetadata],
     AbstractFileMetadataRepository,
 ):
+    def __init__(self, tables: _MemoryTables):
+        super().__init__(tables.files)
+
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
         """Get a file by its project-relative path."""
         for file in self._items.values():
@@ -110,23 +125,29 @@ class InMemoryFileMetadataRepository(
         return [f for f in self._items.values() if f.package_id == package_id]
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
+    def __init__(self, tables: _MemoryTables):
+        super().__init__(tables.symbols)
+
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
         """Return all symbols that belong to the given *file_id*."""
         return [sym for sym in self._items.values() if sym.file_id == file_id]
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
+    def __init__(self, tables: _MemoryTables):
+        super().__init__(tables.edges)
+
     def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
         """Return all import-edges whose *from_package_id* equals *package_id*."""
         return [edge for edge in self._items.values() if edge.from_package_id == package_id]
 
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
-        """Initialize the in-memory data repository."""
-        self._repo = InMemoryRepoMetadataRepository()
-        self._package = InMemoryPackageMetadataRepository()
-        self._file = InMemoryFileMetadataRepository()
-        self._symbol = InMemorySymbolMetadataRepository()
-        self._importedge = InMemoryImportEdgeRepository()
+        tables = _MemoryTables()
+        self._repo = InMemoryRepoMetadataRepository(tables)
+        self._file = InMemoryFileMetadataRepository(tables)
+        self._package = InMemoryPackageMetadataRepository(tables)
+        self._symbol = InMemorySymbolMetadataRepository(tables)
+        self._importedge = InMemoryImportEdgeRepository(tables)
 
     @property
     def repo(self) -> AbstractRepoMetadataRepository:
