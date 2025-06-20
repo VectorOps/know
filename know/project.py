@@ -3,8 +3,7 @@ from typing import Optional
 from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge
 from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
-from know.parsers import ParsedFile, ParsedSymbol, ParsedImportEdge
-from know.parser_registry import CodeParserRegistry
+from know.parsers import ParsedFile, ParsedSymbol, ParsedImportEdge, CodeParserRegistry
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
 from know.settings import ProjectSettings
@@ -90,7 +89,7 @@ def scan_project_directory(project: Project) -> None:
             continue
 
         try:
-            parsed_file = parser.parse(project, str(rel_path))
+            parsed_file = parser.parse(project.settings, str(rel_path))
             upsert_parsed_file(project, parsed_file)
         except Exception as exc:
             logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
