@@ -45,6 +45,8 @@ def scan_project_directory(project: Project) -> None:
         logger.warning("scan_project_directory skipped – project_path is not set.")
         return
 
+    processed_paths: set[str] = set()
+
     root = Path(root_path).resolve()
 
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
@@ -63,6 +65,8 @@ def scan_project_directory(project: Project) -> None:
 
         if not path.is_file():
             continue
+
+        processed_paths.add(str(path.relative_to(root)))
 
         # mtime-based change detection
         file_repo = project.data_repository.file
@@ -90,6 +94,24 @@ def scan_project_directory(project: Project) -> None:
             upsert_parsed_file(project, parsed_file)
         except Exception as exc:
             logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
+
+    # ------------------------------------------------------------------
+    #  Remove stale metadata for files that have disappeared from disk
+    # ------------------------------------------------------------------
+    file_repo   = project.data_repository.file
+    symbol_repo = project.data_repository.symbol
+    repo_id     = project.get_repo().id
+
+    # All FileMetadata currently stored for this repo
+    existing_files = file_repo.get_list_by_repo_id(repo_id)
+
+    for fm in existing_files:
+        if fm.path not in processed_paths:
+            # 1) delete all symbols that belonged to the vanished file
+            for sym in symbol_repo.get_list_by_file_id(fm.id):
+                symbol_repo.delete(sym.id)
+            # 2) delete the file metadata itself
+            file_repo.delete(fm.id)
 
 
 def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
@@ -218,7 +240,6 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
     for top_level_symbol in parsed_file.symbols:
         _upsert_symbol(top_level_symbol)
 
-    # ── Delete symbols that disappeared from the file ───────────────────────
     for key in obsolete_keys:
         symbol_repo.delete(existing_by_key[key].id)
 
