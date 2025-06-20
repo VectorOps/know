@@ -113,19 +113,6 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         pkg_meta = PackageMetadata(id=generate_id(), **pkg_data)
         pkg_meta = pkg_repo.create(pkg_meta)
 
-    # ── File ────────────────────────────────────────────────────────────────
-    file_repo = repo_store.file
-    file_meta = file_repo.get_by_path(parsed_file.path)
-
-    file_data = parsed_file.to_dict()
-    file_data.update({"package_id": pkg_meta.id, "repo_id": project.get_repo().id})
-
-    if file_meta:
-        file_repo.update(file_meta.id, file_data)
-    else:
-        file_meta = FileMetadata(id=generate_id(), **file_data)
-        file_meta = file_repo.create(file_meta)
-
     # ── Import edges (package-level) ─────────────────────────────────────────
     import_repo = repo_store.importedge
 
@@ -172,6 +159,19 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         if key not in new_keys:
             import_repo.delete(edge.id)
 
+    # ── File ────────────────────────────────────────────────────────────────
+    file_repo = repo_store.file
+    file_meta = file_repo.get_by_path(parsed_file.path)
+
+    file_data = parsed_file.to_dict()
+    file_data.update({"package_id": pkg_meta.id, "repo_id": project.get_repo().id})
+
+    if file_meta:
+        file_repo.update(file_meta.id, file_data)
+    else:
+        file_meta = FileMetadata(id=generate_id(), **file_data)
+        file_meta = file_repo.create(file_meta)
+
     # ── Symbols (recursive) ─────────────────────────────────────────────────
     symbol_repo = repo_store.symbol
 
@@ -180,31 +180,22 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
     existing_by_key: dict[str, SymbolMetadata] = {
         sym.symbol_key: sym for sym in existing_symbols if sym.symbol_key
     }
+    # Symbols that MIGHT need deletion (will be removed from this set when re-encountered)
+    obsolete_keys: set[str] = set(existing_by_key)
 
     def _upsert_symbol(sym: ParsedSymbol, parent_id: Optional[str] = None) -> str:
         """
         Persist a single ParsedSymbol and recurse through its children.
         Returns the id of the upserted SymbolMetadata (needed for parenting).
         """
+        nonlocal obsolete_keys
         existing = existing_by_key.get(sym.key)
 
-        sm_kwargs = {
+        sm_kwargs = sym.to_dict()
+        sm_kwargs.update({
             "file_id": file_meta.id,
-            "name": sym.name,
-            "fqn": sym.fqn,
-            "symbol_key": sym.key,
-            "symbol_hash": sym.hash,
-            "kind": sym.kind,
             "parent_symbol_id": parent_id,
-            "start_line": sym.start_line,
-            "end_line": sym.end_line,
-            "start_byte": sym.start_byte,
-            "end_byte": sym.end_byte,
-            "visibility": sym.visibility,
-            "modifiers": sym.modifiers,
-            "docstring": sym.docstring,
-            "signature": sym.signature,
-        }
+        })
 
         if existing:
             symbol_repo.update(existing.id, sm_kwargs)
@@ -216,6 +207,9 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
             # cache the newly-created symbol for potential children look-ups
             existing_by_key[sym.key] = sm  # type: ignore[assignment]
 
+        # ── this symbol exists in the latest parse → keep it
+        obsolete_keys.discard(sym.key)
+
         for child in sym.children:
             _upsert_symbol(child, sym_id)
 
@@ -223,6 +217,10 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
     for top_level_symbol in parsed_file.symbols:
         _upsert_symbol(top_level_symbol)
+
+    # ── Delete symbols that disappeared from the file ───────────────────────
+    for key in obsolete_keys:
+        symbol_repo.delete(existing_by_key[key].id)
 
 
 def init_project(settings: ProjectSettings) -> Project:
