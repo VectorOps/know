@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import duckdb
 import json
+import pandas as pd   # new – required for .df() conversion
 from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime
@@ -31,15 +32,11 @@ T = TypeVar("T")
 
 def _row_to_dict(rel) -> list[dict[str, Any]]:
     """
-    Convert a DuckDBPyRelation into a list of dictionaries **without**
-    relying on NumPy.  Rows are fetched as native Python tuples and
-    zipped with the column names (`rel.columns`).
+    Convert a DuckDB relation to List[Dict] via a pandas DataFrame.
+    Using DataFrame avoids the manual column-name handling and is faster.
     """
-    rows = rel.fetchall()              # native Python objects
-    if not rows:
-        return []
-    cols = list(rel.columns)           # column names
-    return [dict(zip(cols, row)) for row in rows]
+    df = rel.df()              # pandas DataFrame
+    return df.to_dict(orient="records")  # [] when df is empty
 
 
 # ---------------------------------------------------------------------------
