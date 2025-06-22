@@ -78,8 +78,8 @@ class PackageMetadata(BaseModel):
     description: Optional[str] = None
 
     # Runtime links
-    imports: List["ImportEdge"] = Field(default_factory=list, repr=False)
-    imported_by: List["ImportEdge"] = Field(default_factory=list, repr=False)
+    imports: List["ImportEdge"] = Field(default_factory=list, exclude=True, repr=False)
+    imported_by: List["ImportEdge"] = Field(default_factory=list, exclude=True, repr=False)
 
 
 class FileMetrics(BaseModel):
@@ -102,8 +102,8 @@ class FileMetadata(BaseModel):
     metrics: Optional[FileMetrics] = None
 
     # Runtime links
-    package: Optional[PackageMetadata] = Field(default=None, repr=False)
-    symbols: List["SymbolMetadata"] = Field(default_factory=list, repr=False)
+    package: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
+    symbols: List["SymbolMetadata"] = Field(default_factory=list, exclude=True, repr=False)
 
 
 class SymbolParameter(BaseModel):
@@ -118,20 +118,6 @@ class SymbolSignature(BaseModel):
     parameters: List[SymbolParameter] = Field(default_factory=list)
     return_type: Optional[str] = None
     decorators: List[str] = Field(default_factory=list)
-
-
-class QualityScores(BaseModel):
-    lint_score: Optional[float] = None
-    complexity: Optional[int] = None
-    coverage: Optional[float] = None
-    security_flags: List[str] = Field(default_factory=list)
-
-
-class SymbolEmbedding(BaseModel):
-    code_vec: Optional[Vector] = None
-    doc_vec: Optional[Vector] = None
-    sig_vec: Optional[Vector] = None
-    embedding_model: Optional[str] = None
 
 
 class SymbolMetadata(BaseModel):
@@ -157,15 +143,24 @@ class SymbolMetadata(BaseModel):
     signature: Optional[SymbolSignature] = None
     comment: Optional[str] = None
 
-    # Calculated metadata
-    embedding: Optional[SymbolEmbedding] = None
+    # Embedding
+    embedding_code_vec: Optional[Vector] = None
+    embedding_doc_vec: Optional[Vector] = None
+    embedding_sig_vec: Optional[Vector] = None
+    embedding_model: Optional[str] = None
+
     summary: Optional[str] = None
-    quality: Optional[QualityScores] = None
+
+    # Quality scores
+    score_lint: Optional[float] = None
+    score_complexity: Optional[int] = None
+    score_coverage: Optional[float] = None
+    score_security_flags: List[str] = Field(default_factory=list)
 
     # Runtime links
-    file_ref: Optional[FileMetadata] = Field(default=None, repr=False)
-    parent_ref: Optional["SymbolMetadata"] = Field(default=None, repr=False)
-    children: List["SymbolMetadata"] = Field(default_factory=list, repr=False)
+    file_ref: Optional[FileMetadata] = Field(default=None, exclude=True, repr=False)
+    parent_ref: Optional["SymbolMetadata"] = Field(default=None, exclude=True, repr=False)
+    children: List["SymbolMetadata"] = Field(default_factory=list, exclude=True, repr=False)
 
 
 class ImportEdge(BaseModel):
@@ -177,5 +172,5 @@ class ImportEdge(BaseModel):
     dot: bool = False  # true for dot-imports (import . "pkg")
 
     # Runtime links
-    from_package_ref: Optional[PackageMetadata] = Field(default=None)
-    to_package_ref: Optional[PackageMetadata] = Field(default=None)
+    from_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
+    to_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
