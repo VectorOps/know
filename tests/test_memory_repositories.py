@@ -11,15 +11,15 @@ from know.models import (
 from typing import Dict, Any
 import uuid
 
+
 def make_id() -> str:
     return str(uuid.uuid4())
 
+
 @pytest.fixture(params=[InMemoryDataRepository, DuckDBDataRepository])
-def data_repo(request, tmp_path):
+def data_repo(request):
     """Yield a fresh data-repository instance (in-memory or DuckDB)."""
     cls = request.param
-    if cls is DuckDBDataRepository:          # file-based, isolate per test
-        return cls(str(tmp_path / "test.db"))
     return cls()
 
 
@@ -30,11 +30,11 @@ def test_repo_metadata_repository(data_repo):
     obj = RepoMetadata(id=rid, name="repo1", root_path="/tmp/repo1")
 
     # create / fetch
-    assert repo_repo.create(obj) is obj
-    assert repo_repo.get_by_id(rid) is obj
+    assert repo_repo.create(obj) == obj
+    assert repo_repo.get_by_id(rid) == obj
     assert repo_repo.get_list_by_ids([rid]) == [obj]
     # specialised method
-    assert repo_repo.get_by_path("/tmp/repo1") is obj
+    assert repo_repo.get_by_path("/tmp/repo1") == obj
     # update / delete
     assert repo_repo.update(rid, {"name": "repo2"}).name == "repo2"
     assert repo_repo.delete(rid) is True
@@ -68,7 +68,7 @@ def test_file_metadata_repository(data_repo):
     obj = FileMetadata(id=fid, repo_id=rid, package_id=pid, path="src/file.py")
 
     file_repo.create(obj)
-    assert file_repo.get_by_path("src/file.py") is obj
+    assert file_repo.get_by_path("src/file.py") == obj
     assert file_repo.get_list_by_repo_id(rid) == [obj]
     assert file_repo.get_list_by_package_id(pid) == [obj]
     assert file_repo.update(fid, {"path": "src/other.py"}).path == "src/other.py"
