@@ -31,18 +31,15 @@ T = TypeVar("T")
 
 def _row_to_dict(rel) -> list[dict[str, Any]]:
     """
-    Convert a DuckDBPyRelation returned by `con.execute(sql, params)`
-    into a list of Python dictionaries.
+    Convert a DuckDBPyRelation into a list of dictionaries **without**
+    relying on NumPy.  Rows are fetched as native Python tuples and
+    zipped with the column names (`rel.columns`).
     """
-    data = rel.fetchnumpy()
-    if not data:
+    rows = rel.fetchall()              # native Python objects
+    if not rows:
         return []
-    cols = list(data.keys())
-    row_cnt = len(data[cols[0]])
-    res: list[dict[str, Any]] = []
-    for i in range(row_cnt):
-        res.append({c: (data[c][i].item() if hasattr(data[c][i], "item") else data[c][i]) for c in cols})
-    return res
+    cols = list(rel.columns)           # column names
+    return [dict(zip(cols, row)) for row in rows]
 
 
 # ---------------------------------------------------------------------------
