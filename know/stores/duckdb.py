@@ -92,7 +92,7 @@ class _DuckDBBaseRepo(Generic[T]):
         return [self.model(**self._deserialize_row(r)) for r in rows]
 
     def create(self, item: T) -> T:
-        data = self._serialize_json(item.model_dump(exclude_none=False))
+        data = self._serialize_json(item.model_dump(exclude_none=True))
         cols = ", ".join(data.keys())
         placeholders = ", ".join("?" for _ in data)
         self.conn.execute(f"INSERT INTO {self.table} ({cols}) VALUES ({placeholders})", list(data.values()))

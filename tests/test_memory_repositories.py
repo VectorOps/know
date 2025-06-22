@@ -1,5 +1,6 @@
 import pytest
 from know.stores.memory import InMemoryDataRepository
+from know.stores.duckdb import DuckDBDataRepository
 from know.models import (
     RepoMetadata,
     PackageMetadata,
@@ -13,14 +14,17 @@ import uuid
 def make_id() -> str:
     return str(uuid.uuid4())
 
-def _new_data_repo():
-    # each test gets a fresh, empty in-memory DB
-    return InMemoryDataRepository()
+@pytest.fixture(params=[InMemoryDataRepository, DuckDBDataRepository])
+def data_repo(request, tmp_path):
+    """Yield a fresh data-repository instance (in-memory or DuckDB)."""
+    cls = request.param
+    if cls is DuckDBDataRepository:          # file-based, isolate per test
+        return cls(str(tmp_path / "test.db"))
+    return cls()
 
 
-def test_repo_metadata_repository():
-    data = _new_data_repo()
-    repo_repo = data.repo
+def test_repo_metadata_repository(data_repo):
+    repo_repo = data_repo.repo
 
     rid = make_id()
     obj = RepoMetadata(id=rid, name="repo1", root_path="/tmp/repo1")
@@ -37,9 +41,8 @@ def test_repo_metadata_repository():
     assert repo_repo.get_by_id(rid) is None
 
 
-def test_package_metadata_repository():
-    data = _new_data_repo()
-    pkg_repo, file_repo = data.package, data.file
+def test_package_metadata_repository(data_repo):
+    pkg_repo, file_repo = data_repo.package, data_repo.file
 
     orphan_id = make_id()
     used_id   = make_id()
@@ -59,9 +62,8 @@ def test_package_metadata_repository():
     assert pkg_repo.delete(used_id) is True
 
 
-def test_file_metadata_repository():
-    data = _new_data_repo()
-    file_repo = data.file
+def test_file_metadata_repository(data_repo):
+    file_repo = data_repo.file
     rid, pid, fid = make_id(), make_id(), make_id()
     obj = FileMetadata(id=fid, repo_id=rid, package_id=pid, path="src/file.py")
 
@@ -73,9 +75,8 @@ def test_file_metadata_repository():
     assert file_repo.delete(fid) is True
 
 
-def test_symbol_metadata_repository():
-    data = _new_data_repo()
-    sym_repo = data.symbol
+def test_symbol_metadata_repository(data_repo):
+    sym_repo = data_repo.symbol
     fid, sid = make_id(), make_id()
     sym_repo.create(SymbolMetadata(id=sid, name="sym", file_id=fid))
 
@@ -84,9 +85,8 @@ def test_symbol_metadata_repository():
     assert sym_repo.delete(sid) is True
 
 
-def test_import_edge_repository():
-    data = _new_data_repo()
-    edge_repo = data.importedge
+def test_import_edge_repository(data_repo):
+    edge_repo = data_repo.importedge
     eid, from_pid = make_id(), make_id()
     edge_repo.create(ImportEdge(id=eid, from_package_id=from_pid, to_package_path="pkg/other"))
 
