@@ -14,6 +14,7 @@ from know.models import (
     SymbolMetadata,
     SymbolSignature,
     ImportEdge,
+    Modifier,
 )
 from know.data import (
     AbstractRepoMetadataRepository,
@@ -36,7 +37,13 @@ def _row_to_dict(rel) -> list[dict[str, Any]]:
     Using DataFrame avoids the manual column-name handling and is faster.
     """
     df = rel.df()              # pandas DataFrame
-    return df.to_dict(orient="records")  # [] when df is empty
+    records = df.to_dict(orient="records")  # [] when df is empty
+    cleaned: list[dict[str, Any]] = []
+    for rec in records:
+        cleaned.append(
+            {k: (None if pd.isna(v) else v) for k, v in rec.items()}
+        )
+    return cleaned
 
 
 # ---------------------------------------------------------------------------
@@ -159,10 +166,11 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
 class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMetadataRepository):
     table = "symbols"
     model = SymbolMetadata
-    _json_fields = {"signature", "score_security_flags"}
+    _json_fields = {"signature", "score_security_flags", "modifiers"}
     _json_parsers = {
         "signature": lambda v: SymbolSignature(**v) if v is not None else None,
         "score_security_flags": lambda v: v,   # returns list[str]
+        "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
 
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
