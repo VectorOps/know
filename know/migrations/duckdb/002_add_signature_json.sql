@@ -1,0 +1,2 @@
+ALTER TABLE symbols
+ADD COLUMN IF NOT EXISTS signature JSON;
