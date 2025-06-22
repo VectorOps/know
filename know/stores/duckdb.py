@@ -137,8 +137,7 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
 
     def delete_orphaned(self) -> int:
         used_pkg_ids = {row["package_id"] for row in
-                        _row_to_dict(self.conn.execute("SELECT DISTINCT package_id FROM files WHERE package_id IS NOT
-NULL"))}
+                        _row_to_dict(self.conn.execute("SELECT DISTINCT package_id FROM files WHERE package_id IS NOT NULL"))}
         rows = _row_to_dict(self.conn.execute("SELECT id FROM packages"))
         orphan_ids = [r["id"] for r in rows if r["id"] not in used_pkg_ids]
         for oid in orphan_ids:
