@@ -159,8 +159,11 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
 class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMetadataRepository):
     table = "symbols"
     model = SymbolMetadata
-    _json_fields = {"signature"}
-    _json_parsers = {"signature": lambda v: SymbolSignature(**v) if v is not None else None}
+    _json_fields = {"signature", "score_security_flags"}
+    _json_parsers = {
+        "signature": lambda v: SymbolSignature(**v) if v is not None else None,
+        "score_security_flags": lambda v: v,   # returns list[str]
+    }
 
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
         rows = _row_to_dict(self.conn.execute("SELECT * FROM symbols WHERE file_id = ?", [file_id]))
