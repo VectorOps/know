@@ -50,10 +50,19 @@ CREATE TABLE IF NOT EXISTS symbols (
     start_byte INTEGER,
     end_byte INTEGER,
     visibility TEXT,
-    modifiers TEXT,
+    modifiers JSON,
     docstring TEXT,
     comment TEXT,
     summary TEXT,
+    signature JSON,
+    score_lint DOUBLE,
+    score_complexity INTEGER,
+    score_coverage DOUBLE,
+    score_security_flags TEXT[],
+    embedding_code_vec DOUBLE[],
+    embedding_doc_vec DOUBLE[],
+    embedding_sig_vec DOUBLE[],
+    embedding_model TEXT
 );
 
 CREATE TABLE IF NOT EXISTS import_edges (

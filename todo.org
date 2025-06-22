@@ -5,3 +5,5 @@
 * [-] Need to delete files, packages, symbols, etc that are no longer exist on the disk
 * [X] Create helper methods to return models from parser objects
 * [X] Fix _resolve_to_package_id to use data repository
+* [ ] Add git support
+** [ ]  Use git to quickly find what files have changed
