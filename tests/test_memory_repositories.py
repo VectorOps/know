@@ -7,6 +7,8 @@ from know.models import (
     FileMetadata,
     SymbolMetadata,
     ImportEdge,
+    SymbolSignature,
+    SymbolParameter,
 )
 from typing import Dict, Any
 import uuid
@@ -78,10 +80,28 @@ def test_file_metadata_repository(data_repo):
 def test_symbol_metadata_repository(data_repo):
     sym_repo = data_repo.symbol
     fid, sid = make_id(), make_id()
-    sym_repo.create(SymbolMetadata(id=sid, name="sym", file_id=fid))
 
-    assert sym_repo.get_list_by_file_id(fid)[0].id == sid
-    assert sym_repo.update(sid, {"name": "sym2"}).name == "sym2"
+    signature = SymbolSignature(
+        raw="def sym(a: int) -> str",
+        parameters=[SymbolParameter(name="a", type_annotation="int")],
+        return_type="str",
+        decorators=[],
+    )
+
+    # create with signature
+    sym_repo.create(
+        SymbolMetadata(id=sid, name="sym", file_id=fid, signature=signature)
+    )
+
+    # read back (by id and by file_id) and ensure signature persisted
+    assert sym_repo.get_by_id(sid).signature == signature
+    assert sym_repo.get_list_by_file_id(fid)[0].signature == signature
+
+    # update signature
+    new_sig = SymbolSignature(raw="def sym()")
+    assert sym_repo.update(sid, {"signature": new_sig}).signature == new_sig
+
+    # delete
     assert sym_repo.delete(sid) is True
 
 
