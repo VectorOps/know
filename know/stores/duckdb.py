@@ -3,6 +3,7 @@ import os
 import duckdb
 import json
 import pandas as pd   # new – required for .df() conversion
+import math          # needed for math.isnan
 from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime, timezone
@@ -38,13 +39,19 @@ def _row_to_dict(rel) -> list[dict[str, Any]]:
     """
     df = rel.df()              # pandas DataFrame
     records = df.to_dict(orient="records")  # [] when df is empty
-    cleaned: list[dict[str, Any]] = []
-    for rec in records:
-        cleaned.append(
-            {k: (None if pd.isna(v) else v) for k, v in rec.items()}
-        )
-    return cleaned
-
+    for row in records:
+        for k, v in row.items():
+            # convert scalar NaN / pandas.NA → None, but skip sequences/arrays
+            if isinstance(v, float) and math.isnan(v):
+                row[k] = None
+                continue
+            try:
+                is_na = pd.isna(v)          # may return array for sequences
+            except Exception:
+                is_na = False
+            if isinstance(is_na, bool) and is_na:
+                row[k] = None
+    return records
 
 # ---------------------------------------------------------------------------
 # generic base repository
@@ -111,6 +118,7 @@ class _DuckDBBaseRepo(Generic[T]):
     def delete(self, item_id: str) -> bool:
         self.conn.execute(f"DELETE FROM {self.table} WHERE id = ?", [item_id])
         return True
+
 # ---------------------------------------------------------------------------
 # concrete repositories
 # ---------------------------------------------------------------------------
@@ -166,10 +174,9 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
 class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMetadataRepository):
     table = "symbols"
     model = SymbolMetadata
-    _json_fields = {"signature", "score_security_flags", "modifiers"}
+    _json_fields = {"signature", "modifiers"}
     _json_parsers = {
         "signature": lambda v: SymbolSignature(**v) if v is not None else None,
-        "score_security_flags": lambda v: v,   # returns list[str]
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
 
