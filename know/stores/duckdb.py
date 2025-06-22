@@ -5,7 +5,7 @@ import json
 import pandas as pd   # new – required for .df() conversion
 from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
-from datetime import datetime
+from datetime import datetime, timezone
 
 from know.models import (
     RepoMetadata,
@@ -209,8 +209,9 @@ def _apply_migrations(conn: duckdb.DuckDBPyConnection) -> None:
                 continue
             sql = file_path.read_text()
             conn.execute(sql)
+
             conn.execute("INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)",
-                         [file_path.name, datetime.utcnow()])
+                         [file_path.name, datetime.now(timezone.utc)])
 
 
 # ---------------------------------------------------------------------------

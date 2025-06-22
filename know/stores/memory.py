@@ -48,8 +48,12 @@ class InMemoryBaseRepository(Generic[T]):
         item = self._items.get(item_id)
         if not item:
             return None
-        # For pydantic models, use .copy(update=...)
-        if hasattr(item, "copy"):
+        # Pydantic v2: use `model_copy`, fall back to legacy `copy`.
+        if hasattr(item, "model_copy"):              # Pydantic >= 2
+            updated = item.model_copy(update=data)
+            self._items[item_id] = updated
+            return updated
+        if hasattr(item, "copy"):                    # Pydantic < 2
             updated = item.copy(update=data)
             self._items[item_id] = updated
             return updated
