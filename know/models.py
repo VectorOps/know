@@ -82,13 +82,6 @@ class PackageMetadata(BaseModel):
     imported_by: List["ImportEdge"] = Field(default_factory=list, exclude=True, repr=False)
 
 
-class FileMetrics(BaseModel):
-    total_loc: int
-    code_loc: int
-    comment_loc: int
-    cyclomatic_complexity: int
-
-
 class FileMetadata(BaseModel):
     id: Optional[str]
     repo_id: Optional[str] = None
@@ -99,7 +92,11 @@ class FileMetadata(BaseModel):
     commit_hash: Optional[str] = None
     mime_type: Optional[str] = None
     language_guess: Optional[ProgrammingLanguage] = None
-    metrics: Optional[FileMetrics] = None
+
+    metrics_total_loc: Optional[int] = None
+    metrics_code_loc: Optional[int] = None
+    metrics_comment_loc: Optional[int] = None
+    metrics_cyclomatic_complexity: Optional[int] = None
 
     # Runtime links
     package: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)

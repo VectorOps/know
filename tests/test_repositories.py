@@ -85,7 +85,7 @@ def test_symbol_metadata_repository(data_repo):
         raw="def sym(a: int) -> str",
         parameters=[SymbolParameter(name="a", type_annotation="int")],
         return_type="str",
-        decorators=[],
+        decorators=["a", "b"],
     )
 
     # create with signature
