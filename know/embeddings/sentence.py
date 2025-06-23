@@ -127,6 +127,9 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
     # --------------------------------------------------------------------- #
     # Public API required by EmbeddingsCalculator
     # --------------------------------------------------------------------- #
+    def get_model_name(self):
+        return self._model_name
+
     def get_code_embedding(self, text: str) -> Vector:
         return self._encode([text])[0]
 

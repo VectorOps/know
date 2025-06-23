@@ -90,7 +90,7 @@ def test_symbol_metadata_repository(data_repo):
 
     # create with signature
     sym_repo.create(
-        SymbolMetadata(id=sid, name="sym", file_id=fid, signature=signature)
+        SymbolMetadata(id=sid, name="sym", file_id=fid, symbol_body="def sym(a: int) -> str\n\treturn 'a'", signature=signature)
     )
 
     # read back (by id and by file_id) and ensure signature persisted

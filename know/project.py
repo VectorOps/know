@@ -23,12 +23,12 @@ class Project:
         settings: ProjectSettings,
         data_repository: AbstractDataRepository,
         repo_metadata: RepoMetadata,
-        embeddings_calculator: EmbeddingsCalculator | None = None,
+        embeddings: EmbeddingsCalculator | None = None,
     ):
         self.settings = settings
         self.data_repository = data_repository
         self._repo_metadata = repo_metadata
-        self.embeddings_calculator = embeddings_calculator   # new attr
+        self.embeddings = embeddings
 
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
@@ -235,15 +235,15 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
             "parent_symbol_id": parent_id,
         })
 
-        emb_calc = project.embeddings_calculator
+        emb_calc = project.embeddings
         if emb_calc:
-            code_src = sym.signature.raw if sym.signature else sym.name
             try:
-                sm_kwargs["embedding_code_vec"] = emb_calc.get_code_embedding(code_src)
+                sm_kwargs["embedding_code_vec"] = emb_calc.get_code_embedding(sym.body)
                 if sym.docstring:
                     sm_kwargs["embedding_doc_vec"] = emb_calc.get_text_embedding(sym.docstring)
-                sm_kwargs["embedding_model"] = getattr(emb_calc, "_model_name", None) \
-                                               or emb_calc.__class__.__name__
+                if sym.signature:
+                    sm_kwargs["embedding_sig_vec"] = emb_calc.get_code_embedding(sym.signature.raw)
+                sm_kwargs["embedding_model"] = emb_calc.get_model_name()
             except Exception as exc:
                 logger.error(f"Embedding generation failed for symbol {sym.name}: {exc}")
 

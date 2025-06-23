@@ -124,6 +124,7 @@ class SymbolMetadata(BaseModel):
     fqn: Optional[str] = None
     symbol_key: Optional[str] = None
     symbol_hash: Optional[str] = None
+    symbol_body: str
     kind: Optional[SymbolKind] = None
     parent_symbol_id: Optional[str] = None
 

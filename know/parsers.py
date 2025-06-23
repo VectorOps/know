@@ -74,6 +74,7 @@ class ParsedSymbol(BaseModel):
             "fqn": self.fqn,
             "symbol_key": self.key,
             "symbol_hash": self.hash,
+            "symbol_body": self.body,
             "kind": self.kind,
             "start_line": self.start_line,
             "end_line": self.end_line,

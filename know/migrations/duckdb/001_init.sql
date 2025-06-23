@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS symbols (
     fqn TEXT,
     symbol_key TEXT,
     symbol_hash TEXT,
+    symbol_body TEXT,
     kind TEXT,
     parent_symbol_id TEXT,
     start_line INTEGER,
