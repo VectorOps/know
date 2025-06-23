@@ -55,7 +55,6 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
         normalize_embeddings: bool = True,
         device: Optional[str] = None,
         batch_size: int = 32,
-        *,
         quantize: bool = False,
         quantize_bits: int = 8,
         **model_kwargs: Any,
