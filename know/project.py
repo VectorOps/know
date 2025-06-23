@@ -7,6 +7,8 @@ from know.parsers import ParsedFile, ParsedSymbol, ParsedImportEdge, CodeParserR
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
 from know.settings import ProjectSettings
+from know.embeddings.interface import EmbeddingsCalculator
+from know.embeddings.factory import get_embeddings_calculator
 
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
 
@@ -16,10 +18,17 @@ class Project:
     Represents a single project and offers various APIs to get information
     about the project or notify of project file changes.
     """
-    def __init__(self, settings: ProjectSettings, data_repository: AbstractDataRepository, repo_metadata: RepoMetadata):
+    def __init__(
+        self,
+        settings: ProjectSettings,
+        data_repository: AbstractDataRepository,
+        repo_metadata: RepoMetadata,
+        embeddings_calculator: EmbeddingsCalculator | None = None,
+    ):
         self.settings = settings
         self.data_repository = data_repository
         self._repo_metadata = repo_metadata
+        self.embeddings_calculator = embeddings_calculator   # new attr
 
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
@@ -226,6 +235,18 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
             "parent_symbol_id": parent_id,
         })
 
+        emb_calc = project.embeddings_calculator
+        if emb_calc:
+            code_src = sym.signature.raw if sym.signature else sym.name
+            try:
+                sm_kwargs["embedding_code_vec"] = emb_calc.get_code_embedding(code_src)
+                if sym.docstring:
+                    sm_kwargs["embedding_doc_vec"] = emb_calc.get_text_embedding(sym.docstring)
+                sm_kwargs["embedding_model"] = getattr(emb_calc, "_model_name", None) \
+                                               or emb_calc.__class__.__name__
+            except Exception as exc:
+                logger.error(f"Embedding generation failed for symbol {sym.name}: {exc}")
+
         if existing:
             symbol_repo.update(existing.id, sm_kwargs)
             sym_id = existing.id
@@ -274,7 +295,24 @@ def init_project(settings: ProjectSettings) -> Project:
         )
         repo_repository.create(repo_metadata)
 
-    project = Project(settings, data_repository, repo_metadata)
+    embeddings_calculator: EmbeddingsCalculator | None = None
+    if settings.embedding and settings.embedding.enabled:
+        embeddings_calculator = get_embeddings_calculator(
+            settings.embedding.calculator_type,
+            model_name=settings.embedding.model_name,
+            normalize_embeddings=settings.embedding.normalize_embeddings,
+            device=settings.embedding.device,
+            batch_size=settings.embedding.batch_size,
+            quantize=settings.embedding.quantize,
+            quantize_bits=settings.embedding.quantize_bits,
+        )
+
+    project = Project(
+        settings,
+        data_repository,
+        repo_metadata,
+        embeddings_calculator=embeddings_calculator,   # pass along
+    )
 
     # Recursively scan the project directory and parse source files
     scan_project_directory(project)
