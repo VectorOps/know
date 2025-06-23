@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+from know.logger import KnowLogger
+
 from typing import List, Optional, Any
 
 try:
@@ -15,7 +18,12 @@ from know.embeddings.interface import EmbeddingsCalculator
 from know.models import Vector
 
 
-class SentenceTransformersEmbeddingsCalculator(EmbeddingsCalculator):
+# Ensure `sentence_transformers` messages are emitted at INFO or above and
+# handled by the global logging configuration defined in know.logger.
+logging.getLogger("sentence_transformers").setLevel(logging.INFO)
+
+
+class LocalEmbeddingsCalculator(EmbeddingsCalculator):
     """
     EmbeddingsCalculator implementation backed by `sentence-transformers`.
 
@@ -53,20 +61,42 @@ class SentenceTransformersEmbeddingsCalculator(EmbeddingsCalculator):
     # --------------------------------------------------------------------- #
     # Internal helpers
     # --------------------------------------------------------------------- #
-    def _model(self) -> SentenceTransformer:
-        if self._model is None:  # lazy initialisation
+    def _get_model(self) -> SentenceTransformer:
+        if self._model is None:
+            KnowLogger.log_event(
+                "embeddings_model_initializing",
+                {"model_name": self._model_name, "device": self._device},
+            )
             self._model = SentenceTransformer(
                 self._model_name, device=self._device, **self._model_kwargs
+            )
+            KnowLogger.log_event(
+                "embeddings_model_ready",
+                {"model_name": self._model_name, "normalize": self._normalize},
+                level=logging.DEBUG,
             )
         return self._model
 
     def _encode(self, texts: List[str]) -> List[Vector]:
-        embeddings = self._model().encode(
-            texts,
-            batch_size=self._batch_size,
-            normalize_embeddings=self._normalize,
-            show_progress_bar=False,
+        KnowLogger.log_event(
+            "embeddings_encode",
+            {"model_name": self._model_name, "num_texts": len(texts)},
+            level=logging.DEBUG,
         )
+        try:
+            embeddings = self._get_model().encode(
+                texts,
+                batch_size=self._batch_size,
+                normalize_embeddings=self._normalize,
+                show_progress_bar=False,
+            )
+        except Exception as exc:
+            KnowLogger.log_event(
+                "embeddings_encode_error",
+                {"model_name": self._model_name, "error": str(exc)},
+                level=logging.ERROR,
+            )
+            raise
         # Ensure list[float] return type.
         return [emb.tolist() if hasattr(emb, "tolist") else list(emb) for emb in embeddings]
 
@@ -78,7 +108,3 @@ class SentenceTransformersEmbeddingsCalculator(EmbeddingsCalculator):
 
     def get_text_embedding(self, text: str) -> Vector:
         return self._encode([text])[0]
-
-
-# Convenience default instance (can be overridden by users)
-default_embeddings_calculator = SentenceTransformersEmbeddingsCalculator()
