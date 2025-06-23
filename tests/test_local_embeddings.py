@@ -8,17 +8,7 @@ from know.embeddings.sentence import LocalEmbeddingsCalculator
 
 
 def test_local_embeddings_calculator_basic():
-    """
-    Smoke-test LocalEmbeddingsCalculator with the default model (no mocking).
-
-    Verifies:
-      • Returned vectors are list[float] with non-zero length.
-      • get_code_embedding == get_text_embedding for identical input
-        (current implementation shares the same encoder).
-      • Vectors are L2-normalised when `normalize_embeddings=True`
-        (the default).
-    """
-    calc = LocalEmbeddingsCalculator()  # uses default model
+    calc = LocalEmbeddingsCalculator()
     sample = "def foo(bar): return bar * 2"
 
     code_vec = calc.get_code_embedding(sample)
