@@ -13,7 +13,6 @@ except ImportError as exc:  # pragma: no cover
         "SentenceTransformersEmbeddingsCalculator.\n"
         "Install it with:  pip install sentence-transformers"
     ) from exc
-```
 
 know/embeddings/sentence.py
 ```python
