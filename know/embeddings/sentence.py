@@ -15,8 +15,6 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 know/embeddings/sentence.py
-```python
-<<<<<<< SEARCH
     def __init__(
         self,
         *,
@@ -24,56 +22,38 @@ know/embeddings/sentence.py
         normalize_embeddings: bool = True,
         device: Optional[str] = None,
         batch_size: int = 32,
+        quantize: bool = False,
+        quantize_kwargs: Optional[Dict[str, Any]] = None,
         **model_kwargs: Any,
     ):
+        """
+        Parameters
+        ----------
+        model_name:
+            HuggingFace hub model name or local path.
+        normalize_embeddings:
+            Whether to L2-normalize vectors returned by the model.
+        device:
+            Torch device string (e.g. "cuda", "cpu", "cuda:0").  If ``None`` the
+            underlying library chooses automatically.
+        batch_size:
+            Number of texts to encode per batch.
+        quantize:
+            If *quantize* is True the model is quantized via
+            ``SentenceTransformer.quantize(**quantize_kwargs)``. This can reduce
+            model size and improve inference speed at some cost to accuracy.
+        quantize_kwargs:
+            Optional keyword arguments forwarded to
+            ``SentenceTransformer.quantize()``.
+        **model_kwargs:
+            Arbitrary keyword arguments forwarded to ``SentenceTransformer``.
+        """
         self._model_name = model_name
         self._normalize = normalize_embeddings
         self._device = device
         self._batch_size = batch_size
-        self._model_kwargs = model_kwargs
-        self._model: Optional[SentenceTransformer] = None  # lazy loaded
-
-from know.embeddings.interface import EmbeddingsCalculator
-from know.models import Vector
-
-
-# Ensure `sentence_transformers` messages are emitted at INFO or above and
-# handled by the global logging configuration defined in know.logger.
-logging.getLogger("sentence_transformers").setLevel(logging.INFO)
-
-
-class LocalEmbeddingsCalculator(EmbeddingsCalculator):
-    """
-    EmbeddingsCalculator implementation backed by `sentence-transformers`.
-
-    Parameters
-    ----------
-    model_name:
-        HuggingFace hub model name or local path.
-    normalize_embeddings:
-        Whether to L2-normalize vectors returned by the model.
-    device:
-        Torch device string (e.g. "cuda", "cpu", "cuda:0").  If ``None`` the
-        underlying library chooses automatically.
-    batch_size:
-        Number of texts to encode per batch.
-    **model_kwargs:
-        Arbitrary keyword arguments forwarded to ``SentenceTransformer``.
-    """
-
-    def __init__(
-        self,
-        *,
-        model_name: str = "all-MiniLM-L6-v2",
-        normalize_embeddings: bool = True,
-        device: Optional[str] = None,
-        batch_size: int = 32,
-        **model_kwargs: Any,
-    ):
-        self._model_name = model_name
-        self._normalize = normalize_embeddings
-        self._device = device
-        self._batch_size = batch_size
+        self._quantize = quantize
+        self._quantize_kwargs = quantize_kwargs or {}
         self._model_kwargs = model_kwargs
         self._model: Optional[SentenceTransformer] = None  # lazy loaded
 
@@ -120,7 +100,6 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
                 level=logging.DEBUG,
             )
         return self._model
-```
 
 know/embeddings/sentence.py
 ```python
