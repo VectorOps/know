@@ -220,7 +220,7 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
         # ---------- ordering (embedding vs. default) ----------
         if query.embedding_query:
-            sql += " ORDER BY array_distance(s.embedding_code_vec, ?) ASC"
+            sql += " ORDER BY array_distance(s.embedding_code_vec, CAST(? AS FLOAT[])) ASC"
             params.append(query.embedding_query)          # vector parameter
         else:
             sql += " ORDER BY s.name ASC"
