@@ -178,6 +178,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         new_keys.add(key)
 
         kwargs = dict(
+            repo_id = project.get_repo().id,          # NEW
             from_package_id=pkg_meta.id,
             to_package_path=imp.virtual_path,
             to_package_id=_resolve_to_package_id(imp),

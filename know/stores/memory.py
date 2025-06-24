@@ -91,6 +91,10 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                 return pkg
         return None
 
+    def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
+        """Return all packages that belong to *repo_id*."""
+        return [pkg for pkg in self._items.values() if pkg.repo_id == repo_id]
+
     def delete_orphaned(
         self,
     ) -> int:
@@ -143,6 +147,10 @@ class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractI
     def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
         """Return all import-edges whose *from_package_id* equals *package_id*."""
         return [edge for edge in self._items.values() if edge.from_package_id == package_id]
+
+    def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
+        """Return all import-edges whose ``repo_id`` matches *repo_id*."""
+        return [edge for edge in self._items.values() if edge.repo_id == repo_id]
 
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):

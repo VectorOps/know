@@ -48,20 +48,24 @@ def test_package_metadata_repository(data_repo):
 
     orphan_id = make_id()
     used_id   = make_id()
-    pkg_repo.create(PackageMetadata(id=orphan_id, name="orphan", physical_path="pkg/orphan"))
-    pkg_repo.create(PackageMetadata(id=used_id,   name="used",   physical_path="pkg/used"))
+    rid = make_id()
+    pkg_repo.create(PackageMetadata(id=orphan_id, name="orphan", physical_path="pkg/orphan", repo_id=rid))
+    pkg_repo.create(PackageMetadata(id=used_id,   name="used",   physical_path="pkg/used",   repo_id=rid))
 
     # add a file that references the “used” package, leaving the first one orphaned
     file_repo.create(FileMetadata(id=make_id(), path="pkg/used/a.py", package_id=used_id))
 
     assert pkg_repo.get_by_path("pkg/used").id == used_id
+    assert {p.id for p in pkg_repo.get_list_by_repo_id(rid)} == {orphan_id, used_id}
     # delete_orphaned should remove only the orphan package
     assert pkg_repo.delete_orphaned() == 1
     assert pkg_repo.get_by_id(orphan_id) is None
     assert pkg_repo.get_by_id(used_id) is not None
+    assert [p.id for p in pkg_repo.get_list_by_repo_id(rid)] == [used_id]
     # update / delete
     assert pkg_repo.update(used_id, {"name": "renamed"}).name == "renamed"
     assert pkg_repo.delete(used_id) is True
+    assert pkg_repo.get_list_by_repo_id(rid) == []
 
 
 def test_file_metadata_repository(data_repo):
@@ -107,9 +111,11 @@ def test_symbol_metadata_repository(data_repo):
 
 def test_import_edge_repository(data_repo):
     edge_repo = data_repo.importedge
-    eid, from_pid = make_id(), make_id()
-    edge_repo.create(ImportEdge(id=eid, from_package_id=from_pid, to_package_path="pkg/other"))
+    rid, eid, from_pid = make_id(), make_id(), make_id()
+    edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, to_package_path="pkg/other"))
 
     assert edge_repo.get_list_by_source_package_id(from_pid)[0].id == eid
+    assert edge_repo.get_list_by_repo_id(rid)[0].id == eid
     assert edge_repo.update(eid, {"alias": "aliaspkg"}).alias == "aliaspkg"
     assert edge_repo.delete(eid) is True
+    assert edge_repo.get_list_by_repo_id(rid) == []

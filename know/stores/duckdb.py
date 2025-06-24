@@ -144,6 +144,11 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         rows = _row_to_dict(self.conn.execute("SELECT * FROM packages WHERE physical_path = ?", [path]))
         return PackageMetadata(**rows[0]) if rows else None
 
+    def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
+        rows = _row_to_dict(self.conn.execute(
+            "SELECT * FROM packages WHERE repo_id = ?", [repo_id]))
+        return [PackageMetadata(**r) for r in rows]
+
     def delete_orphaned(self) -> int:
         used_pkg_ids = {row["package_id"] for row in
                         _row_to_dict(self.conn.execute("SELECT DISTINCT package_id FROM files WHERE package_id IS NOT NULL"))}
@@ -191,6 +196,11 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
 
     def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
         rows = _row_to_dict(self.conn.execute("SELECT * FROM import_edges WHERE from_package_id = ?", [package_id]))
+        return [ImportEdge(**r) for r in rows]
+
+    def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
+        rows = _row_to_dict(self.conn.execute(
+            "SELECT * FROM import_edges WHERE repo_id = ?", [repo_id]))
         return [ImportEdge(**r) for r in rows]
 
 # ---------------------------------------------------------------------------
