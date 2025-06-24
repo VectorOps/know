@@ -12,6 +12,7 @@ from know.models import (
 )
 from typing import Dict, Any
 import uuid
+from know.data import SymbolSearchQuery
 
 
 def make_id() -> str:
@@ -119,3 +120,50 @@ def test_import_edge_repository(data_repo):
     assert edge_repo.update(eid, {"alias": "aliaspkg"}).alias == "aliaspkg"
     assert edge_repo.delete(eid) is True
     assert edge_repo.get_list_by_repo_id(rid) == []
+
+
+def test_symbol_search(data_repo):
+    repo_repo, file_repo, sym_repo = data_repo.repo, data_repo.file, data_repo.symbol
+
+    # ---------- minimal repo / file scaffolding ----------
+    rid  = make_id()
+    fid  = make_id()
+    repo_repo.create(RepoMetadata(id=rid, root_path="/tmp/rid"))
+    file_repo.create(FileMetadata(id=fid, repo_id=rid, path="src/a.py"))
+
+    # ---------- seed three symbols ----------
+    sym_repo.create(SymbolMetadata(
+        id=make_id(), name="Alpha", file_id=fid,
+        kind="function", visibility="public",
+        docstring="Compute foo and bar."
+    ))
+    sym_repo.create(SymbolMetadata(
+        id=make_id(), name="Beta", file_id=fid,
+        kind="class", visibility="private",
+        docstring="Baz qux docs."
+    ))
+    sym_repo.create(SymbolMetadata(
+        id=make_id(), name="Gamma", file_id=fid,
+        kind="variable", visibility="public",
+        docstring="Alpha-numeric helper."
+    ))
+
+    # ---------- no-filter search: default ordering (name ASC) ----------
+    res = sym_repo.search(rid, SymbolSearchQuery())
+    assert [s.name for s in res] == ["Alpha", "Beta", "Gamma"]
+
+    # ---------- name substring (case-insensitive) ----------
+    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_name="alp"))] == ["Alpha"]
+
+    # ---------- kind filter ----------
+    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_kind="class"))] == ["Beta"]
+
+    # ---------- visibility filter ----------
+    assert {s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_visibility="public"))} == {"Alpha", "Gamma"}
+
+    # ---------- docstring / comment full-text search ----------
+    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(doc_needle=["foo"]))] == ["Alpha"]
+
+    # ---------- pagination ----------
+    assert len(sym_repo.search(rid, SymbolSearchQuery(limit=2))) == 2
+    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(limit=2, offset=2))] == ["Gamma"]
