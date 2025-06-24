@@ -83,6 +83,10 @@ def test_file_metadata_repository(data_repo):
 
 
 def test_symbol_metadata_repository(data_repo):
+    repo_repo = data_repo.repo
+    rid = make_id()
+    repo_repo.create(RepoMetadata(id=rid, root_path=f"/tmp/{rid}"))
+
     sym_repo = data_repo.symbol
     fid, sid = make_id(), make_id()
 
@@ -95,7 +99,14 @@ def test_symbol_metadata_repository(data_repo):
 
     # create with signature
     sym_repo.create(
-        SymbolMetadata(id=sid, name="sym", file_id=fid, symbol_body="def sym(a: int) -> str\n\treturn 'a'", signature=signature)
+        SymbolMetadata(
+            id=sid,
+            name="sym",
+            file_id=fid,
+            repo_id=rid,
+            symbol_body="def sym(a: int) -> str\n\treturn 'a'",
+            signature=signature,
+        )
     )
 
     # read back (by id and by file_id) and ensure signature persisted
