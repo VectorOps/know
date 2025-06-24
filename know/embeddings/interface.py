@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 
 
+# Truncate embeddings to this constant. This is hardcoded due to DuckDB schema limitations.
+EMBEDDING_DIM = 1024
+
+
 class EmbeddingsCalculator(ABC):
     @abstractmethod
     def get_model_name(self):

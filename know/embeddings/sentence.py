@@ -14,10 +14,8 @@ except ImportError as exc:  # pragma: no cover
         "Install it with:  pip install sentence-transformers"
     ) from exc
 
-from know.embeddings.interface import EmbeddingsCalculator
+from know.embeddings.interface import EmbeddingsCalculator, EMBEDDING_DIM
 from know.models import Vector
-
-from know.embeddings.quantize import quantize_embeddings
 
 
 # Ensure `sentence_transformers` messages are emitted at INFO or above and
@@ -40,10 +38,6 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
         underlying library chooses automatically.
     batch_size:
         Number of texts to encode per batch.
-    quantize:
-        Whether to quantize vectors before returning (default False).
-    quantize_bits:
-        Bit-width used for quantization if enabled (default 8).
     **model_kwargs:
         Arbitrary keyword arguments forwarded to ``SentenceTransformer``.
     """
@@ -63,8 +57,6 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
         self._normalize = normalize_embeddings
         self._device = device
         self._batch_size = batch_size
-        self._quantize = quantize
-        self._quantize_bits = quantize_bits
         self._model_kwargs = model_kwargs
         self._model: Optional[SentenceTransformer] = None  # lazy loaded
 
@@ -78,7 +70,10 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
                 {"model_name": self._model_name, "device": self._device},
             )
             self._model = SentenceTransformer(
-                self._model_name, device=self._device, **self._model_kwargs
+                self._model_name,
+                device=self._device,
+                truncate_dim=EMBEDDING_DIM,
+                **self._model_kwargs,
             )
             KnowLogger.log_event(
                 "embeddings_model_ready",
@@ -112,16 +107,6 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
             emb.tolist() if hasattr(emb, "tolist") else list(emb)
             for emb in embeddings
         ]
-        if self._quantize:
-            KnowLogger.log_event(
-                "embeddings_quantize",
-                {"num_texts": len(processed), "bits": self._quantize_bits},
-                level=logging.DEBUG,
-            )
-            processed = [
-                quantize_embeddings(vec, num_bits=self._quantize_bits)
-                for vec in processed
-            ]
         return processed
 
     # --------------------------------------------------------------------- #
