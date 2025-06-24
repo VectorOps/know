@@ -256,6 +256,14 @@ class DuckDBDataRepository(AbstractDataRepository):
             os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
 
         self._conn = duckdb.connect(db_path)
+
+        # --- enable vector-similarity search extension --------------------------
+        try:
+            self._conn.execute("INSTALL vss")
+            self._conn.execute("LOAD vss")
+        except Exception:          # extension already installed / not available
+            pass
+
         _apply_migrations(self._conn)
 
         # build repositories (some need cross-references)
