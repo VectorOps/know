@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS symbols (
 
 CREATE TABLE IF NOT EXISTS import_edges (
     id TEXT PRIMARY KEY,
+    repo_id TEXT,
     from_package_id TEXT,
     to_package_path TEXT,
     to_package_id TEXT,

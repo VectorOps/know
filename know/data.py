@@ -47,6 +47,10 @@ class AbstractPackageMetadataRepository(ABC):
         pass
 
     @abstractmethod
+    def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
+        pass
+
+    @abstractmethod
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""
         pass
@@ -142,6 +146,10 @@ class AbstractImportEdgeRepository(ABC):
 
     @abstractmethod
     def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
+        pass
+
+    @abstractmethod
+    def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
         pass
 
     @abstractmethod
