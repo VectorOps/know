@@ -1,6 +1,5 @@
 -- 003_add_vector_indexes.sql  : vector-search indexes for embedding columns
-INSTALL vss;
-LOAD vss;
+-- INSTALL and LOAD commands are not allowed in migration scripts, remove them
 
 CREATE INDEX IF NOT EXISTS idx_symbols_code_vec ON symbols USING vss(embedding_code_vec);
 CREATE INDEX IF NOT EXISTS idx_symbols_doc_vec  ON symbols USING vss(embedding_doc_vec);
