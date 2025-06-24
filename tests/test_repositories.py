@@ -144,17 +144,20 @@ def test_symbol_search(data_repo):
 
     # ---------- seed three symbols ----------
     sym_repo.create(SymbolMetadata(
-        id=make_id(), name="Alpha", file_id=fid,
+        id=make_id(), name="Alpha", repo_id=rid, file_id=fid,
+        symbol_body='def Alpha(): pass',
         kind="function", visibility="public",
         docstring="Compute foo and bar."
     ))
     sym_repo.create(SymbolMetadata(
-        id=make_id(), name="Beta", file_id=fid,
+        id=make_id(), name="Beta", repo_id=rid, file_id=fid,
+        symbol_body='class Beta(): pass',
         kind="class", visibility="private",
         docstring="Baz qux docs."
     ))
     sym_repo.create(SymbolMetadata(
-        id=make_id(), name="Gamma", file_id=fid,
+        id=make_id(), name="Gamma", repo_id=rid, file_id=fid,
+        symbol_body='Gamma = 10',
         kind="variable", visibility="public",
         docstring="Alpha-numeric helper."
     ))
@@ -178,3 +181,37 @@ def test_symbol_search(data_repo):
     # ---------- pagination ----------
     assert len(sym_repo.search(rid, SymbolSearchQuery(limit=2))) == 2
     assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(limit=2, offset=2))] == ["Gamma"]
+
+
+# ---------------------------------------------------------------------------
+# NEW – embedding-similarity search
+# ---------------------------------------------------------------------------
+def test_symbol_embedding_search(data_repo):
+    repo_repo, file_repo, sym_repo = data_repo.repo, data_repo.file, data_repo.symbol
+
+    rid = make_id()
+    fid = make_id()
+
+    repo_repo.create(RepoMetadata(id=rid, root_path="/tmp/emb_repo"))
+    file_repo.create(FileMetadata(id=fid, repo_id=rid, path="src/vec.py"))
+
+    # seed three symbols with simple, orthogonal 3-d vectors
+    sym_repo.create(SymbolMetadata(
+        id=make_id(), name="VecA", repo_id=rid, file_id=fid,
+        symbol_body="def VecA(): pass", embedding_code_vec=[1.0, 0.0, 0.0]
+    ))
+    sym_repo.create(SymbolMetadata(
+        id=make_id(), name="VecB", repo_id=rid, file_id=fid,
+        symbol_body="def VecB(): pass", embedding_code_vec=[0.0, 1.0, 0.0]
+    ))
+    sym_repo.create(SymbolMetadata(
+        id=make_id(), name="VecC", repo_id=rid, file_id=fid,
+        symbol_body="def VecC(): pass", embedding_code_vec=[0.0, 0.0, 1.0]
+    ))
+
+    # query vector identical to VecA  ->  VecA must rank first
+    res = sym_repo.search(
+        rid,
+        SymbolSearchQuery(embedding_query=[1.0, 0.0, 0.0], limit=3),
+    )
+    assert res[0].name == "VecA"
