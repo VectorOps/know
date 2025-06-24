@@ -18,6 +18,16 @@ from know.data import (
 from dataclasses import dataclass, field
 import math
 
+def _cosine(a: list[float], b: list[float]) -> float:
+    """
+    Return cosine similarity of two equal-length numeric vectors.
+    If either vector has zero norm, –1.0 is returned (so it ranks last).
+    """
+    dot = sum(x * y for x, y in zip(a, b))
+    na  = math.sqrt(sum(x * x for x in a))
+    nb  = math.sqrt(sum(x * x for x in b))
+    return dot / (na * nb) if na and nb else -1.0
+
 T = TypeVar("T")
 
 @dataclass
@@ -173,14 +183,10 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         if query.embedding_query:
             qvec = query.embedding_query
 
-            def _cosine(a: list[float], b: list[float]) -> float:
-                dot = sum(x * y for x, y in zip(a, b))
-                na = math.sqrt(sum(x * x for x in a))
-                nb = math.sqrt(sum(x * x for x in b))
-                return dot / (na * nb) if na and nb else -1.0
-
-            scores = {s.id: _cosine(qvec, s.embedding_code_vec)  # type: ignore[arg-type]
-                      for s in res if s.embedding_code_vec}
+            scores = {
+                s.id: _cosine(qvec, s.embedding_code_vec)      # type: ignore[arg-type]
+                for s in res if s.embedding_code_vec
+            }
             res.sort(key=lambda s: scores.get(s.id, -1.0), reverse=True)
         else:
             res.sort(key=lambda s: s.name or "")
