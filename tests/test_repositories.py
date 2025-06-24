@@ -198,20 +198,20 @@ def test_symbol_embedding_search(data_repo):
     # seed three symbols with simple, orthogonal 3-d vectors
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="VecA", repo_id=rid, file_id=fid,
-        symbol_body="def VecA(): pass", embedding_code_vec=[1.0, 0.0, 0.0]
+        symbol_body="def VecA(): pass", embedding_code_vec=[1.0, 0.0, 0.0] + [0] * 1021
     ))
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="VecB", repo_id=rid, file_id=fid,
-        symbol_body="def VecB(): pass", embedding_code_vec=[0.0, 1.0, 0.0]
+        symbol_body="def VecB(): pass", embedding_code_vec=[0.0, 1.0, 0.0] + [0] * 1021
     ))
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="VecC", repo_id=rid, file_id=fid,
-        symbol_body="def VecC(): pass", embedding_code_vec=[0.0, 0.0, 1.0]
+        symbol_body="def VecC(): pass", embedding_code_vec=[0.0, 0.0, 1.0] + [0] * 1021
     ))
 
     # query vector identical to VecA  ->  VecA must rank first
     res = sym_repo.search(
         rid,
-        SymbolSearchQuery(embedding_query=[1.0, 0.0, 0.0], limit=3),
+        SymbolSearchQuery(embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3),
     )
     assert res[0].name == "VecA"

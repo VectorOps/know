@@ -6,7 +6,11 @@ from know.models import (
     FileMetadata,
     SymbolMetadata,
     ImportEdge,
+    SymbolKind,
+    Visibility,
+    Vector,
 )
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:                      # new
     from .data import AbstractFileMetadataRepository  # type: ignore  # noqa: E402
@@ -109,6 +113,25 @@ class AbstractFileMetadataRepository(ABC):
         """Return **all** FileMetadata instances that belong to *package_id*."""
         pass
 
+# Symbols
+@dataclass
+class SymbolSearchQuery:
+    # Filter by symbol name
+    symbol_name: Optional[str] = None
+    # Filter by symbol kind
+    symbol_kind: Optional[SymbolKind] = None
+    # Filter by symbol visiblity
+    symbol_visibility: Optional[Visibility] = None
+    # Full-text search on symbol documentation or comment
+    doc_needle: Optional[list[str]] = None
+    # Embedding similarity search
+    embedding_query: Optional[Vector] = None
+    # Number of records to return. If not provided, 20 records are returned.
+    limit: Optional[int] = None
+    # Zero-based offset
+    offset: Optional[int] = None
+
+
 class AbstractSymbolMetadataRepository(ABC):
     @abstractmethod
     def get_by_id(self, symbol_id: str) -> Optional[SymbolMetadata]:
@@ -120,7 +143,10 @@ class AbstractSymbolMetadataRepository(ABC):
 
     @abstractmethod
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
-        """Get symbols for a file"""
+        pass
+
+    @abstractmethod
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
         pass
 
     @abstractmethod

@@ -7,3 +7,5 @@
 * [X] Fix _resolve_to_package_id to use data repository
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed
+* [ ] Expose a helper method in Project class to calculate embedding for the arbitrary search term
+* [ ] Better vector type (pandas?)

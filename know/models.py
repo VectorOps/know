@@ -119,6 +119,7 @@ class SymbolSignature(BaseModel):
 
 class SymbolMetadata(BaseModel):
     id: Optional[str]
+    repo_id: str
     file_id: Optional[str] = None
     name: str
     fqn: Optional[str] = None

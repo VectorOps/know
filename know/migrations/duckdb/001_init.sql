@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS files (
 
 CREATE TABLE IF NOT EXISTS symbols (
     id TEXT PRIMARY KEY,
+    repo_id TEXT,
     file_id TEXT,
     name TEXT,
     fqn TEXT,

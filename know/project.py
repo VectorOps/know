@@ -233,7 +233,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         sm_kwargs = sym.to_dict()
         sm_kwargs.update({
             "file_id": file_meta.id,
-            "repo_id": project.get_repo().id,      # <-- ensure repo_id is stored
+            "repo_id": project.get_repo().id,
             "parent_symbol_id": parent_id,
         })
 
