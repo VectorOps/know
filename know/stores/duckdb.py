@@ -24,6 +24,7 @@ from know.data import (
     AbstractSymbolMetadataRepository,
     AbstractImportEdgeRepository,
     AbstractDataRepository,
+    SymbolSearchQuery,
 )
 
 T = TypeVar("T")
@@ -187,6 +188,50 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
         rows = _row_to_dict(self.conn.execute("SELECT * FROM symbols WHERE file_id = ?", [file_id]))
+        return [self.model(**self._deserialize_row(r)) for r in rows]
+
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
+        # ---- FROM / JOIN clause to filter by repo_id via files table ----
+        sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
+        where, params = ["f.repo_id = ?"], [repo_id]
+
+        # ---------- scalar filters ----------
+        if query.symbol_name:
+            where.append("LOWER(s.name) LIKE ?")
+            params.append(f"%{query.symbol_name.lower()}%")
+
+        if query.symbol_kind:
+            where.append("s.kind = ?")
+            params.append(getattr(query.symbol_kind, "value", query.symbol_kind))
+
+        if query.symbol_visibility:
+            where.append("s.visibility = ?")
+            params.append(getattr(query.symbol_visibility, "value", query.symbol_visibility))
+
+        # ---------- doc / comment LIKE filters ----------
+        if query.doc_needle:
+            for n in query.doc_needle:
+                like = f"%{n.lower()}%"
+                where.append("(LOWER(s.docstring) LIKE ? OR LOWER(s.comment) LIKE ?)")
+                params.extend([like, like])
+
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+
+        # ---------- ordering (embedding vs. default) ----------
+        if query.embedding_query:
+            sql += " ORDER BY array_distance(s.embedding_code_vec, ?) ASC"
+            params.append(query.embedding_query)          # vector parameter
+        else:
+            sql += " ORDER BY s.name ASC"
+
+        # ---------- pagination ----------
+        limit  = query.limit  if query.limit  is not None else 20
+        offset = query.offset if query.offset is not None else 0
+        sql += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        rows = _row_to_dict(self.conn.execute(sql, params))
         return [self.model(**self._deserialize_row(r)) for r in rows]
 
 

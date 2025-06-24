@@ -13,8 +13,10 @@ from know.data import (
     AbstractSymbolMetadataRepository,
     AbstractImportEdgeRepository,
     AbstractDataRepository,
+    SymbolSearchQuery,
 )
 from dataclasses import dataclass, field
+import math
 
 T = TypeVar("T")
 
@@ -139,6 +141,54 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
         """Return all symbols that belong to the given *file_id*."""
         return [sym for sym in self._items.values() if sym.file_id == file_id]
+
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
+        # --- initial candidate set: symbols that belong to the requested repo
+        res: list[SymbolMetadata] = [
+            s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
+        ]
+
+        # ---------- scalar filters ----------
+        if query.symbol_name:
+            needle = query.symbol_name.lower()
+            res = [s for s in res if needle in (s.name or "").lower()]
+
+        if query.symbol_kind:
+            res = [s for s in res if s.kind == query.symbol_kind]
+
+        if query.symbol_visibility:
+            res = [s for s in res if s.visibility == query.symbol_visibility]
+
+        # ---------- doc / comment full-text search ----------
+        if query.doc_needle:
+            needles = [n.lower() for n in query.doc_needle]
+
+            def _matches(s: SymbolMetadata) -> bool:
+                haystack = f"{s.docstring or ''} {s.comment or ''}".lower()
+                return all(n in haystack for n in needles)
+
+            res = [s for s in res if _matches(s)]
+
+        # ---------- embedding similarity ----------
+        if query.embedding_query:
+            qvec = query.embedding_query
+
+            def _cosine(a: list[float], b: list[float]) -> float:
+                dot = sum(x * y for x, y in zip(a, b))
+                na = math.sqrt(sum(x * x for x in a))
+                nb = math.sqrt(sum(x * x for x in b))
+                return dot / (na * nb) if na and nb else -1.0
+
+            scores = {s.id: _cosine(qvec, s.embedding_code_vec)  # type: ignore[arg-type]
+                      for s in res if s.embedding_code_vec}
+            res.sort(key=lambda s: scores.get(s.id, -1.0), reverse=True)
+        else:
+            res.sort(key=lambda s: s.name or "")
+
+        # ---------- pagination ----------
+        offset = query.offset or 0
+        limit = query.limit or 20
+        return res[offset: offset + limit]
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):
