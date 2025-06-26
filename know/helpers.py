@@ -55,10 +55,24 @@ def parse_gitignore(root_path: str | Path) -> list[str]:
     gitignore_file = root_path / ".gitignore"
     patterns: list[str] = []
     if gitignore_file.exists():
-        for line in gitignore_file.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#"):
-                patterns.append(line)
+        for raw in gitignore_file.read_text().splitlines():
+            raw = raw.strip()
+            if not raw or raw.startswith("#"):
+                continue
+
+            line = raw           # copy to a working var
+            dir_only = line.endswith("/")
+            if dir_only:
+                line = line.rstrip("/")
+
+            if line.startswith("/"):
+                line = line.lstrip("/")
+
+            glob_pat = f"**/{line}" if "/" not in line else line
+            if dir_only:
+                glob_pat = f"{glob_pat}/**"
+
+            patterns.append(glob_pat)
     return patterns
 
 
