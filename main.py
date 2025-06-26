@@ -32,6 +32,14 @@ from know.settings import ProjectSettings, EmbeddingSettings
               help="Enable int8 quantisation.")
 @click.option("--embedding-quantize-bits", default=8, type=int,
               help="Number of bits when quantising the model.")
+@click.option("--repo-backend",
+              type=click.Choice(["memory", "duckdb"]),
+              default="memory",
+              help="Storage backend to use.")
+@click.option("--repo-connection",
+              type=str,
+              default=None,
+              help="Connection string / DB path for the backend.")
 def cli(project_path,
         project_id,
         embeddings_enabled,
@@ -41,7 +49,9 @@ def cli(project_path,
         embedding_device,
         embedding_batch_size,
         quantize,
-        embedding_quantize_bits):
+        embedding_quantize_bits,
+        repo_backend,
+        repo_connection):
     """
     Initialise a *know* project using command-line supplied settings.
     """
@@ -60,6 +70,8 @@ def cli(project_path,
         project_path = project_path,
         project_id   = project_id,
         embedding    = embedding_cfg,
+        repository_backend  = repo_backend,
+        repository_connection = repo_connection,
     )
 
     try:

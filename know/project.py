@@ -3,6 +3,7 @@ from typing import Optional
 from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge
 from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
+from know.stores.duckdb import DuckDBDataRepository  # new
 from know.parsers import ParsedFile, ParsedSymbol, ParsedImportEdge, CodeParserRegistry
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
@@ -281,7 +282,14 @@ def init_project(settings: ProjectSettings) -> Project:
     If it does not exist - creates a new RepoMetadata and sets that on Project instance that's returned.
     Finally, kicks off a function to recursively scan the project directory.
     """
-    data_repository = InMemoryDataRepository()
+    backend = settings.repository_backend or "memory"
+    if backend == "duckdb":
+        data_repository = DuckDBDataRepository(db_path=settings.repository_connection)
+    elif backend == "memory":
+        data_repository = InMemoryDataRepository()
+    else:
+        raise ValueError(f"Unsupported repository backend: {backend}")
+
     repo_repository = data_repository.repo
     repo_metadata = None
 
@@ -313,7 +321,7 @@ def init_project(settings: ProjectSettings) -> Project:
         settings,
         data_repository,
         repo_metadata,
-        embeddings_calculator=embeddings_calculator,   # pass along
+        embeddings=embeddings_calculator,   # pass along
     )
 
     # Recursively scan the project directory and parse source files
