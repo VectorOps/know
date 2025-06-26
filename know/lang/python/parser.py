@@ -71,37 +71,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
-            # print(node)
-            if node.type in ('import_statement',
-                             'import_from_statement',
-                             'future_import_statement'):
-                self._handle_import_statement(node, parsed_file, project)
-            elif node.type == 'function_definition':
-                self._handle_function_definition(node, parsed_file, package)
-            elif node.type == 'class_definition':
-                self._handle_class_definition(node, parsed_file, package)
-            elif node.type == 'assignment':
-                self._handle_assignment(node, parsed_file, package)
-            elif node.type == 'decorated_definition':
-                self._handle_decorated_definition(node, parsed_file, package)
-            elif node.type == "expression_statement":
-                assign_child = next((c for c in node.children if c.type == "assignment"), None)
-                if assign_child is not None:
-                    self._handle_assignment(assign_child, parsed_file, package)
-            elif node.type == "comment":
-                pass
-            else:
-                KnowLogger.log_event(
-                    "UNKNOWN_NODE",
-                    {
-                        "path": rel_path,
-                        "type": node.type,
-                        "line": node.start_point[0] + 1,      # convert to 1-based line
-                        "byte_offset": node.start_byte,
-                        "raw": node.text.decode("utf8", errors="replace"),
-                    },
-                    level=logging.DEBUG,
-                )
+            self._process_node(node, parsed_file, package, project)
 
         # ------------------------------------------------------------------
         # Sync package-level imports with file-level imports
@@ -668,26 +638,6 @@ class PythonCodeParser(AbstractCodeParser):
         Child `block`s of the try/except/else/finally clauses are inspected; deeper
         nesting is ignored.
         """
-        # --- local helper: re-use the standard dispatch logic -----------------
-        def _process_inner(inner):
-            if inner.type in (
-                "import_statement",
-                "import_from_statement",
-                "future_import_statement",
-            ):
-                self._handle_import_statement(inner, parsed_file, project)
-            elif inner.type == "function_definition":
-                self._handle_function_definition(inner, parsed_file, package)
-            elif inner.type == "class_definition":
-                self._handle_class_definition(inner, parsed_file, package)
-            elif inner.type == "assignment":
-                self._handle_assignment(inner, parsed_file, package)
-            elif inner.type == "decorated_definition":
-                self._handle_decorated_definition(inner, parsed_file, package)
-            elif inner.type == "expression_statement":
-                assign = next((c for c in inner.children if c.type == "assignment"), None)
-                if assign is not None:
-                    self._handle_assignment(assign, parsed_file, package)
 
         # ----------------------------------------------------------------------
         # visit every first-level block (try, except, else, finally)
@@ -696,13 +646,13 @@ class PythonCodeParser(AbstractCodeParser):
             # plain `block`
             if child.type == "block":
                 for grand in child.children:
-                    _process_inner(grand)
+                    self._process_node(grand, parsed_file, package, project)
             # except_clause → grab its inner block
             elif child.type == "except_clause":
                 blk = next((c for c in child.children if c.type == "block"), None)
                 if blk is not None:
                     for grand in blk.children:
-                        _process_inner(grand)
+                        self._process_node(grand, parsed_file, package, project)
 
     # ------------------------------------------------------------------ #
     # Module-resolution helper                                           #
