@@ -6,7 +6,8 @@ from know.settings import ProjectSettings, EmbeddingSettings
 @click.command()
 @click.option("--project-path",
               type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=str),
-              help="Path to the project directory.")
+              required=True,                     # ← make the argument mandatory
+              help="Path to the project directory (required).")
 @click.option("--project-id",
               type=str,
               help="Existing project identifier (optional).")
