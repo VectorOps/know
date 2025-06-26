@@ -76,6 +76,21 @@ def parse_gitignore(root_path: str | Path) -> list[str]:
     return patterns
 
 
+# ----------------------------------------------------------------------  
+#  Convenience: test whether a relative path matches any git-ignore rule  
+# ----------------------------------------------------------------------  
+def matches_gitignore(path: str | Path, patterns: list[str]) -> bool:
+    """
+    Return True if *path* (str or Path – **relative to repo root**) matches
+    at least one of the glob patterns returned by ``parse_gitignore``.
+    """
+    p = Path(path)
+    for pat in patterns:
+        if p.match(pat):
+            return True
+    return False
+
+
 def generate_id() -> str:
     """
     Return a new unique identifier as a string.
