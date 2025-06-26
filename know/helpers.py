@@ -2,6 +2,7 @@ import hashlib
 import uuid
 from pathlib import Path
 from typing import Union
+import pathspec
 
 
 def compute_file_hash(abs_path: str) -> str:
@@ -11,7 +12,6 @@ def compute_file_hash(abs_path: str) -> str:
         for chunk in iter(lambda: f.read(8192), b""):
             sha256.update(chunk)
     return sha256.hexdigest()
-
 
 
 def compute_symbol_hash(symbol: Union[str, bytes]) -> str:
@@ -36,59 +36,39 @@ def get_symbol_key(symbol):
     return name
 
 
-def parse_gitignore(root_path: str | Path) -> list[str]:
+def parse_gitignore(root_path: str | Path) -> "pathspec.PathSpec":
     """
-    Return list of ignore patterns extracted from “.gitignore” located in *root_path*.
+    Parse <root_path>/.gitignore and return a *pathspec.PathSpec* built
+    with the ‘gitwildmatch’ syntax (exactly what Git uses).
 
-    The logic matches previous inline implementation:
-      • Reads <root_path>/.gitignore if it exists.
-      • Strips whitespace, skips blank lines and comments (# …).
-      • Negation patterns (!pattern) are NOT handled.
-
-    Args:
-        root_path: Repository root as str or pathlib.Path.
-
-    Returns:
-        List of glob-style patterns to ignore.
+    Blank lines, comment lines (starting with '#') and negation patterns
+    beginning with '!' are ignored – ‘!’ support is delegated to
+    *pathspec* via the returned spec.
     """
     root_path = Path(root_path)
     gitignore_file = root_path / ".gitignore"
-    patterns: list[str] = []
-    if gitignore_file.exists():
-        for raw in gitignore_file.read_text().splitlines():
-            raw = raw.strip()
-            if not raw or raw.startswith("#"):
-                continue
 
-            line = raw           # copy to a working var
-            dir_only = line.endswith("/")
-            if dir_only:
-                line = line.rstrip("/")
+    if not gitignore_file.exists():
+        return pathspec.PathSpec.from_lines("gitwildmatch", [])
 
-            if line.startswith("/"):
-                line = line.lstrip("/")
+    valid_lines: list[str] = []
+    for raw in gitignore_file.read_text().splitlines():
+        raw = raw.rstrip()
+        if not raw or raw.lstrip().startswith("#"):
+            continue
+        valid_lines.append(raw)
 
-            glob_pat = f"**/{line}" if "/" not in line else line
-            if dir_only:
-                glob_pat = f"{glob_pat}/**"
-
-            patterns.append(glob_pat)
-    return patterns
+    return pathspec.PathSpec.from_lines("gitwildmatch", valid_lines)
 
 
 # ----------------------------------------------------------------------  
 #  Convenience: test whether a relative path matches any git-ignore rule  
 # ----------------------------------------------------------------------  
-def matches_gitignore(path: str | Path, patterns: list[str]) -> bool:
+def matches_gitignore(path: str | Path, spec: "pathspec.PathSpec") -> bool:
     """
-    Return True if *path* (str or Path – **relative to repo root**) matches
-    at least one of the glob patterns returned by ``parse_gitignore``.
+    Return True if *path* (relative to repo root) is ignored by *spec*.
     """
-    p = Path(path)
-    for pat in patterns:
-        if p.match(pat):
-            return True
-    return False
+    return spec.match_file(str(path))
 
 
 def generate_id() -> str:

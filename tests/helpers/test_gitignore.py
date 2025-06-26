@@ -17,28 +17,27 @@ foo/bar
 
 def test_parse_gitignore(tmp_path: Path) -> None:
     _create_gitignore(tmp_path)
-
-    patterns = parse_gitignore(tmp_path)
-
-    assert set(patterns) == {
-        "**/.env",
-        "**/node_modules/**",
-        "**/build/**",
-        "foo/bar",
-    }
+    spec = parse_gitignore(tmp_path)
+    assert spec.match_file(".env")
+    assert spec.match_file("src/.env")
+    assert spec.match_file("node_modules/pkg/index.js")
+    assert spec.match_file("a/b/build/output.o")
+    assert spec.match_file("foo/bar")
+    # and something that must NOT match
+    assert not spec.match_file("src/main.py")
 
 
 def test_matches_gitignore(tmp_path: Path) -> None:
     _create_gitignore(tmp_path)
-    pats = parse_gitignore(tmp_path)
+    spec = parse_gitignore(tmp_path)
 
     # positives
-    assert matches_gitignore(".env", pats)
-    assert matches_gitignore("src/.env", pats)
-    assert matches_gitignore("node_modules/pkg/index.js", pats)
-    assert matches_gitignore("a/b/build/output.o", pats)
-    assert matches_gitignore("foo/bar", pats)
+    assert matches_gitignore(".env", spec)
+    assert matches_gitignore("src/.env", spec)
+    assert matches_gitignore("node_modules/pkg/index.js", spec)
+    assert matches_gitignore("a/b/build/output.o", spec)
+    assert matches_gitignore("foo/bar", spec)
 
     # negatives
-    assert not matches_gitignore("src/main.py", pats)
-    assert not matches_gitignore("docs/readme.md", pats)
+    assert not matches_gitignore("src/main.py", spec)
+    assert not matches_gitignore("docs/readme.md", spec)
