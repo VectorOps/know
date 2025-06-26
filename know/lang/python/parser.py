@@ -72,7 +72,9 @@ class PythonCodeParser(AbstractCodeParser):
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
             # print(node)
-            if node.type in ('import_statement', 'import_from_statement'):
+            if node.type in ('import_statement',
+                             'import_from_statement',
+                             'future_import_statement'):
                 self._handle_import_statement(node, parsed_file, project)
             elif node.type == 'function_definition':
                 self._handle_function_definition(node, parsed_file, package)
