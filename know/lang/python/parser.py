@@ -656,6 +656,54 @@ class PythonCodeParser(AbstractCodeParser):
         elif inner.type == "class_definition":
             self._handle_class_definition(inner, parsed_file, package)
 
+    def _handle_try_statement(
+        self,
+        node,
+        parsed_file: ParsedFile,
+        package: ParsedPackage,
+        project: ProjectSettings,
+    ):
+        """
+        Extract symbols that occur one level deep inside a *top-level* try-statement.
+        Child `block`s of the try/except/else/finally clauses are inspected; deeper
+        nesting is ignored.
+        """
+        # --- local helper: re-use the standard dispatch logic -----------------
+        def _process_inner(inner):
+            if inner.type in (
+                "import_statement",
+                "import_from_statement",
+                "future_import_statement",
+            ):
+                self._handle_import_statement(inner, parsed_file, project)
+            elif inner.type == "function_definition":
+                self._handle_function_definition(inner, parsed_file, package)
+            elif inner.type == "class_definition":
+                self._handle_class_definition(inner, parsed_file, package)
+            elif inner.type == "assignment":
+                self._handle_assignment(inner, parsed_file, package)
+            elif inner.type == "decorated_definition":
+                self._handle_decorated_definition(inner, parsed_file, package)
+            elif inner.type == "expression_statement":
+                assign = next((c for c in inner.children if c.type == "assignment"), None)
+                if assign is not None:
+                    self._handle_assignment(assign, parsed_file, package)
+
+        # ----------------------------------------------------------------------
+        # visit every first-level block (try, except, else, finally)
+        # ----------------------------------------------------------------------
+        for child in node.children:
+            # plain `block`
+            if child.type == "block":
+                for grand in child.children:
+                    _process_inner(grand)
+            # except_clause → grab its inner block
+            elif child.type == "except_clause":
+                blk = next((c for c in child.children if c.type == "block"), None)
+                if blk is not None:
+                    for grand in blk.children:
+                        _process_inner(grand)
+
     # ------------------------------------------------------------------ #
     # Module-resolution helper                                           #
     # ------------------------------------------------------------------ #
