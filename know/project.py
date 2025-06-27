@@ -198,21 +198,27 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         key = (imp.virtual_path, imp.alias, imp.dot)
         new_keys.add(key)
 
+        to_pkg_id: str | None = _resolve_to_package_id(imp)
+
         # TODO: Use parsing function
         kwargs = dict(
-            repo_id          = project.get_repo().id,
-            from_package_id  = pkg_meta.id,
-            to_package_path  = imp.virtual_path,
-            alias            = imp.alias,
-            dot              = imp.dot,
-            external         = imp.external,
+            repo_id         = project.get_repo().id,
+            from_package_id = pkg_meta.id,
+            to_package_path = imp.virtual_path,
+            to_package_id   = to_pkg_id,
+            alias           = imp.alias,
+            dot             = imp.dot,
+            external        = imp.external,
         )
 
         if key in existing_by_key:
-            import_repo.update(existing_by_key[key].id, kwargs)
+            edge = import_repo.update(existing_by_key[key].id, kwargs)
         else:
-            new_edge = import_repo.create(ImportEdge(id=generate_id(), **kwargs))
-            project._add_pending_import_edge(new_edge)
+            edge = import_repo.create(ImportEdge(id=generate_id(), **kwargs))
+
+        # (Re-)schedule internal edges that are still unresolved
+        if edge and not edge.external and edge.to_package_id is None:
+            project._add_pending_import_edge(edge)
 
     # Delete edges that no longer exist
     for key, edge in existing_by_key.items():
