@@ -505,7 +505,7 @@ class PythonCodeParser(AbstractCodeParser):
         class_name = node.child_by_field_name('name').text.decode('utf8')
         symbol = ParsedSymbol(
             name=class_name,
-            fqn=f"{package.virtual_path}.{class_name}",
+            fqn=self._join_fqn(package.virtual_path, class_name),
             body=wrapper.text.decode('utf8'),
             key=class_name,
             hash=compute_symbol_hash(wrapper.text),
@@ -555,7 +555,7 @@ class PythonCodeParser(AbstractCodeParser):
         method_name = node.child_by_field_name('name').text.decode('utf8')
         return ParsedSymbol(
             name=method_name,
-            fqn=f"{package.virtual_path}.{class_name}.{method_name}",
+            fqn=self._join_fqn(package.virtual_path, class_name, method_name),
             body=wrapper.text.decode('utf8'),
             key=method_name,
             hash=compute_symbol_hash(wrapper.text),
@@ -648,7 +648,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         symbol = ParsedSymbol(
             name=func_name,
-            fqn=f"{package.virtual_path}.{func_name}",
+            fqn=self._join_fqn(package.virtual_path, func_name),
             body=wrapper.text.decode("utf8"),
             key=func_name,
             hash=compute_symbol_hash(wrapper.text),
