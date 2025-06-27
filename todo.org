@@ -8,4 +8,25 @@
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed
 * [ ] Expose a helper method in Project class to calculate embedding for the arbitrary search term
-* [ ] Better vector type (pandas?)
+* [ ] Better in-memory vector index (pandas?)
+* [ ] Create a helper that generates a summary view of a file
+* [ ] OpenAI-compatible tool definition support
+* [ ] MCP-compatible tool definition support
+* [ ] Tools
+** [ ] File list
+- List of directories, recursive or not
+- Flag to include docstrings
+- Flag to include AGENT.md files
+- Token limit
+** [ ] Summary lists
+- Takes a list of file paths or packages
+- Returns summary views of files
+- Token limit
+** [ ] Get files
+- A list of files
+** [ ] Search through symbols
+- Needle
+- Result list
+- Token limit
+** [ ] Search symbol by name
+- Path prefixes (optional)
