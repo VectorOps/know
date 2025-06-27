@@ -30,6 +30,29 @@ class PythonCodeParser(AbstractCodeParser):
         # Cache file bytes during `parse` for fast preceding-comment lookup.
         self._source_bytes: bytes = b""
 
+    # ------------------------------------------------------------
+    # Virtual-path / FQN helpers
+    # ------------------------------------------------------------
+    @staticmethod
+    def _rel_to_virtual_path(rel_path: str) -> str:
+        """
+        Convert a file’s *relative* path into its dotted Python module path.
+
+        Special–case ``__init__.py`` so that “pkg/__init__.py” → “pkg”
+        instead of “pkg.__init__”.
+        """
+        p = Path(rel_path)
+        if p.name == "__init__.py":
+            parts = p.parent.parts                # drop the file name
+        else:
+            parts = p.with_suffix("").parts       # strip ".py"
+        return ".".join(parts)
+
+    @staticmethod
+    def _join_fqn(*parts: Optional[str]) -> str:
+        """Join non-empty parts with a dot, skipping Nones / empty strings."""
+        return ".".join([p for p in parts if p])
+
     def parse(self, project: ProjectSettings, rel_path: str) -> ParsedFile:
         # Read the file content as bytes
         file_path = os.path.join(project.project_path, rel_path)
@@ -50,7 +73,7 @@ class PythonCodeParser(AbstractCodeParser):
         package = ParsedPackage(
             language=ProgrammingLanguage.PYTHON,
             physical_path=rel_path,
-            virtual_path = rel_path.replace('/', '.').removesuffix('.py'),
+            virtual_path=self._rel_to_virtual_path(rel_path),
             imports=[]
         )
 
@@ -425,11 +448,7 @@ class PythonCodeParser(AbstractCodeParser):
         else is recorded as VARIABLE.
         """
         kind = SymbolKind.CONSTANT if self._is_constant_name(name) else SymbolKind.VARIABLE
-        fqn = (
-            f"{package.virtual_path}.{class_name}.{name}"
-            if class_name
-            else f"{package.virtual_path}.{name}"
-        )
+        fqn = self._join_fqn(package.virtual_path, class_name, name)
         return ParsedSymbol(
             name=name,
             fqn=fqn,
