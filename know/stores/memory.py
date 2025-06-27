@@ -94,12 +94,21 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
         super().__init__(tables.packages)
         self._file_items = tables.files
 
-    def get_by_path(self, path: str) -> Optional[PackageMetadata]:
+    def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
         """
         Return the first PackageMetadata whose physical_path equals *path*.
         """
         for pkg in self._items.values():
             if pkg.physical_path == path:
+                return pkg
+        return None
+
+    def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:
+        """
+        Return the first PackageMetadata whose physical_path equals *path*.
+        """
+        for pkg in self._items.values():
+            if pkg.virtual_path == path:
                 return pkg
         return None
 

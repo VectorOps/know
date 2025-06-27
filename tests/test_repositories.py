@@ -50,13 +50,14 @@ def test_package_metadata_repository(data_repo):
     orphan_id = make_id()
     used_id   = make_id()
     rid = make_id()
-    pkg_repo.create(PackageMetadata(id=orphan_id, name="orphan", virtual_path="pkg/orphan", physical_path="pkg/orphan", repo_id=rid))
-    pkg_repo.create(PackageMetadata(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used",   repo_id=rid))
+    pkg_repo.create(PackageMetadata(id=orphan_id, name="orphan", virtual_path="pkg/orphan", physical_path="pkg/orphan.py", repo_id=rid))
+    pkg_repo.create(PackageMetadata(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used.go",   repo_id=rid))
 
     # add a file that references the “used” package, leaving the first one orphaned
     file_repo.create(FileMetadata(id=make_id(), path="pkg/used/a.py", package_id=used_id))
 
-    assert pkg_repo.get_by_path("pkg/used").id == used_id
+    assert pkg_repo.get_by_virtual_path("pkg/used").id == used_id
+    assert pkg_repo.get_by_physical_path("pkg/used.go").id == used_id
     assert {p.id for p in pkg_repo.get_list_by_repo_id(rid)} == {orphan_id, used_id}
     # delete_orphaned should remove only the orphan package
     assert pkg_repo.delete_orphaned() == 1

@@ -603,7 +603,7 @@ class PythonCodeParser(AbstractCodeParser):
             )
 
         import_edge = ParsedImportEdge(
-            path=resolved_path,
+            physical_path=resolved_path,
             virtual_path=import_path or raw_stmt,
             alias=alias,
             dot=dot,

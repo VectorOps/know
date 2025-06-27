@@ -57,7 +57,8 @@ def test_python_parser_on_simple_file():
     assert rel_import is not None, "Relative import '.foobuz' not found"
     assert rel_import.external is False          # must be classified local
     assert rel_import.dot is True                # leading dot present
-    assert rel_import.path == "foobuz.py"        # stored canonical path
+    assert rel_import.physical_path == "foobuz.py"
+    assert rel_import.virtual_path == ".foobuz"
 
     # ------------------------------------------------------------------ #
     # Top-level symbols

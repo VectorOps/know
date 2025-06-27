@@ -53,9 +53,13 @@ class AbstractPackageMetadataRepository(ABC):
     def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
         pass
 
-    # TODO: Make it explicit. Split into two for virtual and physical access helpers.
     @abstractmethod
-    def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
+    def get_by_physical_path(self, root_path: str) -> Optional[RepoMetadata]:
+        """Get a repo by its root path."""
+        pass
+
+    @abstractmethod
+    def get_by_virtual_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""
         pass
 

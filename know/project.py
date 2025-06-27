@@ -47,7 +47,7 @@ class Project:
                 continue
             if edge.to_package_path is None:
                 continue
-            pkg = pkg_repo.get_by_path(edge.to_package_path)
+            pkg = pkg_repo.get_by_virtual_path(edge.to_package_path)
             if pkg:
                 imp_repo.update(edge.id, {"to_package_id": pkg.id})
                 edge.to_package_id = pkg.id
@@ -159,7 +159,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
     # ── Package ─────────────────────────────────────────────────────────────
     pkg_repo = repo_store.package
-    pkg_meta = pkg_repo.get_by_path(parsed_file.package.virtual_path)
+    pkg_meta = pkg_repo.get_by_virtual_path(parsed_file.package.virtual_path)
 
     pkg_data = parsed_file.package.to_dict()
     pkg_data["repo_id"] = project.get_repo().id
@@ -186,10 +186,10 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         (or None when the import is external / unknown).
         """
         # print(parsed_imp)
-        if parsed_imp.external or not parsed_imp.path:
+        if parsed_imp.external or not parsed_imp.physical_path:
             return None
 
-        pkg = repo_store.package.get_by_path(parsed_imp.path)
+        pkg = repo_store.package.get_by_virtual_path(parsed_imp.virtual_path)
         return pkg.id if pkg else None
 
     new_keys: set[tuple[str | None, str | None, bool]] = set()
