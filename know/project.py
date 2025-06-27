@@ -167,6 +167,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         Map a ParsedImportEdge to an existing internal PackageMetadata.id
         (or None when the import is external / unknown).
         """
+        # print(parsed_imp)
         if parsed_imp.external or not parsed_imp.path:
             return None
 
@@ -174,25 +175,30 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         return pkg.id if pkg else None
 
     new_keys: set[tuple[str | None, str | None, bool]] = set()
+
+    def _target_path(imp: ParsedImportEdge) -> str | None:
+        # Prefer the physical path (imp.path) when available,
+        # fall back to the raw / virtual text otherwise.
+        return imp.path or imp.virtual_path
+
     for imp in parsed_file.package.imports:
-        key = (imp.virtual_path, imp.alias, imp.dot)
+        tgt_path = _target_path(imp)          # NEW – physical when local
+        key = (tgt_path, imp.alias, imp.dot)  # use physical path in the key
         new_keys.add(key)
 
         kwargs = dict(
-            repo_id = project.get_repo().id,          # NEW
-            from_package_id=pkg_meta.id,
-            to_package_path=imp.virtual_path,
-            to_package_id=_resolve_to_package_id(imp),
-            alias=imp.alias,
-            dot=imp.dot,
+            repo_id          = project.get_repo().id,
+            from_package_id  = pkg_meta.id,
+            to_package_path  = tgt_path,                 # physical path stored
+            to_package_id    = _resolve_to_package_id(imp),  # unchanged helper
+            alias            = imp.alias,
+            dot              = imp.dot,
         )
 
         if key in existing_by_key:
-            import_repo.update(existing_by_key[key].id, kwargs)   # type: ignore[arg-type]
+            import_repo.update(existing_by_key[key].id, kwargs)
         else:
-            import_repo.create(
-                ImportEdge(id=generate_id(), **kwargs)        # type: ignore[arg-type]
-            )
+            import_repo.create(ImportEdge(id=generate_id(), **kwargs))
 
     # Delete edges that no longer exist
     for key, edge in existing_by_key.items():
