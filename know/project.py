@@ -30,10 +30,28 @@ class Project:
         self.data_repository = data_repository
         self._repo_metadata = repo_metadata
         self.embeddings = embeddings
+        self._pending_import_edges: list[ImportEdge] = []
 
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
         return self._repo_metadata
+
+    def _add_pending_import_edge(self, edge: ImportEdge) -> None:
+        self._pending_import_edges.append(edge)
+
+    def resolve_pending_import_edges(self) -> None:
+        pkg_repo  = self.data_repository.package
+        imp_repo  = self.data_repository.importedge
+        for edge in list(self._pending_import_edges):
+            if edge.external or edge.to_package_id is not None:
+                continue
+            if edge.to_package_path is None:
+                continue
+            pkg = pkg_repo.get_by_path(edge.to_package_path)
+            if pkg:
+                imp_repo.update(edge.id, {"to_package_id": pkg.id})
+                edge.to_package_id = pkg.id
+        self._pending_import_edges.clear()
 
 
 def scan_project_directory(project: Project) -> None:
@@ -176,29 +194,25 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
     new_keys: set[tuple[str | None, str | None, bool]] = set()
 
-    def _target_path(imp: ParsedImportEdge) -> str | None:
-        # Prefer the physical path (imp.path) when available,
-        # fall back to the raw / virtual text otherwise.
-        return imp.path or imp.virtual_path
-
     for imp in parsed_file.package.imports:
-        tgt_path = _target_path(imp)          # NEW – physical when local
-        key = (tgt_path, imp.alias, imp.dot)  # use physical path in the key
+        key = (imp.virtual_path, imp.alias, imp.dot)
         new_keys.add(key)
 
+        # TODO: Use parsing function
         kwargs = dict(
             repo_id          = project.get_repo().id,
             from_package_id  = pkg_meta.id,
-            to_package_path  = tgt_path,                 # physical path stored
-            to_package_id    = _resolve_to_package_id(imp),  # unchanged helper
+            to_package_path  = imp.virtual_path,
             alias            = imp.alias,
             dot              = imp.dot,
+            external         = imp.external,
         )
 
         if key in existing_by_key:
             import_repo.update(existing_by_key[key].id, kwargs)
         else:
-            import_repo.create(ImportEdge(id=generate_id(), **kwargs))
+            new_edge = import_repo.create(ImportEdge(id=generate_id(), **kwargs))
+            project._add_pending_import_edge(new_edge)
 
     # Delete edges that no longer exist
     for key, edge in existing_by_key.items():
@@ -332,5 +346,7 @@ def init_project(settings: ProjectSettings) -> Project:
 
     # Recursively scan the project directory and parse source files
     scan_project_directory(project)
+
+    project.resolve_pending_import_edges()
 
     return project
