@@ -1,12 +1,13 @@
 from pathlib import Path
 import pytest
 
-from know.project import Project, upsert_parsed_file
+from know.project import Project, upsert_parsed_file, scan_project_directory
 from know.settings import ProjectSettings
 from know.stores.memory import InMemoryDataRepository
 from know.models import RepoMetadata
 from know.helpers import generate_id
 from know.lang.python.parser import PythonCodeParser
+from know.parsers import CodeParserRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -17,14 +18,17 @@ CONST = 1
 
 import os
 
+# foo comment
 def foo():
     pass
 """
 
 CODE_V2 = """
-def foo():
+# new foo comment
+def foo(x):
     return 1
 """
+MOD2_CODE = "def bar():\n    pass\n"
 
 
 def _make_project(root: Path) -> Project:
@@ -35,6 +39,7 @@ def _make_project(root: Path) -> Project:
     """
     settings = ProjectSettings(project_path=str(root))
     data_repo = InMemoryDataRepository()
+    CodeParserRegistry.register_parser(".py", PythonCodeParser())
     repo_meta = RepoMetadata(id=generate_id(), root_path=str(root))
     data_repo.repo.create(repo_meta)        # pre-seed repo table
     return Project(settings, data_repo, repo_meta)   # embeddings = None
@@ -60,6 +65,8 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     repo_dir   = tmp_path / "repo"
     repo_dir.mkdir()
     module_fp  = repo_dir / "mod.py"
+    module2_fp = repo_dir / "mod2.py"
+    module2_fp.write_text(MOD2_CODE)
     parser     = PythonCodeParser()
 
     # build project instance
@@ -71,17 +78,22 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     parsed_v1 = _parse(parser, settings, "mod.py")
     upsert_parsed_file(project, parsed_v1)
 
+    parsed2_v1 = _parse(parser, settings, "mod2.py")
+    upsert_parsed_file(project, parsed2_v1)
+
     rs         = project.data_repository      # shorthand
     repo_meta  = project.get_repo()
 
-    # expect exactly one package / file
+    # expect exactly two packages / files (one per source file)
     packages = rs.package.get_list_by_repo_id(repo_meta.id)
-    assert len(packages) == 1
-    pkg_id = packages[0].id
+    assert len(packages) == 2
+    pkg_id_mod1 = next(p.id for p in packages if p.physical_path == "mod.py" or p.virtual_path.endswith("mod"))
+    pkg_id_mod2 = next(p.id for p in packages if p.physical_path == "mod2.py" or p.virtual_path.endswith("mod2"))
 
     files = rs.file.get_list_by_repo_id(repo_meta.id)
-    assert len(files) == 1
-    file_id = files[0].id
+    assert len(files) == 2
+    file_id = next(f.id for f in files if f.path == "mod.py")
+    file_id_mod2 = next(f.id for f in files if f.path == "mod2.py")
 
     # symbols: CONST + foo
     symbols = rs.symbol.get_list_by_file_id(file_id)
@@ -91,9 +103,10 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     foo_before = next(s for s in symbols if s.name == "foo")
     foo_id_before   = foo_before.id
     foo_hash_before = foo_before.symbol_hash
+    foo_sig_before = foo_before.signature.raw if foo_before.signature else None
 
     # import-edge created for 'import os'
-    edges = rs.importedge.get_list_by_source_package_id(pkg_id)
+    edges = rs.importedge.get_list_by_source_package_id(pkg_id_mod1)
     assert len(edges) == 1
 
     # ── 2) second version  → UPDATE / DELETE paths ─────────────────────────
@@ -102,8 +115,8 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     upsert_parsed_file(project, parsed_v2)
 
     # packages / files unchanged (update, not duplicate)
-    assert len(rs.package.get_list_by_repo_id(repo_meta.id)) == 1
-    assert len(rs.file.get_list_by_repo_id(repo_meta.id))    == 1
+    assert len(rs.package.get_list_by_repo_id(repo_meta.id)) == 2
+    assert len(rs.file.get_list_by_repo_id(repo_meta.id))    == 2
 
     # symbols: only foo remains, id should be SAME, hash should be different
     symbols_after = rs.symbol.get_list_by_file_id(file_id)
@@ -112,6 +125,7 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     foo_after = symbols_after[0]
     assert foo_after.id == foo_id_before           # update, not re-insert
     assert foo_after.symbol_hash != foo_hash_before
+    assert foo_after.signature.raw != foo_sig_before
 
     # import-edges: removed
-    assert rs.importedge.get_list_by_source_package_id(pkg_id) == []
+    assert rs.importedge.get_list_by_source_package_id(pkg_id_mod1) == []
