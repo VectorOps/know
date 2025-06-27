@@ -141,6 +141,7 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         super().__init__(conn)
         self._file_repo = file_repo
 
+    # TODO: Rename to get_by_virtual_path
     def get_by_path(self, path: str) -> Optional[PackageMetadata]:
         rows = _row_to_dict(self.conn.execute("SELECT * FROM packages WHERE virtual_path = ?", [path]))
         return PackageMetadata(**rows[0]) if rows else None

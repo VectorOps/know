@@ -159,7 +159,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
     # ── Package ─────────────────────────────────────────────────────────────
     pkg_repo = repo_store.package
-    pkg_meta = pkg_repo.get_by_path(parsed_file.package.path)
+    pkg_meta = pkg_repo.get_by_path(parsed_file.package.virtual_path)
 
     pkg_data = parsed_file.package.to_dict()
     pkg_data["repo_id"] = project.get_repo().id

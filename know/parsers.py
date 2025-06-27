@@ -34,7 +34,7 @@ class ParsedImportEdge(BaseModel):
 
 class ParsedPackage(BaseModel):
     language: ProgrammingLanguage
-    path: str # relative path to package
+    physical_path: str # relative path to package
     virtual_path: str # syntax specific virtual path to package
     imports: List[ParsedImportEdge] = Field(default_factory=list)
 
@@ -43,7 +43,7 @@ class ParsedPackage(BaseModel):
             "name": (self.virtual_path or "").split("/")[-1],
             "language": self.language,
             "virtual_path": self.virtual_path,
-            "physical_path": self.path,
+            "physical_path": self.physical_path,
         }
 
 

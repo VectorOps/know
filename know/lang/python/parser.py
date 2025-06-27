@@ -49,7 +49,7 @@ class PythonCodeParser(AbstractCodeParser):
         # Create a new ParsedPackage instance
         package = ParsedPackage(
             language=ProgrammingLanguage.PYTHON,
-            path=rel_path,
+            physical_path=rel_path,
             virtual_path = rel_path.replace('/', '.').removesuffix('.py'),
             imports=[]
         )

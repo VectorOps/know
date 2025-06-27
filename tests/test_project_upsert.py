@@ -4,6 +4,7 @@ import pytest
 from know.project import Project, upsert_parsed_file, scan_project_directory
 from know.settings import ProjectSettings
 from know.stores.memory import InMemoryDataRepository
+from know.stores.duckdb import DuckDBDataRepository
 from know.models import RepoMetadata
 from know.helpers import generate_id
 from know.lang.python.parser import PythonCodeParser
@@ -38,7 +39,8 @@ def _make_project(root: Path) -> Project:
     that populates the stores during this test).
     """
     settings = ProjectSettings(project_path=str(root))
-    data_repo = InMemoryDataRepository()
+    #data_repo = InMemoryDataRepository()
+    data_repo = DuckDBDataRepository()
     CodeParserRegistry.register_parser(".py", PythonCodeParser())
     repo_meta = RepoMetadata(id=generate_id(), root_path=str(root))
     data_repo.repo.create(repo_meta)        # pre-seed repo table
