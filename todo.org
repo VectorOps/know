@@ -2,6 +2,7 @@
 * [X] Fix python decorators to be included in raw symbol output
 * [X] Implement recursive parsing function. Do not parse the file if it's hash did not change.
 * [ ] Add data access helper that reads file from data store along with all symbols
+* [ ] Add a helper to resolve import edge dependencies
 * [-] Need to delete files, packages, symbols, etc that are no longer exist on the disk
 * [X] Create helper methods to return models from parser objects
 * [X] Fix _resolve_to_package_id to use data repository
@@ -30,3 +31,10 @@
 - Token limit
 ** [ ] Search symbol by name
 - Path prefixes (optional)
+* [ ] Figure out a way to update embeddings in background
+* [ ] Add embedding value caching
+** [ ] A shared cross-project table
+** [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
+* [ ] Do not warn on pass_statement
+* [ ] Add support for del_statement?
+* [ ] Add support for FTS when embedding search is not feasible
