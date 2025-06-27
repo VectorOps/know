@@ -200,15 +200,16 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
         to_pkg_id: str | None = _resolve_to_package_id(imp)
 
-        # TODO: Use parsing function
-        kwargs = dict(
-            repo_id         = project.get_repo().id,
-            from_package_id = pkg_meta.id,
-            to_package_path = imp.virtual_path,
-            to_package_id   = to_pkg_id,
-            alias           = imp.alias,
-            dot             = imp.dot,
-            external        = imp.external,
+        # Build kwargs from ParsedImportEdge while mapping to ImportEdge fields
+        kwargs = imp.to_dict()                         # path / virtual_path / alias / dot / external
+        kwargs.pop("path", None)                       # physical path is not stored in ImportEdge
+        kwargs["to_package_path"] = kwargs.pop("virtual_path", None)
+        kwargs.update(
+            {
+                "repo_id": project.get_repo().id,
+                "from_package_id": pkg_meta.id,
+                "to_package_id": to_pkg_id,
+            }
         )
 
         if key in existing_by_key:
