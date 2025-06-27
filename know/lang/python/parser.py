@@ -80,6 +80,53 @@ class PythonCodeParser(AbstractCodeParser):
         
         return parsed_file
 
+    # ------------------------------------------------------------------
+    # Generic node-dispatcher
+    # ------------------------------------------------------------------
+    def _process_node(
+        self,
+        node,
+        parsed_file: ParsedFile,
+        package: ParsedPackage,
+        project: ProjectSettings,
+    ) -> None:
+        if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
+            self._handle_import_statement(node, parsed_file, project)
+
+        elif node.type == "function_definition":
+            self._handle_function_definition(node, parsed_file, package)
+
+        elif node.type == "class_definition":
+            self._handle_class_definition(node, parsed_file, package)
+
+        elif node.type == "assignment":
+            self._handle_assignment(node, parsed_file, package)
+
+        elif node.type == "decorated_definition":
+            self._handle_decorated_definition(node, parsed_file, package)
+
+        elif node.type == "expression_statement":
+            assign_child = next((c for c in node.children if c.type == "assignment"), None)
+            if assign_child is not None:
+                self._handle_assignment(assign_child, parsed_file, package)
+
+        elif node.type == "try_statement":
+            self._handle_try_statement(node, parsed_file, package, project)
+
+        # Unknown / unhandled → debug-log (mirrors previous behaviour)
+        elif node.type != "comment":
+            KnowLogger.log_event(
+                "UNKNOWN_NODE",
+                {
+                    "path": parsed_file.path,
+                    "type": node.type,
+                    "line": node.start_point[0] + 1,
+                    "byte_offset": node.start_byte,
+                    "raw": node.text.decode("utf8", errors="replace"),
+                },
+                level=logging.DEBUG,
+            )
+
     def _extract_docstring(self, node) -> Optional[str]:
         """
         Extract a Python docstring from the given Tree-sitter node if it is
@@ -662,32 +709,44 @@ class PythonCodeParser(AbstractCodeParser):
 
     def _locate_module_path(self, import_path: str, project: ProjectSettings) -> Optional[Path]:
         """
-        Return the *absolute* Path of the first package / module that matches
-        *import_path* inside the given *project*.  None when no artefact found.
+        Return the *absolute* Path of the *deepest* package/module that matches
+        ``import_path`` inside the given project.
+
+        Resolution preference:
+        1. Concrete module file  (…/foo.py, …/foo.so, …)
+        2. Package directory’s   ``__init__.py`` (…/foo/__init__.py)
+
+        The scan continues through the whole dotted path, keeping the last
+        match instead of returning on the first one, so that
+        ``from pkg.sub import x`` resolves to ``pkg/sub.py`` (or
+        ``pkg/sub/__init__.py``) rather than just ``pkg``.
         """
         if not import_path:
             return None
 
         project_root = Path(project.project_path).resolve()
         parts = import_path.split(".")
+        found: Optional[Path] = None  # remember the most-specific hit
 
         for idx in range(1, len(parts) + 1):
-            candidate = project_root.joinpath(*parts[:idx])
+            base = project_root.joinpath(*parts[:idx])
 
-            # ignore anything inside a (local) virtual-env
-            if any(seg in self._VENV_DIRS for seg in candidate.parts):
+            # Skip anything located inside a virtual-env folder
+            if any(seg in self._VENV_DIRS for seg in base.parts):
                 continue
 
-            # package directory
-            if candidate.is_dir() and (candidate / "__init__.py").exists():
-                return candidate
-
-            # single-file module
+            # --- 1) concrete module file (preferred) ------------------------
             for suffix in self._MODULE_SUFFIXES:
-                file_candidate = candidate.with_suffix(suffix)
+                file_candidate = base.with_suffix(suffix)
                 if file_candidate.exists():
-                    return file_candidate
-        return None
+                    found = file_candidate
+                    break  # no need to check package dir for this idx
+            else:
+                # --- 2) package directory ----------------------------------
+                if base.is_dir() and (base / "__init__.py").exists():
+                    found = base / "__init__.py"
+
+        return found
 
     def _resolve_local_import_path(self, import_path: str, project: ProjectSettings) -> Optional[str]:
         path_obj = self._locate_module_path(import_path, project)
