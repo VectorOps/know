@@ -129,3 +129,13 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
 
     # import-edges: removed
     assert rs.importedge.get_list_by_source_package_id(pkg_id_mod1) == []
+
+    # ── 3) delete second file and rescan  ─────────────────────────────────
+    module2_fp.unlink()
+    scan_project_directory(project)
+
+    # Only mod.py-related metadata should remain
+    assert len(rs.file.get_list_by_repo_id(repo_meta.id)) == 1
+    assert len(rs.package.get_list_by_repo_id(repo_meta.id)) == 1
+    # Confirm mod2 file metadata truly deleted
+    assert rs.file.get_by_id(file_id_mod2) is None
