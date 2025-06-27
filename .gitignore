@@ -8,5 +8,5 @@ wheels/
 .DS_Store
 
 # Virtual environments
-.venv
+.venv/
 .aider*

@@ -37,6 +37,7 @@ from know.settings import ProjectSettings, EmbeddingSettings
               type=click.Choice(["memory", "duckdb"]),
               default="memory",
               help="Storage backend to use.")
+
 @click.option("--repo-connection",
               type=str,
               default=None,

@@ -50,8 +50,8 @@ def test_package_metadata_repository(data_repo):
     orphan_id = make_id()
     used_id   = make_id()
     rid = make_id()
-    pkg_repo.create(PackageMetadata(id=orphan_id, name="orphan", physical_path="pkg/orphan", repo_id=rid))
-    pkg_repo.create(PackageMetadata(id=used_id,   name="used",   physical_path="pkg/used",   repo_id=rid))
+    pkg_repo.create(PackageMetadata(id=orphan_id, name="orphan", virtual_path="pkg/orphan", physical_path="pkg/orphan", repo_id=rid))
+    pkg_repo.create(PackageMetadata(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used",   repo_id=rid))
 
     # add a file that references the “used” package, leaving the first one orphaned
     file_repo.create(FileMetadata(id=make_id(), path="pkg/used/a.py", package_id=used_id))
@@ -124,7 +124,7 @@ def test_symbol_metadata_repository(data_repo):
 def test_import_edge_repository(data_repo):
     edge_repo = data_repo.importedge
     rid, eid, from_pid = make_id(), make_id(), make_id()
-    edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, to_package_path="pkg/other"))
+    edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, to_package_path="pkg/other", external=False))
 
     assert edge_repo.get_list_by_source_package_id(from_pid)[0].id == eid
     assert edge_repo.get_list_by_repo_id(rid)[0].id == eid

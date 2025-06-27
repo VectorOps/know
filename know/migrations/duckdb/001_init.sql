@@ -74,5 +74,6 @@ CREATE TABLE IF NOT EXISTS import_edges (
     to_package_path TEXT,
     to_package_id TEXT,
     alias TEXT,
-    dot BOOLEAN
+    dot BOOLEAN,
+    external BOOLEAN
 );

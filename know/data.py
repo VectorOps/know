@@ -12,8 +12,7 @@ from know.models import (
 )
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-if TYPE_CHECKING:                      # new
-    from .data import AbstractFileMetadataRepository  # type: ignore  # noqa: E402
+
 
 class AbstractRepoMetadataRepository(ABC):
     @abstractmethod
@@ -54,6 +53,7 @@ class AbstractPackageMetadataRepository(ABC):
     def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
         pass
 
+    # TODO: Make it explicit. Split into two for virtual and physical access helpers.
     @abstractmethod
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""

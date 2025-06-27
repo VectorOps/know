@@ -50,7 +50,7 @@ class PythonCodeParser(AbstractCodeParser):
         package = ParsedPackage(
             language=ProgrammingLanguage.PYTHON,
             path=rel_path,
-            virtual_path=rel_path.replace('/', '.').rstrip('.py'),
+            virtual_path = rel_path.replace('/', '.').removesuffix('.py'),
             imports=[]
         )
 

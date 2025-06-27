@@ -17,7 +17,7 @@ from know.settings import ProjectSettings
 
 # Parser-specific data structures
 class ParsedImportEdge(BaseModel):
-    path: Optional[str] = None # relative path to package. Can be None for external packages.
+    path: Optional[str] = None # relative physical path to package. Can be None for external packages.
     virtual_path: str # syntax specific virtual path to package
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")

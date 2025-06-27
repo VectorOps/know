@@ -142,7 +142,7 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         self._file_repo = file_repo
 
     def get_by_path(self, path: str) -> Optional[PackageMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM packages WHERE physical_path = ?", [path]))
+        rows = _row_to_dict(self.conn.execute("SELECT * FROM packages WHERE virtual_path = ?", [path]))
         return PackageMetadata(**rows[0]) if rows else None
 
     def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:

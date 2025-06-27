@@ -9,11 +9,6 @@ from know.lang.python.parser import PythonCodeParser
 from devtools import pprint
 
 
-# ---------------------------------------------------------------------------
-# Ensure the Python parser is available for the Project scan
-# ---------------------------------------------------------------------------
-CodeParserRegistry.register_parser(".py", PythonCodeParser())
-
 SAMPLES_DIR = Path(__file__).parent / "parsers" / "python" / "samples"
 
 

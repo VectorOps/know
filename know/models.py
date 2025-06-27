@@ -170,6 +170,7 @@ class ImportEdge(BaseModel):
     to_package_id: Optional[str] = None  # filled when the imported package exists in the same repo
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")
+    external: bool # true for external symbols
 
     # Runtime links
     from_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
