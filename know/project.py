@@ -201,9 +201,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         to_pkg_id: str | None = _resolve_to_package_id(imp)
 
         # Build kwargs from ParsedImportEdge while mapping to ImportEdge fields
-        kwargs = imp.to_dict()                         # path / virtual_path / alias / dot / external
-        kwargs.pop("path", None)                       # physical path is not stored in ImportEdge
-        kwargs["to_package_path"] = kwargs.pop("virtual_path", None)
+        kwargs = imp.to_dict()
         kwargs.update(
             {
                 "repo_id": project.get_repo().id,

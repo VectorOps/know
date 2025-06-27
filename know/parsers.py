@@ -17,6 +17,7 @@ from know.settings import ProjectSettings
 
 # Parser-specific data structures
 class ParsedImportEdge(BaseModel):
+    # TODO: Rename to physical
     path: Optional[str] = None # relative physical path to package. Can be None for external packages.
     virtual_path: str # syntax specific virtual path to package
     alias: Optional[str] = None  # import alias if any
@@ -98,7 +99,6 @@ class ParsedFile(BaseModel):
     last_updated: Optional[float] = None   # filesystem modification time
 
     symbols: List[ParsedSymbol] = Field(default_factory=list)
-    # TODO: Populate with links to packages
     imports: List[ParsedImportEdge] = Field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
