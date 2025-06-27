@@ -103,10 +103,17 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
             )
             raise
         # Ensure list[float] return type.
-        processed = [
-            emb.tolist() if hasattr(emb, "tolist") else list(emb)
-            for emb in embeddings
-        ]
+        processed: List[Vector] = []
+        for emb in embeddings:
+            emb_list = emb.tolist() if hasattr(emb, "tolist") else list(emb)
+
+            # guarantee fixed length = EMBEDDING_DIM
+            if len(emb_list) < EMBEDDING_DIM:                     # pad
+                emb_list.extend([0.0] * (EMBEDDING_DIM - len(emb_list)))
+            elif len(emb_list) > EMBEDDING_DIM:                   # truncate (safety)
+                emb_list = emb_list[:EMBEDDING_DIM]
+
+            processed.append(emb_list)
         return processed
 
     # --------------------------------------------------------------------- #
