@@ -186,7 +186,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         (or None when the import is external / unknown).
         """
         # print(parsed_imp)
-        if parsed_imp.external or not parsed_imp.physical_path:
+        if parsed_imp.external or not parsed_imp.virtual_path:
             return None
 
         pkg = repo_store.package.get_by_virtual_path(parsed_imp.virtual_path)

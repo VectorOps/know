@@ -441,6 +441,7 @@ class PythonCodeParser(AbstractCodeParser):
         kind = SymbolKind.CONSTANT if self._is_constant_name(name) else SymbolKind.VARIABLE
         fqn = self._join_fqn(package.virtual_path, class_name, name)
         key = ".".join(filter(None, [class_name, name])) if class_name else name
+        wrapper = node.parent if node.parent and node.parent.type == "expression_statement" else node
         return ParsedSymbol(
             name=name,
             fqn=fqn,
@@ -456,7 +457,7 @@ class PythonCodeParser(AbstractCodeParser):
             modifiers=[],
             docstring=None,
             signature=None,
-            comment=self._get_preceding_comment(node),
+            comment=self._get_preceding_comment(wrapper),
             children=[],
         )
 

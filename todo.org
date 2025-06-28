@@ -1,4 +1,5 @@
 #+title: Todo
+* [ ] Add language to symbol and use it find parser when generating a summary
 * [X] Fix python decorators to be included in raw symbol output
 * [X] Implement recursive parsing function. Do not parse the file if it's hash did not change.
 * [ ] Add data access helper that reads file from data store along with all symbols
@@ -38,3 +39,4 @@
 * [ ] Do not warn on pass_statement
 * [ ] Add support for del_statement?
 * [ ] Add support for FTS when embedding search is not feasible
+* [ ] Even if file can not be parsed, store information about it in the database

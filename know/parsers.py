@@ -132,6 +132,15 @@ class AbstractCodeParser(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0) -> str:
+        """
+        Generate symbol summary (comment, definition and a docstring if available) as a string
+        with correct identation. For functions and methods, function body is replaced
+        with three dots.
+        """
+        pass
+
 
 class CodeParserRegistry:
     """

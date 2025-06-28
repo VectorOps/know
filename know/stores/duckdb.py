@@ -7,7 +7,6 @@ import math          # needed for math.isnan
 from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime, timezone
-from know.helpers import resolve_symbol_hierarchy      # NEW
 
 from know.models import (
     RepoMetadata,
@@ -191,15 +190,15 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
 
-    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:  # NEW
+    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         syms = super().get_list_by_ids(symbol_ids)
-        resolve_symbol_hierarchy(syms)
+        SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
 
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
         rows = _row_to_dict(self.conn.execute("SELECT * FROM symbols WHERE file_id = ?", [file_id]))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
-        resolve_symbol_hierarchy(syms)      # NEW
+        SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
 
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
@@ -246,7 +245,7 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
         rows = _row_to_dict(self.conn.execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
-        resolve_symbol_hierarchy(syms)      # NEW
+        SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
 
 

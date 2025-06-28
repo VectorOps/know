@@ -58,19 +58,21 @@ def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]
             continue
 
         symbols = symbol_repo.get_list_by_file_id(fm.id)
+
         # Use language-specific get_symbol_summary when a parser exists.
         # Work on *top-level* symbols only – nested ones are emitted by the
         # summary function itself.
+        # TODO: Do not guess language, use SymbolMetadata.language field
         parser: AbstractCodeParser | None = None
-        ext = Path(rel_path).suffix.lstrip(".")            # "py", "go", …
-        parser = CodeParserRegistry.get_parser(ext) or CodeParserRegistry.get_parser("." + ext)
+        ext = Path(rel_path).suffix
+        parser = CodeParserRegistry.get_parser(ext)
 
         top_level_syms = [s for s in symbols if s.parent_ref is None]
         top_level_syms.sort(key=lambda s: (s.start_line, s.start_col))
 
         if parser is not None:
             definitions_blocks = [parser.get_symbol_summary(s) for s in top_level_syms]
-        else:                                              # fallback
+        else:
             definitions_blocks = [_symbol_to_text(s) for s in top_level_syms]
 
         definitions_text   = "\n\n".join(definitions_blocks)

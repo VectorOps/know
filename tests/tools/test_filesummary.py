@@ -9,14 +9,21 @@ def _setup_project(tmp_path):
     # create a minimal Python file with a few symbols
     code = textwrap.dedent(
         """
+        # Something-something
+        A = 10
+
         # comment for foo
         def foo(a, b):
-            \"\"\"Function docstring\"\"\"
+            \"\"\"Function docstring
+            Also multiline
+            \"\"\"
             return a + b
 
         class Bar:
             \"\"\"Bar class docs\"\"\"
-            pass
+            def foo(self):
+                \"Doc\"
+                pass
         """
     )
     (tmp_path / "foo.py").write_text(code)
@@ -29,6 +36,8 @@ def test_filesummary_returns_expected_content(tmp_path):
 
     res = summarize_files(project, ["foo.py"])
     assert len(res) == 1
+    print(res[0].definitions)
+    raise
 
     summary = res[0]
     assert summary.path == "foo.py"

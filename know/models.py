@@ -161,6 +161,31 @@ class SymbolMetadata(BaseModel):
     parent_ref: Optional["SymbolMetadata"] = Field(default=None, exclude=True, repr=False)
     children: List["SymbolMetadata"] = Field(default_factory=list, exclude=True, repr=False)
 
+    @staticmethod
+    def resolve_symbol_hierarchy(symbols: list[SymbolMetadata]) -> None:
+        """
+        Populate in-memory parent/child links inside *symbols* **in-place**.
+
+        • parent_ref   ↔  points to the parent SymbolMetadata instance
+        • children     ↔  list with direct child SymbolMetadata instances
+
+        Function is no-op when list is empty.
+        """
+        if not symbols:
+            return
+
+        id_map: dict[str | None, SymbolMetadata] = {s.id: s for s in symbols if s.id}
+        # clear any previous links to avoid duplicates on repeated invocations
+        for s in symbols:
+            s.children.clear()
+            s.parent_ref = None
+
+        for s in symbols:
+            pid = s.parent_symbol_id
+            if pid and (parent := id_map.get(pid)):
+                s.parent_ref = parent
+                parent.children.append(s)
+
 
 class ImportEdge(BaseModel):
     id: Optional[str]
@@ -170,7 +195,7 @@ class ImportEdge(BaseModel):
     to_package_id: Optional[str] = None  # filled when the imported package exists in the same repo
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")
-    external: bool # true for external symbols
+    external: bool
 
     # Runtime links
     from_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
