@@ -15,6 +15,7 @@ from know.models import (
     SymbolSignature,
     SymbolParameter,
     SymbolMetadata,
+    ImportEdge,            # NEW – needed for get_import_summary
 )
 from know.settings import ProjectSettings
 from know.parsers import CodeParserRegistry
@@ -832,3 +833,28 @@ class PythonCodeParser(AbstractCodeParser):
             _emit_docstring(sym.docstring, IND)
 
         return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Import-edge summary helper  (implements AbstractCodeParser API)
+    # ------------------------------------------------------------------
+    def get_import_summary(self, imp: ImportEdge) -> str:       # NEW
+        """
+        Return a concise, human-readable textual representation of *imp*.
+
+        Preference order:
+        1) Use the original source text stored in ``imp.raw`` when present.
+        2) Fall back to a syntactic reconstruction based on the edge fields.
+        """
+        if imp.raw:
+            return imp.raw.strip()
+
+        path  = imp.to_package_path or ""
+        alias = f" as {imp.alias}" if imp.alias else ""
+
+        if imp.dot:
+            # relative “from .foo import …” style
+            leading = "." if not path.startswith(".") else ""
+            return f"from {leading}{path} import *{alias}".strip()
+
+        # plain absolute import
+        return f"import {path}{alias}".strip()
