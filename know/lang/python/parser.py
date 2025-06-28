@@ -14,6 +14,7 @@ from know.models import (
     Modifier,
     SymbolSignature,
     SymbolParameter,
+    SymbolMetadata,
 )
 from know.settings import ProjectSettings
 from know.parsers import CodeParserRegistry
@@ -170,25 +171,15 @@ class PythonCodeParser(AbstractCodeParser):
             if child.type == "expression_statement":
                 if child.children and child.children[0].type == "string":
                     raw = child.children[0].text.decode("utf8")
-                    return self._clean_string_literal(raw)
+                    return raw
             # Fallback when the string is a direct child
             if child.type == "string":
                 raw = child.text.decode("utf8")
-                return self._clean_string_literal(raw)
+                return raw
             # Stop scanning once we hit a non-whitespace/comment node
             if child.type not in ("comment",):
                 break
         return None
-
-    @staticmethod
-    def _clean_string_literal(raw: str) -> str:
-        """
-        Safely evaluate a Python string literal to strip quotes and escapes.
-        """
-        try:
-            return ast.literal_eval(raw)
-        except Exception:
-            return raw.strip('\'"')
 
     # ---------------------------------------------------------------------
     # Comment helpers
@@ -206,7 +197,7 @@ class PythonCodeParser(AbstractCodeParser):
                 break
             if sib.type == "comment":
                 raw = self._source_bytes[sib.start_byte : sib.end_byte].decode("utf8")
-                comments.append(raw.lstrip("# ").rstrip())
+                comments.append(raw.rstrip())
                 sib = sib.prev_sibling
                 continue
             # skip solitary newlines/indent tokens
@@ -277,7 +268,7 @@ class PythonCodeParser(AbstractCodeParser):
                 depth -= 1
             elif ch == ":" and depth == 0:
                 # reached the colon that terminates the signature
-                return code[def_idx:i].rstrip()
+                return code[def_idx:i+1].rstrip()
         return code[def_idx:].rstrip()
 
     # ---------------------------------------------------------------------
@@ -297,7 +288,7 @@ class PythonCodeParser(AbstractCodeParser):
             elif ch == ")":
                 depth -= 1
             elif ch == ":" and depth == 0:
-                return code[cls_idx:i].rstrip()
+                return code[cls_idx:i+1].rstrip()
         return code[cls_idx:].rstrip()
 
     def _build_class_signature(self, node) -> SymbolSignature:
@@ -776,3 +767,65 @@ class PythonCodeParser(AbstractCodeParser):
 
     def _is_local_import(self, import_path: str, project: ProjectSettings) -> bool:
         return self._locate_module_path(import_path, project) is not None
+
+
+    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0) -> str:
+        """
+        Return a human-readable summary for *sym*.
+
+        • includes preceding comment
+        • includes definition header (class / def / assignment …)
+        • includes docstring when present
+        • for functions / methods the body is replaced with an indented “...”
+        • for classes the method recurses over *sym.children*, indenting each child
+        """
+        IND = " " * indent
+        lines: list[str] = []
+
+        # ---------- preceding comment ----------
+        if sym.comment:
+            for ln in sym.comment.splitlines():
+                lines.append(f"{IND}{ln.rstrip()}")
+
+        # ---------- header line ----------
+        if sym.signature and sym.signature.raw:
+            header = sym.signature.raw.rstrip()
+        else:
+            if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+                header = f"def {sym.name}():"
+            elif sym.kind == SymbolKind.CLASS:
+                header = f"class {sym.name}:"
+            else:
+                header = (sym.symbol_body or "").splitlines()[0].rstrip()
+
+        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD, SymbolKind.CLASS) and not header.endswith(":"):
+            header += ":"
+        lines.append(f"{IND}{header}")
+
+        # ---------- body / docstring ----------
+        def _emit_docstring(ds: str, base_indent: str) -> None:
+            ds_lines = ds.strip().splitlines()
+            if len(ds_lines) == 1:
+                lines.append(f'{base_indent}"""{ds_lines[0].strip()}"""')
+            else:
+                lines.append(f'{base_indent}"""' + ds_lines[0].strip())
+                for l in ds_lines[1:]:
+                    lines.append(f"{base_indent}{l.rstrip()}")
+                lines.append(f'{base_indent}"""')
+
+        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+            if sym.docstring:
+                _emit_docstring(sym.docstring, IND + "    ")
+            lines.append(f"{IND}    ...")
+
+        elif sym.kind == SymbolKind.CLASS:
+            if sym.docstring:
+                _emit_docstring(sym.docstring, IND + "    ")
+            for child in sym.children:
+                lines.append(self.get_symbol_summary(child, indent + 4))
+
+        # (Variables / constants etc. – docstring only)
+        elif sym.docstring:
+            _emit_docstring(sym.docstring, IND)
+
+        return "\n".join(lines)
