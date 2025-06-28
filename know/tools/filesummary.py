@@ -2,11 +2,16 @@
 from __future__ import annotations
 
 from typing import Sequence, List
+from pathlib import Path
+from know.parsers import CodeParserRegistry
+from know.lang import register_parsers        # ensure parsers are registered
 
 from pydantic import BaseModel
 
 from know.project import Project
 from know.logger import KnowLogger as logger
+
+register_parsers()
 
 
 class FileSummary(BaseModel):
@@ -53,10 +58,21 @@ def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]
             continue
 
         symbols = symbol_repo.get_list_by_file_id(fm.id)
-        # Stable order: first by start_line / start_col
-        symbols.sort(key=lambda s: (s.start_line, s.start_col))
+        # Use language-specific get_symbol_summary when a parser exists.
+        # Work on *top-level* symbols only – nested ones are emitted by the
+        # summary function itself.
+        parser: AbstractCodeParser | None = None
+        ext = Path(rel_path).suffix.lstrip(".")            # "py", "go", …
+        parser = CodeParserRegistry.get_parser(ext) or CodeParserRegistry.get_parser("." + ext)
 
-        definitions_blocks = [_symbol_to_text(sym) for sym in symbols]
+        top_level_syms = [s for s in symbols if s.parent_ref is None]
+        top_level_syms.sort(key=lambda s: (s.start_line, s.start_col))
+
+        if parser is not None:
+            definitions_blocks = [parser.get_symbol_summary(s) for s in top_level_syms]
+        else:                                              # fallback
+            definitions_blocks = [_symbol_to_text(s) for s in top_level_syms]
+
         definitions_text   = "\n\n".join(definitions_blocks)
 
         summaries.append(FileSummary(path=rel_path, definitions=definitions_text))
