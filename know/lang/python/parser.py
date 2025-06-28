@@ -32,6 +32,12 @@ class PythonCodeParser(AbstractCodeParser):
         # Cache file bytes during `parse` for fast preceding-comment lookup.
         self._source_bytes: bytes = b""
 
+    @staticmethod
+    def register():
+        parser = PythonCodeParser()
+        CodeParserRegistry.register_language(ProgrammingLanguage.PYTHON, parser)
+        CodeParserRegistry.register_parser(".py", parser)
+
     # ------------------------------------------------------------
     # Virtual-path / FQN helpers
     # ------------------------------------------------------------

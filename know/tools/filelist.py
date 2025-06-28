@@ -11,7 +11,7 @@ from know.models import ProgrammingLanguage
 
 class FileListItem(BaseModel):
     path: str
-    language_guess: Optional[ProgrammingLanguage] = None
+    language: Optional[ProgrammingLanguage] = None
 
 
 def list_files(
@@ -42,7 +42,7 @@ def list_files(
     if not pats:
         # no filtering necessary
         return [
-            FileListItem(path=fm.path, language_guess=fm.language_guess)
+            FileListItem(path=fm.path, language_guess=fm.language)
             for fm in all_files
         ]
 
@@ -50,7 +50,7 @@ def list_files(
         return any(fnmatch.fnmatch(path, pat) for pat in pats)
 
     return [
-        FileListItem(path=fm.path, language_guess=fm.language_guess)
+        FileListItem(path=fm.path, language_guess=fm.language)
         for fm in all_files
         if _matches(fm.path)
     ]

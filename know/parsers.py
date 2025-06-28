@@ -55,7 +55,7 @@ class ParsedSymbol(BaseModel):
     body: str # full symbol body
     key: str # virtual path within a file
     hash: str # sha256 hash of the symbol
-    kind: SymbolKind
+    kind: SymbolKind # type of the symbol
 
     start_line: int
     end_line: int
@@ -107,7 +107,7 @@ class ParsedFile(BaseModel):
             "path": self.path,
             "file_hash": self.file_hash,
             "last_updated": self.last_updated,
-            "language_guess": self.language,
+            "language": self.language,
         }
 
 
@@ -157,11 +157,20 @@ class CodeParserRegistry:
     """
     _instance = None
     _parsers: Dict[str, AbstractCodeParser] = {}
+    _lang_parsers: Dict[ProgrammingLanguage, AbstractCodeParser] = {}
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(CodeParserRegistry, cls).__new__(cls)
         return cls._instance
+
+    @classmethod
+    def register_language(cls, lang: ProgrammingLanguage, parser: AbstractCodeParser) -> None:
+        cls._lang_parsers[lang] = parser
+
+    @classmethod
+    def get_language(cls, lang: ProgrammingLanguage) -> Optional[AbstractCodeParser]:
+        return cls._lang_parsers[lang]
 
     @classmethod
     def register_parser(cls, ext: str, parser: AbstractCodeParser) -> None:

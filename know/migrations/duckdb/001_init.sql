@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS files (
     last_updated DOUBLE,
     commit_hash TEXT,
     mime_type TEXT,
-    language_guess TEXT,
+    language TEXT,
     metrics_total_loc INTEGER,
     metrics_code_loc INTEGER,
     metrics_comment_loc INTEGER,

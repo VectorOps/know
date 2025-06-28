@@ -75,12 +75,9 @@ def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]
         # Use language-specific get_symbol_summary when a parser exists.
         # Work on *top-level* symbols only – nested ones are emitted by the
         # summary function itself.
-        # TODO: Do not guess language, use SymbolMetadata.language field
         parser: AbstractCodeParser | None = None
--        ext = Path(rel_path).suffix
--        parser = CodeParserRegistry.get_parser(ext)
-+        if fm.language_guess is not None:
-+            parser = CodeParserRegistry.get_language(fm.language_guess)
+        if fm.language is not None:
+            parser = CodeParserRegistry.get_language(fm.language)
 
         if parser is not None:
             import_lines = [parser.get_import_summary(e) for e in imp_edges]

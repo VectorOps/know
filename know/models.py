@@ -91,7 +91,7 @@ class FileMetadata(BaseModel):
     last_updated: Optional[float] = None   # POSIX mtime (seconds)
     commit_hash: Optional[str] = None
     mime_type: Optional[str] = None
-    language_guess: Optional[ProgrammingLanguage] = None
+    language: Optional[ProgrammingLanguage] = None
 
     metrics_total_loc: Optional[int] = None
     metrics_code_loc: Optional[int] = None
