@@ -43,13 +43,10 @@ def _symbol_to_text(sym) -> str:
 def _import_to_text(imp: ImportEdge) -> str:          # NEW
     if imp.raw:
         return imp.raw.strip()
-    path  = imp.to_package_path or ""
-    alias = f" as {imp.alias}" if imp.alias else ""
-    if imp.dot:
-        leading = "." if not path.startswith(".") else ""
-        return f"from {leading}{path} import *{alias}".strip()
-    return f"import {path}{alias}".strip()
-
+    logger.warning(f"Unable tog generate summary for import", data={
+        "id": imp.id,
+    })
+    return ""
 
 def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]:
     """

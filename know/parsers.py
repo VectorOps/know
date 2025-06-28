@@ -22,6 +22,7 @@ class ParsedImportEdge(BaseModel):
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")
     external: bool
+    raw: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -29,6 +30,7 @@ class ParsedImportEdge(BaseModel):
             "alias": self.alias,
             "dot": self.dot,
             "external": self.external,
+            "raw": self.raw,
         }
 
 
@@ -138,6 +140,13 @@ class AbstractCodeParser(ABC):
         Generate symbol summary (comment, definition and a docstring if available) as a string
         with correct identation. For functions and methods, function body is replaced
         with three dots.
+        """
+        pass
+
+    @abstractmethod
+    def get_import_summary(self, imp: ImportEdge) -> str:
+        """
+        Generate import edge summary
         """
         pass
 

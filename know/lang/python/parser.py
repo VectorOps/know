@@ -834,10 +834,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         return "\n".join(lines)
 
-    # ------------------------------------------------------------------
-    # Import-edge summary helper  (implements AbstractCodeParser API)
-    # ------------------------------------------------------------------
-    def get_import_summary(self, imp: ImportEdge) -> str:       # NEW
+    def get_import_summary(self, imp: ImportEdge) -> str:
         """
         Return a concise, human-readable textual representation of *imp*.
 

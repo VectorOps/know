@@ -9,8 +9,14 @@ def _setup_project(tmp_path):
     # create a minimal Python file with a few symbols
     code = textwrap.dedent(
         """
+        from pydantic import BaseModel
+
         # Something-something
         A = 10
+
+        class Test(BaseModel):
+            id: Optional[str]
+            field: int
 
         # comment for foo
         def foo(a, b):
@@ -36,8 +42,6 @@ def test_filesummary_returns_expected_content(tmp_path):
 
     res = summarize_files(project, ["foo.py"])
     assert len(res) == 1
-    print(res[0].definitions)
-    raise
 
     summary = res[0]
     assert summary.path == "foo.py"

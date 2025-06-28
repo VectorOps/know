@@ -196,6 +196,7 @@ class ImportEdge(BaseModel):
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")
     external: bool
+    raw: str
 
     # Runtime links
     from_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
