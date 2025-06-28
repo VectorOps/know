@@ -26,14 +26,20 @@ def compute_symbol_hash(symbol: Union[str, bytes]) -> str:
     return sha256.hexdigest()
 
 
-def get_symbol_key(symbol):
-    """Get symbol path relative to file"""
-    name = symbol.name
+from know.models import SymbolMetadata          # keep / ensure already present
+
+def get_symbol_key(symbol: SymbolMetadata) -> str:
+    """
+    Return “dotted” name of *symbol* inside its local hierarchy:
+        parent2.parent1.symbol
+    Works by walking `parent_ref` links populated via resolve_symbol_hierarchy.
+    """
+    parts: list[str] = [symbol.name]
     parent = symbol.parent_ref
     while parent:
-        name = parent + "." + name
+        parts.append(parent.name)
         parent = parent.parent_ref
-    return name
+    return ".".join(reversed(parts))
 
 
 def parse_gitignore(root_path: str | Path) -> "pathspec.PathSpec":
