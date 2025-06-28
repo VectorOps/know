@@ -1,70 +1,56 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import List, Optional, Set
+import fnmatch
+from typing import Sequence, List, Optional
 
-from know.models import FileMetadata, ProgrammingLanguage
+from pydantic import BaseModel
 
-
-_IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
-
-_EXT_LANGUAGE_MAP: dict[str, ProgrammingLanguage] = {
-    ".py": ProgrammingLanguage.PYTHON,
-    ".go": ProgrammingLanguage.GO,
-    # extend if new languages are added
-}
+from know.project import Project
+from know.models import ProgrammingLanguage
 
 
-def _lang_from_suffix(suffix: str) -> ProgrammingLanguage | None:
-    """Return ProgrammingLanguage for a file‐suffix or None if unknown."""
-    return _EXT_LANGUAGE_MAP.get(suffix.lower())
+class FileListItem(BaseModel):
+    path: str
+    language_guess: Optional[ProgrammingLanguage] = None
 
 
 def list_files(
-    root_path: str | Path = ".",
-    patterns: Optional[List[str]] = None,
-) -> List[FileMetadata]:
+    project: Project,
+    patterns: Sequence[str] | None = None,
+) -> List[FileListItem]:
     """
-    Return a list of FileMetadata (only path & language_guess populated)
-    for all files below *root_path* that match ANY of the supplied glob
-    *patterns* (evaluated relative to *root_path*).
+    Return all project files whose *path* matches at least one of the
+    supplied glob *patterns* (fnmatch-style).  
+    If *patterns* is None / empty → return every file.
 
     Parameters
     ----------
-    root_path : directory that acts as the search root.
-    patterns  : optional list of glob patterns; defaults to ["**/*"].
+    project:
+        The active Project instance.
+    patterns:
+        Iterable of glob patterns (e.g. ["**/*.py", "src/*.ts"]).
 
-    Notes
-    -----
-    • Directories listed in *_IGNORED_DIRS* are skipped.
-    • Duplicate matches coming from overlapping patterns are de-duplicated.
+    Returns
+    -------
+    List[FileListItem]
     """
-    root = Path(root_path).expanduser().resolve()
-    if not root.is_dir():
-        raise ValueError(f"root_path '{root}' is not a directory")
+    repo_id = project.get_repo().id
+    file_repo = project.data_repository.file
+    all_files = file_repo.get_list_by_repo_id(repo_id)
 
-    if not patterns:
-        patterns = ["**/*"]
+    pats = list(patterns) if patterns else []
+    if not pats:
+        # no filtering necessary
+        return [
+            FileListItem(path=fm.path, language_guess=fm.language_guess)
+            for fm in all_files
+        ]
 
-    seen: Set[Path] = set()
-    out: List[FileMetadata] = []
+    def _matches(path: str) -> bool:
+        return any(fnmatch.fnmatch(path, pat) for pat in pats)
 
-    for patt in patterns:
-        for p in root.glob(patt):
-            if not p.is_file():
-                continue
-            if any(part in _IGNORED_DIRS for part in p.relative_to(root).parts):
-                continue
-            if p in seen:
-                continue
-            seen.add(p)
-
-            out.append(
-                FileMetadata(
-                    id=None,
-                    path=str(p.relative_to(root)),
-                    language_guess=_lang_from_suffix(p.suffix),
-                )
-            )
-
-    return out
+    return [
+        FileListItem(path=fm.path, language_guess=fm.language_guess)
+        for fm in all_files
+        if _matches(fm.path)
+    ]
