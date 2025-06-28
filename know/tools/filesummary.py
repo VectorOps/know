@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from typing import Sequence, List
-from pathlib import Path
 from know.parsers import CodeParserRegistry, AbstractCodeParser
 from know.lang import register_parsers        # ensure parsers are registered
 from know.models import ImportEdge     # NEW
@@ -78,8 +77,10 @@ def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]
         # summary function itself.
         # TODO: Do not guess language, use SymbolMetadata.language field
         parser: AbstractCodeParser | None = None
-        ext = Path(rel_path).suffix
-        parser = CodeParserRegistry.get_parser(ext)
+-        ext = Path(rel_path).suffix
+-        parser = CodeParserRegistry.get_parser(ext)
++        if fm.language_guess is not None:
++            parser = CodeParserRegistry.get_language(fm.language_guess)
 
         if parser is not None:
             import_lines = [parser.get_import_summary(e) for e in imp_edges]
