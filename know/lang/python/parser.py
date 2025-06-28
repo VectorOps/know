@@ -440,11 +440,12 @@ class PythonCodeParser(AbstractCodeParser):
         """
         kind = SymbolKind.CONSTANT if self._is_constant_name(name) else SymbolKind.VARIABLE
         fqn = self._join_fqn(package.virtual_path, class_name, name)
+        key = ".".join(filter(None, [class_name, name])) if class_name else name
         return ParsedSymbol(
             name=name,
             fqn=fqn,
             body=node.text.decode("utf8"),
-            key=name,
+            key=key,
             hash=compute_symbol_hash(node.text),
             kind=kind,
             start_line=node.start_point[0],
@@ -544,11 +545,12 @@ class PythonCodeParser(AbstractCodeParser):
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
         method_name = node.child_by_field_name('name').text.decode('utf8')
+        key = f"{class_name}.{method_name}" if class_name else method_name
         return ParsedSymbol(
             name=method_name,
             fqn=self._join_fqn(package.virtual_path, class_name, method_name),
             body=wrapper.text.decode('utf8'),
-            key=method_name,
+            key=key,
             hash=compute_symbol_hash(wrapper.text),
             kind=SymbolKind.METHOD,
             start_line=wrapper.start_point[0],
@@ -806,12 +808,11 @@ class PythonCodeParser(AbstractCodeParser):
         def _emit_docstring(ds: str, base_indent: str) -> None:
             ds_lines = ds.strip().splitlines()
             if len(ds_lines) == 1:
-                lines.append(f'{base_indent}"""{ds_lines[0].strip()}"""')
+                lines.append(f'{base_indent}{ds_lines[0].strip()}')
             else:
-                lines.append(f'{base_indent}"""' + ds_lines[0].strip())
+                lines.append(f'{base_indent}' + ds_lines[0].strip())
                 for l in ds_lines[1:]:
-                    lines.append(f"{base_indent}{l.rstrip()}")
-                lines.append(f'{base_indent}"""')
+                    lines.append(f"{base_indent}{l.strip()}")
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
             if sym.docstring:
