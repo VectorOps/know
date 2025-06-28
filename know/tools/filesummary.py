@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Sequence, List
 from pathlib import Path
-from know.parsers import CodeParserRegistry
+from know.parsers import CodeParserRegistry, AbstractCodeParser
 from know.lang import register_parsers        # ensure parsers are registered
 
 from pydantic import BaseModel
