@@ -5,6 +5,7 @@ from typing import Sequence, List
 from pathlib import Path
 from know.parsers import CodeParserRegistry, AbstractCodeParser
 from know.lang import register_parsers        # ensure parsers are registered
+from know.models import ImportEdge     # NEW
 
 from pydantic import BaseModel
 
@@ -39,6 +40,17 @@ def _symbol_to_text(sym) -> str:
     return "\n".join(parts)
 
 
+def _import_to_text(imp: ImportEdge) -> str:          # NEW
+    if imp.raw:
+        return imp.raw.strip()
+    path  = imp.to_package_path or ""
+    alias = f" as {imp.alias}" if imp.alias else ""
+    if imp.dot:
+        leading = "." if not path.startswith(".") else ""
+        return f"from {leading}{path} import *{alias}".strip()
+    return f"import {path}{alias}".strip()
+
+
 def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]:
     """
     Given a *project* and an iterable of project-relative *paths*,
@@ -48,6 +60,7 @@ def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]
     """
     file_repo   = project.data_repository.file
     symbol_repo = project.data_repository.symbol
+    edge_repo = project.data_repository.importedge   # NEW
 
     summaries: list[FileSummary] = []
 
@@ -56,6 +69,10 @@ def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]
         if not fm:
             logger.warning(f"File '{rel_path}' not found in repository – skipped.")
             continue
+
+        imp_edges: list[ImportEdge] = []
+        if fm.package_id:
+            imp_edges = edge_repo.get_list_by_source_package_id(fm.package_id)
 
         symbols = symbol_repo.get_list_by_file_id(fm.id)
 
@@ -67,6 +84,11 @@ def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]
         ext = Path(rel_path).suffix
         parser = CodeParserRegistry.get_parser(ext)
 
+        if parser is not None:
+            import_lines = [parser.get_import_summary(e) for e in imp_edges]
+        else:
+            import_lines = [_import_to_text(e) for e in imp_edges]
+
         top_level_syms = [s for s in symbols if s.parent_ref is None]
         top_level_syms.sort(key=lambda s: (s.start_line, s.start_col))
 
@@ -75,7 +97,12 @@ def summarize_files(project: Project, paths: Sequence[str]) -> List[FileSummary]
         else:
             definitions_blocks = [_symbol_to_text(s) for s in top_level_syms]
 
-        definitions_text   = "\n\n".join(definitions_blocks)
+        sections: list[str] = []
+        if import_lines:
+            sections.append("\n".join(import_lines))
+        if definitions_blocks:
+            sections.append("\n\n".join(definitions_blocks))
+        definitions_text = "\n\n".join(sections)
 
         summaries.append(FileSummary(path=rel_path, definitions=definitions_text))
 
