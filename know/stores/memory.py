@@ -17,6 +17,7 @@ from know.data import (
 )
 from dataclasses import dataclass, field
 import math
+from know.helpers import resolve_symbol_hierarchy      # NEW
 
 def _cosine(a: list[float], b: list[float]) -> float:
     """
@@ -157,9 +158,16 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.symbols)
 
+    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:  # NEW
+        syms = super().get_list_by_ids(symbol_ids)
+        resolve_symbol_hierarchy(syms)
+        return syms
+
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
         """Return all symbols that belong to the given *file_id*."""
-        return [sym for sym in self._items.values() if sym.file_id == file_id]
+        res = [sym for sym in self._items.values() if sym.file_id == file_id]
+        resolve_symbol_hierarchy(res)      # NEW
+        return res
 
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
         # --- initial candidate set: symbols that belong to the requested repo
@@ -203,7 +211,9 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         # ---------- pagination ----------
         offset = query.offset or 0
         limit = query.limit or 20
-        return res[offset: offset + limit]
+        res = res[offset: offset + limit]
+        resolve_symbol_hierarchy(res)      # NEW
+        return res
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):

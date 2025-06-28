@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from typing import Union
 import pathspec
-
+from know.models import SymbolMetadata
 
 def compute_file_hash(abs_path: str) -> str:
     """Compute SHA256 hash of a file's contents."""
@@ -61,9 +61,6 @@ def parse_gitignore(root_path: str | Path) -> "pathspec.PathSpec":
     return pathspec.PathSpec.from_lines("gitwildmatch", valid_lines)
 
 
-# ----------------------------------------------------------------------  
-#  Convenience: test whether a relative path matches any git-ignore rule  
-# ----------------------------------------------------------------------  
 def matches_gitignore(path: str | Path, spec: "pathspec.PathSpec") -> bool:
     """
     Return True if *path* (relative to repo root) is ignored by *spec*.
@@ -77,3 +74,28 @@ def generate_id() -> str:
     Centralised helper so code never calls ``uuid.uuid4`` directly.
     """
     return str(uuid.uuid4())
+
+
+def resolve_symbol_hierarchy(symbols: list[SymbolMetadata]) -> None:
+    """
+    Populate in-memory parent/child links inside *symbols* **in-place**.
+
+    • parent_ref   ↔  points to the parent SymbolMetadata instance  
+    • children     ↔  list with direct child SymbolMetadata instances
+
+    Function is no-op when list is empty.
+    """
+    if not symbols:
+        return
+
+    id_map: dict[str | None, SymbolMetadata] = {s.id: s for s in symbols if s.id}
+    # clear any previous links to avoid duplicates on repeated invocations
+    for s in symbols:
+        s.children.clear()
+        s.parent_ref = None
+
+    for s in symbols:
+        pid = s.parent_symbol_id
+        if pid and (parent := id_map.get(pid)):
+            s.parent_ref = parent
+            parent.children.append(s)
