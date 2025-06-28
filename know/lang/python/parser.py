@@ -621,6 +621,7 @@ class PythonCodeParser(AbstractCodeParser):
             alias=alias,
             dot=dot,
             external=not is_local,
+            raw=raw_stmt,                 # ← NEW – populate required field
         )
         parsed_file.imports.append(import_edge)
 
