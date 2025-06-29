@@ -1,5 +1,9 @@
 #+title: Todo
-* [ ] Add language to symbol and use it find parser when generating a summary
+* [ ] Add public OpenAI API call definitions for existing tools
+- Implement as classes
+- Returns OpenAI schema
+- Returns MCP?
+* [X] Add language to symbol and use it find parser when generating a summary
 * [X] Fix python decorators to be included in raw symbol output
 * [X] Implement recursive parsing function. Do not parse the file if it's hash did not change.
 * [ ] Add data access helper that reads file from data store along with all symbols

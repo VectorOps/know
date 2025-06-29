@@ -16,8 +16,8 @@ class FileListItem(BaseModel):
 
 
 class ListFilesTool(BaseTool):
-    @staticmethod
     def execute(
+        self,
         project: Project,
         patterns: Sequence[str] | None = None,
     ) -> List[FileListItem]:
@@ -58,7 +58,6 @@ class ListFilesTool(BaseTool):
             if _matches(fm.path)
         ]
 
-    @staticmethod
     def get_openai_schema() -> dict:
         return {
             "name": "list_files",

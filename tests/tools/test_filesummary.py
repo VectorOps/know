@@ -2,7 +2,7 @@ import textwrap
 
 from know.settings import ProjectSettings
 from know.project import init_project
-from know.tools.filesummary import summarize_files
+from know.tools.filesummary import SummarizeFilesTool
 
 
 def _setup_project(tmp_path):
@@ -40,7 +40,7 @@ def _setup_project(tmp_path):
 def test_filesummary_returns_expected_content(tmp_path):
     project = _setup_project(tmp_path)
 
-    res = summarize_files(project, ["foo.py"])
+    res = SummarizeFilesTool().execute(project, ["foo.py"])
     assert len(res) == 1
 
     summary = res[0]
@@ -58,7 +58,7 @@ def test_filesummary_skips_unknown_files(tmp_path):
     project = _setup_project(tmp_path)
 
     # add an additional, non-existing path
-    res = summarize_files(project, ["foo.py", "does_not_exist.py"])
+    res = SummarizeFilesTool().execute(project, ["foo.py", "does_not_exist.py"])
     # Only one valid summary expected
     assert len(res) == 1
     assert res[0].path == "foo.py"

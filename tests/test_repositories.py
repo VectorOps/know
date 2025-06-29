@@ -125,7 +125,7 @@ def test_symbol_metadata_repository(data_repo):
 def test_import_edge_repository(data_repo):
     edge_repo = data_repo.importedge
     rid, eid, from_pid = make_id(), make_id(), make_id()
-    edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, to_package_path="pkg/other", external=False))
+    edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, to_package_path="pkg/other", raw="import pkg.other", external=False))
 
     assert edge_repo.get_list_by_source_package_id(from_pid)[0].id == eid
     assert edge_repo.get_list_by_repo_id(rid)[0].id == eid

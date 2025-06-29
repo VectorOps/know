@@ -47,8 +47,8 @@ def _import_to_text(imp: ImportEdge) -> str:          # NEW
 
 
 class SummarizeFilesTool(BaseTool):
-    @staticmethod
     def execute(
+        self,
         project: Project,
         paths: Sequence[str]
     ) -> List[FileSummary]:
@@ -107,7 +107,6 @@ class SummarizeFilesTool(BaseTool):
 
         return summaries
 
-    @staticmethod
     def get_openai_schema() -> dict:
         return {
             "name": "summarize_files",

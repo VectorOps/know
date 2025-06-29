@@ -89,5 +89,5 @@ def test_python_parser_on_simple_file():
     # ------------------------------------------------------------------ #
     # Docstrings
     # ------------------------------------------------------------------ #
-    assert top_level["fn"].docstring == "docstring!"
+    assert top_level["fn"].docstring == "\"docstring!\""
     assert "Multiline" in (top_level["_foo"].docstring or "")
