@@ -47,7 +47,7 @@ def _serialize_tool_result(res):
 
 
 async def _chat(model: str, system_msg: str, project):
-    session = PromptSession(history=FileHistory("~/.chatcli-history"))
+    session = PromptSession()
     messages: List[Dict] = [{"role": "system", "content": system_msg}]
 
     tools = [t.get_openai_schema() for t in ToolRegistry._tools.values()]
@@ -70,7 +70,13 @@ async def _chat(model: str, system_msg: str, project):
             response = litellm.completion(
                 model=model,
                 messages=messages,
-                tools=tools,          # expose tools
+                tools=[
+                    {                       # OpenAI / litellm tool-definition format
+                        "type": "function",
+                        "function": t.get_openai_schema(),
+                    }
+                    for t in ToolRegistry._tools.values()
+                ],          # expose tools
             )
             msg = response.choices[0].message
             # If the assistant wants to call a tool …
