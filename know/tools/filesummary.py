@@ -47,7 +47,7 @@ def _import_to_text(imp: ImportEdge) -> str:          # NEW
 
 
 class SummarizeFilesTool(BaseTool):
-    tool_name = "summarize_files"
+    tool_name = "vectorops_summarize_files"
 
     def execute(
         self,
@@ -109,9 +109,9 @@ class SummarizeFilesTool(BaseTool):
 
         return summaries
 
-    def get_openai_schema() -> dict:
+    def get_openai_schema(self) -> dict:
         return {
-            "name": f"vectoros/{SummarizeFilesTool.tool_name}",
+            "name": self.tool_name,
             "description": (
                 "Generate a text summary for each supplied file consisting "
                 "of its import statements and top-level symbol definitions."

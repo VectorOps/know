@@ -16,7 +16,7 @@ class FileListItem(BaseModel):
 
 
 class ListFilesTool(BaseTool):
-    tool_name = "list_files"
+    tool_name = "vectorops_list_files"
 
     def execute(
         self,
@@ -60,9 +60,9 @@ class ListFilesTool(BaseTool):
             if _matches(fm.path)
         ]
 
-    def get_openai_schema() -> dict:
+    def get_openai_schema(self) -> dict:
         return {
-            "name": f"vectoros/{ListFilesTool.tool_name}",
+            "name": self.tool_name,
             "description": (
                 "Return all project files whose path matches at least one "
                 "of the supplied glob patterns.  If no patterns are "

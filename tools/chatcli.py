@@ -66,7 +66,7 @@ async def _chat(model: str, system_msg: str, project):
         if cmd in {"/new", "/restart", "/reset"}:
             # start a fresh chat session – keep the original system prompt
             messages[:] = [{"role": "system", "content": system_msg}]
-            print("🆕  Started new session.")
+            print("  Started new session.")
             continue        # ask for the next user prompt
         if not user_input.strip():
             continue
