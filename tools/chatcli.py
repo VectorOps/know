@@ -9,6 +9,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
+from know.logger import logger
 from know.settings import ProjectSettings
 from know.project import init_project
 from know.tools.base import ToolRegistry
@@ -26,7 +27,7 @@ to solve users question.
 
 def _parse_cli() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Simple interactive chat CLI.")
-    p.add_argument("-m", "--model", default=os.getenv("OPENAI_MODEL", "o3"))
+    p.add_argument("-m", "--model", default=os.getenv("OPENAI_MODEL", "gpt-4.1"))
     p.add_argument("-s", "--system", default=SYSTEM_PROMPT)
     p.add_argument("-p", "--path", "--project-path",
                    required=True,
@@ -52,14 +53,21 @@ async def _chat(model: str, system_msg: str, project):
 
     tools = [t.get_openai_schema() for t in ToolRegistry._tools.values()]
 
-    print(f"Loaded model '{model}'.   Type '/exit' or Ctrl-D to quit.")
+    print(f"Loaded model '{model}'.   Type '/new' to start a fresh session, "
+          "'/exit' or Ctrl-D to quit.")
     while True:
         try:
             user_input = await session.prompt_async("> ")
         except (EOFError, KeyboardInterrupt):
             break
-        if user_input.strip().lower() in {"/exit", "/quit"}:
+        cmd = user_input.strip().lower()
+        if cmd in {"/exit", "/quit"}:
             break
+        if cmd in {"/new", "/restart", "/reset"}:
+            # start a fresh chat session – keep the original system prompt
+            messages[:] = [{"role": "system", "content": system_msg}]
+            print("🆕  Started new session.")
+            continue        # ask for the next user prompt
         if not user_input.strip():
             continue
 
@@ -86,7 +94,14 @@ async def _chat(model: str, system_msg: str, project):
                     tool_name = call.function.name.split("/", 1)[-1]
                     tool      = ToolRegistry.get(tool_name)
                     args      = json.loads(call.function.arguments or "{}")
-                    result    = tool.execute(project, **args)
+
+                    # TODO: Logger
+                    print("Tool call request", call.function.name, args)
+
+                    result = tool.execute(project, **args)
+
+                    print("Tool call response", call.function.name, result)
+
                     messages.append({
                         "role": "tool",
                         "tool_call_id": call.id,
