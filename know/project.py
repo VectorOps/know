@@ -11,7 +11,8 @@ from know.settings import ProjectSettings
 from know.embeddings.interface import EmbeddingsCalculator
 from know.embeddings.factory import get_embeddings_calculator
 
-IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode"}
+# TODO: Make configurable
+IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode", ".pytest_cache"}
 
 
 class Project:
@@ -113,7 +114,30 @@ def scan_project_directory(project: Project) -> None:
 
         parser = CodeParserRegistry.get_parser(path.suffix)
         if parser is None:
-            logger.debug(f"No parser registered for {rel_path}")
+            logger.debug(f"No parser registered for {rel_path} – storing bare FileMetadata.")
+
+            # Ensure FileMetadata exists / is up-to-date so the file is still discoverable
+            file_hash = compute_file_hash(str(path))
+            mod_time  = path.stat().st_mtime
+
+            if existing_meta is None:
+                fm = FileMetadata(
+                    id=generate_id(),
+                    repo_id=project.get_repo().id,
+                    package_id=None,          # no package context
+                    path=str(rel_path),
+                    file_hash=file_hash,
+                    last_updated=mod_time,
+                )
+                file_repo.create(fm)
+            else:
+                file_repo.update(
+                    existing_meta.id,
+                    {
+                        "file_hash": file_hash,
+                        "last_updated": mod_time,
+                    },
+                )
             continue
 
         try:
