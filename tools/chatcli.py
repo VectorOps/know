@@ -5,6 +5,7 @@ import json
 from typing import List, Dict
 
 import litellm
+from litellm.utils import calculate_cost  # type: ignore  (fallback if stubless)
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -86,6 +87,13 @@ async def _chat(model: str, system_msg: str, project):
                     for t in ToolRegistry._tools.values()
                 ],          # expose tools
             )
+            usage = response.usage or {}
+            prompt_toks     = usage.get("prompt_tokens", 0)
+            completion_toks = usage.get("completion_tokens", 0)
+            total_toks      = usage.get("total_tokens", 0)
+            cost_usd        = calculate_cost(model=model,  # litellm helper
+                                             prompt_tokens=prompt_toks,
+                                             completion_tokens=completion_toks)
             msg = response.choices[0].message
             # If the assistant wants to call a tool …
             if getattr(msg, "tool_calls", None):
@@ -112,6 +120,8 @@ async def _chat(model: str, system_msg: str, project):
                 continue
             # otherwise, regular assistant answer
             print(f"\nAssistant: {msg.content}")
+            print(f"[usage] prompt={prompt_toks}  completion={completion_toks} "
+                  f"total={total_toks}  →  est. cost ${cost_usd:.6f}")
             messages.append({"role": "assistant", "content": msg.content})
             break
 
