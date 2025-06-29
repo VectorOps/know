@@ -50,7 +50,9 @@ class ReadFilesTool(BaseTool):
             "name": self.tool_name,
             "description": (
                 "Return the full text contents of each supplied file. "
-                "Only files registered in the project repository are read."
+                "Only files registered in the project repository are read. "
+                "Only use this tool if text summary tool does not return enough "
+                "information to provide an answer"
             ),
             "parameters": {
                 "type": "object",

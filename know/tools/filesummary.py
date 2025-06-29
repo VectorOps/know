@@ -115,6 +115,7 @@ class SummarizeFilesTool(BaseTool):
             "description": (
                 "Generate a text summary for each supplied file consisting "
                 "of its import statements and top-level symbol definitions."
+                "Use this tool to find overview of the interesting files."
             ),
             "parameters": {
                 "type": "object",

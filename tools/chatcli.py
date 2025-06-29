@@ -121,7 +121,7 @@ async def _chat(model: str, system_msg: str, project):
             # otherwise, regular assistant answer
             print(f"\nAssistant: {msg.content}")
             print(f"[usage] prompt={prompt_toks}  completion={completion_toks} "
-                  f"total={total_toks}  →  est. cost ${cost_usd:.6f}")
+                  f"total={total_toks}  -  est. cost ${cost_usd:.6f}")
             messages.append({"role": "assistant", "content": msg.content})
             break
 
