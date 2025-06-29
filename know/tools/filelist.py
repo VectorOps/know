@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from know.project import Project
 from know.models import ProgrammingLanguage
+from .base import BaseTool
 
 
 class FileListItem(BaseModel):
@@ -14,43 +15,70 @@ class FileListItem(BaseModel):
     language: Optional[ProgrammingLanguage] = None
 
 
-def list_files(
-    project: Project,
-    patterns: Sequence[str] | None = None,
-) -> List[FileListItem]:
-    """
-    Return all project files whose *path* matches at least one of the
-    supplied glob *patterns* (fnmatch-style).  
-    If *patterns* is None / empty → return every file.
+class ListFilesTool(BaseTool):
+    @staticmethod
+    def execute(
+        project: Project,
+        patterns: Sequence[str] | None = None,
+    ) -> List[FileListItem]:
+        """
+        Return all project files whose *path* matches at least one of the
+        supplied glob *patterns* (fnmatch-style).
+        If *patterns* is None / empty → return every file.
 
-    Parameters
-    ----------
-    project:
-        The active Project instance.
-    patterns:
-        Iterable of glob patterns (e.g. ["**/*.py", "src/*.ts"]).
+        Parameters
+        ----------
+        project:
+            The active Project instance.
+        patterns:
+            Iterable of glob patterns (e.g. ["**/*.py", "src/*.ts"]).
 
-    Returns
-    -------
-    List[FileListItem]
-    """
-    repo_id = project.get_repo().id
-    file_repo = project.data_repository.file
-    all_files = file_repo.get_list_by_repo_id(repo_id)
+        Returns
+        -------
+        List[FileListItem]
+        """
+        repo_id = project.get_repo().id
+        file_repo = project.data_repository.file
+        all_files = file_repo.get_list_by_repo_id(repo_id)
 
-    pats = list(patterns) if patterns else []
-    if not pats:
-        # no filtering necessary
+        pats = list(patterns) if patterns else []
+        if not pats:
+            # no filtering necessary
+            return [
+                FileListItem(path=fm.path, language=fm.language)
+                for fm in all_files
+            ]
+
+        def _matches(path: str) -> bool:
+            return any(fnmatch.fnmatch(path, pat) for pat in pats)
+
         return [
-            FileListItem(path=fm.path, language_guess=fm.language)
+            FileListItem(path=fm.path, language=fm.language)
             for fm in all_files
+            if _matches(fm.path)
         ]
 
-    def _matches(path: str) -> bool:
-        return any(fnmatch.fnmatch(path, pat) for pat in pats)
-
-    return [
-        FileListItem(path=fm.path, language_guess=fm.language)
-        for fm in all_files
-        if _matches(fm.path)
-    ]
+    @staticmethod
+    def get_openai_schema() -> dict:
+        return {
+            "name": "list_files",
+            "description": (
+                "Return all project files whose path matches at least one "
+                "of the supplied glob patterns.  If no patterns are "
+                "provided every file is returned."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "patterns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "List of fnmatch-style glob patterns "
+                            "(e.g. ['**/*.py', 'src/*.ts'])."
+                        ),
+                    }
+                },
+                "required": [],
+            },
+        }
