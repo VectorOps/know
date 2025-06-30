@@ -8,6 +8,7 @@ from know.data import SymbolSearchQuery
 from know.models import SymbolKind, Visibility
 from know.project import Project
 from know.tools.base import BaseTool
+from know.parsers import AbstractCodeParser      # top-level import section
 
 
 class SymbolSearchResult(BaseModel):
@@ -17,6 +18,8 @@ class SymbolSearchResult(BaseModel):
     kind:      Optional[str] = None
     visibility:Optional[str] = None
     file_path: Optional[str] = None
+    summary:    Optional[str] = None
+    body:       Optional[str] = None
 
 
 class SearchSymbolsTool(BaseTool):
@@ -31,9 +34,11 @@ class SearchSymbolsTool(BaseTool):
         symbol_kind: Optional[str] = None,
         symbol_visibility: Optional[str] = None,
         doc_needle: Optional[Sequence[str]] = None,
-        embedding_text: Optional[str] = None,
+        query: Optional[str] = None,
         limit: int | None = 20,
         offset: int | None = 0,
+        include_summary: bool = False,
+        include_body:    bool = False,
     ) -> List[SymbolSearchResult]:
 
         # translate enums if string values are given
@@ -44,9 +49,8 @@ class SearchSymbolsTool(BaseTool):
         # transform free-text query → embedding vector (if requested)
         # ------------------------------------------------------------
         embedding_vec = None
-        if embedding_text:
-            # treat query text as plain language (not code)
-            embedding_vec = project.compute_embedding(embedding_text, is_code=False)
+        if query:
+            embedding_vec = project.compute_embedding(query, is_code=True)
 
         repo_id = project.get_repo().id
         query   = SymbolSearchQuery(
@@ -62,20 +66,47 @@ class SearchSymbolsTool(BaseTool):
         syms = project.data_repository.symbol.search(repo_id, query)
         file_repo = project.data_repository.file
 
+        # --- eager load parser for summary/body only if required ---
+        parser: AbstractCodeParser | None = None
+        if include_summary or include_body:
+            # project.get_parser() returns a language specific parser; falls back to None
+            parser = project.get_parser()
+
         results: list[SymbolSearchResult] = []
         for s in syms:
             file_path = None
             if s.file_id:
                 fm = file_repo.get_by_id(s.file_id)
                 file_path = fm.path if fm else None
+
+            sym_summary = None
+            sym_body    = None
+            if parser and (include_summary or include_body):
+                try:
+                    if include_summary:
+                        sym_summary = parser.get_symbol_summary(s)
+                    if include_body and s.file_id:
+                        fm = file_repo.get_by_id(s.file_id)
+                        if fm and fm.content:
+                            # assume FileMetadata has raw source in .content
+                            src_lines = fm.content.splitlines()
+                            if getattr(s, "start_line", None) is not None and getattr(s, "end_line", None) is not None:
+                                start = s.start_line - 1
+                                end   = s.end_line
+                                sym_body = "\n".join(src_lines[start:end])
+                except Exception:
+                    pass    # graceful degradation
+
             results.append(
                 SymbolSearchResult(
                     symbol_id  = s.id,
                     fqn        = s.fqn,
                     name       = s.name,
-                    kind       = getattr(s.kind, "value", s.kind) if s.kind else None,
-                    visibility = getattr(s.visibility, "value", s.visibility) if s.visibility else None,
+                    kind       = s.kind,
+                    visibility = s.visibility,
                     file_path  = file_path,
+                    summary    = sym_summary,
+                    body       = sym_body,
                 )
             )
         return results
@@ -86,7 +117,9 @@ class SearchSymbolsTool(BaseTool):
 
         return {
             "name": self.tool_name,
-            "description": "Search symbols in the current project repository.",
+            "description": "Search symbols in the current project repository. Use the tool "
+            "to do project discovery and find relevant public symbols that can be used to "
+            "solve users request.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -102,8 +135,8 @@ class SearchSymbolsTool(BaseTool):
                         "enum": visibility_enum,
                         "description": "Filter by visibility (public / protected / private)."
                     },
-                    "doc_needle":        {"type": "array",  "items": {"type": "string"}, "description": "Full-text search tokens"},
-                    "embedding_text": {
+                    #"doc_needle":        {"type": "array",  "items": {"type": "string"}, "description": "Full-text search tokens"},
+                    "query": {
                         "type": "string",
                         "description": (
                             "Natural-language search string to be embedded and used "
@@ -112,6 +145,14 @@ class SearchSymbolsTool(BaseTool):
                     },
                     "limit":             {"type": "integer", "minimum": 1, "default": 20},
                     "offset":            {"type": "integer", "minimum": 0, "default": 0},
+                    "include_summary": {
+                        "type": "boolean",
+                        "description": "If true, include a natural-language summary of each symbol."
+                    },
+                    "include_body": {
+                        "type": "boolean",
+                        "description": "If true, include full source code body of each symbol."
+                    },
                 },
             },
         }
