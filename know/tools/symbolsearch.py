@@ -31,7 +31,7 @@ class SearchSymbolsTool(BaseTool):
         symbol_kind: Optional[str] = None,
         symbol_visibility: Optional[str] = None,
         doc_needle: Optional[Sequence[str]] = None,
-        embedding_query: Optional[List[float]] = None,
+        embedding_text: Optional[str] = None,
         limit: int | None = 20,
         offset: int | None = 0,
     ) -> List[SymbolSearchResult]:
@@ -40,6 +40,14 @@ class SearchSymbolsTool(BaseTool):
         kind  = SymbolKind(symbol_kind)           if symbol_kind else None
         vis   = Visibility(symbol_visibility)     if symbol_visibility else None
 
+        # ------------------------------------------------------------
+        # transform free-text query → embedding vector (if requested)
+        # ------------------------------------------------------------
+        embedding_vec = None
+        if embedding_text:
+            # treat query text as plain language (not code)
+            embedding_vec = project.compute_embedding(embedding_text, is_code=False)
+
         repo_id = project.get_repo().id
         query   = SymbolSearchQuery(
             symbol_name       = symbol_name,
@@ -47,7 +55,7 @@ class SearchSymbolsTool(BaseTool):
             symbol_kind       = kind,
             symbol_visibility = vis,
             doc_needle        = list(doc_needle) if doc_needle else None,
-            embedding_query   = embedding_query,
+            embedding_query   = embedding_vec,
             limit             = limit,
             offset            = offset,
         )
@@ -84,7 +92,13 @@ class SearchSymbolsTool(BaseTool):
                     "symbol_kind":       {"type": "string", "description": "Filter by kind (class, function, …)"},
                     "symbol_visibility": {"type": "string", "description": "public / protected / private"},
                     "doc_needle":        {"type": "array",  "items": {"type": "string"}, "description": "Full-text search tokens"},
-                    "embedding_query":   {"type": "array",  "items": {"type": "number"}, "description": "Vector for similarity search"},
+                    "embedding_text": {
+                        "type": "string",
+                        "description": (
+                            "Natural-language search string to be embedded and used "
+                            "for semantic similarity search."
+                        )
+                    },
                     "limit":             {"type": "integer", "minimum": 1, "default": 20},
                     "offset":            {"type": "integer", "minimum": 0, "default": 0},
                 },
