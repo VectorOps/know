@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from know.logger import KnowLogger
 
 from typing import List, Optional, Any
@@ -59,6 +60,7 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
         self._batch_size = batch_size
         self._model_kwargs = model_kwargs
         self._model: Optional[SentenceTransformer] = None  # lazy loaded
+        self._last_encode_time: Optional[float] = None
 
     # --------------------------------------------------------------------- #
     # Internal helpers
@@ -89,11 +91,23 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
             level=logging.DEBUG,
         )
         try:
+            start_ts = time.perf_counter()
             embeddings = self._get_model().encode(
                 texts,
                 batch_size=self._batch_size,
                 normalize_embeddings=self._normalize,
                 show_progress_bar=False,
+            )
+            duration = time.perf_counter() - start_ts
+            self._last_encode_time = duration
+            KnowLogger.log_event(
+                "embeddings_encode_time",
+                {
+                    "model_name": self._model_name,
+                    "num_texts": len(texts),
+                    "duration_sec": duration,
+                },
+                level=logging.INFO,
             )
         except Exception as exc:
             KnowLogger.log_event(
@@ -127,3 +141,10 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
 
     def get_text_embedding(self, text: str) -> Vector:
         return self._encode([text])[0]
+
+    def get_last_encode_time(self) -> Optional[float]:
+        """
+        Returns the duration (in seconds) of the most recent `_encode` call,
+        or ``None`` if `_encode` has not been executed yet.
+        """
+        return self._last_encode_time
