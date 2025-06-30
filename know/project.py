@@ -30,7 +30,7 @@ class Project:
         self.settings = settings
         self.data_repository = data_repository
         self._repo_metadata = repo_metadata
-        self._embeddings = embeddings
+        self.embeddings = embeddings
         self._pending_import_edges: list[ImportEdge] = []
 
     def get_repo(self) -> RepoMetadata:
@@ -46,26 +46,13 @@ class Project:
         """
         Return an embedding vector for *text* using the project’s
         EmbeddingsCalculator.
-
-        Parameters
-        ----------
-        text:
-            Input to embed.
-        is_code:
-            When True, use `get_code_embedding`; otherwise use
-            `get_text_embedding`.
-
-        Returns
-        -------
-        Vector | None
-            The embedding vector, or ``None`` if no calculator is attached.
         """
-        if self._embeddings is None:
+        if self.embeddings is None:
             return None
         return (
-            self._embeddings.get_code_embedding(text)
+            self.embeddings.get_code_embedding(text)
             if is_code
-            else self._embeddings.get_text_embedding(text)
+            else self.embeddings.get_text_embedding(text)
         )
 
     def _add_pending_import_edge(self, edge: ImportEdge) -> None:
@@ -311,6 +298,14 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         nonlocal obsolete_keys
         existing = existing_by_key.get(sym.key)
 
+        is_new_symbol = existing is None
+        code_changed = is_new_symbol or existing.symbol_hash != sym.hash
+        doc_changed  = is_new_symbol or existing.docstring != sym.docstring
+        sig_changed  = is_new_symbol or (
+            sym.signature
+            and (existing.signature is None or existing.signature.raw != sym.signature.raw)
+        )
+
         sm_kwargs = sym.to_dict()
         sm_kwargs.update({
             "file_id": file_meta.id,
@@ -321,12 +316,15 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         emb_calc = project.embeddings
         if emb_calc:
             try:
-                sm_kwargs["embedding_code_vec"] = emb_calc.get_code_embedding(sym.body)
-                if sym.docstring:
+                if code_changed:
+                    sm_kwargs["embedding_code_vec"] = emb_calc.get_code_embedding(sym.body)
+                if sym.docstring and doc_changed:
                     sm_kwargs["embedding_doc_vec"] = emb_calc.get_text_embedding(sym.docstring)
-                if sym.signature:
+                if sym.signature and sig_changed:
                     sm_kwargs["embedding_sig_vec"] = emb_calc.get_code_embedding(sym.signature.raw)
-                sm_kwargs["embedding_model"] = emb_calc.get_model_name()
+                # record model name only when at least one vector was (re)generated
+                if any([code_changed, doc_changed, sig_changed]):
+                    sm_kwargs["embedding_model"] = emb_calc.get_model_name()
             except Exception as exc:
                 logger.error(f"Embedding generation failed for symbol {sym.name}: {exc}")
 
