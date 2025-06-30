@@ -209,4 +209,4 @@ class SearchSymbolsTool(BaseTool):
                     summary    = sym_summary,
                 )
             )
-        return self.to_python(results)       # NEW
+        return self.to_python(results)

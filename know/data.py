@@ -122,6 +122,8 @@ class AbstractFileMetadataRepository(ABC):
 class SymbolSearchQuery:
     # Filter by symbol name
     symbol_name: Optional[str] = None
+    # Filter by symbol fully qualified name
+    symbol_fqn: Optional[str] = None
     # Filter by symbol kind
     symbol_kind: Optional[SymbolKind] = None
     # Filter by symbol visiblity

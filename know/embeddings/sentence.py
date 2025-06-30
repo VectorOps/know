@@ -107,7 +107,7 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
                     "num_texts": len(texts),
                     "duration_sec": duration,
                 },
-                level=logging.INFO,
+                level=logging.DEBUG,
             )
         except Exception as exc:
             KnowLogger.log_event(

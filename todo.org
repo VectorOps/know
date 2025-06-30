@@ -37,3 +37,4 @@
 * [ ] Add support for del_statement?
 * [ ] Add support for FTS when embedding search is not feasible
 * [ ] Even if file can not be parsed, store information about it in the database
+* [ ] When reparsing file and symbols did not change - do not recalculate embeddings

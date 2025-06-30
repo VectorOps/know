@@ -107,7 +107,7 @@ class SummarizeFilesTool(BaseTool):
 
             summaries.append(FileSummary(path=rel_path, definitions=definitions_text))
 
-        return summaries
+        return self.to_python(summaries)
 
     def get_openai_schema(self) -> dict:
         return {

@@ -54,11 +54,11 @@ class ListFilesTool(BaseTool):
         def _matches(path: str) -> bool:
             return any(fnmatch.fnmatch(path, pat) for pat in pats)
 
-        return [
+        return self.to_python([
             FileListItem(path=fm.path, language=fm.language)
             for fm in all_files
             if _matches(fm.path)
-        ]
+        ])
 
     def get_openai_schema(self) -> dict:
         return {

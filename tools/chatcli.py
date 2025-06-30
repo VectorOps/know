@@ -13,6 +13,7 @@ from know.logger import logger
 from know.settings import ProjectSettings, EmbeddingSettings
 from know.project import init_project
 from know.tools.base import ToolRegistry
+from devtools import pformat
 
 
 SYSTEM_PROMPT = """
@@ -58,18 +59,6 @@ def _parse_cli() -> argparse.Namespace:
              "(e.g. DuckDB file path).",
     )
     return p.parse_args()
-
-
-def _serialize_tool_result(res):
-    # pydantic BaseModel or list[BaseModel] → python primitives
-    if isinstance(res, list):
-        return [r.model_dump() if hasattr(r, "model_dump") else r.dict()
-                for r in res]
-    if hasattr(res, "model_dump"):
-        return res.model_dump()
-    if hasattr(res, "dict"):
-        return res.dict()
-    return res
 
 
 async def _chat(model: str, system_msg: str, project):
@@ -129,17 +118,19 @@ async def _chat(model: str, system_msg: str, project):
                     args      = json.loads(call.function.arguments or "{}")
 
                     # TODO: Logger
-                    print("Tool call request", call.function.name, args)
+                    print(f"Tool call request {call.function.name}")
+                    print(pformat(args))
 
                     result = tool.execute(project, **args)
 
-                    print("Tool call response", call.function.name, result)
+                    print(f"Tool call response {call.function.name}")
+                    print(pformat(result))
 
                     messages.append({
                         "role": "tool",
                         "tool_call_id": call.id,
                         "name": call.function.name,
-                        "content": json.dumps(_serialize_tool_result(result)),
+                        "content": json.dumps(result),
                     })
                 # run another completion to let the model consume the tool output
                 continue

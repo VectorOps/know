@@ -43,7 +43,7 @@ class ReadFilesTool(BaseTool):
 
             results.append(FileContent(path=rel_path, content=text))
 
-        return results
+        return self.to_python(results)
 
     def get_openai_schema(self) -> dict:      # OpenAI function-calling schema
         return {

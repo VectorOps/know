@@ -208,12 +208,12 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
         # ---------- scalar filters ----------
         if query.symbol_name:
-            where.append("LOWER(s.name) LIKE ?")
-            params.append(f"%{query.symbol_name.lower()}%")
+            where.append("LOWER(s.name) = ?")
+            params.append(query.symbol_name.lower())
 
         if query.symbol_fqn:
-            where.append("s.fqn = ?")
-            params.append(query.symbol_fqn)
+            where.append("LOWER(s.fqn) LIKE ?")
+            params.append(f"%{query.symbol_fqn.lower()}%")
 
         if query.symbol_kind:
             where.append("s.kind = ?")
@@ -318,7 +318,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         if db_path != ":memory:":
             os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
 
-        self._conn = duckdb.connect(db_path)
+        self._conn = duckdb.connect()
 
         # --- enable vector-similarity search extension --------------------------
         try:
@@ -326,6 +326,10 @@ class DuckDBDataRepository(AbstractDataRepository):
             self._conn.execute("LOAD vss")
         except Exception:          # extension already installed / not available
             pass
+
+        # TODO: SQL injection?
+        self._conn.execute(f"ATTACH '{db_path}' as db")
+        self._conn.execute("USE db")
 
         _apply_migrations(self._conn)
 

@@ -2,7 +2,9 @@ from abc import ABC, abstractmethod
 from know.project import Project
 from typing import Dict, Type, Any
 import inspect
-from enum import Enum        # NEW
+from enum import Enum
+from pydantic import BaseModel
+
 
 class BaseTool(ABC):
     # each concrete tool MUST set this
@@ -27,7 +29,6 @@ class BaseTool(ABC):
         Recursively turn Pydantic models / Enums / collections into
         plain-Python (JSON-serialisable) structures.
         """
-        from pydantic import BaseModel                           # local to avoid cycles
 
         if isinstance(obj, BaseModel):
             return obj.model_dump()
