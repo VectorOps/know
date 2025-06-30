@@ -81,6 +81,9 @@ class SearchSymbolsTool(BaseTool):
         return results
 
     def get_openai_schema(self) -> dict:
+        kind_enum        = [k.value for k in SymbolKind]
+        visibility_enum  = [v.value for v in Visibility]
+
         return {
             "name": self.tool_name,
             "description": "Search symbols in the current project repository.",
@@ -89,8 +92,16 @@ class SearchSymbolsTool(BaseTool):
                 "properties": {
                     "symbol_name":       {"type": "string", "description": "Substring match on symbol name"},
                     "symbol_fqn":        {"type": "string", "description": "Exact fully-qualified name"},
-                    "symbol_kind":       {"type": "string", "description": "Filter by kind (class, function, …)"},
-                    "symbol_visibility": {"type": "string", "description": "public / protected / private"},
+                    "symbol_kind": {
+                        "type": "string",
+                        "enum": kind_enum,
+                        "description": "Filter by symbol kind."
+                    },
+                    "symbol_visibility": {
+                        "type": "string",
+                        "enum": visibility_enum,
+                        "description": "Filter by visibility (public / protected / private)."
+                    },
                     "doc_needle":        {"type": "array",  "items": {"type": "string"}, "description": "Full-text search tokens"},
                     "embedding_text": {
                         "type": "string",
