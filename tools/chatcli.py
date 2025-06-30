@@ -10,7 +10,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from know.logger import logger
-from know.settings import ProjectSettings
+from know.settings import ProjectSettings, EmbeddingSettings
 from know.project import init_project
 from know.tools.base import ToolRegistry
 
@@ -32,6 +32,11 @@ def _parse_cli() -> argparse.Namespace:
     p.add_argument("-p", "--path", "--project-path",
                    required=True,
                    help="Root directory of the project to analyse/assist with")
+    p.add_argument(
+        "--enable-embeddings",
+        action="store_true",
+        help="Load the embeddings engine so semantic-search tools work.",
+    )
     return p.parse_args()
 
 
@@ -131,7 +136,10 @@ def main() -> None:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY env var not set.")
-    settings = ProjectSettings(project_path=args.path)
+    ps_kwargs = {"project_path": args.path}
+    if args.enable_embeddings:
+        ps_kwargs["embedding"] = EmbeddingSettings(enabled=True)
+    settings = ProjectSettings(**ps_kwargs)
     project  = init_project(settings)
     with patch_stdout():
         asyncio.run(_chat(args.model, args.system, project))
