@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from know.project import Project
-from typing import Dict, Type
+from typing import Dict, Type, Any
 import inspect
+from enum import Enum        # NEW
 
 class BaseTool(ABC):
     # each concrete tool MUST set this
@@ -18,6 +19,30 @@ class BaseTool(ABC):
         Returns OpenAI function calling schema.
         """
         pass
+
+    # ------------------------------------------------------------------ NEW
+    @staticmethod
+    def _convert_to_python(obj: Any) -> Any:
+        """
+        Recursively turn Pydantic models / Enums / collections into
+        plain-Python (JSON-serialisable) structures.
+        """
+        from pydantic import BaseModel                           # local to avoid cycles
+
+        if isinstance(obj, BaseModel):
+            return obj.model_dump()
+        if isinstance(obj, Enum):
+            return obj.value
+        if isinstance(obj, dict):
+            return {k: BaseTool._convert_to_python(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple, set)):
+            return [BaseTool._convert_to_python(v) for v in obj]
+        return obj
+
+    # convenience instance wrapper
+    def to_python(self, obj: Any) -> Any:            # NEW
+        return self._convert_to_python(obj)
+    # ------------------------------------------------------------------ NEW
 
 
 class ToolRegistry:

@@ -46,10 +46,10 @@ class ListFilesTool(BaseTool):
         pats = list(patterns) if patterns else []
         if not pats:
             # no filtering necessary
-            return [
+            return self.to_python([
                 FileListItem(path=fm.path, language=fm.language)
                 for fm in all_files
-            ]
+            ])
 
         def _matches(path: str) -> bool:
             return any(fnmatch.fnmatch(path, pat) for pat in pats)
