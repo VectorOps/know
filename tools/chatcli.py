@@ -45,6 +45,18 @@ def _parse_cli() -> argparse.Namespace:
             "engine (only used when --enable-embeddings is given)."
         ),
     )
+    p.add_argument(
+        "--repo-backend",
+        choices=["memory", "duckdb"],
+        default=os.getenv("REPO_BACKEND", "memory"),
+        help="Metadata store backend to use ('memory' or 'duckdb').",
+    )
+    p.add_argument(
+        "--repo-connection",
+        default=os.getenv("REPO_CONNECTION"),
+        help="Connection string / path for the selected backend "
+             "(e.g. DuckDB file path).",
+    )
     return p.parse_args()
 
 
@@ -144,7 +156,11 @@ def main() -> None:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY env var not set.")
-    ps_kwargs = {"project_path": args.path}
+    ps_kwargs = {
+        "project_path": args.path,
+        "repository_backend": args.repo_backend,
+        "repository_connection": args.repo_connection,
+    }
     if args.enable_embeddings:
         ps_kwargs["embedding"] = EmbeddingSettings(
             enabled=True,
