@@ -175,6 +175,10 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         ]
 
         # ---------- scalar filters ----------
+        if query.symbol_fqn:
+            needle_fqn = query.symbol_fqn.lower()
+            res = [s for s in res if (s.fqn or "").lower() == needle_fqn]
+
         if query.symbol_name:
             needle = query.symbol_name.lower()
             res = [s for s in res if needle in (s.name or "").lower()]

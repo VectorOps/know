@@ -211,6 +211,10 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
             where.append("LOWER(s.name) LIKE ?")
             params.append(f"%{query.symbol_name.lower()}%")
 
+        if query.symbol_fqn:
+            where.append("s.fqn = ?")
+            params.append(query.symbol_fqn)
+
         if query.symbol_kind:
             where.append("s.kind = ?")
             params.append(getattr(query.symbol_kind, "value", query.symbol_kind))
