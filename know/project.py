@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Optional
-from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge
+from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge, Vector
 from know.data import AbstractDataRepository
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository  # new
@@ -30,12 +30,43 @@ class Project:
         self.settings = settings
         self.data_repository = data_repository
         self._repo_metadata = repo_metadata
-        self.embeddings = embeddings
+        self._embeddings = embeddings
         self._pending_import_edges: list[ImportEdge] = []
 
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
         return self._repo_metadata
+
+    def compute_embedding(
+        self,
+        text: str,
+        *,
+        is_code: bool = False,
+    ) -> Optional[Vector]:
+        """
+        Return an embedding vector for *text* using the project’s
+        EmbeddingsCalculator.
+
+        Parameters
+        ----------
+        text:
+            Input to embed.
+        is_code:
+            When True, use `get_code_embedding`; otherwise use
+            `get_text_embedding`.
+
+        Returns
+        -------
+        Vector | None
+            The embedding vector, or ``None`` if no calculator is attached.
+        """
+        if self._embeddings is None:
+            return None
+        return (
+            self._embeddings.get_code_embedding(text)
+            if is_code
+            else self._embeddings.get_text_embedding(text)
+        )
 
     def _add_pending_import_edge(self, edge: ImportEdge) -> None:
         self._pending_import_edges.append(edge)
