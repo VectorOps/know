@@ -37,6 +37,14 @@ def _parse_cli() -> argparse.Namespace:
         action="store_true",
         help="Load the embeddings engine so semantic-search tools work.",
     )
+    p.add_argument(
+        "--embedding-model",
+        default=os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
+        help=(
+            "HuggingFace hub model name or local path to use for the embeddings "
+            "engine (only used when --enable-embeddings is given)."
+        ),
+    )
     return p.parse_args()
 
 
@@ -138,7 +146,10 @@ def main() -> None:
         raise RuntimeError("OPENAI_API_KEY env var not set.")
     ps_kwargs = {"project_path": args.path}
     if args.enable_embeddings:
-        ps_kwargs["embedding"] = EmbeddingSettings(enabled=True)
+        ps_kwargs["embedding"] = EmbeddingSettings(
+            enabled=True,
+            model_name=args.embedding_model,
+        )
     settings = ProjectSettings(**ps_kwargs)
     project  = init_project(settings)
     with patch_stdout():
