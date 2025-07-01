@@ -544,6 +544,12 @@ class GolangCodeParser(AbstractCodeParser):
                     children=[],
                 )
             )
+            parent_symbol = parsed_file.symbols[-1]
+            if type_node is not None:
+                if type_node.type == "struct_type":
+                    self._parse_struct_fields(type_node, parent_symbol, parsed_file, package)
+                elif type_node.type == "interface_type":
+                    self._parse_interface_members(type_node, parent_symbol, parsed_file, package)
 
     def _handle_const_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         """
@@ -560,3 +566,124 @@ class GolangCodeParser(AbstractCodeParser):
         pass
 
     # (docstring/comments/signature/visibility helpers can be modeled after python as needed)
+
+    def _parse_struct_fields(
+        self,
+        struct_node,
+        parent_sym: ParsedSymbol,
+        parsed_file: ParsedFile,
+        package: ParsedPackage,
+    ) -> None:
+        # locate field_declaration_list
+        fld_list = next((c for c in struct_node.children if c.type == "field_declaration_list"), None)
+        if fld_list is None:
+            return
+
+        for fld in fld_list.children:
+            if fld.type != "field_declaration":
+                continue
+
+            # all identifiers belonging to this field declaration
+            id_nodes = [c for c in fld.children if c.type == "field_identifier"]
+            if not id_nodes:
+                # embedded / anonymous field – skip for now
+                continue
+
+            # try to capture the textual type (first non-comment node after idents)
+            type_node = None
+            after_ident = False
+            for c in fld.children:
+                if after_ident and c.type not in ("comment",):
+                    type_node = c
+                    break
+                if c in id_nodes:
+                    after_ident = True
+
+            type_text = ""
+            if type_node is not None:
+                type_text = self._source_bytes[type_node.start_byte:type_node.end_byte] \
+                                .decode("utf8", errors="replace").strip()
+
+            # shared byte / line span for this field declaration
+            start_b, end_b = fld.start_byte, fld.end_byte
+            body_bytes = self._source_bytes[start_b:end_b]
+            body_str = body_bytes.decode("utf8", errors="replace")
+
+            for idn in id_nodes:
+                fname = idn.text.decode("utf8")
+                child = ParsedSymbol(
+                    name=fname,
+                    fqn=self._join_fqn(package.virtual_path, parent_sym.name, fname),
+                    body=body_str,
+                    key=self._join_fqn(package.virtual_path, parent_sym.name, fname),
+                    hash=compute_symbol_hash(body_bytes),
+                    kind=SymbolKind.PROPERTY,
+                    start_line=fld.start_point[0] + 1,
+                    end_line=fld.end_point[0] + 1,
+                    start_byte=start_b,
+                    end_byte=end_b,
+                    visibility=Visibility.PUBLIC if fname[0].isupper() else Visibility.PRIVATE,
+                    modifiers=[],
+                    docstring=self._extract_preceding_comment(fld),
+                    signature=None,        # struct field – no signature
+                    comment=None,
+                    children=[],
+                )
+                parent_sym.children.append(child)
+                parsed_file.symbols.append(child)
+
+    def _parse_interface_members(
+        self,
+        iface_node,
+        parent_sym: ParsedSymbol,
+        parsed_file: ParsedFile,
+        package: ParsedPackage,
+    ) -> None:
+        # iterate over possible method_spec nodes
+        for m in iface_node.children:
+            if m.type != "method_spec":
+                continue
+
+            ident = next((c for c in m.children if c.type == "identifier"), None)
+            if ident is None:
+                continue
+            mname = ident.text.decode("utf8")
+
+            param_node = next((c for c in m.children if c.type == "parameter_list"), None)
+            result_node = None
+            if param_node is not None:
+                nxt = param_node.next_sibling
+                while nxt and nxt.type == "comment":
+                    nxt = nxt.next_sibling
+                if nxt and nxt.type not in ("comment",):
+                    result_node = nxt
+            signature_obj = (
+                self._build_function_signature(param_node, result_node)
+                if param_node is not None
+                else None
+            )
+
+            start_b, end_b = m.start_byte, m.end_byte
+            body_bytes = self._source_bytes[start_b:end_b]
+            body_str = body_bytes.decode("utf8", errors="replace")
+
+            child = ParsedSymbol(
+                name=mname,
+                fqn=self._join_fqn(package.virtual_path, parent_sym.name, mname),
+                body=body_str,
+                key=self._join_fqn(package.virtual_path, parent_sym.name, mname),
+                hash=compute_symbol_hash(body_bytes),
+                kind=SymbolKind.METHOD,
+                start_line=m.start_point[0] + 1,
+                end_line=m.end_point[0] + 1,
+                start_byte=start_b,
+                end_byte=end_b,
+                visibility=Visibility.PUBLIC if mname[0].isupper() else Visibility.PRIVATE,
+                modifiers=[],
+                docstring=self._extract_preceding_comment(m),
+                signature=signature_obj,
+                comment=None,
+                children=[],
+            )
+            parent_sym.children.append(child)
+            parsed_file.symbols.append(child)
