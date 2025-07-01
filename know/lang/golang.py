@@ -2,7 +2,7 @@ import os
 import logging
 import re  # NEW – needed for simple token handling (if not already present)
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from tree_sitter import Parser, Language
 import tree_sitter_go as tsgo
 
@@ -181,47 +181,6 @@ class GolangCodeParser(AbstractCodeParser):
         return "\n".join(parts).strip() or None
 
     # --- Node Handlers -------------------------------------------------------
-```
-
-know/lang/golang.py
-```python
-<<<<<<< SEARCH
-        # full source for the symbol
-        body_bytes: bytes = self._source_bytes[start_byte:end_byte]
-        body_str: str = body_bytes.decode("utf8", errors="replace")
-
-        # fully-qualified name + key
-        fqn: str = self._join_fqn(package.virtual_path, name)
-        key: str = fqn          # (keep identical – change here if another key scheme is preferred)
-
-        # visibility: exported identifiers in Go start with a capital letter
-        visibility = (
-            Visibility.PUBLIC   # adjust if your enum uses another literal
-            if name[0].isupper()
-            else Visibility.PRIVATE
-        )
-
-        parsed_file.symbols.append(
-            ParsedSymbol(
-                name=name,
-                fqn=fqn,
-                body=body_str,
-                key=key,
-                hash=compute_symbol_hash(body_bytes),
-                kind=SymbolKind.FUNCTION,
-                start_line=start_line,
-                end_line=end_line,
-                start_byte=start_byte,
-                end_byte=end_byte,
-                visibility=visibility,
-                modifiers=[],            # not handled yet
-                docstring=None,          # TODO: extract preceding comments
-                signature=None,          # TODO: build a proper SymbolSignature
-                comment=None,
-                children=[],
-            )
-        )
-
     def _handle_import_declaration(self, node, parsed_file: ParsedFile, project: ProjectSettings):
         """
         Walk every `import_spec` inside this import declaration and
@@ -298,6 +257,73 @@ know/lang/golang.py
             )
         )
 
+    # ------------------------------------------------------------------  
+    def _build_function_signature(
+        self,
+        param_node,           # tree-sitter “parameter_list” node
+        result_node=None,     # optional result node (may be None)
+    ) -> SymbolSignature:
+        """
+        Build a SymbolSignature from the supplied tree-sitter nodes.
+        Very tolerant – it falls back to raw strings when detailed parsing
+        fails, but still populates `parameters` / `return_type` whenever
+        possible.
+        """
+        src = self._source_bytes
+
+        # ---- parameters -------------------------------------------------
+        params_raw = src[param_node.start_byte : param_node.end_byte] \
+            .decode("utf8", errors="replace").strip()
+        inner = params_raw[1:-1].strip()            # drop surrounding ( )
+        parameters: List[SymbolParameter] = []
+
+        if inner:                                   # may be empty “()”
+            for group in inner.split(","):
+                group = group.strip()
+                # Example groups: "a int", "a, b string", "int"
+                if " " in group:
+                    names_part, type_part = group.rsplit(" ", 1)
+                    type_part = type_part.strip()
+                    names = [n.strip() for n in names_part.split(",")]
+                else:                               # no identifier(s) – only type
+                    names = [""]
+                    type_part = group.strip()
+
+                # variadic parameter: "...int"
+                variadic = False
+                if type_part.startswith("..."):
+                    variadic = True
+                    type_part = type_part[3:].lstrip()
+
+                for n in names:
+                    parameters.append(
+                        SymbolParameter(
+                            name=n,
+                            type_annotation=("..." + type_part) if variadic else type_part,
+                        )
+                    )
+
+        # ---- return type(s) --------------------------------------------
+        return_raw = ""
+        return_type = None
+        if result_node is not None:
+            return_raw = src[result_node.start_byte : result_node.end_byte] \
+                .decode("utf8", errors="replace").strip()
+            # If the result is a single unnamed type (e.g. "error") store it
+            if result_node.type != "parameter_list":
+                return_type = return_raw
+            else:
+                # For “(a int, err error)” or “(int, error)” keep raw form
+                return_type = return_raw
+
+        # ---- assemble ---------------------------------------------------
+        raw_sig = f"{params_raw} {return_raw}".strip()
+        return SymbolSignature(
+            raw=raw_sig,
+            parameters=parameters,
+            return_type=return_type,
+        )
+
     def _handle_function_declaration(
         self,
         node,
@@ -322,6 +348,26 @@ know/lang/golang.py
         # full source for the symbol
         body_bytes: bytes = self._source_bytes[start_byte:end_byte]
         body_str: str = body_bytes.decode("utf8", errors="replace")
+
+        # Extract Go doc-comment immediately above the declaration
+        docstring = self._extract_preceding_comment(node)
+
+        # --- build signature -------------------------------------------
+        param_list_node = next((c for c in node.children if c.type == "parameter_list"), None)
+        # locate a possible result node (anything after params but before block)
+        result_node = None
+        if param_list_node:
+            nxt = param_list_node.next_sibling
+            while nxt and nxt.type in ("comment",):
+                nxt = nxt.next_sibling
+            if nxt and nxt.type != "block":
+                result_node = nxt
+
+        signature_obj = (
+            self._build_function_signature(param_list_node, result_node)
+            if param_list_node is not None
+            else None
+        )
 
         # fully-qualified name + key
         fqn: str = self._join_fqn(package.virtual_path, name)
@@ -348,8 +394,8 @@ know/lang/golang.py
                 end_byte=end_byte,
                 visibility=visibility,
                 modifiers=[],            # not handled yet
-                docstring=None,          # TODO: extract preceding comments
-                signature=None,          # TODO: build a proper SymbolSignature
+                docstring=docstring,
+                signature=signature_obj,
                 comment=None,
                 children=[],
             )
