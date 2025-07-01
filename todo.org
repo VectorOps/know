@@ -8,27 +8,28 @@
 * [X] Need to delete files, packages, symbols, etc that are no longer exist on the disk
 * [X] Create helper methods to return models from parser objects
 * [X] Fix _resolve_to_package_id to use data repository
+* [ ] Figure out a way to call functions for language parsers after finishing parsing files
+* [ ] Language support
+** [ ] Golang
+*** [ ] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
+** [ ] JavaScript
+** [ ] TypeScript
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed
 * [ ] Expose a helper method in Project class to calculate embedding for the arbitrary search term
 * [ ] Better in-memory vector index
 * [X] Create a helper that generates a summary view of a file
 * [ ] MCP-compatible tool definition support
-* [ ] Tools
-** [-] File list
-*** [ ]List of directories, recursive or not
-*** [ ] Flag to include docstrings
+* [X] Tools
+** [X] File list
 ** [X] Summary lists
 - Takes a list of file paths or packages
 - Returns summary views of files
 ** [X] Get full files
 - A list of files
-** [ ] Search through symbols
+** [X] Search through symbols
 - Needle
 - Result list
-- Token limit
-** [ ] Search symbol by name
-- Path prefixes (optional)
 * [ ] Figure out a way to update embeddings in background
 * [ ] Add embedding value caching
 ** [ ] A shared cross-project table
@@ -38,3 +39,4 @@
 * [ ] Add support for FTS when embedding search is not feasible
 * [ ] Even if file can not be parsed, store information about it in the database
 * [ ] When reparsing file and symbols did not change - do not recalculate embeddings
+* [ ] Build a tool that provides recommendations for a list of files/packages by applying PageRank algorithm to dependencies.
