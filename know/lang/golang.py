@@ -151,8 +151,6 @@ class GolangCodeParser(AbstractCodeParser):
             if child.type == "import_spec":
                 self._process_import_spec(child, parsed_file, project)
 
-    # --- helpers -------------------------------------------------------------
-
     def _process_import_spec(
         self,
         spec_node,
@@ -220,13 +218,62 @@ class GolangCodeParser(AbstractCodeParser):
             )
         )
 
-    def _handle_function_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
+    def _handle_function_declaration(
+        self,
+        node,
+        parsed_file: ParsedFile,
+        package: ParsedPackage,
+    ) -> None:
         """
-        Extract Go function and add to parsed_file.symbols.
-        (TODO: extract signature, doc string, etc)
+        Translate a `function_declaration` node into a ParsedSymbol
+        and append it to `parsed_file.symbols`.
         """
-        # TODO
-        pass
+        # --- locate function identifier ------------------------------------
+        ident_node = next((c for c in node.children if c.type == "identifier"), None)
+        if ident_node is None:       # malformed ‒ ignore
+            return
+
+        name: str = ident_node.text.decode("utf8")
+        start_byte: int = node.start_byte
+        end_byte: int = node.end_byte
+        start_line: int = node.start_point[0] + 1   # 0-based → 1-based
+        end_line: int = node.end_point[0] + 1
+
+        # full source for the symbol
+        body_bytes: bytes = self._source_bytes[start_byte:end_byte]
+        body_str: str = body_bytes.decode("utf8", errors="replace")
+
+        # fully-qualified name + key
+        fqn: str = self._join_fqn(package.virtual_path, name)
+        key: str = fqn          # (keep identical – change here if another key scheme is preferred)
+
+        # visibility: exported identifiers in Go start with a capital letter
+        visibility = (
+            Visibility.PUBLIC   # adjust if your enum uses another literal
+            if name[0].isupper()
+            else Visibility.PRIVATE
+        )
+
+        parsed_file.symbols.append(
+            ParsedSymbol(
+                name=name,
+                fqn=fqn,
+                body=body_str,
+                key=key,
+                hash=compute_symbol_hash(body_bytes),
+                kind=SymbolKind.FUNCTION,
+                start_line=start_line,
+                end_line=end_line,
+                start_byte=start_byte,
+                end_byte=end_byte,
+                visibility=visibility,
+                modifiers=[],            # not handled yet
+                docstring=None,          # TODO: extract preceding comments
+                signature=None,          # TODO: build a proper SymbolSignature
+                comment=None,
+                children=[],
+            )
+        )
 
     def _handle_method_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         """
