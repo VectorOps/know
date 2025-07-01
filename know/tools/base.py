@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 
 class BaseTool(ABC):
-    # each concrete tool MUST set this
     tool_name: str
 
     def __init_subclass__(cls, **kw):
