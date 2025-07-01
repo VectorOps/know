@@ -476,11 +476,74 @@ class GolangCodeParser(AbstractCodeParser):
 
     def _handle_type_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         """
-        Extract type declarations (struct, interface, etc) as symbols.
-        (TODO: recurse into fields/methods)
+        Extract every `type` definition (structs, interfaces, aliases …) from the
+        supplied *type_declaration* node and register them as ParsedSymbol objects.
+        Handles both the single-declaration form
+
+            type Foo struct { … }
+
+        and the grouped form
+
+            type (
+                Foo struct { … }
+                Bar interface { … }
+            )
         """
-        # TODO
-        pass
+        # --- collect type_spec nodes ------------------------------------
+        specs = [c for c in node.children if c.type == "type_spec"]
+        # single-line declaration has no inner *type_spec* – treat the node itself
+        if not specs:
+            specs = [node]
+
+        for spec in specs:
+            # ---------- identifier -------------------------------------
+            ident = next((c for c in spec.children if c.type == "identifier"), None)
+            if ident is None:
+                continue
+            name: str = ident.text.decode("utf8")
+
+            # ---------- type node (struct / interface / …) --------------
+            after_ident = False
+            type_node = None
+            for c in spec.children:
+                if after_ident and c.type != "comment":
+                    type_node = c
+                    break
+                if c is ident:
+                    after_ident = True
+
+            kind = SymbolKind.CLASS
+            if type_node:
+                if type_node.type == "struct_type":
+                    kind = SymbolKind.CLASS
+                elif type_node.type == "interface_type":
+                    kind = SymbolKind.INTERFACE
+
+            # ---------- misc. metadata ----------------------------------
+            start_b, end_b = spec.start_byte, spec.end_byte
+            body_bytes = self._source_bytes[start_b:end_b]
+            body_str = body_bytes.decode("utf8", errors="replace")
+
+            parsed_file.symbols.append(
+                ParsedSymbol(
+                    name=name,
+                    fqn=self._join_fqn(package.virtual_path, name),
+                    body=body_str,
+                    key=self._join_fqn(package.virtual_path, name),
+                    hash=compute_symbol_hash(body_bytes),
+                    kind=kind,
+                    start_line=spec.start_point[0] + 1,
+                    end_line=spec.end_point[0] + 1,
+                    start_byte=start_b,
+                    end_byte=end_b,
+                    visibility=Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE,
+                    modifiers=[],
+                    docstring=self._extract_preceding_comment(spec),
+                    signature=None,
+                    comment=None,
+                    children=[],
+                )
+            )
 
     def _handle_const_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         """
