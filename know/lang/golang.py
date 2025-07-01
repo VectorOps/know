@@ -722,10 +722,58 @@ class GolangCodeParser(AbstractCodeParser):
                     )
                 )
 
-    def _handle_var_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
+    def _handle_var_declaration(
+        self,
+        node,
+        parsed_file: ParsedFile,
+        package: ParsedPackage,
+    ) -> None:
         """
-        Extract var declarations as symbols.
+        Extract every variable defined in a `var_declaration` (single-line or
+        grouped) and register it as a ParsedSymbol with kind = VARIABLE.
         """
-        # TODO
-        pass
+        # 1) Collect all `var_spec` children (covers both `var Foo = …`
+        #    and the grouped form `var ( Foo = … ; Bar int )`)
+        specs = [c for c in node.children if c.type == "var_spec"] or [node]
+
+        for spec in specs:
+            # 2) All identifiers belonging to this spec
+            id_nodes = [c for c in spec.children if c.type == "identifier"]
+            if not id_nodes:
+                continue
+
+            # 3) Common metadata for every identifier in this spec
+            start_b, end_b = spec.start_byte, spec.end_byte
+            body_bytes = self._source_bytes[start_b:end_b]
+            body_str = body_bytes.decode("utf8", errors="replace")
+            docstring = self._extract_preceding_comment(spec)
+            start_line, end_line = spec.start_point[0] + 1, spec.end_point[0] + 1
+
+            for idn in id_nodes:
+                name = idn.text.decode("utf8")
+                fqn = self._join_fqn(package.virtual_path, name)
+                visibility = (
+                    Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
+                )
+
+                parsed_file.symbols.append(
+                    ParsedSymbol(
+                        name=name,
+                        fqn=fqn,
+                        body=body_str,
+                        key=fqn,
+                        hash=compute_symbol_hash(body_bytes),
+                        kind=SymbolKind.VARIABLE,
+                        start_line=start_line,
+                        end_line=end_line,
+                        start_byte=start_b,
+                        end_byte=end_b,
+                        visibility=visibility,
+                        modifiers=[],
+                        docstring=docstring,
+                        signature=None,
+                        comment=None,
+                        children=[],
+                    )
+                )
 
