@@ -401,13 +401,78 @@ class GolangCodeParser(AbstractCodeParser):
             )
         )
 
-    def _handle_method_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
-        """
-        Extract Go method attached to a type.
-        (TODO: distinguish receiver, etc.)
-        """
-        # TODO
-        pass
+    def _handle_method_declaration(
+        self,
+        node,
+        parsed_file: ParsedFile,
+        package: ParsedPackage,
+    ) -> None:
+        # --- method identifier ---------------------------------------------
+        ident_node = next((c for c in node.children if c.type == "identifier"), None)
+        if ident_node is None:
+            return                                  # malformed → skip
+        name: str = ident_node.text.decode("utf8")
+
+        # --- receiver ------------------------------------------------------
+        # first parameter_list is the receiver, e.g.  (t *Test)  or  (*pkg.Type)
+        param_lists = [c for c in node.children if c.type == "parameter_list"]
+        if not param_lists:                          # should never happen
+            return
+        recv_node = param_lists[0]
+        inner = self._source_bytes[recv_node.start_byte : recv_node.end_byte] \
+            .decode("utf8", errors="replace").strip()[1:-1].strip()           # drop ( )
+        # take last token after blanks/commas, strip leading '*'
+        recv_type_token = inner.replace(",", " ").split()[-1] if inner else ""
+        while recv_type_token.startswith("*"):
+            recv_type_token = recv_type_token[1:]
+        receiver_type: str = recv_type_token or "receiver"
+
+        # --- build signature ----------------------------------------------
+        param_node = param_lists[1] if len(param_lists) >= 2 else None
+        result_node = None
+        if param_node is not None:
+            nxt = param_node.next_sibling
+            while nxt and nxt.type == "comment":
+                nxt = nxt.next_sibling
+            if nxt and nxt.type != "block":
+                result_node = nxt
+        signature_obj = (
+            self._build_function_signature(param_node, result_node)
+            if param_node is not None
+            else None
+        )
+
+        # --- misc. metadata ------------------------------------------------
+        start_byte, end_byte = node.start_byte, node.end_byte
+        start_line, end_line = node.start_point[0] + 1, node.end_point[0] + 1
+        body_bytes = self._source_bytes[start_byte:end_byte]
+        body_str = body_bytes.decode("utf8", errors="replace")
+        docstring = self._extract_preceding_comment(node)
+
+        fqn = self._join_fqn(package.virtual_path, receiver_type, name)
+        key = fqn
+        visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
+
+        parsed_file.symbols.append(
+            ParsedSymbol(
+                name=name,
+                fqn=fqn,
+                body=body_str,
+                key=key,
+                hash=compute_symbol_hash(body_bytes),
+                kind=SymbolKind.METHOD,
+                start_line=start_line,
+                end_line=end_line,
+                start_byte=start_byte,
+                end_byte=end_byte,
+                visibility=visibility,
+                modifiers=[],
+                docstring=docstring,
+                signature=signature_obj,
+                comment=None,
+                children=[],
+            )
+        )
 
     def _handle_type_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
         """
