@@ -140,7 +140,87 @@ class GolangCodeParser(AbstractCodeParser):
                     return ident.text.decode("utf8")
         return None
 
+    # ---------------------------------------------------------------------  
+    def _extract_preceding_comment(self, node) -> Optional[str]:
+        """
+        Collect contiguous comment nodes that immediately precede *node*.
+        Follows Go “doc-comment” rules:
+        – only //… or /*…*/ directly touching the declaration (no blank line).
+        – stops on first gap or non-comment sibling.
+        Returned text is stripped of leading comment markers and whitespace.
+        """
+        prev = node.prev_sibling
+        if prev is None:
+            return None
+
+        comment_nodes = []
+        expected_line = node.start_point[0]      # 0-based start line of decl.
+
+        while prev is not None and prev.type == "comment":
+            # Require vertical contiguity.
+            if prev.end_point[0] + 1 != expected_line:
+                break
+            comment_nodes.append(prev)
+            expected_line = prev.start_point[0]
+            prev = prev.prev_sibling
+
+        if not comment_nodes:
+            return None
+
+        comment_nodes.reverse()                  # restore top-to-bottom order
+        parts: list[str] = []
+        for c in comment_nodes:
+            raw = self._source_bytes[c.start_byte : c.end_byte] \
+                      .decode("utf8", errors="replace").strip()
+            if raw.startswith("//"):
+                parts.append(raw.lstrip("/").lstrip())
+            elif raw.startswith("/*") and raw.endswith("*/"):
+                parts.append(raw[2:-2].strip())
+            else:
+                parts.append(raw)
+        return "\n".join(parts).strip() or None
+
     # --- Node Handlers -------------------------------------------------------
+```
+
+know/lang/golang.py
+```python
+<<<<<<< SEARCH
+        # full source for the symbol
+        body_bytes: bytes = self._source_bytes[start_byte:end_byte]
+        body_str: str = body_bytes.decode("utf8", errors="replace")
+
+        # fully-qualified name + key
+        fqn: str = self._join_fqn(package.virtual_path, name)
+        key: str = fqn          # (keep identical – change here if another key scheme is preferred)
+
+        # visibility: exported identifiers in Go start with a capital letter
+        visibility = (
+            Visibility.PUBLIC   # adjust if your enum uses another literal
+            if name[0].isupper()
+            else Visibility.PRIVATE
+        )
+
+        parsed_file.symbols.append(
+            ParsedSymbol(
+                name=name,
+                fqn=fqn,
+                body=body_str,
+                key=key,
+                hash=compute_symbol_hash(body_bytes),
+                kind=SymbolKind.FUNCTION,
+                start_line=start_line,
+                end_line=end_line,
+                start_byte=start_byte,
+                end_byte=end_byte,
+                visibility=visibility,
+                modifiers=[],            # not handled yet
+                docstring=None,          # TODO: extract preceding comments
+                signature=None,          # TODO: build a proper SymbolSignature
+                comment=None,
+                children=[],
+            )
+        )
 
     def _handle_import_declaration(self, node, parsed_file: ParsedFile, project: ProjectSettings):
         """
