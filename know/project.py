@@ -247,6 +247,9 @@ def scan_project_directory(project: Project) -> None:
     # Resolve orphaned method symbols → assign missing parent references
     _assign_parents_to_orphan_methods(project)
 
+    # Refresh any full text indexes
+    project.data_repository.refresh_full_text_indexes()
+
 
 def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
     """
