@@ -234,10 +234,10 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
         # ---------- doc / comment LIKE filters ----------
         if query.doc_needle:
-            for n in query.doc_needle:
-                like = f"%{n.lower()}%"
-                where.append("(LOWER(s.docstring) LIKE ? OR LOWER(s.comment) LIKE ?)")
-                params.extend([like, like])
+            # join all tokens into one search phrase
+            phrase = " ".join(query.doc_needle).lower()
+            where.append("idx_symbols_doc_fts.match(?)")
+            params.append(phrase)
 
         if where:
             sql += " WHERE " + " AND ".join(where)
@@ -339,6 +339,12 @@ class DuckDBDataRepository(AbstractDataRepository):
             self._conn.execute("LOAD vss")
         except Exception:          # extension already installed / not available
             pass
+
+        try:
+            self._conn.execute("INSTALL fts")
+            self._conn.execute("LOAD fts")
+        except Exception:
+            pass          # already installed / unavailable
 
         # TODO: SQL injection?
         self._conn.execute(f"ATTACH '{db_path}' as db")
