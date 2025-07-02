@@ -20,7 +20,6 @@ from know.settings import ProjectSettings
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger
 from know.helpers import compute_file_hash, compute_symbol_hash
-from devtools import pprint
 
 GO_LANGUAGE = Language(tsgo.language())
 
@@ -99,7 +98,7 @@ class GolangCodeParser(AbstractCodeParser):
         tree = self.parser.parse(source_bytes)
         root_node = tree.root_node
 
-        package_name = self._extract_package_name(root_node) or self._rel_to_virtual_path(rel_path)
+        package_name = self._build_virtual_package_path(rel_path, root_node)
 
         package = ParsedPackage(
             language=ProgrammingLanguage.GO,
@@ -174,6 +173,44 @@ class GolangCodeParser(AbstractCodeParser):
                     return ident.text.decode("utf8")
         return None
 
+    def _build_virtual_package_path(
+        self, rel_path: str, root_node
+    ) -> str:                                         # NEW
+        """
+        Return the package’s full import path.
+
+        • If a go.mod is present, prepend its `module` path,
+          then append the file’s directory (if any).
+        • Otherwise fall back to the old heuristics.
+        """
+        pkg_ident = self._extract_package_name(root_node)
+
+        if self._module_path:
+            rel_dir = os.path.dirname(rel_path).replace(os.sep, "/").strip("/")
+            full_path = (
+                self._module_path + ("/" + rel_dir if rel_dir else "")
+            )
+
+            # Optional sanity check – warn if the declared identifier
+            # doesn’t match the directory name implied by go.mod.
+            expected_pkg = (
+                rel_dir.split("/")[-1]
+                if rel_dir
+                else self._module_path.split("/")[-1]
+            )
+            if pkg_ident and pkg_ident != expected_pkg:
+                KnowLogger.warning(
+                    "Go package mismatch: %s (clause) vs %s (dir) in %s",
+                    pkg_ident,
+                    expected_pkg,
+                    rel_path,
+                )
+
+            return full_path or pkg_ident or self._rel_to_virtual_path(rel_path)
+
+        # ── no go.mod ───────────────────────────────────────────────────
+        return pkg_ident or self._rel_to_virtual_path(rel_path)
+
     # ---------------------------------------------------------------------  
     def _extract_preceding_comment(self, node) -> Optional[str]:
         """
@@ -238,8 +275,6 @@ class GolangCodeParser(AbstractCodeParser):
         # raw text of the spec (e.g. `alias "foo/bar"` or `"fmt"`)
         raw_str: str = self._source_bytes[spec_node.start_byte : spec_node.end_byte] \
             .decode("utf8", errors="replace").strip()
-
-        # pprint(spec_node.children)
 
         # ---- extract components from tree-sitter children ---------------
         alias: str | None = None        # "k"   …  alias import
@@ -684,7 +719,6 @@ class GolangCodeParser(AbstractCodeParser):
             specs = [node]
 
         for spec in specs:
-            pprint(spec.children)
             # ---------- identifier -------------------------------------
             ident = next(
                 (c for c in spec.children if c.type in ("identifier", "type_identifier")),
