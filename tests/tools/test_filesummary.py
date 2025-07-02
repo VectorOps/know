@@ -44,10 +44,10 @@ def test_filesummary_returns_expected_content(tmp_path):
     assert len(res) == 1
 
     summary = res[0]
-    assert summary.path == "foo.py"
+    assert summary['path'] == "foo.py"
 
     # Expect both symbols (and their docs / comments) to be present
-    definitions = summary.definitions
+    definitions = summary['definitions']
     assert "def foo" in definitions
     assert "Function docstring" in definitions
     assert "class Bar" in definitions
@@ -61,4 +61,4 @@ def test_filesummary_skips_unknown_files(tmp_path):
     res = SummarizeFilesTool().execute(project, ["foo.py", "does_not_exist.py"])
     # Only one valid summary expected
     assert len(res) == 1
-    assert res[0].path == "foo.py"
+    assert res[0]['path'] == "foo.py"

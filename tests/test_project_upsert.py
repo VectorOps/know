@@ -7,7 +7,7 @@ from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
 from know.models import RepoMetadata
 from know.helpers import generate_id
-from know.lang.python.parser import PythonCodeParser
+from know.lang.python import PythonCodeParser
 from know.parsers import CodeParserRegistry
 
 

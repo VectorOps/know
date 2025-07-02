@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from devtools import pprint
 
-from know.lang.python.parser import PythonCodeParser
+from know.lang.python import PythonCodeParser
 from know.models import ProgrammingLanguage, SymbolKind
 
 # --------------------------------------------------------------------------- #

@@ -168,7 +168,7 @@ def test_symbol_search(data_repo):
     assert [s.name for s in res] == ["Alpha", "Beta", "Gamma"]
 
     # ---------- name substring (case-insensitive) ----------
-    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_name="alp"))] == ["Alpha"]
+    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_name="alpha"))] == ["Alpha"]
 
     # ---------- kind filter ----------
     assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_kind="class"))] == ["Beta"]

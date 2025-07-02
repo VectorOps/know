@@ -19,6 +19,7 @@ dependencies = [
     "pathspec==0.12.1",
     "litellm>=1.73.6",
     "prompt-toolkit>=3.0.51",
+    "tree-sitter-go>=0.23.4",
 ]
 
 [tool.uv]

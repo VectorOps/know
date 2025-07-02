@@ -27,8 +27,7 @@ GO_LANGUAGE = Language(tsgo.language())
 
 class GolangCodeParser(AbstractCodeParser):
     def __init__(self):
-        self.parser = Parser()
-        self.parser.set_language(GO_LANGUAGE)
+        self.parser = Parser(GO_LANGUAGE)
         self._source_bytes: bytes = b""
 
     @staticmethod
