@@ -52,6 +52,36 @@ class GolangCodeParser(AbstractCodeParser):
         """Join non-empty parts with a dot, skipping Nones / empty strings."""
         return ".".join([p for p in parts if p])
 
+    # ------------------------------------------------------------------ #
+    # go.mod handling                                                    #
+    # ------------------------------------------------------------------ #
+    def _load_module_path(self, project_path: str) -> None:        # <NEW>
+        """
+        Cache the current project’s Go‐module path (first  `module …`  line
+        in go.mod).  If no go.mod is present, the cache is cleared.
+        """
+        if project_path == self._module_root and self._module_path is not None:
+            return                                                # already cached
+
+        self._module_root = project_path
+        self._module_path = None                                   # default = no module
+
+        gomod = os.path.join(project_path, "go.mod")
+        if not os.path.isfile(gomod):
+            return
+
+        try:
+            with open(gomod, "r", encoding="utf8") as fh:
+                for ln in fh:
+                    ln = ln.strip()
+                    if ln.startswith("module"):
+                        parts = ln.split()
+                        if len(parts) >= 2:
+                            self._module_path = parts[1]
+                        break
+        except OSError:
+            pass
+
     def parse(self, project: ProjectSettings, rel_path: str) -> ParsedFile:
         """
         Parse a Go source file, populating ParsedFile, ParsedSymbols, etc.
@@ -259,7 +289,7 @@ class GolangCodeParser(AbstractCodeParser):
                 physical_path = os.path.relpath(abs_target, project.project_path)
                 external = False
 
-        # 2) paths inside the current Go module (from go.mod)          <NEW>
+        # 2) paths inside the current Go module (from go.mod)
         elif self._module_path and (
             import_path == self._module_path
             or import_path.startswith(self._module_path + "/")
@@ -439,7 +469,10 @@ class GolangCodeParser(AbstractCodeParser):
         package: ParsedPackage,
     ) -> None:
         # --- method identifier ---------------------------------------------
-        ident_node = next((c for c in node.children if c.type == "identifier"), None)
+        ident_node = next(
+            (c for c in node.children if c.type in ("field_identifier", "identifier")),
+            None,
+        )
         if ident_node is None:
             return                                  # malformed → skip
         name: str = ident_node.text.decode("utf8")
