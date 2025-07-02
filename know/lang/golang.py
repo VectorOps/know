@@ -29,6 +29,8 @@ class GolangCodeParser(AbstractCodeParser):
     def __init__(self):
         self.parser = Parser(GO_LANGUAGE)
         self._source_bytes: bytes = b""
+        self._module_path: str | None = None      # <NEW>
+        self._module_root: str | None = None      # <NEW – project path the module belongs to>
 
     @staticmethod
     def register():
@@ -54,6 +56,9 @@ class GolangCodeParser(AbstractCodeParser):
         """
         Parse a Go source file, populating ParsedFile, ParsedSymbols, etc.
         """
+        # Ensure we know the module path for this project ----------  <NEW>
+        self._load_module_path(project.project_path)
+
         file_path = os.path.join(project.project_path, rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
@@ -236,18 +241,36 @@ class GolangCodeParser(AbstractCodeParser):
         if import_path[0] in "\"`" and import_path[-1] in "\"`":
             import_path = import_path[1:-1]
 
-        # ---- internal vs external + physical path ---------------------------
+        # ------------------------------------------------------------------
+        # Resolve import – relative, module-local, or truly external
+        # ------------------------------------------------------------------
         physical_path: str | None = None
         external = True
 
-        # try to resolve inside the project first
+        # 1) relative paths like ".", "./util", "../foo"
         if import_path.startswith((".", "./", "../")):
             abs_target = os.path.normpath(
-                os.path.join(os.path.dirname(os.path.join(project.project_path, parsed_file.path)), import_path)
+                os.path.join(
+                    os.path.dirname(os.path.join(project.project_path, parsed_file.path)),
+                    import_path,
+                )
             )
             if abs_target.startswith(project.project_path) and os.path.isdir(abs_target):
                 physical_path = os.path.relpath(abs_target, project.project_path)
                 external = False
+
+        # 2) paths inside the current Go module (from go.mod)          <NEW>
+        elif self._module_path and (
+            import_path == self._module_path
+            or import_path.startswith(self._module_path + "/")
+        ):
+            sub_path = import_path[len(self._module_path) :].lstrip("/")
+            abs_target = os.path.join(project.project_path, sub_path)
+            if os.path.isdir(abs_target) or sub_path == "":
+                physical_path = sub_path or "."      # root package ⇒ "."
+                external = False
+
+        # 3) plain “path” that maps directly into project directory
         else:
             abs_target = os.path.join(project.project_path, import_path)
             if os.path.isdir(abs_target):
