@@ -777,3 +777,83 @@ class GolangCodeParser(AbstractCodeParser):
                     )
                 )
 
+    # ------------------------------------------------------------------  
+    # Public helpers required by AbstractCodeParser                      #
+    # ------------------------------------------------------------------
+    def get_import_summary(self, imp: ImportEdge) -> str:          # NEW
+        """
+        Return a concise, human-readable textual representation of a Go
+        import edge.
+
+        Preference order:
+        1) the original raw string stored in ``imp.raw``;
+        2) a best-effort reconstruction from the edge fields.
+        """
+        if getattr(imp, "raw", None):
+            return imp.raw.strip()
+
+        path  = getattr(imp, "to_package_path", "") or ""
+        alias = getattr(imp, "alias", None)
+        dot   = bool(getattr(imp, "dot", False))
+
+        # ----- reconstruction -----------------------------------------
+        if dot:
+            return f'import . "{path}"'.strip()
+
+        if alias == "_":                                 # blank-import
+            return f'import _ "{path}"'.strip()
+
+        if alias:                                        # aliased
+            return f'import {alias} "{path}"'.strip()
+
+        # plain import
+        return f'import "{path}"'.strip()
+
+    def get_symbol_summary(self,                           # NEW
+                           sym: SymbolMetadata,
+                           indent: int = 0) -> str:
+        """
+        Produce a human-readable summary for *sym* (Go flavour).
+
+        • leading comment/docstring (if any)
+        • declaration header
+        • for funcs/methods → indented “...”
+        • for types (struct/interface) → recurse over children
+        """
+        IND   = " " * indent
+        lines: list[str] = []
+
+        # ---------- preceding comment / doc ----------
+        if sym.docstring:
+            for ln in sym.docstring.splitlines():
+                lines.append(f"{IND}{ln.rstrip()}")
+
+        # ---------- header line ----------
+        header: str
+        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+            sig = "()"
+            if sym.signature and sym.signature.raw:
+                sig = sym.signature.raw.strip()
+            header = f"func {sym.name}{sig}"
+            if not header.endswith("{{"):
+                header += " {"
+        elif sym.kind == SymbolKind.CLASS:          # struct
+            header = f"type {sym.name} struct {{"
+        elif sym.kind == SymbolKind.INTERFACE:
+            header = f"type {sym.name} interface {{"
+        else:
+            # constants / vars etc. – first line of body
+            header = (getattr(sym, "symbol_body", "") or "").splitlines()[0].rstrip()
+
+        lines.append(f"{IND}{header}")
+
+        # ---------- body / children ----------
+        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+            lines.append(f"{IND}    ...")
+
+        elif sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE):
+            for child in getattr(sym, "children", []):
+                lines.append(self.get_symbol_summary(child, indent + 4))
+
+        return "\n".join(lines)
+
