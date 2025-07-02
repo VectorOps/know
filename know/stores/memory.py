@@ -156,6 +156,7 @@ class InMemoryFileMetadataRepository(
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.symbols)
+        self._file_items = tables.files          # needed for package lookup
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:  # NEW
         syms = super().get_list_by_ids(symbol_ids)
@@ -168,58 +169,18 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
 
-    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
-        # --- initial candidate set: symbols that belong to the requested repo
-        res: list[SymbolMetadata] = [
-            s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
-        ]
-
-        # ---------- scalar filters ----------
-        if query.symbol_fqn:
-            needle_fqn = query.symbol_fqn.lower()
-            res = [s for s in res if (s.fqn or "").lower() == needle_fqn]
-
-        if query.symbol_name:
-            needle = query.symbol_name.lower()
-            res = [s for s in res if needle in (s.name or "").lower()]
-
-        if query.symbol_kind:
-            res = [s for s in res if s.kind == query.symbol_kind]
-
-        if query.symbol_visibility:
-            res = [s for s in res if s.visibility == query.symbol_visibility]
-
-        if query.top_level_only:
-            res = [s for s in res if s.parent_symbol_id is None]
-
-        # ---------- doc / comment full-text search ----------
-        if query.doc_needle:
-            needles = [n.lower() for n in query.doc_needle]
-
-            def _matches(s: SymbolMetadata) -> bool:
-                haystack = f"{s.docstring or ''} {s.comment or ''}".lower()
-                return all(n in haystack for n in needles)
-
-            res = [s for s in res if _matches(s)]
-
-        # ---------- embedding similarity ----------
-        if query.embedding_query:
-            qvec = query.embedding_query
-
-            scores = {
-                s.id: _cosine(qvec, s.embedding_code_vec)      # type: ignore[arg-type]
-                for s in res if s.embedding_code_vec
-            }
-            res.sort(key=lambda s: scores.get(s.id, -1.0), reverse=True)
-        else:
-            res.sort(key=lambda s: s.name or "")
-
-        # ---------- pagination ----------
-        offset = query.offset or 0
-        if query.limit is None:            # unlimited ‒ only apply offset
-            res = res[offset:]
-        else:                              # bounded slice
-            res = res[offset: offset + query.limit]
+    def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
+        """
+        Return all symbols whose *file* belongs to the supplied *package_id*.
+        """
+        res: list[SymbolMetadata] = []
+        for sym in self._items.values():
+            fid = sym.file_id
+            if fid is None:
+                continue
+            fmeta = self._file_items.get(fid)
+            if fmeta is not None and fmeta.package_id == package_id:
+                res.append(sym)
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
 

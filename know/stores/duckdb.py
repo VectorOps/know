@@ -201,6 +201,25 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
 
+    def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
+        """
+        Return all symbols whose file belongs to *package_id*.
+        """
+        rows = _row_to_dict(
+            self.conn.execute(
+                """
+                SELECT s.*
+                FROM symbols s
+                JOIN files   f ON s.file_id = f.id
+                WHERE f.package_id = ?
+                """,
+                [package_id],
+            )
+        )
+        syms = [self.model(**self._deserialize_row(r)) for r in rows]
+        SymbolMetadata.resolve_symbol_hierarchy(syms)
+        return syms
+
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
         # ---- FROM / JOIN clause to filter by repo_id via files table ----
         sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
@@ -250,9 +269,9 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         if query.limit is not None:
             sql += " LIMIT ? OFFSET ?"
             params.extend([query.limit, offset])
-        elif offset:                       # offset without limit → emulate “no-limit”
-            sql += " LIMIT ? OFFSET ?"
-            params.extend([9223372036854775807, offset])   # effectively unlimited
+        elif offset:
+            sql += " OFFSET ?"
+            params.append(offset)
 
         rows = _row_to_dict(self.conn.execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
