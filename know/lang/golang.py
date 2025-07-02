@@ -206,12 +206,7 @@ class GolangCodeParser(AbstractCodeParser):
         for c in comment_nodes:
             raw = self._source_bytes[c.start_byte : c.end_byte] \
                       .decode("utf8", errors="replace").strip()
-            if raw.startswith("//"):
-                parts.append(raw.lstrip("/").lstrip())
-            elif raw.startswith("/*") and raw.endswith("*/"):
-                parts.append(raw[2:-2].strip())
-            else:
-                parts.append(raw)
+            parts.append(raw)
         return "\n".join(parts).strip() or None
 
     # --- Node Handlers -------------------------------------------------------
@@ -335,34 +330,42 @@ class GolangCodeParser(AbstractCodeParser):
         # ---- parameters -------------------------------------------------
         params_raw = src[param_node.start_byte : param_node.end_byte] \
             .decode("utf8", errors="replace").strip()
-        inner = params_raw[1:-1].strip()            # drop surrounding ( )
-        parameters: List[SymbolParameter] = []
 
-        if inner:                                   # may be empty “()”
-            for group in inner.split(","):
-                group = group.strip()
-                # Example groups: "a int", "a, b string", "int"
-                if " " in group:
-                    names_part, type_part = group.rsplit(" ", 1)
-                    type_part = type_part.strip()
-                    names = [n.strip() for n in names_part.split(",")]
-                else:                               # no identifier(s) – only type
-                    names = [""]
-                    type_part = group.strip()
+        parameters: list[SymbolParameter] = []
 
-                # variadic parameter: "...int"
-                variadic = False
-                if type_part.startswith("..."):
-                    variadic = True
-                    type_part = type_part[3:].lstrip()
+        # walk every individual parameter_declaration
+        for pd in (c for c in param_node.children if c.type == "parameter_declaration"):
+            names: list[str] = []
+            type_text: str = ""
+            variadic: bool = False
 
-                for n in names:
-                    parameters.append(
-                        SymbolParameter(
-                            name=n,
-                            type_annotation=("..." + type_part) if variadic else type_part,
-                        )
+            for ch in pd.children:
+                match ch.type:
+                    case "identifier" | "blank_identifier":
+                        names.append(ch.text.decode("utf8"))
+                    case "variadic_parameter":
+                        variadic = True
+                        # strip leading "..."
+                        txt = src[ch.start_byte : ch.end_byte] \
+                              .decode("utf8", errors="replace").strip()
+                        type_text = txt.lstrip(".").lstrip()
+                    case "," | ":":        # ignore separators / tokens
+                        pass
+                    case _:
+                        # treat any other child as (part of) the type
+                        type_text = src[ch.start_byte : ch.end_byte] \
+                                    .decode("utf8", errors="replace").strip()
+
+            if not names:                         # unnamed parameter
+                names.append("")
+
+            for n in names:
+                parameters.append(
+                    SymbolParameter(
+                        name=n,
+                        type_annotation=("..." if variadic else "") + type_text,
                     )
+                )
 
         # ---- return type(s) --------------------------------------------
         return_raw = ""
