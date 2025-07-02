@@ -38,19 +38,29 @@ def test_golang_parser_on_sample_file():
     assert parsed_file.path == "main.go"
     assert parsed_file.language == ProgrammingLanguage.GO
 
-    #pprint(parsed_file)
-
     # ------------------------------------------------------------------ #
     # Imports                                                             #
     # ------------------------------------------------------------------ #
-    # main.go contains exactly one import:  "fmt"
+    # main.go contains exactly two imports:
+    #   k "example.com/m"   → inside the project
+    #   "fmt"               → standard-library (external)
     assert len(parsed_file.imports) == 2
-    fmt_imp = parsed_file.imports[0]
-    assert fmt_imp.virtual_path == "example.com/m"
-    assert fmt_imp.external is False
+
+    imports = {imp.virtual_path: imp for imp in parsed_file.imports}
+
+    # aliased import
+    m_imp = imports["example.com/m"]
+    assert m_imp.alias == "k"
+    assert m_imp.dot is False
+    assert m_imp.external is False
+    assert m_imp.physical_path == "."
+
+    # std-lib import
+    fmt_imp = imports["fmt"]
+    assert fmt_imp.alias is None
     assert fmt_imp.dot is False
-    assert fmt_imp.alias == "k"
-    assert fmt_imp.physical_path == "."
+    assert fmt_imp.external is True
+    assert fmt_imp.physical_path is None
 
     # ------------------------------------------------------------------ #
     # Top-level symbols                                                   #
@@ -76,3 +86,17 @@ def test_golang_parser_on_sample_file():
     assert symbols["main"].kind == SymbolKind.FUNCTION
     assert symbols["main"].docstring is not None
     assert "Test comment" in symbols["main"].docstring
+
+    # Extra top-level function
+    assert "dummy" in symbols
+    assert symbols["dummy"].kind == SymbolKind.FUNCTION
+    assert symbols["dummy"].docstring is not None
+    assert "Just a comment" in symbols["dummy"].docstring
+
+    # Ensure we saw exactly the expected set of top-level symbols
+    expected = {"A", "S", "m", "main", "dummy"}
+    assert set(symbols.keys()) == expected
+
+    # Child symbols of struct S should all be properties
+    for child in struct_s.children:
+        assert child.kind == SymbolKind.PROPERTY
