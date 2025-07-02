@@ -59,7 +59,7 @@ class SearchSymbolsTool(BaseTool):
             symbol_visibility = vis,
             doc_needle        = list(doc_needle) if doc_needle else None,
             embedding_query   = embedding_vec,
-            limit             = limit,
+            limit             = limit or 20,
             offset            = offset,
         )
         syms = project.data_repository.symbol.search(repo_id, query)

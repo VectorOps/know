@@ -171,37 +171,65 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
     def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
         """
--        """
--        Return all symbols whose *file* belongs to the supplied *package_id*.
--        """
--        res: list[SymbolMetadata] = []
--        for sym in self._items.values():
--            fid = sym.file_id
--            if fid is None:
--                continue
--            fmeta = self._file_items.get(fid)
--            if fmeta is not None and fmeta.package_id == package_id:
--                res.append(sym)
--        SymbolMetadata.resolve_symbol_hierarchy(res)
--        return res
-+        """
-+        Return all symbols that belong to *package_id* (prefer the symbol’s
-+        own package_id field, fall back to the file-based lookup for symbols
-+        created before the refactor).
-+        """
-+        res: list[SymbolMetadata] = [
-+            s for s in self._items.values() if s.package_id == package_id
-+        ]
-+        for sym in self._items.values():
-+            if sym.package_id is None:                    # legacy entries
-+                fid = sym.file_id
-+                if fid is None:
-+                    continue
-+                fmeta = self._file_items.get(fid)
-+                if fmeta is not None and fmeta.package_id == package_id:
-+                    res.append(sym)
-+        SymbolMetadata.resolve_symbol_hierarchy(res)
-+        return res
+        Return all symbols that belong to *package_id* (prefer the symbol’s
+        own package_id field.
+        """
+        res: list[SymbolMetadata] = [
+            s for s in self._items.values() if s.package_id == package_id
+        ]
+        SymbolMetadata.resolve_symbol_hierarchy(res)
+        return res
+
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
+        # --- initial candidate set: symbols that belong to the requested repo
+        res: list[SymbolMetadata] = [
+            s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
+        ]
+
+        # ---------- scalar filters ----------
+        if query.symbol_fqn:
+            needle_fqn = query.symbol_fqn.lower()
+            res = [s for s in res if (s.fqn or "").lower() == needle_fqn]
+
+        if query.symbol_name:
+            needle = query.symbol_name.lower()
+            res = [s for s in res if needle in (s.name or "").lower()]
+
+        if query.symbol_kind:
+            res = [s for s in res if s.kind == query.symbol_kind]
+
+        if query.symbol_visibility:
+            res = [s for s in res if s.visibility == query.symbol_visibility]
+
+        # ---------- doc / comment full-text search ----------
+        if query.doc_needle:
+            needles = [n.lower() for n in query.doc_needle]
+
+            def _matches(s: SymbolMetadata) -> bool:
+                haystack = f"{s.docstring or ''} {s.comment or ''}".lower()
+                return all(n in haystack for n in needles)
+
+            res = [s for s in res if _matches(s)]
+
+        # ---------- embedding similarity ----------
+        if query.embedding_query:
+            qvec = query.embedding_query
+
+            scores = {
+                s.id: _cosine(qvec, s.embedding_code_vec)      # type: ignore[arg-type]
+                for s in res if s.embedding_code_vec
+            }
+            res.sort(key=lambda s: scores.get(s.id, -1.0), reverse=True)
+        else:
+            res.sort(key=lambda s: s.name or "")
+
+        # ---------- pagination ----------
+        offset = query.offset or 0
+        limit = query.limit or 20
+        res = res[offset: offset + limit]
+        SymbolMetadata.resolve_symbol_hierarchy(res)
+        return res
+
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):

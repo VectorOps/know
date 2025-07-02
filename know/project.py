@@ -76,6 +76,57 @@ class Project:
         self._pending_import_edges.clear()
 
 
+def _assign_parents_to_orphan_methods(project: "Project") -> None:
+    """
+    Find method symbols whose parent reference is missing and link them
+    to the most specific class / interface (incl. Go struct) in the
+    same package, based on FQN prefix matching.
+    """
+    symbol_repo = project.data_repository.symbol
+    repo_id = project.get_repo().id
+
+    # 1) fetch all top-level methods (= orphaned)
+    query = SymbolSearchQuery(
+        symbol_kind=SymbolKind.METHOD,
+        top_level_only=True,
+        limit=100_000,          # effectively “no limit”
+    )
+    orphan_methods = symbol_repo.search(repo_id, query)
+    if not orphan_methods:
+        return
+
+    # 2) group methods by package for efficient lookup
+    by_pkg: dict[str | None, list[SymbolMetadata]] = {}
+    for m in orphan_methods:
+        by_pkg.setdefault(m.package_id, []).append(m)
+
+    parent_kinds = {SymbolKind.CLASS, SymbolKind.INTERFACE}
+
+    # 3) per-package candidate parents & assignment
+    for pkg_id, methods in by_pkg.items():
+        if pkg_id is None:
+            continue
+        candidates = [
+            s for s in symbol_repo.get_list_by_package_id(pkg_id)
+            if s.kind in parent_kinds and s.fqn
+        ]
+        if not candidates:
+            continue
+
+        for meth in methods:
+            if not meth.fqn:
+                continue
+            best_parent = None
+            best_len = -1
+            for cand in candidates:
+                pref = f"{cand.fqn}."
+                if meth.fqn.startswith(pref) and len(cand.fqn) > best_len:
+                    best_parent, best_len = cand, len(cand.fqn)
+            if best_parent:
+                symbol_repo.update(meth.id, {"parent_symbol_id": best_parent.id})
+
+
+
 def scan_project_directory(project: Project) -> None:
     """
     Recursively walk the project directory, parse every supported source file
@@ -193,8 +244,8 @@ def scan_project_directory(project: Project) -> None:
     if removed_pkgs:
         logger.debug(f"Deleted {removed_pkgs} orphaned packages.")
 
-
-    # TODO: For methods that don't have a parent reference, find corresponding class (or structure)
+    # Resolve orphaned method symbols → assign missing parent references
+    _assign_parents_to_orphan_methods(project)
 
 
 def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:

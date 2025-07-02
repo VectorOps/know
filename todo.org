@@ -40,3 +40,4 @@
 * [ ] Even if file can not be parsed, store information about it in the database
 * [ ] When reparsing file and symbols did not change - do not recalculate embeddings
 * [ ] Build a tool that provides recommendations for a list of files/packages by applying PageRank algorithm to dependencies.
+* [X] Add package_id to symbols to speed up search

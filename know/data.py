@@ -132,7 +132,7 @@ class SymbolSearchQuery:
     doc_needle: Optional[list[str]] = None
     # Embedding similarity search
     embedding_query: Optional[Vector] = None
-    # Number of records to return. If not provided, 20 records are returned.
+    # Number of records to return. If None is passed, no limit will be applied.
     limit: Optional[int] = None
     # Zero-based offset
     offset: Optional[int] = None
@@ -151,6 +151,10 @@ class AbstractSymbolMetadataRepository(ABC):
 
     @abstractmethod
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
+        pass
+
+    @abstractmethod
+    def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
         pass
 
     @abstractmethod

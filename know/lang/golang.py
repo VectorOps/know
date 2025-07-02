@@ -533,7 +533,7 @@ class GolangCodeParser(AbstractCodeParser):
                     visibility=Visibility.PUBLIC if fname[0].isupper() else Visibility.PRIVATE,
                     modifiers=[],
                     docstring=self._extract_preceding_comment(fld),
-                    signature=None,        # struct field – no signature
+                    signature=None,
                     comment=None,
                     children=[],
                 )

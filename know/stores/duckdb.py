@@ -202,20 +202,7 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         return syms
 
     def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
-        """
-        Return all symbols whose file belongs to *package_id*.
-        """
-        rows = _row_to_dict(
-            self.conn.execute(
-                """
-                SELECT s.*
-                FROM symbols s
-                JOIN files   f ON s.file_id = f.id
-                WHERE f.package_id = ?
-                """,
-                [package_id],
-            )
-        )
+        rows = _row_to_dict(self.conn.execute("SELECT * FROM symbols WHERE package_id = ?", [package_id]))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
