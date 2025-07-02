@@ -203,11 +203,11 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
         # ---------- doc / comment full-text search ----------
         if query.doc_needle:
-            needles = [n.lower() for n in query.doc_needle]
+            needle = query.doc_needle.lower()
 
             def _matches(s: SymbolMetadata) -> bool:
                 haystack = f"{s.docstring or ''} {s.comment or ''}".lower()
-                return all(n in haystack for n in needles)
+                return needle in haystack
 
             res = [s for s in res if _matches(s)]
 
