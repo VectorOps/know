@@ -678,13 +678,18 @@ class GolangCodeParser(AbstractCodeParser):
         """
         # --- collect type_spec nodes ------------------------------------
         specs = [c for c in node.children if c.type == "type_spec"]
+
         # single-line declaration has no inner *type_spec* – treat the node itself
         if not specs:
             specs = [node]
 
         for spec in specs:
+            pprint(spec.children)
             # ---------- identifier -------------------------------------
-            ident = next((c for c in spec.children if c.type == "identifier"), None)
+            ident = next(
+                (c for c in spec.children if c.type in ("identifier", "type_identifier")),
+                None,
+            )
             if ident is None:
                 continue
             name: str = ident.text.decode("utf8")
