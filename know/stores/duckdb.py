@@ -379,3 +379,11 @@ class DuckDBDataRepository(AbstractDataRepository):
     @property
     def importedge(self) -> AbstractImportEdgeRepository:  # type: ignore[override]
         return self._edge_repo
+
+    def refresh_full_text_indexes(self) -> None:               # NEW
+        try:
+            # refresh the symbols docs/comments FTS index
+            self._conn.execute("CALL FTS_REFRESH_INDEX('idx_symbols_doc_fts');")
+        except Exception:
+            # index absent or extension unavailable – ignore
+            pass

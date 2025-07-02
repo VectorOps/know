@@ -276,3 +276,6 @@ class InMemoryDataRepository(AbstractDataRepository):
     def importedge(self) -> AbstractImportEdgeRepository:
         """Access the import edge repository."""
         return self._importedge
+
+    def refresh_full_text_indexes(self) -> None:  # new – required by interface
+        return

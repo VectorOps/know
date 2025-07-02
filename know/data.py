@@ -228,3 +228,8 @@ class AbstractDataRepository(ABC):
     @abstractmethod
     def importedge(self) -> AbstractImportEdgeRepository:
         pass
+
+    @abstractmethod
+    def refresh_full_text_indexes(self) -> None:
+        """Refresh full-text search indexes (noop in back-ends that don’t need it)."""
+        pass
