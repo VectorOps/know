@@ -244,8 +244,12 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         # ---------- pagination ----------
         limit  = query.limit  if query.limit  is not None else 20
         offset = query.offset if query.offset is not None else 0
-        sql += " LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
+        if query.limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([query.limit, offset])
+        elif offset:                       # offset without limit → emulate “no-limit”
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([9223372036854775807, offset])   # effectively unlimited
 
         rows = _row_to_dict(self.conn.execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]

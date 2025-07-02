@@ -213,8 +213,10 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
         # ---------- pagination ----------
         offset = query.offset or 0
-        limit = query.limit or 20
-        res = res[offset: offset + limit]
+        if query.limit is None:            # unlimited ‒ only apply offset
+            res = res[offset:]
+        else:                              # bounded slice
+            res = res[offset: offset + query.limit]
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
 
