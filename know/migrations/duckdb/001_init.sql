@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS symbols (
     id TEXT PRIMARY KEY,
     repo_id TEXT,
     file_id TEXT,
+    package_id TEXT,
     name TEXT,
     fqn TEXT,
     symbol_key TEXT,

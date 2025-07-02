@@ -121,6 +121,7 @@ class SymbolMetadata(BaseModel):
     id: Optional[str]
     repo_id: str
     file_id: Optional[str] = None
+    package_id: Optional[str] = None        # NEW – owning package
     name: str
     fqn: Optional[str] = None
     symbol_key: Optional[str] = None

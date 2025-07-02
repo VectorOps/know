@@ -171,18 +171,37 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
     def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
         """
-        Return all symbols whose *file* belongs to the supplied *package_id*.
-        """
-        res: list[SymbolMetadata] = []
-        for sym in self._items.values():
-            fid = sym.file_id
-            if fid is None:
-                continue
-            fmeta = self._file_items.get(fid)
-            if fmeta is not None and fmeta.package_id == package_id:
-                res.append(sym)
-        SymbolMetadata.resolve_symbol_hierarchy(res)
-        return res
+-        """
+-        Return all symbols whose *file* belongs to the supplied *package_id*.
+-        """
+-        res: list[SymbolMetadata] = []
+-        for sym in self._items.values():
+-            fid = sym.file_id
+-            if fid is None:
+-                continue
+-            fmeta = self._file_items.get(fid)
+-            if fmeta is not None and fmeta.package_id == package_id:
+-                res.append(sym)
+-        SymbolMetadata.resolve_symbol_hierarchy(res)
+-        return res
++        """
++        Return all symbols that belong to *package_id* (prefer the symbol’s
++        own package_id field, fall back to the file-based lookup for symbols
++        created before the refactor).
++        """
++        res: list[SymbolMetadata] = [
++            s for s in self._items.values() if s.package_id == package_id
++        ]
++        for sym in self._items.values():
++            if sym.package_id is None:                    # legacy entries
++                fid = sym.file_id
++                if fid is None:
++                    continue
++                fmeta = self._file_items.get(fid)
++                if fmeta is not None and fmeta.package_id == package_id:
++                    res.append(sym)
++        SymbolMetadata.resolve_symbol_hierarchy(res)
++        return res
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):

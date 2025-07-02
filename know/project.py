@@ -191,6 +191,9 @@ def scan_project_directory(project: Project) -> None:
         logger.debug(f"Deleted {removed_pkgs} orphaned packages.")
 
 
+    # TODO: For methods that don't have a parent reference, find corresponding class (or structure)
+
+
 def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
     """
     Persist *parsed_file* (package → file → symbols) into the
@@ -311,6 +314,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
             "file_id": file_meta.id,
             "repo_id": project.get_repo().id,
             "parent_symbol_id": parent_id,
+            "package_id": pkg_meta.id,          # NEW
         })
 
         emb_calc = project.embeddings
