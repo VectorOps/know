@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Optional
-from know.models import RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge, Vector
-from know.data import AbstractDataRepository
+from know.models import (
+    RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata,
+    ImportEdge, Vector, SymbolKind              # NEW
+)
+from know.data import AbstractDataRepository, SymbolSearchQuery   # NEW
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository  # new
 from know.parsers import ParsedFile, ParsedSymbol, ParsedImportEdge, CodeParserRegistry
