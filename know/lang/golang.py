@@ -20,6 +20,7 @@ from know.settings import ProjectSettings
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger
 from know.helpers import compute_file_hash, compute_symbol_hash
+from devtools import pprint
 
 GO_LANGUAGE = Language(tsgo.language())
 
@@ -208,29 +209,32 @@ class GolangCodeParser(AbstractCodeParser):
         raw_str: str = self._source_bytes[spec_node.start_byte : spec_node.end_byte] \
             .decode("utf8", errors="replace").strip()
 
-        # ---- quick-and-dirty tokenisation -----------------------------------
-        # Go import specs are very regular:  [alias | '.' | '_']? "path"
-        tokens = raw_str.split()
-        alias: str | None = None
-        dot: bool = False
+        # pprint(spec_node.children)
 
-        if len(tokens) == 1:                    # plain:  "path"
-            path_literal = tokens[0]
-        else:                                   # alias / dot / blank-import
-            first = tokens[0]
-            if first == ".":                    # dot-import
-                dot = True
-            elif first != "_":                  # blank import keeps '_' as alias
-                alias = first
-            else:
-                alias = "_"                     # blank import
-            path_literal = tokens[-1]
+        # ---- extract components from tree-sitter children ---------------
+        alias: str | None = None        # "k"   …  alias import
+        dot: bool = False               #        …  dot-import  `import . "foo"`
+        import_path: str | None = None  # "fmt", "example.com/m", …
+
+        for ch in spec_node.children:
+            match ch.type:
+                case "package_identifier" | "identifier":   # alias
+                    alias = ch.text.decode("utf8")
+                case "dot":
+                    dot = True
+                case "blank_identifier":                    # `_`
+                    alias = "_"
+                case "interpreted_string_literal":
+                    import_path = ch.text.decode("utf8").strip()
+                case _:
+                    pass        # ignore comments, parens, etc.
+
+        if import_path is None:       # malformed spec → skip
+            return
 
         # strip surrounding quotes / back-ticks
-        if path_literal[0] in "\"`" and path_literal[-1] in "\"`":
-            import_path = path_literal[1:-1]
-        else:
-            import_path = path_literal
+        if import_path[0] in "\"`" and import_path[-1] in "\"`":
+            import_path = import_path[1:-1]
 
         # ---- internal vs external + physical path ---------------------------
         physical_path: str | None = None
