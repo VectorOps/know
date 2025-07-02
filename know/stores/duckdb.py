@@ -223,6 +223,9 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
             where.append("s.visibility = ?")
             params.append(getattr(query.symbol_visibility, "value", query.symbol_visibility))
 
+        if query.top_level_only:
+            where.append("s.parent_symbol_id IS NULL")
+
         # ---------- doc / comment LIKE filters ----------
         if query.doc_needle:
             for n in query.doc_needle:

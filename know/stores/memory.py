@@ -189,6 +189,9 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         if query.symbol_visibility:
             res = [s for s in res if s.visibility == query.symbol_visibility]
 
+        if query.top_level_only:
+            res = [s for s in res if s.parent_symbol_id is None]
+
         # ---------- doc / comment full-text search ----------
         if query.doc_needle:
             needles = [n.lower() for n in query.doc_needle]
