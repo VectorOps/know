@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 from types import SimpleNamespace
+from devtools import pprint
 
 from know.lang.golang import GolangCodeParser
 from know.models import ProgrammingLanguage, SymbolKind
@@ -37,17 +38,19 @@ def test_golang_parser_on_sample_file():
     assert parsed_file.path == "main.go"
     assert parsed_file.language == ProgrammingLanguage.GO
 
+    #pprint(parsed_file)
+
     # ------------------------------------------------------------------ #
     # Imports                                                             #
     # ------------------------------------------------------------------ #
     # main.go contains exactly one import:  "fmt"
-    assert len(parsed_file.imports) == 1
+    assert len(parsed_file.imports) == 2
     fmt_imp = parsed_file.imports[0]
-    assert fmt_imp.virtual_path == "fmt"
-    assert fmt_imp.external is True
+    assert fmt_imp.virtual_path == "example.com/m"
+    assert fmt_imp.external is False
     assert fmt_imp.dot is False
-    assert fmt_imp.alias is None
-    assert fmt_imp.physical_path is None
+    assert fmt_imp.alias == "k"
+    assert fmt_imp.physical_path == "."
 
     # ------------------------------------------------------------------ #
     # Top-level symbols                                                   #

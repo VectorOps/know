@@ -6,33 +6,33 @@ from know.settings import ProjectSettings
 from know.project import init_project
 from know.parsers import CodeParserRegistry
 from know.lang.python import PythonCodeParser
-from devtools import pprint
 
 
-SAMPLES_DIR = Path(__file__).parent / "parsers" / "python" / "samples"
+SAMPLES_DIR = Path(__file__).parent / "samples"
 
 
-def test_project_scan_populates_repositories():
+def test_python_project_scan_populates_repositories():
     """Project.init + directory scan should create metadata for every sample file."""
     project = init_project(ProjectSettings(project_path=str(SAMPLES_DIR)))
     repo_store = project.data_repository
     repo_meta = project.get_repo()
 
     # ── files ────────────────────────────────────────────────────────────
-    expected_files = [p for p in SAMPLES_DIR.glob("*.py")]
     files = repo_store.file.get_list_by_repo_id(repo_meta.id)
-    assert len(files) == len(expected_files)
+    assert len(files) == 4
 
     # ── packages ─────────────────────────────────────────────────────────
     pkg_ids = {f.package_id for f in files if f.package_id}
-    # current Python parser creates one package per file
-    assert len(pkg_ids) == len(expected_files)
+    assert len(pkg_ids) == 2
 
-    # ── symbols (spot-check simple.py) ───────────────────────────────────
-    simple_meta = next(f for f in files if f.path == "simple.py")
-    symbols = repo_store.symbol.get_list_by_file_id(simple_meta.id)
+    # ── symbols (spot-check method.go) ───────────────────────────────────
+    simple_meta = next(f for f in files if f.path == "m/method.go")
+    symbols = repo_store.symbol.get_list_by_package_id(simple_meta.package_id)
     symbol_names = {s.name for s in symbols}
 
-    assert {"CONST", "fn", "Test"}.issubset(symbol_names)
-    # every recorded symbol must reference its file
-    assert all(s.file_id == simple_meta.id for s in symbols)
+    assert {"foobar"}.issubset(symbol_names)
+
+    # method should reference struct
+    method = next(s for s in symbols if s.name == "foobar")
+    struct = next(s for s in symbols if s.name == "M")
+    assert method.parent_symbol_id == struct.id
