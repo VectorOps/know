@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Optional, List
 from tree_sitter import Parser, Language
 import tree_sitter_go as tsgo
-
 from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
 from know.models import (
     ProgrammingLanguage,
@@ -182,12 +181,18 @@ class GolangCodeParser(AbstractCodeParser):
     # --- Node Handlers -------------------------------------------------------
     def _handle_import_declaration(self, node, parsed_file: ParsedFile, project: ProjectSettings):
         """
-        Walk every `import_spec` inside this import declaration and
-        forward it to `_process_import_spec`.
+        Visit every `import_spec` contained in this import declaration.
+        Handles both forms:
+            import "fmt"
+            import ( "fmt"; "foo/bar" )
         """
-        for child in node.children:
-            if child.type == "import_spec":
-                self._process_import_spec(child, parsed_file, project)
+        def _walk(n):
+            for child in n.children:
+                if child.type == "import_spec":
+                    self._process_import_spec(child, parsed_file, project)
+                elif child.type == "import_spec_list":
+                    _walk(child)                # recurse into grouped list
+        _walk(node)
 
     def _process_import_spec(
         self,
