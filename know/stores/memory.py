@@ -155,6 +155,8 @@ class InMemoryFileMetadataRepository(
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
+    # minimum cosine similarity for an embedding to participate in ranking
+    EMBEDDING_SIM_THRESHOLD: float = 0.4
 
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.symbols)
@@ -212,8 +214,6 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         # ---------------------------------------------------------------
         # unified ranking  (RRF over optional FTS / embedding signals)
         # ---------------------------------------------------------------
-        has_fts       = bool(query.doc_needle)
-        has_embedding = bool(query.embedding_query)
 
         fts_rank : dict[str, int] = {}
         code_rank: dict[str, int] = {}
@@ -233,17 +233,22 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         if has_embedding:
             qvec = query.embedding_query          # type: ignore[arg-type]
 
-            code_sims = [
-                (s, _cosine(qvec, s.embedding_code_vec))         # type: ignore
-                for s in candidates if s.embedding_code_vec
-            ]
+            code_sims: list[tuple[SymbolMetadata, float]] = []
+            for s in candidates:
+                if s.embedding_code_vec:
+                    sim = _cosine(qvec, s.embedding_code_vec)     # type: ignore[arg-type]
+                    if sim >= self.EMBEDDING_SIM_THRESHOLD:
+                        code_sims.append((s, sim))
             code_sims.sort(key=lambda t: t[1], reverse=True)
             code_rank = {s.id: i + 1 for i, (s, _) in enumerate(code_sims)}
 
-            doc_sims = [
-                (s, _cosine(qvec, getattr(s, "embedding_doc_vec", None)))  # type: ignore
-                for s in candidates if getattr(s, "embedding_doc_vec", None)
-            ]
+            doc_sims: list[tuple[SymbolMetadata, float]] = []
+            for s in candidates:
+                vec = getattr(s, "embedding_doc_vec", None)
+                if vec:
+                    sim = _cosine(qvec, vec)                      # type: ignore[arg-type]
+                    if sim >= self.EMBEDDING_SIM_THRESHOLD:
+                        doc_sims.append((s, sim))
             doc_sims.sort(key=lambda t: t[1], reverse=True)
             doc_rank = {s.id: i + 1 for i, (s, _) in enumerate(doc_sims)}
 
@@ -260,9 +265,15 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             fused_score[s.id] = score
 
         if has_fts or has_embedding:
-            candidates.sort(key=lambda s: (-fused_score.get(s.id, 0.0), s.name or ""))
+            ranked_candidates = [
+                s for s in candidates
+                if s.id in code_rank or s.id in doc_rank or s.id in fts_rank
+            ]
+            ranked_candidates.sort(
+                key=lambda s: (-fused_score.get(s.id, 0.0), s.name or "")
+            )
+            candidates = ranked_candidates
         else:
-            # purely alphabetical fallback
             candidates.sort(key=lambda s: s.name or "")
 
         results = candidates
