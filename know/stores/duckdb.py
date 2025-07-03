@@ -344,8 +344,6 @@ LIMIT ? OFFSET ?
 
         sql = "".join(cte_parts) + final_select
 
-        print(sql, params)
-
         rows = _row_to_dict(self.conn.execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
         SymbolMetadata.resolve_symbol_hierarchy(syms)
@@ -473,8 +471,6 @@ class DuckDBDataRepository(AbstractDataRepository):
                 "PRAGMA create_fts_index('symbols', "
                 "'id', 'docstring', 'comment');"
             )
-            print('OK')
         except Exception as ex:
-            print('whoops', ex)
             # index absent or extension unavailable – ignore
             pass
