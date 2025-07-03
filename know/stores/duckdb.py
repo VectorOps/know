@@ -256,11 +256,15 @@ WITH candidates AS (
         # ---------- optional rank CTEs ---------- #
         if has_fts:
             cte_parts.append("""
-, rank_fts AS (
+, rank_fts_scores AS (
     SELECT id,
-           row_number() OVER (ORDER BY match_bm25(idx_symbols_doc_fts)) AS fts_rank
+           fts_main_symbols.match_bm25(id, ?) as score
     FROM candidates
-    WHERE idx_symbols_doc_fts MATCH ?
+), rank_fts AS (
+    SELECT id,
+           row_number() OVER (score) AS fts_rank
+    FROM rank_fts_scores
+    WHERE score IS NOT NULL
 )""")
             params.append(query.doc_needle)
 
@@ -449,11 +453,13 @@ class DuckDBDataRepository(AbstractDataRepository):
 
     def refresh_full_text_indexes(self) -> None:               # NEW
         try:
-            self._conn.execute("DROP INDEX IF EXISTS idx_symbols_doc_fts;")
+            self._conn.execute("PRAGMA drop_fts_index('symbols');")
             self._conn.execute(
                 "PRAGMA create_fts_index('symbols', "
-                "'idx_symbols_doc_fts', 'docstring', 'comment');"
+                "'id', 'docstring', 'comment');"
             )
-        except Exception:
+            print('OK')
+        except Exception as ex:
+            print('whoops', ex)
             # index absent or extension unavailable – ignore
             pass
