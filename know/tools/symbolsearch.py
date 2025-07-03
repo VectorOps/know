@@ -33,7 +33,6 @@ class SearchSymbolsTool(BaseTool):
         symbol_fqn: Optional[str] = None,
         symbol_kind: Optional[str] = None,
         symbol_visibility: Optional[str] = None,
-        doc_needle: Optional[Sequence[str]] = None,
         query: Optional[str] = None,
         limit: int | None = 20,
         offset: int | None = 0,
@@ -57,7 +56,7 @@ class SearchSymbolsTool(BaseTool):
             symbol_fqn        = symbol_fqn,
             symbol_kind       = kind,
             symbol_visibility = vis,
-            doc_needle        = list(doc_needle) if doc_needle else None,
+            doc_needle        = query,
             embedding_query   = embedding_vec,
             limit             = limit or 20,
             offset            = offset,
@@ -121,12 +120,11 @@ class SearchSymbolsTool(BaseTool):
                         "enum": visibility_enum,
                         "description": "Filter by visibility (public / protected / private)."
                     },
-                    "doc_needle":        {"type": "array",  "items": {"type": "string"}, "description": "Full-text search tokens"},
                     "query": {
                         "type": "string",
                         "description": (
-                            "Natural-language search string using embedding vector and used "
-                            "for semantic code similarity search. If nothing is found, try doc_needle search."
+                            "Natural-language semantic search string. Use to find relevant symbols by their "
+                            "documentation, comments or code itself."
                         )
                     },
                     "limit":             {"type": "integer", "minimum": 1, "default": 20},

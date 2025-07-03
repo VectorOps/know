@@ -162,6 +162,7 @@ def test_symbol_search(data_repo):
         kind="variable", visibility="public",
         docstring="Alpha-numeric helper."
     ))
+    data_repo.refresh_full_text_indexes()
 
     # ---------- no-filter search: default ordering (name ASC) ----------
     res = sym_repo.search(rid, SymbolSearchQuery())
@@ -177,7 +178,7 @@ def test_symbol_search(data_repo):
     assert {s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_visibility="public"))} == {"Alpha", "Gamma"}
 
     # ---------- docstring / comment full-text search ----------
-    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(doc_needle=["foo"]))] == ["Alpha"]
+    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(doc_needle="foo"))] == ["Alpha"]
 
     # ---------- pagination ----------
     assert len(sym_repo.search(rid, SymbolSearchQuery(limit=2))) == 2
@@ -185,7 +186,7 @@ def test_symbol_search(data_repo):
 
 
 # ---------------------------------------------------------------------------
-# NEW – embedding-similarity search
+# embedding-similarity search
 # ---------------------------------------------------------------------------
 def test_symbol_embedding_search(data_repo):
     repo_repo, file_repo, sym_repo = data_repo.repo, data_repo.file, data_repo.symbol

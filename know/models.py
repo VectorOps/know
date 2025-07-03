@@ -162,6 +162,7 @@ class SymbolMetadata(BaseModel):
     parent_ref: Optional["SymbolMetadata"] = Field(default=None, exclude=True, repr=False)
     children: List["SymbolMetadata"] = Field(default_factory=list, exclude=True, repr=False)
 
+    # TODO: Move out
     @staticmethod
     def resolve_symbol_hierarchy(symbols: list[SymbolMetadata]) -> None:
         """

@@ -258,14 +258,13 @@ WITH candidates AS (
             cte_parts.append("""
 , rank_fts_scores AS (
     SELECT id,
-           fts_main_symbols.match_bm25(id, ?, conjunctive := true) as score
+           fts_main_symbols.match_bm25(id, ?) as score
     FROM candidates
 ), rank_fts AS (
     SELECT id,
            row_number() OVER (ORDER BY score DESC) AS fts_rank
     FROM rank_fts_scores
     WHERE score IS NOT NULL
-        AND score > 0
 )""")
             params.append(query.doc_needle)
 
@@ -273,7 +272,7 @@ WITH candidates AS (
             cte_parts.append("""
 , rank_code_scores AS (
     SELECT id,
-           array_cosine_distance(embedding_code_vec,
+           array_cosine_similarity(embedding_code_vec,
                           CAST(? AS FLOAT[1024])) AS dist
     FROM candidates
 ), rank_code AS (
@@ -286,7 +285,7 @@ WITH candidates AS (
             cte_parts.append("""
 , rank_doc_scores AS (
     SELECT id,
-           array_cosine_distance(embedding_doc_vec,
+           array_cosine_similarity(embedding_doc_vec,
                           CAST(? AS FLOAT[1024])) AS dist
     FROM candidates
 ), rank_doc AS (
@@ -319,7 +318,7 @@ WITH candidates AS (
     SELECT c.*,
            COALESCE(rs.rrf_score, 0) AS rrf_score
     FROM candidates c
-    LEFT JOIN (
+    INNER JOIN (
         SELECT id, SUM(score) AS rrf_score
         FROM rrf_scores
         GROUP BY id
@@ -345,7 +344,7 @@ LIMIT ? OFFSET ?
 
         sql = "".join(cte_parts) + final_select
 
-        print(sql)
+        print(sql, params)
 
         rows = _row_to_dict(self.conn.execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]

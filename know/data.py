@@ -129,7 +129,7 @@ class SymbolSearchQuery:
     # Filter by symbol visiblity
     symbol_visibility: Optional[Visibility] = None
     # Full-text search on symbol documentation or comment
-    doc_needle: Optional[list[str]] = None
+    doc_needle: Optional[str] = None
     # Embedding similarity search
     embedding_query: Optional[Vector] = None
     # Number of records to return. If None is passed, no limit will be applied.
