@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from devtools import pprint
 
 from know.lang.python import PythonCodeParser
-from know.models import ProgrammingLanguage, SymbolKind
+from know.models import ProgrammingLanguage, SymbolKind, Modifier
 
 # --------------------------------------------------------------------------- #
 # Helpers

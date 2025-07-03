@@ -32,6 +32,11 @@ def double_decorated():
     pass
 
 
+# Async function
+async def async_fn(a, b):
+    return a - b
+
+
 # Class
 class Test:
     ABC = "abc"
@@ -49,6 +54,9 @@ class Test:
     @property
     def get(self):
         return self.a
+
+    async def async_method(self):
+        pass
 
 
 # Decorated class
