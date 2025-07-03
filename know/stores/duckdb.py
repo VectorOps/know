@@ -190,6 +190,8 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
 
+    RRF_K: int = 60          # tuning-parameter k (see RRF paper)
+
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         syms = super().get_list_by_ids(symbol_ids)
         SymbolMetadata.resolve_symbol_hierarchy(syms)
@@ -209,56 +211,136 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
         # ---- FROM / JOIN clause to filter by repo_id via files table ----
-        sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
-        where, params = ["f.repo_id = ?"], [repo_id]
+        base_where, base_params = ["f.repo_id = ?"], [repo_id]
 
         # ---------- scalar filters ----------
         if query.symbol_name:
-            where.append("LOWER(s.name) = ?")
-            params.append(query.symbol_name.lower())
+            base_where.append("LOWER(s.name) = ?")
+            base_params.append(query.symbol_name.lower())
 
         if query.symbol_fqn:
-            where.append("LOWER(s.fqn) LIKE ?")
-            params.append(f"%{query.symbol_fqn.lower()}%")
+            base_where.append("LOWER(s.fqn) LIKE ?")
+            base_params.append(f"%{query.symbol_fqn.lower()}%")
 
         if query.symbol_kind:
-            where.append("s.kind = ?")
-            params.append(getattr(query.symbol_kind, "value", query.symbol_kind))
+            base_where.append("s.kind = ?")
+            base_params.append(getattr(query.symbol_kind, "value", query.symbol_kind))
 
         if query.symbol_visibility:
-            where.append("s.visibility = ?")
-            params.append(getattr(query.symbol_visibility, "value", query.symbol_visibility))
+            base_where.append("s.visibility = ?")
+            base_params.append(getattr(query.symbol_visibility, "value", query.symbol_visibility))
 
         if query.top_level_only:
-            where.append("s.parent_symbol_id IS NULL")
+            base_where.append("s.parent_symbol_id IS NULL")
 
-        # ---------- doc / comment LIKE filters ----------
-        if query.doc_needle:
-            # join all tokens into one search phrase
-            phrase = " ".join(query.doc_needle).lower()
+        # Compose base WHERE clause string
+        base_where_clause = " AND ".join(base_where)
+
+        # Determine which search dimensions are provided
+        has_fts = bool(query.doc_needle)
+        has_embedding = bool(query.embedding_query)
+
+        # If both FTS and embedding are provided, use RRF fusion query
+        if has_fts and has_embedding:
+            sql = f"""
+WITH candidates AS (
+    SELECT s.*
+    FROM symbols s
+    JOIN files f ON s.file_id = f.id
+    WHERE {base_where_clause}
+)
+, rank_fts AS (
+    SELECT id,
+           row_number() OVER (ORDER BY bm25_score(idx_symbols_doc_fts)) AS fts_rank
+    FROM candidates
+    JOIN idx_symbols_doc_fts USING (id)
+    WHERE idx_symbols_doc_fts.match(?)
+)
+, rank_code AS (
+    SELECT id,
+           row_number() OVER (
+               ORDER BY array_distance(embedding_code_vec,
+                                       CAST(? AS FLOAT[1024])) ASC
+           ) AS code_rank
+    FROM candidates
+)
+, rank_doc AS (
+    SELECT id,
+           row_number() OVER (
+               ORDER BY array_distance(embedding_doc_vec,
+                                       CAST(? AS FLOAT[1024])) ASC
+           ) AS doc_rank
+    FROM candidates
+)
+, fused AS (
+    SELECT c.*,
+           coalesce(1.0 / (? + fts_rank), 0) +
+           1.0 / (? + code_rank) +
+           1.0 / (? + doc_rank)         AS rrf_score
+    FROM candidates c
+    JOIN rank_code USING(id)
+    JOIN rank_doc  USING(id)
+    LEFT JOIN rank_fts USING(id)
+)
+SELECT *
+FROM fused
+ORDER BY rrf_score DESC, name ASC
+LIMIT ? OFFSET ?
+"""
+            params = base_params[:]
+            params.append(query.doc_needle)
+            params.extend([query.embedding_query, query.embedding_query])
+            params.extend([self.RRF_K, self.RRF_K, self.RRF_K])
+            params.append(query.limit or 20)
+            params.append(query.offset or 0)
+
+        # If only FTS is provided, fallback to old FTS ordering
+        elif has_fts:
+            sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
+            where, params = base_where[:], base_params[:]
             where.append("idx_symbols_doc_fts.match(?)")
-            params.append(phrase)
-
-        if where:
+            params.append(query.doc_needle)
             sql += " WHERE " + " AND ".join(where)
+            sql += " ORDER BY bm25_score(idx_symbols_doc_fts)"
+            limit  = query.limit  if query.limit  is not None else 20
+            offset = query.offset if query.offset is not None else 0
+            if query.limit is not None:
+                sql += " LIMIT ? OFFSET ?"
+                params.extend([query.limit, offset])
+            elif offset:
+                sql += " OFFSET ?"
+                params.append(offset)
 
-        # ---------- ordering (embedding vs. default) ----------
-        if query.embedding_query:
-            # TODO: Make dimension configurable
+        # If only embedding is provided, fallback to old embedding ordering
+        elif has_embedding:
+            sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
+            where, params = base_where[:], base_params[:]
+            sql += " WHERE " + " AND ".join(where)
             sql += " ORDER BY array_distance(s.embedding_code_vec, CAST(? AS FLOAT[1024])) ASC"
-            params.append(query.embedding_query)          # vector parameter
-        else:
-            sql += " ORDER BY s.name ASC"
+            params.append(query.embedding_query)
+            limit  = query.limit  if query.limit  is not None else 20
+            offset = query.offset if query.offset is not None else 0
+            if query.limit is not None:
+                sql += " LIMIT ? OFFSET ?"
+                params.extend([query.limit, offset])
+            elif offset:
+                sql += " OFFSET ?"
+                params.append(offset)
 
-        # ---------- pagination ----------
-        limit  = query.limit  if query.limit  is not None else 20
-        offset = query.offset if query.offset is not None else 0
-        if query.limit is not None:
-            sql += " LIMIT ? OFFSET ?"
-            params.extend([query.limit, offset])
-        elif offset:
-            sql += " OFFSET ?"
-            params.append(offset)
+        # Neither FTS nor embedding provided, fallback to default ordering by name
+        else:
+            sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
+            where, params = base_where[:], base_params[:]
+            sql += " WHERE " + " AND ".join(where)
+            sql += " ORDER BY s.name ASC"
+            limit  = query.limit  if query.limit  is not None else 20
+            offset = query.offset if query.offset is not None else 0
+            if query.limit is not None:
+                sql += " LIMIT ? OFFSET ?"
+                params.extend([query.limit, offset])
+            elif offset:
+                sql += " OFFSET ?"
+                params.append(offset)
 
         rows = _row_to_dict(self.conn.execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
