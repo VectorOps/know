@@ -2,10 +2,10 @@ import pytest
 import math
 
 from know.stores.duckdb import DuckDBDataRepository
+from know.stores.memory import InMemoryDataRepository
 from know.models import RepoMetadata, FileMetadata, SymbolMetadata
 from know.data import SymbolSearchQuery
 
-pytest.importorskip("duckdb")
 pytest.importorskip("sentence_transformers")
 
 from know.embeddings.sentence import LocalEmbeddingsCalculator
@@ -21,21 +21,25 @@ def emb_calc():
     except Exception:
         pytest.skip(f"Couldn't load embedding model {QWEN_MODEL}")
 
-@pytest.fixture
-def duckdb_repo(tmp_path):
-    db_path = tmp_path / "ducktest.db"
-    repo = DuckDBDataRepository(str(db_path))
-    return repo
+@pytest.fixture(params=["duckdb", "memory"])
+def data_repo(request, tmp_path):
+    """Return a fresh data repository – DuckDB or in-memory – per test run."""
+    if request.param == "duckdb":
+        db_path = tmp_path / "ducktest.db"
+        pytest.importorskip("duckdb")            # ensure extension available
+        return DuckDBDataRepository(str(db_path))
+    # memory backend
+    return InMemoryDataRepository()
 
-def test_bm25_embedding_search_20cases(duckdb_repo, emb_calc):
+def test_bm25_embedding_search_20cases(data_repo, emb_calc):
     """
     Inserts 20 distinct symbols with themed docstrings.
     Performs BM25, embedding-only and *combined (BM25 + embedding)* search.
     Verifies result relevance, ranking and the RRF fusion implementation.
     """
-    repo_repo = duckdb_repo.repo
-    file_repo = duckdb_repo.file
-    sym_repo = duckdb_repo.symbol
+    repo_repo = data_repo.repo
+    file_repo = data_repo.file
+    sym_repo = data_repo.symbol
 
     rid = "repo-BM25-test"
     fid = "file-f"
@@ -81,7 +85,7 @@ def test_bm25_embedding_search_20cases(duckdb_repo, emb_calc):
             embedding_code_vec=vec,
             kind="function"
         ))
-    duckdb_repo.refresh_full_text_indexes()
+    data_repo.refresh_full_text_indexes()
 
     # BM25 Search tests
     # Query for 'sort'; should rank sorting-related symbols at the top.
