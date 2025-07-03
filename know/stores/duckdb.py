@@ -258,15 +258,43 @@ WITH candidates AS (
             cte_parts.append("""
 , rank_fts_scores AS (
     SELECT id,
-           fts_main_symbols.match_bm25(id, ?) as score
+           fts_main_symbols.match_bm25(id, ?) AS score
     FROM candidates
 ), rank_fts AS (
     SELECT id,
-           row_number() OVER (score) AS fts_rank
+           row_number() OVER (ORDER BY score DESC) AS fts_rank
     FROM rank_fts_scores
-    WHERE score IS NOT NULL
+    WHERE score IS NOT NULL      -- drop non-matches
+      AND score > 0              -- gate weak BM25 results
 )""")
             params.append(query.doc_needle)
+```
+
+know/stores/duckdb.py
+```python
+<<<<<<< SEARCH
+        if has_embedding:
+            cte_parts.append("""
+, rank_code AS (
+    SELECT id,
+           row_number() OVER (
+               ORDER BY array_distance(embedding_code_vec,
+                                       CAST(? AS FLOAT[1024])) ASC
+           ) AS code_rank
+    FROM candidates
+)
+""")
+            cte_parts.append("""
+, rank_doc AS (
+    SELECT id,
+           row_number() OVER (
+               ORDER BY array_distance(embedding_doc_vec,
+                                       CAST(? AS FLOAT[1024])) ASC
+           ) AS doc_rank
+    FROM candidates
+)
+""")
+            params.extend([query.embedding_query, query.embedding_query])
 
         if has_embedding:
             cte_parts.append("""
