@@ -240,22 +240,33 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         has_fts = bool(query.doc_needle)
         has_embedding = bool(query.embedding_query)
 
-        # If both FTS and embedding are provided, use RRF fusion query
-        if has_fts and has_embedding:
-            sql = f"""
+        # ------------------------------------------------------------------ #
+        # unified CTE / query construction                                   #
+        # ------------------------------------------------------------------ #
+        cte_parts: list[str] = [f"""
 WITH candidates AS (
     SELECT s.*
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE {base_where_clause}
-)
+)"""]
+
+        params: list[Any] = base_params[:]      # start with scalar-filter params
+
+        # ---------- optional rank CTEs ---------- #
+        if has_fts:
+            cte_parts.append("""
 , rank_fts AS (
     SELECT id,
            row_number() OVER (ORDER BY bm25_score(idx_symbols_doc_fts)) AS fts_rank
     FROM candidates
     JOIN idx_symbols_doc_fts USING (id)
     WHERE idx_symbols_doc_fts.match(?)
-)
+)""")
+            params.append(query.doc_needle)
+
+        if has_embedding:
+            cte_parts.append("""
 , rank_code AS (
     SELECT id,
            row_number() OVER (
@@ -263,7 +274,8 @@ WITH candidates AS (
                                        CAST(? AS FLOAT[1024])) ASC
            ) AS code_rank
     FROM candidates
-)
+)""")
+            cte_parts.append("""
 , rank_doc AS (
     SELECT id,
            row_number() OVER (
@@ -271,76 +283,50 @@ WITH candidates AS (
                                        CAST(? AS FLOAT[1024])) ASC
            ) AS doc_rank
     FROM candidates
-)
+)""")
+            params.extend([query.embedding_query, query.embedding_query])
+
+        has_ranking = has_fts or has_embedding
+        if has_ranking:
+            join_lines: list[str] = []
+            rrf_terms : list[str] = []
+
+            if has_embedding:
+                join_lines += ["JOIN rank_code USING(id)", "JOIN rank_doc USING(id)"]
+                rrf_terms  += ["1.0 / (? + code_rank)", "1.0 / (? + doc_rank)"]
+                params.extend([self.RRF_K, self.RRF_K])
+
+            if has_fts:
+                join_lines.append("LEFT JOIN rank_fts USING(id)")
+                rrf_terms.append("coalesce(1.0 / (? + fts_rank), 0)")
+                params.append(self.RRF_K)
+
+            cte_parts.append(f"""
 , fused AS (
     SELECT c.*,
-           coalesce(1.0 / (? + fts_rank), 0) +
-           1.0 / (? + code_rank) +
-           1.0 / (? + doc_rank)         AS rrf_score
+           {' + '.join(rrf_terms)} AS rrf_score
     FROM candidates c
-    JOIN rank_code USING(id)
-    JOIN rank_doc  USING(id)
-    LEFT JOIN rank_fts USING(id)
-)
-SELECT *
-FROM fused
+    {' '.join(join_lines)}
+)""")
+
+        limit  = query.limit  if query.limit  is not None else 20
+        offset = query.offset if query.offset is not None else 0
+
+        if has_ranking:
+            final_select = """
+SELECT * FROM fused
 ORDER BY rrf_score DESC, name ASC
 LIMIT ? OFFSET ?
 """
-            params = base_params[:]
-            params.append(query.doc_needle)
-            params.extend([query.embedding_query, query.embedding_query])
-            params.extend([self.RRF_K, self.RRF_K, self.RRF_K])
-            params.append(query.limit or 20)
-            params.append(query.offset or 0)
-
-        # If only FTS is provided, fallback to old FTS ordering
-        elif has_fts:
-            sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
-            where, params = base_where[:], base_params[:]
-            where.append("idx_symbols_doc_fts.match(?)")
-            params.append(query.doc_needle)
-            sql += " WHERE " + " AND ".join(where)
-            sql += " ORDER BY bm25_score(idx_symbols_doc_fts)"
-            limit  = query.limit  if query.limit  is not None else 20
-            offset = query.offset if query.offset is not None else 0
-            if query.limit is not None:
-                sql += " LIMIT ? OFFSET ?"
-                params.extend([query.limit, offset])
-            elif offset:
-                sql += " OFFSET ?"
-                params.append(offset)
-
-        # If only embedding is provided, fallback to old embedding ordering
-        elif has_embedding:
-            sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
-            where, params = base_where[:], base_params[:]
-            sql += " WHERE " + " AND ".join(where)
-            sql += " ORDER BY array_distance(s.embedding_code_vec, CAST(? AS FLOAT[1024])) ASC"
-            params.append(query.embedding_query)
-            limit  = query.limit  if query.limit  is not None else 20
-            offset = query.offset if query.offset is not None else 0
-            if query.limit is not None:
-                sql += " LIMIT ? OFFSET ?"
-                params.extend([query.limit, offset])
-            elif offset:
-                sql += " OFFSET ?"
-                params.append(offset)
-
-        # Neither FTS nor embedding provided, fallback to default ordering by name
         else:
-            sql  = "SELECT s.* FROM symbols s JOIN files f ON s.file_id = f.id"
-            where, params = base_where[:], base_params[:]
-            sql += " WHERE " + " AND ".join(where)
-            sql += " ORDER BY s.name ASC"
-            limit  = query.limit  if query.limit  is not None else 20
-            offset = query.offset if query.offset is not None else 0
-            if query.limit is not None:
-                sql += " LIMIT ? OFFSET ?"
-                params.extend([query.limit, offset])
-            elif offset:
-                sql += " OFFSET ?"
-                params.append(offset)
+            final_select = """
+SELECT * FROM candidates
+ORDER BY name ASC
+LIMIT ? OFFSET ?
+"""
+        params.extend([limit, offset])
+
+        sql = "".join(cte_parts) + final_select
 
         rows = _row_to_dict(self.conn.execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
