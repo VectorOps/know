@@ -154,6 +154,8 @@ class InMemoryFileMetadataRepository(
         return [f for f in self._items.values() if f.package_id == package_id]
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
+    RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
+
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.symbols)
         self._file_items = tables.files          # needed for package lookup
@@ -181,54 +183,117 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         return res
 
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
-        # --- initial candidate set: symbols that belong to the requested repo
-        res: list[SymbolMetadata] = [
+        # ---------- candidate set: repo + scalar filters ----------
+        candidates: list[SymbolMetadata] = [
             s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
         ]
 
-        # ---------- scalar filters ----------
+        # scalar filters ......................................................
         if query.symbol_fqn:
             needle_fqn = query.symbol_fqn.lower()
-            res = [s for s in res if (s.fqn or "").lower() == needle_fqn]
+            candidates = [s for s in candidates if (s.fqn or "").lower() == needle_fqn]
 
         if query.symbol_name:
             needle = query.symbol_name.lower()
-            res = [s for s in res if needle in (s.name or "").lower()]
+            candidates = [s for s in candidates if needle in (s.name or "").lower()]
 
         if query.symbol_kind:
-            res = [s for s in res if s.kind == query.symbol_kind]
+            candidates = [s for s in candidates if s.kind == query.symbol_kind]
 
         if query.symbol_visibility:
-            res = [s for s in res if s.visibility == query.symbol_visibility]
+            candidates = [s for s in candidates if s.visibility == query.symbol_visibility]
 
-        # ---------- doc / comment full-text search ----------
-        if query.doc_needle:
-            needle = query.doc_needle.lower()
+        if query.top_level_only:
+            candidates = [s for s in candidates if s.parent_symbol_id is None]
 
-            def _matches(s: SymbolMetadata) -> bool:
-                haystack = f"{s.docstring or ''} {s.comment or ''}".lower()
-                return needle in haystack
+        has_fts       = bool(query.doc_needle)
+        has_embedding = bool(query.embedding_query)
 
-            res = [s for s in res if _matches(s)]
-
-        # ---------- embedding similarity ----------
-        if query.embedding_query:
+        # ---------------------------------------------------------------------
+        # (A) Combined FTS + embedding search – use RRF fusion
+        # ---------------------------------------------------------------------
+        if has_fts and has_embedding:
             qvec = query.embedding_query
+            # ----- FTS ranks --------------------------------------------------
+            def _fts_match_pos(sym: SymbolMetadata) -> int:
+                """
+                Position (byte-offset) of first match inside docs/comments;
+                –1  → no match (later filtered out).
+                """
+                haystack = f"{sym.docstring or ''} {sym.comment or ''}".lower()
+                return haystack.find(query.doc_needle.lower())
 
+            fts_matches = [
+                s for s in candidates if _fts_match_pos(s) >= 0
+            ]
+            fts_matches.sort(key=_fts_match_pos)            # best → rank 1
+            fts_rank = {s.id: i + 1 for i, s in enumerate(fts_matches)}
+
+            # ----- code-embedding ranks --------------------------------------
+            code_sims = [
+                (s, _cosine(qvec, s.embedding_code_vec))     # type: ignore[arg-type]
+                for s in candidates
+                if s.embedding_code_vec
+            ]
+            code_sims.sort(key=lambda t: t[1], reverse=True)
+            code_rank = {s.id: i + 1 for i, (s, _) in enumerate(code_sims)}
+
+            # ----- doc-embedding ranks ---------------------------------------
+            doc_sims = [
+                (s, _cosine(qvec, s.embedding_doc_vec))      # type: ignore[arg-type]
+                for s in candidates
+                if getattr(s, "embedding_doc_vec", None)
+            ]
+            doc_sims.sort(key=lambda t: t[1], reverse=True)
+            doc_rank = {s.id: i + 1 for i, (s, _) in enumerate(doc_sims)}
+
+            # ----- fuse with RRF ---------------------------------------------
+            fused: list[tuple[SymbolMetadata, float]] = []
+            for s in candidates:
+                # require presence of BOTH embedding ranks (mirrors SQL `JOIN`)
+                if s.id not in code_rank or s.id not in doc_rank:
+                    continue
+                rrf  = 1.0 / (self.RRF_K + code_rank[s.id]) \
+                     + 1.0 / (self.RRF_K + doc_rank[s.id]) \
+                     + (1.0 / (self.RRF_K + fts_rank[s.id]) if s.id in fts_rank else 0.0)
+                fused.append((s, rrf))
+
+            fused.sort(key=lambda t: t[1], reverse=True)
+            results = [s for s, _ in fused]
+
+        # ---------------------------------------------------------------------
+        # (B) FTS-only search  (unchanged except filtering)
+        # ---------------------------------------------------------------------
+        elif has_fts:
+            needle = query.doc_needle.lower()
+            results = [s for s in candidates
+                       if needle in f"{s.docstring or ''} {s.comment or ''}".lower()]
+            # simple alphabetical fallback
+            results.sort(key=lambda s: s.name or "")
+
+        # ---------------------------------------------------------------------
+        # (C) embedding-only search  (keep previous behaviour)
+        # ---------------------------------------------------------------------
+        elif has_embedding:
+            qvec = query.embedding_query
             scores = {
-                s.id: _cosine(qvec, s.embedding_code_vec)      # type: ignore[arg-type]
-                for s in res if s.embedding_code_vec
+                s.id: _cosine(qvec, s.embedding_code_vec)     # type: ignore[arg-type]
+                for s in candidates if s.embedding_code_vec
             }
-            res.sort(key=lambda s: scores.get(s.id, -1.0), reverse=True)
-        else:
-            res.sort(key=lambda s: s.name or "")
+            results = sorted(candidates, key=lambda s: scores.get(s.id, -1.0), reverse=True)
 
-        # ---------- pagination ----------
+        # ---------------------------------------------------------------------
+        # (D) no FTS, no embedding
+        # ---------------------------------------------------------------------
+        else:
+            results = sorted(candidates, key=lambda s: s.name or "")
+
+        # ---------- pagination + hierarchy resolution -------------------------
         offset = query.offset or 0
-        limit = query.limit or 20
-        res = res[offset: offset + limit]
-        SymbolMetadata.resolve_symbol_hierarchy(res)
-        return res
+        limit  = query.limit  or 20
+        results = results[offset: offset + limit]
+        SymbolMetadata.resolve_symbol_hierarchy(results)
+        return results
 
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
