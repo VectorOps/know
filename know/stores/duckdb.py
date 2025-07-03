@@ -258,86 +258,72 @@ WITH candidates AS (
             cte_parts.append("""
 , rank_fts_scores AS (
     SELECT id,
-           fts_main_symbols.match_bm25(id, ?) AS score
+           fts_main_symbols.match_bm25(id, ?, conjunctive := true) as score
     FROM candidates
 ), rank_fts AS (
     SELECT id,
            row_number() OVER (ORDER BY score DESC) AS fts_rank
     FROM rank_fts_scores
-    WHERE score IS NOT NULL      -- drop non-matches
-      AND score > 0              -- gate weak BM25 results
+    WHERE score IS NOT NULL
+        AND score > 0
 )""")
             params.append(query.doc_needle)
-```
-
-know/stores/duckdb.py
-```python
-<<<<<<< SEARCH
-        if has_embedding:
-            cte_parts.append("""
-, rank_code AS (
-    SELECT id,
-           row_number() OVER (
-               ORDER BY array_distance(embedding_code_vec,
-                                       CAST(? AS FLOAT[1024])) ASC
-           ) AS code_rank
-    FROM candidates
-)
-""")
-            cte_parts.append("""
-, rank_doc AS (
-    SELECT id,
-           row_number() OVER (
-               ORDER BY array_distance(embedding_doc_vec,
-                                       CAST(? AS FLOAT[1024])) ASC
-           ) AS doc_rank
-    FROM candidates
-)
-""")
-            params.extend([query.embedding_query, query.embedding_query])
 
         if has_embedding:
             cte_parts.append("""
-, rank_code AS (
+, rank_code_scores AS (
     SELECT id,
-           row_number() OVER (
-               ORDER BY array_distance(embedding_code_vec,
-                                       CAST(? AS FLOAT[1024])) ASC
-           ) AS code_rank
+           array_cosine_distance(embedding_code_vec,
+                          CAST(? AS FLOAT[1024])) AS dist
     FROM candidates
+), rank_code AS (
+    SELECT id,
+           row_number() OVER (ORDER BY dist ASC) AS code_rank
+    FROM rank_code_scores
+    WHERE dist IS NOT NULL
+      AND dist >= 0.4
 )""")
             cte_parts.append("""
-, rank_doc AS (
+, rank_doc_scores AS (
     SELECT id,
-           row_number() OVER (
-               ORDER BY array_distance(embedding_doc_vec,
-                                       CAST(? AS FLOAT[1024])) ASC
-           ) AS doc_rank
+           array_cosine_distance(embedding_doc_vec,
+                          CAST(? AS FLOAT[1024])) AS dist
     FROM candidates
+), rank_doc AS (
+    SELECT id,
+           row_number() OVER (ORDER BY dist ASC) AS doc_rank
+    FROM rank_doc_scores
+    WHERE dist IS NOT NULL
+      AND dist >= 0.4
 )""")
             params.extend([query.embedding_query, query.embedding_query])
 
         has_ranking = has_fts or has_embedding
         if has_ranking:
-            join_lines: list[str] = []
-            rrf_terms : list[str] = []
+            union_parts: list[str] = []
 
             if has_embedding:
-                join_lines += ["JOIN rank_code USING(id)", "JOIN rank_doc USING(id)"]
-                rrf_terms  += ["1.0 / (? + code_rank)", "1.0 / (? + doc_rank)"]
-                params.extend([self.RRF_K, self.RRF_K])
+                union_parts.append("SELECT id, 1.0 / (? + code_rank) AS score FROM rank_code")
+                params.append(self.RRF_K)
+                union_parts.append("SELECT id, 1.0 / (? + doc_rank) AS score FROM rank_doc")
+                params.append(self.RRF_K)
 
             if has_fts:
-                join_lines.append("LEFT JOIN rank_fts USING(id)")
-                rrf_terms.append("coalesce(1.0 / (? + fts_rank), 0)")
+                union_parts.append("SELECT id, 1.0 / (? + fts_rank) AS score FROM rank_fts")
                 params.append(self.RRF_K)
 
             cte_parts.append(f"""
-, fused AS (
+, rrf_scores AS (
+    {' UNION ALL '.join(union_parts)}
+), fused AS (
     SELECT c.*,
-           {' + '.join(rrf_terms)} AS rrf_score
+           COALESCE(rs.rrf_score, 0) AS rrf_score
     FROM candidates c
-    {' '.join(join_lines)}
+    LEFT JOIN (
+        SELECT id, SUM(score) AS rrf_score
+        FROM rrf_scores
+        GROUP BY id
+    ) rs USING(id)
 )""")
 
         limit  = query.limit  if query.limit  is not None else 20
@@ -358,6 +344,8 @@ LIMIT ? OFFSET ?
         params.extend([limit, offset])
 
         sql = "".join(cte_parts) + final_select
+
+        print(sql)
 
         rows = _row_to_dict(self.conn.execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
