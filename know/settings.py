@@ -9,7 +9,9 @@ class EmbeddingSettings:
         batch_size: int = 32,
         quantize: bool = False,
         quantize_bits: int = 8,
-        enabled: bool = False
+        enabled: bool = False,
+        cache_path: str | None = None,
+        cache_backend: str = "duckdb",
     ):
         self.calculator_type   = calculator_type
         self.model_name        = model_name
@@ -19,6 +21,8 @@ class EmbeddingSettings:
         self.quantize          = quantize
         self.quantize_bits     = quantize_bits
         self.enabled           = enabled
+        self.cache_path        = cache_path
+        self.cache_backend     = cache_backend
 
 
 class ProjectSettings:

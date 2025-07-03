@@ -5,6 +5,12 @@ import time
 from know.logger import KnowLogger
 
 from typing import List, Optional, Any
+import hashlib, json
+from know.embeddings.cache import (
+    EmbeddingCacheBackend,
+    DuckDBEmbeddingCacheBackend,
+    SQLiteEmbeddingCacheBackend,
+)
 
 try:
     from sentence_transformers import SentenceTransformer  # third-party
@@ -52,6 +58,8 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
         batch_size: int = 32,
         quantize: bool = False,
         quantize_bits: int = 8,
+        cache_backend: str = "duckdb",
+        cache_path: str | None = None,
         **model_kwargs: Any,
     ):
         self._model_name = model_name
@@ -61,6 +69,14 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
         self._model_kwargs = model_kwargs
         self._model: Optional[SentenceTransformer] = None  # lazy loaded
         self._last_encode_time: Optional[float] = None
+
+        backend_map = {
+            "duckdb": DuckDBEmbeddingCacheBackend,
+            "sqlite": SQLiteEmbeddingCacheBackend,
+        }
+        self._cache: EmbeddingCacheBackend | None = None
+        if cache_backend in backend_map:
+            self._cache = backend_map[cache_backend](cache_path)
 
     # --------------------------------------------------------------------- #
     # Internal helpers
@@ -84,7 +100,7 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
             )
         return self._model
 
-    def _encode(self, texts: List[str]) -> List[Vector]:
+    def _encode_uncached(self, texts: List[str]) -> List[Vector]:
         KnowLogger.log_event(
             "embeddings_encode",
             {"model_name": self._model_name, "num_texts": len(texts)},
@@ -129,6 +145,32 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
 
             processed.append(emb_list)
         return processed
+
+    def _encode(self, texts: List[str]) -> List[Vector]:
+        if not self._cache:
+            return self._encode_uncached(texts)
+
+        hashes = [hashlib.sha256(t.encode("utf-8")).hexdigest() for t in texts]
+        result: List[Vector | None] = [None] * len(texts)
+        to_compute_idx, to_compute_texts, to_compute_hashes = [], [], []
+
+        for i, h in enumerate(hashes):
+            cached = self._cache.get_vector(self._model_name, h)
+            if cached is not None:
+                result[i] = cached
+            else:
+                to_compute_idx.append(i)
+                to_compute_texts.append(texts[i])
+                to_compute_hashes.append(h)
+
+        if to_compute_texts:
+            new_vecs = self._encode_uncached(to_compute_texts)
+            for i, h, v in zip(to_compute_idx, to_compute_hashes, new_vecs):
+                result[i] = v
+                self._cache.set_vector(self._model_name, h, v)
+
+        # type ignore: every slot is filled
+        return result  # type: ignore[return-value]
 
     # --------------------------------------------------------------------- #
     # Public API required by EmbeddingsCalculator
