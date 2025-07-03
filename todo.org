@@ -44,4 +44,4 @@
 * [ ] Add caching for go.mod at project level to avoid loading it for each and every Go file
 * [ ] Do not refresh DuckDB index if project did not change
 * [X] Figure out a way to have a single query parameter that searches code by embedding and documentation. Idea: calculate embedding vector for commend/docstring and use that instead of FTS. Fallback to FTS if embeddings are not enabled.
-* [ ] Add symbol search test
+* [X] Add symbol search test
