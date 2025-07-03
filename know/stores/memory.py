@@ -209,84 +209,63 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         has_fts       = bool(query.doc_needle)
         has_embedding = bool(query.embedding_query)
 
-        # ---------------------------------------------------------------------
-        # (A) Combined FTS + embedding search – use RRF fusion
-        # ---------------------------------------------------------------------
-        if has_fts and has_embedding:
-            qvec = query.embedding_query
-            # ----- FTS ranks --------------------------------------------------
+        # ---------------------------------------------------------------
+        # unified ranking  (RRF over optional FTS / embedding signals)
+        # ---------------------------------------------------------------
+        has_fts       = bool(query.doc_needle)
+        has_embedding = bool(query.embedding_query)
+
+        fts_rank : dict[str, int] = {}
+        code_rank: dict[str, int] = {}
+        doc_rank : dict[str, int] = {}
+
+        # ----- FTS ranks ------------------------------------------------
+        if has_fts:
             def _fts_match_pos(sym: SymbolMetadata) -> int:
-                """
-                Position (byte-offset) of first match inside docs/comments;
-                –1  → no match (later filtered out).
-                """
                 haystack = f"{sym.docstring or ''} {sym.comment or ''}".lower()
                 return haystack.find(query.doc_needle.lower())
 
-            fts_matches = [
-                s for s in candidates if _fts_match_pos(s) >= 0
-            ]
-            fts_matches.sort(key=_fts_match_pos)            # best → rank 1
+            fts_matches = [s for s in candidates if _fts_match_pos(s) >= 0]
+            fts_matches.sort(key=_fts_match_pos)                 # best → rank 1
             fts_rank = {s.id: i + 1 for i, s in enumerate(fts_matches)}
 
-            # ----- code-embedding ranks --------------------------------------
+        # ----- embedding ranks -----------------------------------------
+        if has_embedding:
+            qvec = query.embedding_query          # type: ignore[arg-type]
+
             code_sims = [
-                (s, _cosine(qvec, s.embedding_code_vec))     # type: ignore[arg-type]
-                for s in candidates
-                if s.embedding_code_vec
+                (s, _cosine(qvec, s.embedding_code_vec))         # type: ignore
+                for s in candidates if s.embedding_code_vec
             ]
             code_sims.sort(key=lambda t: t[1], reverse=True)
             code_rank = {s.id: i + 1 for i, (s, _) in enumerate(code_sims)}
 
-            # ----- doc-embedding ranks ---------------------------------------
             doc_sims = [
-                (s, _cosine(qvec, s.embedding_doc_vec))      # type: ignore[arg-type]
-                for s in candidates
-                if getattr(s, "embedding_doc_vec", None)
+                (s, _cosine(qvec, getattr(s, "embedding_doc_vec", None)))  # type: ignore
+                for s in candidates if getattr(s, "embedding_doc_vec", None)
             ]
             doc_sims.sort(key=lambda t: t[1], reverse=True)
             doc_rank = {s.id: i + 1 for i, (s, _) in enumerate(doc_sims)}
 
-            # ----- fuse with RRF ---------------------------------------------
-            fused: list[tuple[SymbolMetadata, float]] = []
-            for s in candidates:
-                # require presence of BOTH embedding ranks (mirrors SQL `JOIN`)
-                if s.id not in code_rank or s.id not in doc_rank:
-                    continue
-                rrf  = 1.0 / (self.RRF_K + code_rank[s.id]) \
-                     + 1.0 / (self.RRF_K + doc_rank[s.id]) \
-                     + (1.0 / (self.RRF_K + fts_rank[s.id]) if s.id in fts_rank else 0.0)
-                fused.append((s, rrf))
+        # ----- fuse with Reciprocal-Rank Fusion ------------------------
+        fused_score: dict[str, float] = {}
+        for s in candidates:
+            score = 0.0
+            if s.id in code_rank:
+                score += 1.0 / (self.RRF_K + code_rank[s.id])
+            if s.id in doc_rank:
+                score += 1.0 / (self.RRF_K + doc_rank[s.id])
+            if s.id in fts_rank:
+                score += 1.0 / (self.RRF_K + fts_rank[s.id])
+            fused_score[s.id] = score
 
-            fused.sort(key=lambda t: t[1], reverse=True)
-            results = [s for s, _ in fused]
-
-        # ---------------------------------------------------------------------
-        # (B) FTS-only search  (unchanged except filtering)
-        # ---------------------------------------------------------------------
-        elif has_fts:
-            needle = query.doc_needle.lower()
-            results = [s for s in candidates
-                       if needle in f"{s.docstring or ''} {s.comment or ''}".lower()]
-            # simple alphabetical fallback
-            results.sort(key=lambda s: s.name or "")
-
-        # ---------------------------------------------------------------------
-        # (C) embedding-only search  (keep previous behaviour)
-        # ---------------------------------------------------------------------
-        elif has_embedding:
-            qvec = query.embedding_query
-            scores = {
-                s.id: _cosine(qvec, s.embedding_code_vec)     # type: ignore[arg-type]
-                for s in candidates if s.embedding_code_vec
-            }
-            results = sorted(candidates, key=lambda s: scores.get(s.id, -1.0), reverse=True)
-
-        # ---------------------------------------------------------------------
-        # (D) no FTS, no embedding
-        # ---------------------------------------------------------------------
+        if has_fts or has_embedding:
+            candidates.sort(key=lambda s: (-fused_score.get(s.id, 0.0), s.name or ""))
         else:
-            results = sorted(candidates, key=lambda s: s.name or "")
+            # purely alphabetical fallback
+            candidates.sort(key=lambda s: s.name or "")
+
+        results = candidates
 
         # ---------- pagination + hierarchy resolution -------------------------
         offset = query.offset or 0
