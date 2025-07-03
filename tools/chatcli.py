@@ -23,13 +23,13 @@ in your working directory, and you must fully solve the problem for your answer 
 considered correct. You also have access to special tools that allow quick navigation
 in the codebase. Use these tools to search for relevant code needed to solve users question.
 Design and architect the best solution and provide code diffs with explanation of the proposed
-changes to the user.
+changes to the user. Be conservative in number of files requested.
 """
 
 
 def _parse_cli() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Simple interactive chat CLI.")
-    p.add_argument("-m", "--model", default=os.getenv("OPENAI_MODEL", "gpt-4.1"))
+    p.add_argument("-m", "--model", default=os.getenv("OPENAI_MODEL", "o3"))
     p.add_argument("-s", "--system", default=SYSTEM_PROMPT)
     p.add_argument("-p", "--path", "--project-path",
                    required=True,
@@ -79,6 +79,7 @@ async def _chat(model: str, system_msg: str, project):
     messages: List[Dict] = [{"role": "system", "content": system_msg}]
 
     tools = [t.get_openai_schema() for t in ToolRegistry._tools.values()]
+    session_cost_usd: float = 0.0      # running total for the whole chat session
 
     print(f"Loaded model '{model}'.   Type '/new' to start a fresh session, "
           "'/exit' or Ctrl-D to quit.")
@@ -121,6 +122,7 @@ async def _chat(model: str, system_msg: str, project):
             # LiteLLM surfaces the estimated cost in the hidden-params field
             hidden          = getattr(response, "_hidden_params", {}) or {}
             cost_usd        = hidden.get("response_cost", 0.0)
+            session_cost_usd += cost_usd
             msg = response.choices[0].message
             # If the assistant wants to call a tool …
             if getattr(msg, "tool_calls", None):
@@ -146,11 +148,15 @@ async def _chat(model: str, system_msg: str, project):
                         "content": json.dumps(result),
                     })
                 # run another completion to let the model consume the tool output
+                print(f"[usage] prompt={prompt_toks}  completion={completion_toks} "
+                      f"total={total_toks}  -  est. cost ${cost_usd:.6f}  "
+                      f"session ${session_cost_usd:.6f}")
                 continue
             # otherwise, regular assistant answer
             print(f"\nAssistant: {msg.content}")
             print(f"[usage] prompt={prompt_toks}  completion={completion_toks} "
-                  f"total={total_toks}  -  est. cost ${cost_usd:.6f}")
+                  f"total={total_toks}  -  est. cost ${cost_usd:.6f}  "
+                  f"session ${session_cost_usd:.6f}")
             messages.append({"role": "assistant", "content": msg.content})
             break
 
