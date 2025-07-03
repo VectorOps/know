@@ -277,7 +277,7 @@ WITH candidates AS (
     FROM candidates
 ), rank_code AS (
     SELECT id,
-           row_number() OVER (ORDER BY dist ASC) AS code_rank
+           row_number() OVER (ORDER BY dist DESC) AS code_rank
     FROM rank_code_scores
     WHERE dist IS NOT NULL
       AND dist >= 0.4
@@ -290,7 +290,7 @@ WITH candidates AS (
     FROM candidates
 ), rank_doc AS (
     SELECT id,
-           row_number() OVER (ORDER BY dist ASC) AS doc_rank
+           row_number() OVER (ORDER BY dist DESC) AS doc_rank
     FROM rank_doc_scores
     WHERE dist IS NOT NULL
       AND dist >= 0.4
