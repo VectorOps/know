@@ -1,3 +1,4 @@
+import re      # for tokenisation
 from typing import Optional, Dict, Any, List, TypeVar, Generic
 from know.models import (
     RepoMetadata,
@@ -158,6 +159,10 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     # minimum cosine similarity for an embedding to participate in ranking
     EMBEDDING_SIM_THRESHOLD: float = 0.4
 
+    # ---------- BM25 params ----------
+    BM25_K1: float = 1.5
+    BM25_B:  float = 0.75
+
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.symbols)
         self._file_items = tables.files          # needed for package lookup
@@ -183,6 +188,47 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         ]
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
+
+    # --- internal helpers -------------------------------------------------
+    @staticmethod
+    def _tokenise(text: str) -> list[str]:
+        """Lower-case word tokenisation used by BM25 search."""
+        return re.findall(r"\w+", text.lower())
+
+    def _bm25_ranks(
+        self,
+        docs: list[tuple[SymbolMetadata, list[str]]],
+        query_tokens: list[str],
+    ) -> dict[str, int]:
+        """
+        Return {symbol_id -> rank (1-based)} for *docs* against *query_tokens*
+        using BM25 (same formula as DuckDB’s match_bm25).
+        Symbols with score 0 are omitted.
+        """
+        N = len(docs)
+        if N == 0 or not query_tokens:
+            return {}
+
+        avg_dl = sum(len(toks) for _, toks in docs) / N
+        # idf per query token
+        idf: dict[str, float] = {}
+        for tok in query_tokens:
+            n_q = sum(1 for _, toks in docs if tok in toks)
+            idf[tok] = math.log((N - n_q + 0.5) / (n_q + 0.5) + 1)
+
+        scored: list[tuple[str, float]] = []
+        for sym, toks in docs:
+            dl  = len(toks)
+            tfc = {t: toks.count(t) for t in query_tokens if t in toks}
+            score = 0.0
+            for t, tf in tfc.items():
+                denom  = tf + self.BM25_K1 * (1 - self.BM25_B + self.BM25_B * dl / avg_dl)
+                score += idf[t] * tf * (self.BM25_K1 + 1) / denom
+            if score > 0:
+                scored.append((sym.id, score))
+
+        scored.sort(key=lambda p: p[1], reverse=True)            # best first
+        return {sid: rank + 1 for rank, (sid, _) in enumerate(scored)}
 
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
         # ---------- candidate set: repo + scalar filters ----------
@@ -221,13 +267,12 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
         # ----- FTS ranks ------------------------------------------------
         if has_fts:
-            def _fts_match_pos(sym: SymbolMetadata) -> int:
-                haystack = f"{sym.docstring or ''} {sym.comment or ''}".lower()
-                return haystack.find(query.doc_needle.lower())
-
-            fts_matches = [s for s in candidates if _fts_match_pos(s) >= 0]
-            fts_matches.sort(key=_fts_match_pos)                 # best → rank 1
-            fts_rank = {s.id: i + 1 for i, s in enumerate(fts_matches)}
+            q_tokens = self._tokenise(query.doc_needle)
+            docs     = [
+                (s, self._tokenise(f"{s.docstring or ''} {s.comment or ''}"))
+                for s in candidates
+            ]
+            fts_rank = self._bm25_ranks(docs, q_tokens)
 
         # ----- embedding ranks -----------------------------------------
         if has_embedding:
