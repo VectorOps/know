@@ -20,8 +20,11 @@ class ReadFilesTool(BaseTool):
     def execute(
         self,
         project: Project,
-        paths: Sequence[str],
+        paths: Sequence[str] | None = None,
     ) -> List[FileContent]:
+        if not paths:
+            return []
+
         file_repo = project.data_repository.file
         root_path = project.settings.project_path
 

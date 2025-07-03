@@ -14,9 +14,10 @@ class EmbeddingCacheBackend(ABC):
 class DuckDBEmbeddingCacheBackend(EmbeddingCacheBackend):
     def __init__(self, path: str | None):
         self._conn = duckdb.connect(path or ":memory:")
+        self._conn.execute("CREATE SEQUENCE IF NOT EXISTS embedding_cache_seq START 1;")
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS embedding_cache (
-                id BIGINT PRIMARY KEY AUTOINCREMENT,
+                id    BIGINT DEFAULT nextval('embedding_cache_seq') PRIMARY KEY,
                 model TEXT NOT NULL,
                 hash  TEXT NOT NULL,
                 vector TEXT NOT NULL,

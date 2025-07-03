@@ -45,11 +45,7 @@ class ListFilesTool(BaseTool):
 
         pats = list(patterns) if patterns else []
         if not pats:
-            # no filtering necessary
-            return self.to_python([
-                FileListItem(path=fm.path, language=fm.language)
-                for fm in all_files
-            ])
+            return []
 
         def _matches(path: str) -> bool:
             return any(fnmatch.fnmatch(path, pat) for pat in pats)
@@ -65,8 +61,7 @@ class ListFilesTool(BaseTool):
             "name": self.tool_name,
             "description": (
                 "Return all project files whose path matches at least one "
-                "of the supplied glob patterns.  If no patterns are "
-                "provided every file is returned."
+                "of the supplied glob patterns."
             ),
             "parameters": {
                 "type": "object",

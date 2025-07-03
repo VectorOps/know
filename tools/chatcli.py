@@ -29,7 +29,7 @@ changes to the user. Be conservative in number of files requested.
 
 def _parse_cli() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Simple interactive chat CLI.")
-    p.add_argument("-m", "--model", default=os.getenv("OPENAI_MODEL", "o3"))
+    p.add_argument("-m", "--model", default=os.getenv("OPENAI_MODEL", "gpt-4.1"))
     p.add_argument("-s", "--system", default=SYSTEM_PROMPT)
     p.add_argument("-p", "--path", "--project-path",
                    required=True,

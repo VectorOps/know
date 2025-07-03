@@ -58,10 +58,14 @@ class Project:
             else self.embeddings.get_text_embedding(text)
         )
 
+    def refresh(self):
+        scan_project_directory(project)
+
+    # Import edges
     def _add_pending_import_edge(self, edge: ImportEdge) -> None:
         self._pending_import_edges.append(edge)
 
-    def resolve_pending_import_edges(self) -> None:
+    def _resolve_pending_import_edges(self) -> None:
         pkg_repo  = self.data_repository.package
         imp_repo  = self.data_repository.importedge
         for edge in list(self._pending_import_edges):
@@ -247,6 +251,9 @@ def scan_project_directory(project: Project) -> None:
     # Resolve orphaned method symbols → assign missing parent references
     _assign_parents_to_orphan_methods(project)
 
+    # Resolve import edges
+    project._resolve_pending_import_edges()
+
     # Refresh any full text indexes
     project.data_repository.refresh_full_text_indexes()
 
@@ -420,6 +427,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         symbol_repo.delete(existing_by_key[key].id)
 
 
+
 def init_project(settings: ProjectSettings) -> Project:
     """
     Initializes the project. Settings object contains project path and/or project id.
@@ -460,6 +468,8 @@ def init_project(settings: ProjectSettings) -> Project:
             batch_size=settings.embedding.batch_size,
             quantize=settings.embedding.quantize,
             quantize_bits=settings.embedding.quantize_bits,
+            cache_backend=settings.embedding.cache_backend,
+            cache_path=settings.embedding.cache_path,
         )
 
     project = Project(
@@ -471,7 +481,5 @@ def init_project(settings: ProjectSettings) -> Project:
 
     # Recursively scan the project directory and parse source files
     scan_project_directory(project)
-
-    project.resolve_pending_import_edges()
 
     return project
