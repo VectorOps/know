@@ -124,7 +124,7 @@ class PythonCodeParser(AbstractCodeParser):
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
             self._handle_import_statement(node, parsed_file, project)
 
-        elif node.type == "function_definition":
+        elif node.type in ("function_definition", "async_function_definition"):
             self._handle_function_definition(node, parsed_file, package)
 
         elif node.type == "class_definition":
@@ -527,13 +527,13 @@ class PythonCodeParser(AbstractCodeParser):
         body_children = block.children if block is not None else node.children
 
         for child in body_children:
-            if child.type == 'function_definition':
+            if child.type in ("function_definition", "async_function_definition"):
                 method_symbol = self._create_function_symbol(child, package, class_name)
                 symbol.children.append(method_symbol)
 
             elif child.type == 'decorated_definition':
                 inner = next((c for c in child.children
-                              if c.type == 'function_definition'), None)
+                              if c.type in ("function_definition", "async_function_definition")), None)
                 if inner is not None:
                     method_symbol = self._create_function_symbol(inner, package, class_name)
                     symbol.children.append(method_symbol)
@@ -566,7 +566,7 @@ class PythonCodeParser(AbstractCodeParser):
             start_byte=wrapper.start_byte,
             end_byte=wrapper.end_byte,
             visibility=self._infer_visibility(method_name),
-            modifiers=[],
+            modifiers=[Modifier.ASYNC] if node.type == "async_function_definition" else [],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
@@ -683,13 +683,13 @@ class PythonCodeParser(AbstractCodeParser):
         """
         # Find the real definition wrapped by the decorators
         inner = next(
-            (c for c in node.children if c.type in ("function_definition", "class_definition")),
+            (c for c in node.children if c.type in ("function_definition", "async_function_definition", "class_definition")),
             None,
         )
         if inner is None:  # corrupt / unexpected – skip
             return
 
-        if inner.type == "function_definition":
+        if inner.type in ("function_definition", "async_function_definition"):
             self._handle_function_definition(inner, parsed_file, package)
         elif inner.type == "class_definition":
             self._handle_class_definition(inner, parsed_file, package)
