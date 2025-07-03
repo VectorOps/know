@@ -48,6 +48,18 @@ def _parse_cli() -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        "--embedding-cache-backend",
+        choices=["duckdb", "sqlite", "none"],
+        default=os.getenv("EMBEDDING_CACHE_BACKEND", "duckdb"),
+        help="Backend used for the embeddings cache ('duckdb', 'sqlite', or 'none').",
+    )
+    p.add_argument(
+        "--embedding-cache-path",
+        default=os.getenv("EMBEDDING_CACHE_PATH"),
+        help="File / connection string for the embeddings-cache backend "
+             "(ignored when backend is 'none').",
+    )
+    p.add_argument(
         "--repo-backend",
         choices=["memory", "duckdb"],
         default=os.getenv("REPO_BACKEND", "memory"),
@@ -157,6 +169,8 @@ def main() -> None:
         ps_kwargs["embedding"] = EmbeddingSettings(
             enabled=True,
             model_name=args.embedding_model,
+            cache_backend=args.embedding_cache_backend,
+            cache_path=args.embedding_cache_path,
         )
     settings = ProjectSettings(**ps_kwargs)
     project  = init_project(settings)
