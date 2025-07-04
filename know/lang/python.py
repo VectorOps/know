@@ -544,15 +544,14 @@ class PythonCodeParser(AbstractCodeParser):
 
             for node in nodes:
                 if node.type in ("function_definition", "async_function_definition"):
-                    method_symbol = self._create_function_symbol(node, package, class_name)
+                    # Pass the decorated wrapper (child) to preserve decorators
+                    method_symbol = self._create_function_symbol(child, package, class_name)
                     symbol.children.append(method_symbol)
 
                 elif node.type == "decorated_definition":
-                    inner = next((c for c in node.children
-                                  if c.type in ("function_definition", "async_function_definition")), None)
-                    if inner is not None:
-                        method_symbol = self._create_function_symbol(inner, package, class_name)
-                        symbol.children.append(method_symbol)
+                    # Pass the decorated_definition node itself
+                    method_symbol = self._create_function_symbol(node, package, class_name)
+                    symbol.children.append(method_symbol)
 
                 elif node.type == "assignment":
                     self._handle_assignment(node, parsed_file, package, symbol)
@@ -565,10 +564,16 @@ class PythonCodeParser(AbstractCodeParser):
         parsed_file.symbols.append(symbol)
 
     def _create_function_symbol(self, node, package: ParsedPackage, class_name: str) -> ParsedSymbol:
-        # Utility: determine decorated wrapper
-        wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
+        # Determine if node is a decorated wrapper containing the function
+        inner = next((c for c in node.children if c.type in ("function_definition", "async_function_definition")), None)
+        if inner is not None:
+            func_node = inner
+            wrapper = node
+        else:
+            func_node = node
+            wrapper = node
         # Create a symbol for a function or method
-        method_name = node.child_by_field_name('name').text.decode('utf8')
+        method_name = func_node.child_by_field_name('name').text.decode('utf8')
         key = f"{class_name}.{method_name}" if class_name else method_name
         return ParsedSymbol(
             name=method_name,
@@ -582,10 +587,10 @@ class PythonCodeParser(AbstractCodeParser):
             start_byte=wrapper.start_byte,
             end_byte=wrapper.end_byte,
             visibility=self._infer_visibility(method_name),
-            modifiers=[Modifier.ASYNC] if node.type == "async_function_definition" else [],
-            docstring=self._extract_docstring(node),
+            modifiers=[Modifier.ASYNC] if func_node.type == "async_function_definition" else [],
+            docstring=self._extract_docstring(func_node),
             signature=self._build_function_signature(wrapper),
-            comment=self._get_preceding_comment(node),
+            comment=self._get_preceding_comment(func_node),
             children=[]
         )
 
