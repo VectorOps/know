@@ -26,8 +26,7 @@ class SymbolSearchResult(BaseModel):
     kind:      Optional[str] = None
     visibility:Optional[str] = None
     file_path: Optional[str] = None
-    summary:    Optional[str] = None
-    body:       Optional[str] = None
+    body:      Optional[str] = None
 
 
 class SearchSymbolsTool(BaseTool):
@@ -90,9 +89,8 @@ class SearchSymbolsTool(BaseTool):
             sym_body:    Optional[str] = None
 
             if include_body != IncludeBody.NO and parser:
-                sym_summary = parser.get_symbol_summary(s)
-
-            if include_body == IncludeBody.FULL:
+                sym_body = parser.get_symbol_summary(s)
+            elif include_body == IncludeBody.FULL:
                 sym_body = s.symbol_body
 
             results.append(
@@ -103,7 +101,6 @@ class SearchSymbolsTool(BaseTool):
                     kind       = s.kind,
                     visibility = s.visibility,
                     file_path  = file_path,
-                    summary    = sym_summary,
                     body       = sym_body,
                 )
             )
@@ -155,7 +152,7 @@ class SearchSymbolsTool(BaseTool):
                             "Controls presence of code in the response: "
                             "'no' – neither summary nor body, "
                             "'summary' – include short summary only, "
-                            "'full' – include full symbol body (and summary)."
+                            "'full' – include full symbol body."
                         ),
                     },
                 },

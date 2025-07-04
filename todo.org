@@ -46,3 +46,6 @@
 * [X] Figure out a way to have a single query parameter that searches code by embedding and documentation. Idea: calculate embedding vector for commend/docstring and use that instead of FTS. Fallback to FTS if embeddings are not enabled.
 * [X] Add symbol search test
 * [ ] Add reranking model support
+* [ ] Python parser should preserve decorators when parsing symbols. Extend model to collect decorators and store them in model.
+* [X] Python parser does not parse symbols of decorated methods
+* [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.

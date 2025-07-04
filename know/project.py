@@ -365,6 +365,9 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         nonlocal obsolete_keys
         existing = existing_by_key.get(sym.key)
 
+        if sym.key == "SymbolSearchQuery.embedding_query":
+            print(repr(sym.key), file_meta.id, existing)
+
         is_new_symbol = existing is None
         code_changed = is_new_symbol or existing.symbol_hash != sym.hash
         doc_changed  = is_new_symbol or existing.docstring != sym.docstring or existing.comment != sym.comment

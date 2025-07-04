@@ -110,11 +110,6 @@ class PythonCodeParser(AbstractCodeParser):
         # ------------------------------------------------------------------
         package.imports = list(parsed_file.imports)
 
-        if rel_path == "know/parsers.py":
-            pprint(parsed_file)
-            p = [s for s in parsed_file.symbols if s.name == 'AbstractCodeParser'][0]
-            pprint(self.get_symbol_summary(p))
-
         return parsed_file
 
     # ------------------------------------------------------------------
@@ -458,7 +453,6 @@ class PythonCodeParser(AbstractCodeParser):
         everything else is SymbolKind.VARIABLE.
         """
         target_node = node.child_by_field_name("left") or node.children[0]
-        # print(node, target_node)
         if target_node.type != "identifier":
             return
         name = target_node.text.decode("utf8")

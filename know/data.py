@@ -11,43 +11,11 @@ from know.models import (
     Vector,
 )
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 # ---------------------------------------------------------------------------
 # helper: enrich result-set with direct descendants
 # ---------------------------------------------------------------------------
-
-from typing import List
-
-def include_direct_descendants(
-    repo: "AbstractSymbolMetadataRepository",    # repository to fetch children
-    symbols: list[SymbolMetadata],               # initial search results
-) -> list[SymbolMetadata]:
-    """
-    Ensure every symbol in *symbols* has its direct descendants attached.
-    After resolving the hierarchy, any symbol that became a child of another
-    returned symbol is dropped from the top-level list (to avoid duplicates).
-    The original order of the parent symbols is preserved.
-    """
-    if not symbols:
-        return symbols
-
-    parent_ids = [s.id for s in symbols if s.id]
-    if parent_ids:
-        children = repo.get_list_by_parent_ids(parent_ids)
-        seen_ids = {s.id for s in symbols}
-        for c in children:
-            if c.id not in seen_ids:
-                symbols.append(c)
-                seen_ids.add(c.id)
-
-    # build parent-→child relations
-    SymbolMetadata.resolve_symbol_hierarchy(symbols)
-
-    # keep only those symbols that are NOT children of a returned parent
-    parent_id_set = set(parent_ids)
-    return [s for s in symbols if s.parent_symbol_id not in parent_id_set]
-
 class AbstractRepoMetadataRepository(ABC):
     @abstractmethod
     def get_by_id(self, repo_id: str) -> Optional[RepoMetadata]:
@@ -150,6 +118,7 @@ class AbstractFileMetadataRepository(ABC):
     def get_list_by_package_id(self, package_id: str) -> list[FileMetadata]:
         """Return **all** FileMetadata instances that belong to *package_id*."""
         pass
+
 
 # Symbols
 @dataclass
@@ -271,3 +240,36 @@ class AbstractDataRepository(ABC):
     def refresh_full_text_indexes(self) -> None:
         """Refresh full-text search indexes (noop in back-ends that don’t need it)."""
         pass
+
+
+# Helpers
+def include_direct_descendants(
+    repo: AbstractSymbolMetadataRepository,    # repository to fetch children
+    symbols: list[SymbolMetadata],             # initial search results
+) -> list[SymbolMetadata]:
+    """
+    Ensure every symbol in *symbols* has its direct descendants attached.
+    After resolving the hierarchy, any symbol that became a child of another
+    returned symbol is dropped from the top-level list (to avoid duplicates).
+    The original order of the parent symbols is preserved.
+    """
+    if not symbols:
+        return symbols
+
+    parent_ids = [s.id for s in symbols if s.id]
+    if parent_ids:
+        children = repo.get_list_by_parent_ids(parent_ids)
+        seen_ids = {s.id for s in symbols}
+        for c in children:
+            if c.id not in seen_ids:
+                symbols.append(c)
+                seen_ids.add(c.id)
+
+    # build parent-→child relations
+    SymbolMetadata.resolve_symbol_hierarchy(symbols)
+
+    # keep only those symbols that are NOT children of a returned parent
+    parent_id_set = set(parent_ids)
+    result = [s for s in symbols if s.parent_symbol_id not in parent_id_set]
+
+    return result

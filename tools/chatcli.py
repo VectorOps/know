@@ -55,14 +55,14 @@ def _parse_cli() -> argparse.Namespace:
     )
     p.add_argument(
         "--embedding-cache-path",
-        default=os.getenv("EMBEDDING_CACHE_PATH"),
+        default=os.getenv("EMBEDDING_CACHE_PATH", "cache.duckdb"),
         help="File / connection string for the embeddings-cache backend "
              "(ignored when backend is 'none').",
     )
     p.add_argument(
         "--repo-backend",
         choices=["memory", "duckdb"],
-        default=os.getenv("REPO_BACKEND", "memory"),
+        default=os.getenv("REPO_BACKEND", "duckdb"),
         help="Metadata store backend to use ('memory' or 'duckdb').",
     )
     p.add_argument(

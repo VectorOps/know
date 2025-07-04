@@ -15,6 +15,7 @@ from know.data import (
     AbstractImportEdgeRepository,
     AbstractDataRepository,
     SymbolSearchQuery,
+    include_direct_descendants,
 )
 from dataclasses import dataclass, field
 import math

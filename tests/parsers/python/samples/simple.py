@@ -32,6 +32,11 @@ def double_decorated():
     pass
 
 
+# Ellipsis fn
+def ellipsis_fn():
+    ...
+
+
 # Async function
 async def async_fn(a, b):
     return a - b
@@ -58,11 +63,16 @@ class Test:
     async def async_method(self):
         pass
 
-
     @abc
     @fed
     def multi_decorated(self):
         pass
+
+    def ellipsis_method(self, a: int) -> int:
+        """
+        Test me
+        """
+        ...
 
 
 # Decorated class

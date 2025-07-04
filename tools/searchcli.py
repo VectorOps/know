@@ -38,12 +38,12 @@ def _parse_cli() -> argparse.Namespace:
     )
     p.add_argument(
         "--embedding-cache-path",
-        default=os.getenv("EMBEDDING_CACHE_PATH"),
+        default=os.getenv("EMBEDDING_CACHE_PATH", "cache.duckdb"),
     )
     p.add_argument(
         "--repo-backend",
         choices=["memory", "duckdb"],
-        default=os.getenv("REPO_BACKEND", "memory"),
+        default=os.getenv("REPO_BACKEND", "duckdb"),
     )
     p.add_argument(
         "--repo-connection",
@@ -65,7 +65,7 @@ def _print_results(results: List[Dict[str, Any]]) -> None:
         return
     for r in results:
         print("-" * 80)
-        print(f"{r.get('name') or '<unnamed>'}   ({r.get('kind')})")
+        print(f"{r.get('name') or '<unnamed>'}   ({r.get('kind')}) ({r.get('symbol_id')})")
         if r.get("fqn"):
             print(f"FQN:  {r['fqn']}")
         if r.get("file_path"):
