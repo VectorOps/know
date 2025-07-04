@@ -65,8 +65,8 @@ def test_python_parser_on_simple_file():
     # ------------------------------------------------------------------ #
     # Top-level symbols
     # ------------------------------------------------------------------ #
-    # Expected symbols: CONST, fn, _foo, decorated, double_decorated, Test, Foobar, async_fn, ellipsis_fn
-    assert len(parsed_file.symbols) == 9  # CONST, fn, _foo, decorated, double_decorated, Test, Foobar, async_fn, ellipsis_fn
+    # Expected symbols: CONST, fn, _foo, decorated, double_decorated, Test, Foobar, async_fn, ellipsis_fn, EmbeddingCacheBackend
+    assert len(parsed_file.symbols) == 10  # CONST, fn, _foo, decorated, double_decorated, Test, Foobar, async_fn, ellipsis_fn, EmbeddingCacheBackend
     top_level = {sym.name: sym for sym in parsed_file.symbols}
 
     # Constant
@@ -80,7 +80,6 @@ def test_python_parser_on_simple_file():
 
     assert "ellipsis_fn" in top_level
     assert top_level["ellipsis_fn"].kind == SymbolKind.FUNCTION
-
 
     double_decorated_sym = next(c for c in top_level.values() if c.name == "double_decorated")
     assert double_decorated_sym.signature is not None
@@ -110,6 +109,17 @@ def test_python_parser_on_simple_file():
 
     assert "Foobar" in top_level
     assert top_level["Foobar"].kind == SymbolKind.CLASS
+
+    # ------------------------------------------------------------------ #
+    # EmbeddingCacheBackend class                                        #
+    # ------------------------------------------------------------------ #
+    assert "EmbeddingCacheBackend" in top_level
+    ecb_cls = top_level["EmbeddingCacheBackend"]
+    assert ecb_cls.kind == SymbolKind.CLASS
+    ecb_child_names = {c.name for c in ecb_cls.children}
+    assert ecb_child_names == {"get_vector", "set_vector"}
+    for m in ecb_cls.children:
+        assert m.kind == SymbolKind.METHOD
 
     # ------------------------------------------------------------------ #
     # Decorators                                                         #
