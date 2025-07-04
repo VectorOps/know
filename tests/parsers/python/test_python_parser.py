@@ -96,6 +96,15 @@ def test_python_parser_on_simple_file():
     assert top_level["Foobar"].kind == SymbolKind.CLASS
 
     # ------------------------------------------------------------------ #
+    # Decorators                                                         #
+    # ------------------------------------------------------------------ #
+    # Ensure that the `multi_decorated` method preserved both decorators
+    multi_decorated_sym = next(c for c in test_cls.children
+                               if c.name == "multi_decorated")
+    assert multi_decorated_sym.signature is not None
+    assert multi_decorated_sym.signature.decorators == ["abc", "fed"]
+
+    # ------------------------------------------------------------------ #
     # Docstrings
     # ------------------------------------------------------------------ #
     assert top_level["fn"].docstring == "\"docstring!\""
