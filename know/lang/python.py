@@ -21,6 +21,7 @@ from know.settings import ProjectSettings
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger
 from know.helpers import compute_file_hash, compute_symbol_hash
+from devtools import pprint
 
 
 PY_LANGUAGE = Language(tspython.language())
@@ -108,7 +109,12 @@ class PythonCodeParser(AbstractCodeParser):
         # Sync package-level imports with file-level imports
         # ------------------------------------------------------------------
         package.imports = list(parsed_file.imports)
-        
+
+        if rel_path == "know/parsers.py":
+            pprint(parsed_file)
+            p = [s for s in parsed_file.symbols if s.name == 'AbstractCodeParser'][0]
+            pprint(self.get_symbol_summary(p))
+
         return parsed_file
 
     # ------------------------------------------------------------------
@@ -807,6 +813,13 @@ class PythonCodeParser(AbstractCodeParser):
         if sym.comment:
             for ln in sym.comment.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
+
+        # ---------- decorators ----------
+        if sym.signature and getattr(sym.signature, "decorators", None):
+            for deco in sym.signature.decorators:
+                # add leading '@' if `_build_*_signature` stored only the expression
+                deco_txt = deco if deco.lstrip().startswith("@") else f"@{deco}"
+                lines.append(f"{IND}{deco_txt}")
 
         # ---------- header line ----------
         if sym.signature and sym.signature.raw:
