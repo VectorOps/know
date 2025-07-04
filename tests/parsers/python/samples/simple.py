@@ -59,6 +59,12 @@ class Test:
         pass
 
 
+    @abc
+    @fed
+    def multi_decorated(self):
+        pass
+
+
 # Decorated class
 @dummy
 class Foobar(Foo, Bar, Buzz):

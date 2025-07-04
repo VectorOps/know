@@ -81,7 +81,16 @@ def test_python_parser_on_simple_file():
     test_cls = top_level["Test"]
     assert test_cls.kind == SymbolKind.CLASS
     child_names = {c.name for c in test_cls.children}
-    assert child_names == {"ABC", "__init__", "method", "get", "async_method"}
+    assert child_names == {
+        "ABC",
+        "__init__",
+        "method",
+        "get",
+        "async_method",
+        "multi_decorated",
+    }
+    assert next(c for c in test_cls.children if c.name == "multi_decorated").kind \
+           == SymbolKind.METHOD
 
     assert "Foobar" in top_level
     assert top_level["Foobar"].kind == SymbolKind.CLASS
