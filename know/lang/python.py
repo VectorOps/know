@@ -227,35 +227,6 @@ class PythonCodeParser(AbstractCodeParser):
     # Signature helpers
     # ---------------------------------------------------------------------
     @staticmethod
-    def _annotation_to_str(node):
-        if node is None:
-            return None
-        try:
-            return ast.unparse(node)
-        except Exception:
-            return None
-
-    @staticmethod
-    def _expr_to_str(node):
-        if node is None:
-            return None
-        try:
-            return ast.unparse(node)
-        except Exception:
-            return None
-
-    @staticmethod
-    def _iter_defaults(defaults, total):
-        """Yield default strings aligned to the total number of args."""
-        pad = total - len(defaults)
-        for _ in range(pad):
-            yield None
-        for d in defaults:
-            try:
-                yield ast.unparse(d)
-            except Exception:
-                yield None
-
     # ---------------------------------------------------------------------
     # Function-signature raw text helper
     # ---------------------------------------------------------------------
@@ -329,85 +300,84 @@ class PythonCodeParser(AbstractCodeParser):
 
     def _build_function_signature(self, node) -> SymbolSignature:
         """
-        Build a SymbolSignature object for the given function / method node.
+        Build a SymbolSignature for a (async) function / method **without**
+        falling back to the std-lib `ast` module.  All information is taken
+        directly from the Tree-sitter nodes.
         """
-        code = node.text.decode("utf8")
+        # `node` may be either the concrete *function_definition*/*async* node
+        # or its surrounding *decorated_definition* wrapper; keep a reference.
+        wrapper = node
+
+        # ------------------------------------------------------------------ #
+        # Raw text (full “def …(…)” line, incl. params & optional annotation) #
+        # ------------------------------------------------------------------ #
+        code    = wrapper.text.decode("utf8")
         raw_sig = self._extract_signature_raw(code)
 
-        try:
-            fn_ast = ast.parse(code).body[0]
-            if isinstance(fn_ast, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                parameters: list[SymbolParameter] = []
+        # ------------------------------------------------------------------ #
+        # Decorators                                                         #
+        # ------------------------------------------------------------------ #
+        decorators: list[str] = []
+        if wrapper.type == "decorated_definition":
+            for child in wrapper.children:
+                if child.type == "decorator":
+                    txt = child.text.decode("utf8").strip()
+                    if txt.startswith("@"):
+                        txt = txt[1:]
+                    decorators.append(txt)
+            # descend into the actual def/async-def node for params/return-type
+            node = next(
+                (c for c in wrapper.children
+                 if c.type in ("function_definition", "async_function_definition")),
+                node,
+            )
 
-                # Positional / default args
-                for arg, default in zip(
-                    fn_ast.args.args,
-                    self._iter_defaults(fn_ast.args.defaults, len(fn_ast.args.args)),
-                ):
+        # ------------------------------------------------------------------ #
+        # Parameters                                                         #
+        # ------------------------------------------------------------------ #
+        parameters: list[SymbolParameter] = []
+        param_node = node.child_by_field_name("parameters")
+        if param_node is not None:
+            for ch in param_node.children:
+                # Basic identifiers  ───────────────────────────────────────
+                if ch.type == "identifier":
                     parameters.append(
                         SymbolParameter(
-                            name=arg.arg,
-                            type_annotation=self._annotation_to_str(arg.annotation),
-                            default=default,
-                            doc=None,
-                        )
-                    )
-
-                # *args
-                if fn_ast.args.vararg:
-                    parameters.append(
-                        SymbolParameter(
-                            name="*" + fn_ast.args.vararg.arg,
-                            type_annotation=self._annotation_to_str(
-                                fn_ast.args.vararg.annotation
-                            ),
+                            name=ch.text.decode("utf8"),
+                            type_annotation=None,
                             default=None,
                             doc=None,
                         )
                     )
-
-                # Keyword-only args
-                for kwarg, default in zip(
-                    fn_ast.args.kwonlyargs,
-                    self._iter_defaults(
-                        fn_ast.args.kw_defaults, len(fn_ast.args.kwonlyargs)
-                    ),
-                ):
+                # Typed parameter      (`x: int`)  ─────────────────────────
+                elif ch.type == "typed_parameter":
+                    name_node = ch.child_by_field_name("name")
+                    type_node = ch.child_by_field_name("type")
                     parameters.append(
                         SymbolParameter(
-                            name=kwarg.arg,
-                            type_annotation=self._annotation_to_str(kwarg.annotation),
-                            default=default,
-                            doc=None,
-                        )
-                    )
-
-                # **kwargs
-                if fn_ast.args.kwarg:
-                    parameters.append(
-                        SymbolParameter(
-                            name="**" + fn_ast.args.kwarg.arg,
-                            type_annotation=self._annotation_to_str(
-                                fn_ast.args.kwarg.annotation
-                            ),
+                            name=name_node.text.decode("utf8") if name_node else ch.text.decode("utf8"),
+                            type_annotation=type_node.text.decode("utf8") if type_node else None,
                             default=None,
                             doc=None,
                         )
                     )
+                # *args / **kwargs etc. can be added later; ignore for now.
 
-                return SymbolSignature(
-                    raw=raw_sig,
-                    parameters=parameters,
-                    return_type=self._annotation_to_str(fn_ast.returns),
-                    decorators=[self._expr_to_str(dec) for dec in fn_ast.decorator_list]
-                    if fn_ast.decorator_list
-                    else [],
-                )
-        except Exception:
-            # Fall through to minimal signature on any error
-            pass
+        # ------------------------------------------------------------------ #
+        # Return-type annotation                                             #
+        # ------------------------------------------------------------------ #
+        return_type: str | None = None
+        ret_node = node.child_by_field_name("return_type")
+        if ret_node is not None:
+            return_type = ret_node.text.decode("utf8").strip()
 
-        return SymbolSignature(raw=raw_sig)
+        # ------------------------------------------------------------------ #
+        return SymbolSignature(
+            raw=raw_sig,
+            parameters=parameters,
+            return_type=return_type,
+            decorators=decorators,
+        )
 
     # ---------------------------------------------------------------------
     # Constant helpers
@@ -544,14 +514,15 @@ class PythonCodeParser(AbstractCodeParser):
 
             for node in nodes:
                 if node.type in ("function_definition", "async_function_definition"):
-                    # Pass the decorated wrapper (child) to preserve decorators
-                    method_symbol = self._create_function_symbol(child, package, class_name)
+                    method_symbol = self._create_function_symbol(node, package, class_name)
                     symbol.children.append(method_symbol)
 
                 elif node.type == "decorated_definition":
-                    # Pass the decorated_definition node itself
-                    method_symbol = self._create_function_symbol(node, package, class_name)
-                    symbol.children.append(method_symbol)
+                    inner = next((c for c in node.children
+                                  if c.type in ("function_definition", "async_function_definition")), None)
+                    if inner is not None:
+                        method_symbol = self._create_function_symbol(inner, package, class_name)
+                        symbol.children.append(method_symbol)
 
                 elif node.type == "assignment":
                     self._handle_assignment(node, parsed_file, package, symbol)
@@ -564,16 +535,10 @@ class PythonCodeParser(AbstractCodeParser):
         parsed_file.symbols.append(symbol)
 
     def _create_function_symbol(self, node, package: ParsedPackage, class_name: str) -> ParsedSymbol:
-        # Determine if node is a decorated wrapper containing the function
-        inner = next((c for c in node.children if c.type in ("function_definition", "async_function_definition")), None)
-        if inner is not None:
-            func_node = inner
-            wrapper = node
-        else:
-            func_node = node
-            wrapper = node
+        # Utility: determine decorated wrapper
+        wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
-        method_name = func_node.child_by_field_name('name').text.decode('utf8')
+        method_name = node.child_by_field_name('name').text.decode('utf8')
         key = f"{class_name}.{method_name}" if class_name else method_name
         return ParsedSymbol(
             name=method_name,
@@ -587,10 +552,10 @@ class PythonCodeParser(AbstractCodeParser):
             start_byte=wrapper.start_byte,
             end_byte=wrapper.end_byte,
             visibility=self._infer_visibility(method_name),
-            modifiers=[Modifier.ASYNC] if func_node.type == "async_function_definition" else [],
-            docstring=self._extract_docstring(func_node),
+            modifiers=[Modifier.ASYNC] if node.type == "async_function_definition" else [],
+            docstring=self._extract_docstring(node),
             signature=self._build_function_signature(wrapper),
-            comment=self._get_preceding_comment(func_node),
+            comment=self._get_preceding_comment(node),
             children=[]
         )
 
