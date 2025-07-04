@@ -527,24 +527,34 @@ class PythonCodeParser(AbstractCodeParser):
         body_children = block.children if block is not None else node.children
 
         for child in body_children:
-            if child.type in ("function_definition", "async_function_definition"):
-                method_symbol = self._create_function_symbol(child, package, class_name)
-                symbol.children.append(method_symbol)
+            # ------------------------------------------------------------
+            # Tree-sitter encloses every class-body element in a `statement`
+            # node.  Decorated methods therefore appear as
+            #   statement → decorated_definition → function_definition
+            # Unwrap that extra layer so decorated (and other) members are
+            # detected correctly.
+            # ------------------------------------------------------------
+            nodes = child.children if child.type == "statement" else (child,)
 
-            elif child.type == 'decorated_definition':
-                inner = next((c for c in child.children
-                              if c.type in ("function_definition", "async_function_definition")), None)
-                if inner is not None:
-                    method_symbol = self._create_function_symbol(inner, package, class_name)
+            for node in nodes:
+                if node.type in ("function_definition", "async_function_definition"):
+                    method_symbol = self._create_function_symbol(node, package, class_name)
                     symbol.children.append(method_symbol)
 
-            elif child.type == 'assignment':
-                self._handle_assignment(child, parsed_file, package, symbol)
+                elif node.type == "decorated_definition":
+                    inner = next((c for c in node.children
+                                  if c.type in ("function_definition", "async_function_definition")), None)
+                    if inner is not None:
+                        method_symbol = self._create_function_symbol(inner, package, class_name)
+                        symbol.children.append(method_symbol)
 
-            elif child.type == "expression_statement":
-                assign_node = next((c for c in child.children if c.type == "assignment"), None)
-                if assign_node is not None:
-                    self._handle_assignment(assign_node, parsed_file, package, symbol)
+                elif node.type == "assignment":
+                    self._handle_assignment(node, parsed_file, package, symbol)
+
+                elif node.type == "expression_statement":
+                    assign_node = next((c for c in node.children if c.type == "assignment"), None)
+                    if assign_node is not None:
+                        self._handle_assignment(assign_node, parsed_file, package, symbol)
 
         parsed_file.symbols.append(symbol)
 
