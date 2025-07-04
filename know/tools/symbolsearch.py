@@ -10,6 +10,7 @@ from know.models import SymbolKind, Visibility
 from know.project import Project
 from know.tools.base import BaseTool
 from know.parsers import CodeParserRegistry, AbstractCodeParser
+from know.models import FileMetadata
 
 
 class IncludeBody(str, Enum):
