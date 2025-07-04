@@ -13,6 +13,40 @@ from know.models import (
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+# ---------------------------------------------------------------------------
+# helper: enrich result-set with direct descendants
+# ---------------------------------------------------------------------------
+
+from typing import List
+
+def include_direct_descendants(
+    repo: "AbstractSymbolMetadataRepository",    # repository to fetch children
+    symbols: list[SymbolMetadata],               # initial search results
+) -> list[SymbolMetadata]:
+    """
+    Ensure every symbol in *symbols* has its direct descendants attached.
+    After resolving the hierarchy, any symbol that became a child of another
+    returned symbol is dropped from the top-level list (to avoid duplicates).
+    The original order of the parent symbols is preserved.
+    """
+    if not symbols:
+        return symbols
+
+    parent_ids = [s.id for s in symbols if s.id]
+    if parent_ids:
+        children = repo.get_list_by_parent_ids(parent_ids)
+        seen_ids = {s.id for s in symbols}
+        for c in children:
+            if c.id not in seen_ids:
+                symbols.append(c)
+                seen_ids.add(c.id)
+
+    # build parent-→child relations
+    SymbolMetadata.resolve_symbol_hierarchy(symbols)
+
+    # keep only those symbols that are NOT children of a returned parent
+    parent_id_set = set(parent_ids)
+    return [s for s in symbols if s.parent_symbol_id not in parent_id_set]
 
 class AbstractRepoMetadataRepository(ABC):
     @abstractmethod
@@ -147,6 +181,10 @@ class AbstractSymbolMetadataRepository(ABC):
 
     @abstractmethod
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
+        pass
+
+    @abstractmethod
+    def get_list_by_parent_ids(self, parent_ids: list[str]) -> list[SymbolMetadata]:
         pass
 
     @abstractmethod

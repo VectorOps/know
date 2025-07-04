@@ -328,7 +328,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         limit  = query.limit  or 20
         results = results[offset: offset + limit]
 
-        SymbolMetadata.resolve_symbol_hierarchy(results)
+        results = include_direct_descendants(self, results)
 
         return results
 
