@@ -258,7 +258,7 @@ WITH candidates AS (
             cte_parts.append("""
 , rank_fts_scores AS (
     SELECT id,
-           fts_main_symbols.match_bm25(id, ?) as score
+           fts_main_symbols.match_bm25(id, ?, conjunctive := true) as score
     FROM candidates
 ), rank_fts AS (
     SELECT id,
@@ -345,6 +345,24 @@ LIMIT ? OFFSET ?
         sql = "".join(cte_parts) + final_select
 
         rows = _row_to_dict(self.conn.execute(sql, params))
+        syms = [self.model(**self._deserialize_row(r)) for r in rows]
+        SymbolMetadata.resolve_symbol_hierarchy(syms)
+        return syms
+
+    # ---------- new API implementation ----------
+    def get_list_by_parent_ids(self, parent_ids: list[str]) -> list[SymbolMetadata]:
+        """
+        Return all symbols whose ``parent_symbol_id`` is contained in *parent_ids*.
+        """
+        if not parent_ids:
+            return []
+        placeholders = ", ".join("?" for _ in parent_ids)
+        rows = _row_to_dict(
+            self.conn.execute(
+                f"SELECT * FROM symbols WHERE parent_symbol_id IN ({placeholders})",
+                parent_ids,
+            )
+        )
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms

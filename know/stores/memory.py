@@ -327,8 +327,22 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         offset = query.offset or 0
         limit  = query.limit  or 20
         results = results[offset: offset + limit]
+
         SymbolMetadata.resolve_symbol_hierarchy(results)
+
         return results
+
+    # --- new API implementation ---------------------------------------
+    def get_list_by_parent_ids(self, parent_ids: list[str]) -> list[SymbolMetadata]:
+        """
+        Return all symbols whose ``parent_symbol_id`` is in *parent_ids*.
+        Resolves the symbol-hierarchy before returning.
+        """
+        if not parent_ids:
+            return []
+        res = [s for s in self._items.values() if s.parent_symbol_id in parent_ids]
+        SymbolMetadata.resolve_symbol_hierarchy(res)
+        return res
 
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
