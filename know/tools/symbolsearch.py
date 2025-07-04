@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Sequence, Optional
+from enum import Enum
 
 from pydantic import BaseModel
 
@@ -9,6 +10,12 @@ from know.models import SymbolKind, Visibility
 from know.project import Project
 from know.tools.base import BaseTool
 from know.parsers import CodeParserRegistry, AbstractCodeParser
+
+
+class IncludeBody(str, Enum):
+    NO = "no"
+    SUMMARY = "summary"
+    FULL = "full"
 
 
 class SymbolSearchResult(BaseModel):
@@ -36,7 +43,7 @@ class SearchSymbolsTool(BaseTool):
         query: Optional[str] = None,
         limit: int | None = 20,
         offset: int | None = 0,
-        exclude_summary: bool = False,
+        include_body: IncludeBody = IncludeBody.SUMMARY,
     ) -> List[SymbolSearchResult]:
 
         # translate enums if string values are given
@@ -78,9 +85,14 @@ class SearchSymbolsTool(BaseTool):
                 if fm.language:
                     parser = CodeParserRegistry.get_language(fm.language)
 
-            sym_summary = None
-            if parser and not exclude_summary:
+            sym_summary: Optional[str] = None
+            sym_body:    Optional[str] = None
+
+            if include_body != IncludeBody.NO and parser:
                 sym_summary = parser.get_symbol_summary(s)
+
+            if include_body == IncludeBody.FULL:
+                sym_body = s.symbol_body
 
             results.append(
                 SymbolSearchResult(
@@ -91,6 +103,7 @@ class SearchSymbolsTool(BaseTool):
                     visibility = s.visibility,
                     file_path  = file_path,
                     summary    = sym_summary,
+                    body       = sym_body,
                 )
             )
         return self.to_python(results)
@@ -104,7 +117,11 @@ class SearchSymbolsTool(BaseTool):
             "description": "Search symbols in the current project repository. Use the tool "
             "to do project discovery and find relevant symbol definitions that can be used to "
             "solve users request. All paramers use the AND logical condition. "
-            "Prefer semantic code similarity search over documentation search.",
+            "Prefer semantic code similarity search over documentation search. "
+            "Use the include_body parameter to control presence of code in the response: "
+            "'no' – neither summary nor body, "
+            "'summary' – include short summary only, "
+            "'full' – include full symbol body (and summary).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -124,14 +141,21 @@ class SearchSymbolsTool(BaseTool):
                         "type": "string",
                         "description": (
                             "Natural-language semantic search string. Use to find relevant symbols by their "
-                            "documentation, comments or code itself."
+                            "documentation, comments or code itself using both full text search and embedding vectors."
                         )
                     },
                     "limit":             {"type": "integer", "minimum": 1, "default": 20},
                     "offset":            {"type": "integer", "minimum": 0, "default": 0},
-                    "exclude_summary": {
-                        "type": "boolean",
-                        "description": "If true, disables symbol summary output.",
+                    "include_body": {
+                        "type": "string",
+                        "enum": [e.value for e in IncludeBody],
+                        "default": IncludeBody.SUMMARY.value,
+                        "description": (
+                            "Controls presence of code in the response: "
+                            "'no' – neither summary nor body, "
+                            "'summary' – include short summary only, "
+                            "'full' – include full symbol body (and summary)."
+                        ),
                     },
                 },
             },
