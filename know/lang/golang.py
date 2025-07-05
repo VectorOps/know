@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, List
 from tree_sitter import Parser, Language
 import tree_sitter_go as tsgo
-from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
+from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
 from know.models import (
     ProgrammingLanguage,
     SymbolKind,
@@ -21,21 +21,26 @@ from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger
 from know.helpers import compute_file_hash, compute_symbol_hash
 
+
 GO_LANGUAGE = Language(tsgo.language())
+
+_parser: Parser = None
+def _get_parser():
+    global _parser
+    if not _parser:
+        _parser = Parser(GO_LANGUAGE)
+    return _parser
 
 
 class GolangCodeParser(AbstractCodeParser):
-    def __init__(self):
-        self.parser = Parser(GO_LANGUAGE)
-        self._source_bytes: bytes = b""
-        self._module_path: str | None = None      # <NEW>
-        self._module_root: str | None = None      # <NEW – project path the module belongs to>
-
-    @staticmethod
-    def register():
-        parser = GolangCodeParser()
-        CodeParserRegistry.register_language(ProgrammingLanguage.GO, parser)
-        CodeParserRegistry.register_parser(".go", parser)
+    def __init__(self, project: Project, rel_path: str):
+        self.parser = _get_parser()
+        self.rel_path = rel_path
+        self.project = project
+        self.source_bytes: bytes = b""
+        self.module_path: str | None = None
+        self.package: ParsedPackage | None = None
+        self.parsed_file: ParsedFile | None = None
 
     @staticmethod
     def _rel_to_virtual_path(rel_path: str) -> str:
@@ -54,17 +59,20 @@ class GolangCodeParser(AbstractCodeParser):
     # ------------------------------------------------------------------ #
     # go.mod handling                                                    #
     # ------------------------------------------------------------------ #
-    def _load_module_path(self, cache: ProjectCache, project_path: str) -> None:
+    def _load_module_path(self, cache: ProjectCache) -> None:
         """
         Look up or cache the project's Go module path (first `module ...` in go.mod).
         Uses project-wide cache for performance.
         """
+        project_path = self.project.settings.project_path
+
         cache_key = f"go.mod.module_path::{project_path}"
         if cache is not None:
             cached = cache.get(cache_key)
             if cached is not None:
-                self._module_path = cached          # NEW
+                self.module_path = cached
                 return cached
+
         module_path = None
         gomod = os.path.join(project_path, "go.mod")
         if not os.path.isfile(gomod):
@@ -85,38 +93,41 @@ class GolangCodeParser(AbstractCodeParser):
         if cache is not None:
             cache.set(cache_key, module_path)
 
-        self._module_path = module_path            # NEW
+        self.module_path = module_path
         return module_path
 
-    def parse(self, project: Project, cache: ProjectCache, rel_path: str) -> ParsedFile:
+    def parse(self, cache: ProjectCache) -> ParsedFile:
         """
         Parse a Go source file, populating ParsedFile, ParsedSymbols, etc.
         """
-        # Ensure we know the module path for this project ----------
-        self._load_module_path(cache, project.settings.project_path)
+        # Ensure we know the module path for this project
+        self._load_module_path(cache)
 
-        file_path = os.path.join(project.settings.project_path, rel_path)
+        file_path = os.path.join(self.project.settings.project_path, self.rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
             source_bytes = file.read()
-        self._source_bytes = source_bytes
+        self.source_bytes = source_bytes
 
         # Parse the code with tree-sitter
         tree = self.parser.parse(source_bytes)
         root_node = tree.root_node
 
-        package_name = self._build_virtual_package_path(rel_path, root_node)
+        package_name = self._build_virtual_package_path(root_node)
 
-        package = ParsedPackage(
+        rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
+        physical_path = rel_dir or "."
+
+        self.package = ParsedPackage(
             language=ProgrammingLanguage.GO,
-            physical_path=rel_path,
+            physical_path=physical_path,
             virtual_path=package_name,
-            imports=[]
+            imports=[],
         )
 
-        parsed_file = ParsedFile(
-            package=package,
-            path=rel_path,
+        self.parsed_file = ParsedFile(
+            package=self.package,
+            path=self.rel_path,
             language=ProgrammingLanguage.GO,
             docstring=None,
             file_hash=compute_file_hash(file_path),
@@ -127,30 +138,28 @@ class GolangCodeParser(AbstractCodeParser):
 
         # Visit all top-level nodes (imports, functions, types, vars, etc)
         for node in root_node.children:
-            self._process_node(node, parsed_file, package, project)
+            self._process_node(node)
 
-        package.imports = list(parsed_file.imports)
-        return parsed_file
+        self.package.imports = list(self.parsed_file.imports)
+
+        return self.parsed_file
 
     def _process_node(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
-        project: Project,
     ) -> None:
         if node.type == "import_declaration":
-            self._handle_import_declaration(node, parsed_file, project)
+            self._handle_import_declaration(node)
         elif node.type == "function_declaration":
-            self._handle_function_declaration(node, parsed_file, package)
+            self._handle_function_declaration(node)
         elif node.type == "method_declaration":
-            self._handle_method_declaration(node, parsed_file, package)
+            self._handle_method_declaration(node)
         elif node.type == "type_declaration":
-            self._handle_type_declaration(node, parsed_file, package)
+            self._handle_type_declaration(node)
         elif node.type == "const_declaration":
-            self._handle_const_declaration(node, parsed_file, package)
+            self._handle_const_declaration(node)
         elif node.type == "var_declaration":
-            self._handle_var_declaration(node, parsed_file, package)
+            self._handle_var_declaration(node)
         # Ignore comments and package declarations for now
         elif node.type == "comment":
             pass
@@ -160,7 +169,7 @@ class GolangCodeParser(AbstractCodeParser):
             KnowLogger.log_event(
                 "GO_UNKNOWN_NODE",
                 {
-                    "path": parsed_file.path,
+                    "path": self.parsed_file.path,
                     "type": node.type,
                     "line": node.start_point[0] + 1,
                     "byte_offset": node.start_byte,
@@ -175,14 +184,17 @@ class GolangCodeParser(AbstractCodeParser):
         """
         for node in root_node.children:
             if node.type == "package_clause":
-                ident = next((c for c in node.children if c.type == "identifier"), None)
+                ident = next(
+                    (c for c in node.children if c.type in ("identifier", "package_identifier")),
+                    None,
+                )
                 if ident is not None:
                     return ident.text.decode("utf8")
         return None
 
     def _build_virtual_package_path(
-        self, rel_path: str, root_node
-    ) -> str:                                         # NEW
+        self, root_node
+    ) -> str:
         """
         Return the package’s full import path.
 
@@ -192,10 +204,10 @@ class GolangCodeParser(AbstractCodeParser):
         """
         pkg_ident = self._extract_package_name(root_node)
 
-        if self._module_path:
-            rel_dir = os.path.dirname(rel_path).replace(os.sep, "/").strip("/")
+        if self.module_path:
+            rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
             full_path = (
-                self._module_path + ("/" + rel_dir if rel_dir else "")
+                self.module_path + ("/" + rel_dir if rel_dir else "")
             )
 
             # Optional sanity check – warn if the declared identifier
@@ -203,20 +215,21 @@ class GolangCodeParser(AbstractCodeParser):
             expected_pkg = (
                 rel_dir.split("/")[-1]
                 if rel_dir
-                else self._module_path.split("/")[-1]
+                else self.module_path.split("/")[-1]
             )
             if pkg_ident and pkg_ident != expected_pkg:
                 KnowLogger.warning(
                     "Go package mismatch: %s (clause) vs %s (dir) in %s",
                     pkg_ident,
                     expected_pkg,
-                    rel_path,
+                    self.rel_path,
                 )
 
-            return full_path or pkg_ident or self._rel_to_virtual_path(rel_path)
+            return full_path or pkg_ident or self._rel_to_virtual_path(self.rel_path)
 
         # ── no go.mod ───────────────────────────────────────────────────
-        return pkg_ident or self._rel_to_virtual_path(rel_path)
+        rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
+        return rel_dir or "."
 
     # ---------------------------------------------------------------------  
     def _extract_preceding_comment(self, node) -> Optional[str]:
@@ -248,13 +261,13 @@ class GolangCodeParser(AbstractCodeParser):
         comment_nodes.reverse()                  # restore top-to-bottom order
         parts: list[str] = []
         for c in comment_nodes:
-            raw = self._source_bytes[c.start_byte : c.end_byte] \
+            raw = self.source_bytes[c.start_byte : c.end_byte] \
                       .decode("utf8", errors="replace").strip()
             parts.append(raw)
         return "\n".join(parts).strip() or None
 
     # --- Node Handlers -------------------------------------------------------
-    def _handle_import_declaration(self, node, parsed_file: ParsedFile, project: Project):
+    def _handle_import_declaration(self, node):
         """
         Visit every `import_spec` contained in this import declaration.
         Handles both forms:
@@ -264,7 +277,7 @@ class GolangCodeParser(AbstractCodeParser):
         def _walk(n):
             for child in n.children:
                 if child.type == "import_spec":
-                    self._process_import_spec(child, parsed_file, project)
+                    self._process_import_spec(child)
                 elif child.type == "import_spec_list":
                     _walk(child)                # recurse into grouped list
         _walk(node)
@@ -272,15 +285,13 @@ class GolangCodeParser(AbstractCodeParser):
     def _process_import_spec(
         self,
         spec_node,
-        parsed_file: ParsedFile,
-        project: Project,
     ) -> None:
         """
         Translate a single `import_spec` tree-sitter node into a ParsedImportEdge
         and add it to *parsed_file.imports*.
         """
         # raw text of the spec (e.g. `alias "foo/bar"` or `"fmt"`)
-        raw_str: str = self._source_bytes[spec_node.start_byte : spec_node.end_byte] \
+        raw_str: str = self.source_bytes[spec_node.start_byte : spec_node.end_byte] \
             .decode("utf8", errors="replace").strip()
 
         # ---- extract components from tree-sitter children ---------------
@@ -318,33 +329,33 @@ class GolangCodeParser(AbstractCodeParser):
         if import_path.startswith((".", "./", "../")):
             abs_target = os.path.normpath(
                 os.path.join(
-                    os.path.dirname(os.path.join(project.settings.project_path, parsed_file.path)),
+                    os.path.dirname(os.path.join(self.project.settings.project_path, self.parsed_file.path)),
                     import_path,
                 )
             )
-            if abs_target.startswith(project.settings.project_path) and os.path.isdir(abs_target):
-                physical_path = os.path.relpath(abs_target, project.settings.project_path)
+            if abs_target.startswith(self.project.settings.project_path) and os.path.isdir(abs_target):
+                physical_path = os.path.relpath(abs_target, self.project.settings.project_path)
                 external = False
 
         # 2) paths inside the current Go module (from go.mod)
-        elif self._module_path and (
-            import_path == self._module_path
-            or import_path.startswith(self._module_path + "/")
+        elif self.module_path and (
+            import_path == self.module_path
+            or import_path.startswith(self.module_path + "/")
         ):
-            sub_path = import_path[len(self._module_path) :].lstrip("/")
-            abs_target = os.path.join(project.settings.project_path, sub_path)
+            sub_path = import_path[len(self.module_path) :].lstrip("/")
+            abs_target = os.path.join(self.project.settings.project_path, sub_path)
             if os.path.isdir(abs_target) or sub_path == "":
                 physical_path = sub_path or "."      # root package ⇒ "."
                 external = False
 
         # 3) plain “path” that maps directly into project directory
         else:
-            abs_target = os.path.join(project.settings.project_path, import_path)
+            abs_target = os.path.join(self.project.settings.project_path, import_path)
             if os.path.isdir(abs_target):
                 physical_path = import_path
                 external = False
 
-        parsed_file.imports.append(
+        self.parsed_file.imports.append(
             ParsedImportEdge(
                 physical_path=physical_path,
                 virtual_path=import_path,
@@ -367,7 +378,7 @@ class GolangCodeParser(AbstractCodeParser):
         fails, but still populates `parameters` / `return_type` whenever
         possible.
         """
-        src = self._source_bytes
+        src = self.source_bytes
 
         # ---- parameters -------------------------------------------------
         params_raw = src[param_node.start_byte : param_node.end_byte] \
@@ -433,8 +444,6 @@ class GolangCodeParser(AbstractCodeParser):
     def _handle_function_declaration(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
     ) -> None:
         """
         Translate a `function_declaration` node into a ParsedSymbol
@@ -452,7 +461,7 @@ class GolangCodeParser(AbstractCodeParser):
         end_line: int = node.end_point[0] + 1
 
         # full source for the symbol
-        body_bytes: bytes = self._source_bytes[start_byte:end_byte]
+        body_bytes: bytes = self.source_bytes[start_byte:end_byte]
         body_str: str = body_bytes.decode("utf8", errors="replace")
 
         # Extract Go doc-comment immediately above the declaration
@@ -476,7 +485,7 @@ class GolangCodeParser(AbstractCodeParser):
         )
 
         # fully-qualified name + key
-        fqn: str = self._join_fqn(package.virtual_path, name)
+        fqn: str = self._join_fqn(self.package.virtual_path, name)
         key: str = fqn          # (keep identical – change here if another key scheme is preferred)
 
         # visibility: exported identifiers in Go start with a capital letter
@@ -486,7 +495,7 @@ class GolangCodeParser(AbstractCodeParser):
             else Visibility.PRIVATE
         )
 
-        parsed_file.symbols.append(
+        self.parsed_file.symbols.append(
             ParsedSymbol(
                 name=name,
                 fqn=fqn,
@@ -510,8 +519,6 @@ class GolangCodeParser(AbstractCodeParser):
     def _handle_method_declaration(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
     ) -> None:
         # --- method identifier ---------------------------------------------
         ident_node = next(
@@ -528,7 +535,7 @@ class GolangCodeParser(AbstractCodeParser):
         if not param_lists:                          # should never happen
             return
         recv_node = param_lists[0]
-        inner = self._source_bytes[recv_node.start_byte : recv_node.end_byte] \
+        inner = self.source_bytes[recv_node.start_byte : recv_node.end_byte] \
             .decode("utf8", errors="replace").strip()[1:-1].strip()           # drop ( )
         # take last token after blanks/commas, strip leading '*'
         recv_type_token = inner.replace(",", " ").split()[-1] if inner else ""
@@ -554,15 +561,15 @@ class GolangCodeParser(AbstractCodeParser):
         # --- misc. metadata ------------------------------------------------
         start_byte, end_byte = node.start_byte, node.end_byte
         start_line, end_line = node.start_point[0] + 1, node.end_point[0] + 1
-        body_bytes = self._source_bytes[start_byte:end_byte]
+        body_bytes = self.source_bytes[start_byte:end_byte]
         body_str = body_bytes.decode("utf8", errors="replace")
         docstring = self._extract_preceding_comment(node)
 
-        fqn = self._join_fqn(package.virtual_path, receiver_type, name)
+        fqn = self._join_fqn(self.package.virtual_path, receiver_type, name)
         key = fqn
         visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
-        parsed_file.symbols.append(
+        self.parsed_file.symbols.append(
             ParsedSymbol(
                 name=name,
                 fqn=fqn,
@@ -588,8 +595,6 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         struct_node,
         parent_sym: ParsedSymbol,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
     ) -> None:
         # locate field_declaration_list
         fld_list = next((c for c in struct_node.children if c.type == "field_declaration_list"), None)
@@ -618,21 +623,21 @@ class GolangCodeParser(AbstractCodeParser):
 
             type_text = ""
             if type_node is not None:
-                type_text = self._source_bytes[type_node.start_byte:type_node.end_byte] \
+                type_text = self.source_bytes[type_node.start_byte:type_node.end_byte] \
                                 .decode("utf8", errors="replace").strip()
 
             # shared byte / line span for this field declaration
             start_b, end_b = fld.start_byte, fld.end_byte
-            body_bytes = self._source_bytes[start_b:end_b]
+            body_bytes = self.source_bytes[start_b:end_b]
             body_str = body_bytes.decode("utf8", errors="replace")
 
             for idn in id_nodes:
                 fname = idn.text.decode("utf8")
                 child = ParsedSymbol(
                     name=fname,
-                    fqn=self._join_fqn(package.virtual_path, parent_sym.name, fname),
+                    fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, fname),
                     body=body_str,
-                    key=self._join_fqn(package.virtual_path, parent_sym.name, fname),
+                    key=self._join_fqn(self.package.virtual_path, parent_sym.name, fname),
                     hash=compute_symbol_hash(body_bytes),
                     kind=SymbolKind.PROPERTY,
                     start_line=fld.start_point[0] + 1,
@@ -652,8 +657,6 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         iface_node,
         parent_sym: ParsedSymbol,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
     ) -> None:
         # iterate over possible method_spec nodes
         for m in iface_node.children:
@@ -680,14 +683,14 @@ class GolangCodeParser(AbstractCodeParser):
             )
 
             start_b, end_b = m.start_byte, m.end_byte
-            body_bytes = self._source_bytes[start_b:end_b]
+            body_bytes = self.source_bytes[start_b:end_b]
             body_str = body_bytes.decode("utf8", errors="replace")
 
             child = ParsedSymbol(
                 name=mname,
-                fqn=self._join_fqn(package.virtual_path, parent_sym.name, mname),
+                fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
                 body=body_str,
-                key=self._join_fqn(package.virtual_path, parent_sym.name, mname),
+                key=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
                 hash=compute_symbol_hash(body_bytes),
                 kind=SymbolKind.METHOD,
                 start_line=m.start_point[0] + 1,
@@ -703,7 +706,7 @@ class GolangCodeParser(AbstractCodeParser):
             )
             parent_sym.children.append(child)
 
-    def _handle_type_declaration(self, node, parsed_file: ParsedFile, package: ParsedPackage):
+    def _handle_type_declaration(self, node):
         """
         Extract every `type` definition (structs, interfaces, aliases …) from the
         supplied *type_declaration* node and register them as ParsedSymbol objects.
@@ -754,15 +757,15 @@ class GolangCodeParser(AbstractCodeParser):
 
             # ---------- misc. metadata ----------------------------------
             start_b, end_b = spec.start_byte, spec.end_byte
-            body_bytes = self._source_bytes[start_b:end_b]
+            body_bytes = self.source_bytes[start_b:end_b]
             body_str = body_bytes.decode("utf8", errors="replace")
 
-            parsed_file.symbols.append(
+            self.parsed_file.symbols.append(
                 ParsedSymbol(
                     name=name,
-                    fqn=self._join_fqn(package.virtual_path, name),
+                    fqn=self._join_fqn(self.package.virtual_path, name),
                     body=body_str,
-                    key=self._join_fqn(package.virtual_path, name),
+                    key=self._join_fqn(self.package.virtual_path, name),
                     hash=compute_symbol_hash(body_bytes),
                     kind=kind,
                     start_line=spec.start_point[0] + 1,
@@ -777,18 +780,16 @@ class GolangCodeParser(AbstractCodeParser):
                     children=[],
                 )
             )
-            parent_symbol = parsed_file.symbols[-1]
+            parent_symbol = self.parsed_file.symbols[-1]
             if type_node is not None:
                 if type_node.type == "struct_type":
-                    self._parse_struct_fields(type_node, parent_symbol, parsed_file, package)
+                    self._parse_struct_fields(type_node, parent_symbol)
                 elif type_node.type == "interface_type":
-                    self._parse_interface_members(type_node, parent_symbol, parsed_file, package)
+                    self._parse_interface_members(type_node, parent_symbol)
 
     def _handle_const_declaration(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
     ) -> None:
         """
         Extract every constant defined in a `const_declaration` (single-line or
@@ -804,17 +805,17 @@ class GolangCodeParser(AbstractCodeParser):
                 continue
 
             start_b, end_b = spec.start_byte, spec.end_byte
-            body_bytes = self._source_bytes[start_b:end_b]
+            body_bytes = self.source_bytes[start_b:end_b]
             body_str = body_bytes.decode("utf8", errors="replace")
             docstring = self._extract_preceding_comment(spec)
             start_line, end_line = spec.start_point[0] + 1, spec.end_point[0] + 1
 
             for idn in id_nodes:
                 name = idn.text.decode("utf8")
-                fqn = self._join_fqn(package.virtual_path, name)
+                fqn = self._join_fqn(self.package.virtual_path, name)
                 visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
-                parsed_file.symbols.append(
+                self.parsed_file.symbols.append(
                     ParsedSymbol(
                         name=name,
                         fqn=fqn,
@@ -838,8 +839,6 @@ class GolangCodeParser(AbstractCodeParser):
     def _handle_var_declaration(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
     ) -> None:
         """
         Extract every variable defined in a `var_declaration` (single-line or
@@ -857,19 +856,19 @@ class GolangCodeParser(AbstractCodeParser):
 
             # 3) Common metadata for every identifier in this spec
             start_b, end_b = spec.start_byte, spec.end_byte
-            body_bytes = self._source_bytes[start_b:end_b]
+            body_bytes = self.source_bytes[start_b:end_b]
             body_str = body_bytes.decode("utf8", errors="replace")
             docstring = self._extract_preceding_comment(spec)
             start_line, end_line = spec.start_point[0] + 1, spec.end_point[0] + 1
 
             for idn in id_nodes:
                 name = idn.text.decode("utf8")
-                fqn = self._join_fqn(package.virtual_path, name)
+                fqn = self._join_fqn(self.package.virtual_path, name)
                 visibility = (
                     Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
                 )
 
-                parsed_file.symbols.append(
+                self.parsed_file.symbols.append(
                     ParsedSymbol(
                         name=name,
                         fqn=fqn,
@@ -890,10 +889,12 @@ class GolangCodeParser(AbstractCodeParser):
                     )
                 )
 
+
+class GolangLanguageHelper(AbstractLanguageHelper):
     # ------------------------------------------------------------------  
-    # Public helpers required by AbstractCodeParser                      #
+    # Public helpers required by AbstractCodeParser
     # ------------------------------------------------------------------
-    def get_import_summary(self, imp: ImportEdge) -> str:          # NEW
+    def get_import_summary(self, imp: ImportEdge) -> str:
         """
         Return a concise, human-readable textual representation of a Go
         import edge.
@@ -922,7 +923,7 @@ class GolangCodeParser(AbstractCodeParser):
         # plain import
         return f'import "{path}"'.strip()
 
-    def get_symbol_summary(self,                           # NEW
+    def get_symbol_summary(self,
                            sym: SymbolMetadata,
                            indent: int = 0) -> str:
         """
@@ -969,4 +970,3 @@ class GolangCodeParser(AbstractCodeParser):
                 lines.append(self.get_symbol_summary(child, indent + 4))
 
         return "\n".join(lines)
-
