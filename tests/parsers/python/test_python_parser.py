@@ -1,21 +1,26 @@
 import pytest
 from pathlib import Path
-from types import SimpleNamespace
 from devtools import pprint
+from know.settings import ProjectSettings
+from know.project import init_project
 
 from know.lang.python import PythonCodeParser
 from know.models import ProgrammingLanguage, SymbolKind, Modifier
+from know.project import ProjectCache
 
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
 def _make_dummy_project(root_dir: Path):
     """
-    Return a very small stub that fulfils the interface required by
-    PythonCodeParser.parse().  Right now the parser only relies on
-    `project_path`, so a SimpleNamespace is sufficient.
+    Build a real Project instance backed by the in-memory repository so the
+    parser can access `project.settings.project_path` and other facilities.
     """
-    return SimpleNamespace(project_path=str(root_dir))
+    settings = ProjectSettings(
+        project_path=str(root_dir),
+        repository_backend="memory",        # use the lightweight backend
+    )
+    return init_project(settings)
 
 
 # --------------------------------------------------------------------------- #
@@ -29,8 +34,9 @@ def test_python_parser_on_simple_file():
     samples_dir = Path(__file__).parent / "samples"
     project      = _make_dummy_project(samples_dir)
     parser       = PythonCodeParser()
+    cache        = ProjectCache()
 
-    parsed_file = parser.parse(project, "simple.py")
+    parsed_file = parser.parse(project, cache, "simple.py")
 
     # ------------------------------------------------------------------ #
     # Basic assertions
