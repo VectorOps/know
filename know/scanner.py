@@ -5,12 +5,18 @@ from typing import Optional
 
 from know.helpers import compute_file_hash, generate_id, parse_gitignore
 from know.logger import KnowLogger as logger
-from know.models import FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge
+from know.models import FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge, SymbolKind
+from know.data import SymbolSearchQuery
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.project import Project, ProjectCache
 
 # TODO: Make configurable
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode", ".pytest_cache"}
+
+
+class ParsingState:
+    def __init__(self):
+        self.pending_import_edges: list[ImportEdge] = []
 
 
 def scan_project_directory(project: Project) -> None:
@@ -36,6 +42,7 @@ def scan_project_directory(project: Project) -> None:
     root = Path(root_path).resolve()
 
     cache = ProjectCache()
+    state = ParsingState()
 
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
     gitignore_spec = parse_gitignore(root)
@@ -102,7 +109,7 @@ def scan_project_directory(project: Project) -> None:
 
         try:
             parsed_file = parser.parse(project, cache, str(rel_path))
-            upsert_parsed_file(project, parsed_file)
+            upsert_parsed_file(project, state, parsed_file)
         except Exception as exc:
             logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
 
@@ -133,7 +140,7 @@ def scan_project_directory(project: Project) -> None:
         logger.debug(f"Deleted {removed_pkgs} orphaned packages.")
 
     # Resolve orphaned method symbols → assign missing parent references
-    _assign_parents_to_orphan_methods(project)
+    assign_parents_to_orphan_methods(project)
 
     # Resolve import edges
     project._resolve_pending_import_edges()
@@ -142,7 +149,7 @@ def scan_project_directory(project: Project) -> None:
     project.data_repository.refresh_full_text_indexes()
 
 
-def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
+def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: ParsedFile) -> None:
     """
     Persist *parsed_file* (package → file → symbols) into the
     project's data-repository. If an entity already exists it is
@@ -186,6 +193,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
         return pkg.id if pkg else None
 
     new_keys: set[tuple[str | None, str | None, bool]] = set()
+    pending_edges = []
 
     for imp in parsed_file.package.imports:
         key = (imp.virtual_path, imp.alias, imp.dot)
@@ -210,7 +218,7 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
         # (Re-)schedule internal edges that are still unresolved
         if edge and not edge.external and edge.to_package_id is None:
-            project._add_pending_import_edge(edge)
+            state.pending_import_edges.append(edge)
 
     # Delete edges that no longer exist
     for key, edge in existing_by_key.items():
@@ -312,3 +320,69 @@ def upsert_parsed_file(project: Project, parsed_file: ParsedFile) -> None:
 
     for key in obsolete_keys:
         symbol_repo.delete(existing_by_key[key].id)
+
+
+def assign_parents_to_orphan_methods(project: Project) -> None:
+    """
+    Find method symbols whose parent reference is missing and link them
+    to the most specific class / interface (incl. Go struct) in the
+    same package, based on FQN prefix matching.
+    """
+    symbol_repo = project.data_repository.symbol
+    repo_id = project.get_repo().id
+
+    # 1) fetch all top-level methods (= orphaned)
+    query = SymbolSearchQuery(
+        symbol_kind=SymbolKind.METHOD,
+        top_level_only=True,
+        limit=100_000,          # effectively “no limit”
+    )
+    orphan_methods = symbol_repo.search(repo_id, query)
+    if not orphan_methods:
+        return
+
+    # 2) group methods by package for efficient lookup
+    by_pkg: dict[str | None, list[SymbolMetadata]] = {}
+    for m in orphan_methods:
+        by_pkg.setdefault(m.package_id, []).append(m)
+
+    parent_kinds = {SymbolKind.CLASS, SymbolKind.INTERFACE}
+
+    # 3) per-package candidate parents & assignment
+    for pkg_id, methods in by_pkg.items():
+        if pkg_id is None:
+            continue
+        candidates = [
+            s for s in symbol_repo.get_list_by_package_id(pkg_id)
+            if s.kind in parent_kinds and s.fqn
+        ]
+        if not candidates:
+            continue
+
+        for meth in methods:
+            if not meth.fqn:
+                continue
+            best_parent = None
+            best_len = -1
+            for cand in candidates:
+                pref = f"{cand.fqn}."
+                if meth.fqn.startswith(pref) and len(cand.fqn) > best_len:
+                    best_parent, best_len = cand, len(cand.fqn)
+            if best_parent:
+                symbol_repo.update(meth.id, {"parent_symbol_id": best_parent.id})
+
+
+def resolve_pending_import_edges(project: Project, state: ParsingState) -> None:
+    pkg_repo  = self.data_repository.package
+    imp_repo  = self.data_repository.importedge
+
+    for edge in list(state.pending_import_edges):
+        if edge.external or edge.to_package_id is not None:
+            continue
+        if edge.to_package_path is None:
+            continue
+        pkg = pkg_repo.get_by_virtual_path(edge.to_package_path)
+        if pkg:
+            imp_repo.update(edge.id, {"to_package_id": pkg.id})
+            edge.to_package_id = pkg.id
+    self._pending_import_edges.clear()
