@@ -16,7 +16,7 @@ from know.models import (
     SymbolMetadata,
     ImportEdge,
 )
-from know.settings import ProjectSettings
+from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger
 from know.helpers import compute_file_hash, compute_symbol_hash
@@ -54,21 +54,23 @@ class GolangCodeParser(AbstractCodeParser):
     # ------------------------------------------------------------------ #
     # go.mod handling                                                    #
     # ------------------------------------------------------------------ #
-    def _load_module_path(self, project_path: str) -> None:        # <NEW>
+    def _load_module_path(self, cache: ProjectCache, project_path: str) -> None:
         """
-        Cache the current project’s Go‐module path (first  `module …`  line
-        in go.mod).  If no go.mod is present, the cache is cleared.
+        Look up or cache the project's Go module path (first `module ...` in go.mod).
+        Uses project-wide cache for performance.
         """
-        if project_path == self._module_root and self._module_path is not None:
-            return                                                # already cached
-
-        self._module_root = project_path
-        self._module_path = None                                   # default = no module
-
+        cache_key = f"go.mod.module_path::{project_path}"
+        if cache is not None:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                self._module_path = cached          # NEW
+                return cached
+        module_path = None
         gomod = os.path.join(project_path, "go.mod")
         if not os.path.isfile(gomod):
-            return
-
+            if cache is not None:
+                cache.set(cache_key, None)
+            return None
         try:
             with open(gomod, "r", encoding="utf8") as fh:
                 for ln in fh:
@@ -76,19 +78,24 @@ class GolangCodeParser(AbstractCodeParser):
                     if ln.startswith("module"):
                         parts = ln.split()
                         if len(parts) >= 2:
-                            self._module_path = parts[1]
+                            module_path = parts[1]
                         break
         except OSError:
             pass
+        if cache is not None:
+            cache.set(cache_key, module_path)
 
-    def parse(self, project: ProjectSettings, rel_path: str) -> ParsedFile:
+        self._module_path = module_path            # NEW
+        return module_path
+
+    def parse(self, project: Project, cache: ProjectCache, rel_path: str) -> ParsedFile:
         """
         Parse a Go source file, populating ParsedFile, ParsedSymbols, etc.
         """
-        # Ensure we know the module path for this project ----------  <NEW>
-        self._load_module_path(project.project_path)
+        # Ensure we know the module path for this project ----------
+        self._load_module_path(cache, project.settings.project_path)
 
-        file_path = os.path.join(project.project_path, rel_path)
+        file_path = os.path.join(project.settings.project_path, rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
             source_bytes = file.read()
@@ -130,7 +137,7 @@ class GolangCodeParser(AbstractCodeParser):
         node,
         parsed_file: ParsedFile,
         package: ParsedPackage,
-        project: ProjectSettings,
+        project: Project,
     ) -> None:
         if node.type == "import_declaration":
             self._handle_import_declaration(node, parsed_file, project)
@@ -247,7 +254,7 @@ class GolangCodeParser(AbstractCodeParser):
         return "\n".join(parts).strip() or None
 
     # --- Node Handlers -------------------------------------------------------
-    def _handle_import_declaration(self, node, parsed_file: ParsedFile, project: ProjectSettings):
+    def _handle_import_declaration(self, node, parsed_file: ParsedFile, project: Project):
         """
         Visit every `import_spec` contained in this import declaration.
         Handles both forms:
@@ -266,7 +273,7 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         spec_node,
         parsed_file: ParsedFile,
-        project: ProjectSettings,
+        project: Project,
     ) -> None:
         """
         Translate a single `import_spec` tree-sitter node into a ParsedImportEdge
@@ -311,12 +318,12 @@ class GolangCodeParser(AbstractCodeParser):
         if import_path.startswith((".", "./", "../")):
             abs_target = os.path.normpath(
                 os.path.join(
-                    os.path.dirname(os.path.join(project.project_path, parsed_file.path)),
+                    os.path.dirname(os.path.join(project.settings.project_path, parsed_file.path)),
                     import_path,
                 )
             )
-            if abs_target.startswith(project.project_path) and os.path.isdir(abs_target):
-                physical_path = os.path.relpath(abs_target, project.project_path)
+            if abs_target.startswith(project.settings.project_path) and os.path.isdir(abs_target):
+                physical_path = os.path.relpath(abs_target, project.settings.project_path)
                 external = False
 
         # 2) paths inside the current Go module (from go.mod)
@@ -325,14 +332,14 @@ class GolangCodeParser(AbstractCodeParser):
             or import_path.startswith(self._module_path + "/")
         ):
             sub_path = import_path[len(self._module_path) :].lstrip("/")
-            abs_target = os.path.join(project.project_path, sub_path)
+            abs_target = os.path.join(project.settings.project_path, sub_path)
             if os.path.isdir(abs_target) or sub_path == "":
                 physical_path = sub_path or "."      # root package ⇒ "."
                 external = False
 
         # 3) plain “path” that maps directly into project directory
         else:
-            abs_target = os.path.join(project.project_path, import_path)
+            abs_target = os.path.join(project.settings.project_path, import_path)
             if os.path.isdir(abs_target):
                 physical_path = import_path
                 external = False
