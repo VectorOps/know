@@ -373,8 +373,8 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
 
 
 def resolve_pending_import_edges(project: Project, state: ParsingState) -> None:
-    pkg_repo  = self.data_repository.package
-    imp_repo  = self.data_repository.importedge
+    pkg_repo  = project.data_repository.package
+    imp_repo  = project.data_repository.importedge
 
     for edge in list(state.pending_import_edges):
         if edge.external or edge.to_package_id is not None:
@@ -385,4 +385,4 @@ def resolve_pending_import_edges(project: Project, state: ParsingState) -> None:
         if pkg:
             imp_repo.update(edge.id, {"to_package_id": pkg.id})
             edge.to_package_id = pkg.id
-    self._pending_import_edges.clear()
+    state.pending_import_edges.clear()
