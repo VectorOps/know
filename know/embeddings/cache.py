@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, hashlib, sqlite3, duckdb
 from abc import ABC, abstractmethod
 from typing import Optional, Sequence, Any, List, Tuple
-from know.models import Vector        # existing alias: list[float]
+from know.models import Vector
 
 class EmbeddingCacheBackend(ABC):
     @abstractmethod

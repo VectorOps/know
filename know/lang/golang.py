@@ -1,6 +1,6 @@
 import os
 import logging
-import re  # NEW – needed for simple token handling (if not already present)
+import re  # needed for simple token handling (if not already present)
 from pathlib import Path
 from typing import Optional, List
 from tree_sitter import Parser, Language

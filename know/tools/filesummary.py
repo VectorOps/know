@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Sequence, List
 from know.parsers import CodeParserRegistry, AbstractCodeParser
-from know.models import ImportEdge
+from know.models import ImportEdge, Visibility
 from .base import BaseTool
 
 from pydantic import BaseModel
@@ -52,7 +52,8 @@ class SummarizeFilesTool(BaseTool):
     def execute(
         self,
         project: Project,
-        paths: Sequence[str]
+        paths: Sequence[str],
+        symbol_visibility: str = None,
     ) -> List[FileSummary]:
         """
         Given a *project* and an iterable of project-relative *paths*,
@@ -63,6 +64,15 @@ class SummarizeFilesTool(BaseTool):
         file_repo   = project.data_repository.file
         symbol_repo = project.data_repository.symbol
         edge_repo = project.data_repository.importedge   # NEW
+
+        # Interpret the symbol_visibility param if provided
+        if symbol_visibility is None:
+            symbol_visibility = Visibility.PUBLIC.value      # default → public
+
+        if symbol_visibility == "all":
+            vis = None  # no visibility filter
+        else:
+            vis = Visibility(symbol_visibility)
 
         summaries: list[FileSummary] = []
 
@@ -77,6 +87,9 @@ class SummarizeFilesTool(BaseTool):
                 imp_edges = edge_repo.get_list_by_source_package_id(fm.package_id)
 
             symbols = symbol_repo.get_list_by_file_id(fm.id)
+
+            if vis is not None:
+                symbols = [s for s in symbols if s.visibility == vis.value]
 
             # Use language-specific get_symbol_summary when a helper exists.
             # Work on *top-level* symbols only – nested ones are emitted by the
@@ -110,6 +123,8 @@ class SummarizeFilesTool(BaseTool):
         return self.to_python(summaries)
 
     def get_openai_schema(self) -> dict:
+        visibility_enum = [v.value for v in Visibility] + ["all"]
+
         return {
             "name": self.tool_name,
             "description": (
@@ -126,6 +141,14 @@ class SummarizeFilesTool(BaseTool):
                         "description": (
                             "Project-relative paths of the files to be "
                             "summarized."
+                        ),
+                    },
+                    "symbol_visibility": {
+                        "type": "string",
+                        "enum": visibility_enum,
+                        "description": (
+                            "Restrict by visibility modifier (`public`, `protected`, `private`) "
+                            "or use `all` to include every symbol. Defaults to `public`."
                         ),
                     }
                 },

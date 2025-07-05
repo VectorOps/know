@@ -139,7 +139,7 @@ class SymbolSearchQuery:
     limit: Optional[int] = None
     # Zero-based offset
     offset: Optional[int] = None
-    # NEW – return only root-level symbols (no parent)
+    # return only root-level symbols (no parent)
     top_level_only: Optional[bool] = False
 
 
