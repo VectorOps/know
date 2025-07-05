@@ -46,9 +46,16 @@ class SearchSymbolsTool(BaseTool):
         include_body: IncludeBody = IncludeBody.SUMMARY,
     ) -> List[SymbolSearchResult]:
 
+        if symbol_visibility is None:
+            symbol_visibility = Visibility.PUBLIC.value      # default → public
+
         # translate enums if string values are given
-        kind  = SymbolKind(symbol_kind)           if symbol_kind else None
-        vis   = Visibility(symbol_visibility)     if symbol_visibility else None
+        kind = SymbolKind(symbol_kind) if symbol_kind else None
+
+        if symbol_visibility == "all":
+            vis = None                               # no visibility filter
+        else:
+            vis = Visibility(symbol_visibility)
 
         # ------------------------------------------------------------
         # transform free-text query → embedding vector (if requested)
@@ -108,52 +115,72 @@ class SearchSymbolsTool(BaseTool):
 
     def get_openai_schema(self) -> dict:
         kind_enum        = [k.value for k in SymbolKind]
-        visibility_enum  = [v.value for v in Visibility]
+        visibility_enum  = [v.value for v in Visibility] + ["all"]
 
         return {
             "name": self.tool_name,
-            "description": "Search symbols in the current project repository. Use the tool "
-            "to do project discovery and find relevant symbol definitions that can be used to "
-            "solve users request. All paramers use the AND logical condition. "
-            "Prefer semantic code similarity search over documentation search. "
-            "Use the include_body parameter to control presence of code in the response: "
-            "'no' – neither summary nor body, "
-            "'summary' – include short summary only, "
-            "'full' – include full symbol body (and summary).",
+            "description": (
+                "Search for symbols (functions, classes, variables, etc.) in the current repository. "
+                "All supplied filters are combined with logical **AND**. When both keyword and semantic "
+                "search are available, semantic (vector-based) search is preferred. "
+                "Control how much source code is returned with the `include_body` option."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "symbol_name":       {"type": "string", "description": "Exact match on symbol name"},
-                    "symbol_fqn":        {"type": "string", "description": "Substring match on fully-qualified name"},
+                    "symbol_name": {
+                        "type": "string",
+                        "description": "Exact, case-sensitive match on the symbol’s short name."
+                    },
+                    "symbol_fqn": {
+                        "type": "string",
+                        "description": (
+                            "Substring match against the fully-qualified name "
+                            "(e.g. `package.module.Class.method`)."
+                        )
+                    },
                     "symbol_kind": {
                         "type": "string",
                         "enum": kind_enum,
-                        "description": "Filter by symbol kind."
+                        "description": "Restrict results to a specific kind of symbol."
                     },
                     "symbol_visibility": {
                         "type": "string",
                         "enum": visibility_enum,
-                        "description": "Filter by visibility (public / protected / private)."
+                        "description": (
+                            "Restrict by visibility modifier (`public`, `protected`, `private`) "
+                            "or use `all` to include every symbol. Defaults to `public`."
+                        )
                     },
                     "query": {
                         "type": "string",
                         "description": (
-                            "Natural-language semantic search string. Use to find relevant symbols by their "
-                            "documentation, comments or code itself using both full text search and embedding vectors."
+                            "Natural-language search string evaluated against docstrings, comments, and code "
+                            "with both full-text and vector search. Use when you don’t know the exact name."
                         )
                     },
-                    "limit":             {"type": "integer", "minimum": 1, "default": 20},
-                    "offset":            {"type": "integer", "minimum": 0, "default": 0},
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": 20,
+                        "description": "Maximum number of results to return."
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Number of results to skip (for pagination)."
+                    },
                     "include_body": {
                         "type": "string",
                         "enum": [e.value for e in IncludeBody],
                         "default": IncludeBody.SUMMARY.value,
                         "description": (
-                            "Controls presence of code in the response: "
-                            "'no' – neither summary nor body, "
-                            "'summary' – include short summary only, "
-                            "'full' – include full symbol body."
-                        ),
+                            "Amount of source code to include with each match:\n"
+                            "• `no` – metadata only (no code or summary)\n"
+                            "• `summary` – metadata plus a brief synopsis **(default)**\n"
+                            "• `full` – metadata plus the complete symbol body"
+                        )
                     },
                 },
             },
