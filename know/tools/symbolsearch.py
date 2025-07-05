@@ -95,7 +95,7 @@ class SearchSymbolsTool(BaseTool):
             sym_summary: Optional[str] = None
             sym_body:    Optional[str] = None
 
-            if include_body != IncludeBody.NO and parser:
+            if include_body != IncludeBody.NO and helper:
                 sym_body = helper.get_symbol_summary(s)
             elif include_body == IncludeBody.FULL:
                 sym_body = s.symbol_body

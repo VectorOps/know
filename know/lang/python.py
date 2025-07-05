@@ -276,27 +276,40 @@ class PythonCodeParser(AbstractCodeParser):
         return code[cls_idx:].rstrip()
 
     def _build_class_signature(self, node) -> SymbolSignature:
-        """Build a SymbolSignature for a class definition (not its constructor)."""
-        code = node.text.decode("utf8")
+        """
+        Build a SymbolSignature for a class, extracting decorators directly
+        from Tree-sitter nodes (no std-lib ast).
+        `node` may be either a `class_definition` or its surrounding
+        `decorated_definition` wrapper.
+        """
+        # ------------------------------------------------------------------ #
+        # Locate the concrete `class_definition` node                        #
+        # ------------------------------------------------------------------ #
+        cls_node = node
+        if node.type == "decorated_definition":
+            cls_node = next((c for c in node.children if c.type == "class_definition"), node)
+
+        code    = cls_node.text.decode("utf8")
         raw_sig = self._extract_class_signature_raw(code)
 
-        try:
-            cls_ast = ast.parse(code).body[0]
-            if isinstance(cls_ast, ast.ClassDef):
-                return SymbolSignature(
-                    raw=raw_sig,
-                    parameters=[],
-                    return_type=None,
-                    decorators=[
-                        self._expr_to_str(dec) for dec in cls_ast.decorator_list
-                    ]
-                    if cls_ast.decorator_list
-                    else [],
-                )
-        except Exception:
-            pass
+        # ------------------------------------------------------------------ #
+        # Decorators                                                         #
+        # ------------------------------------------------------------------ #
+        decorators: list[str] = []
+        if node.type == "decorated_definition":
+            for ch in node.children:
+                if ch.type == "decorator":
+                    txt = ch.text.decode("utf8").strip()
+                    if txt.startswith("@"):
+                        txt = txt[1:]
+                    decorators.append(txt)
 
-        return SymbolSignature(raw=raw_sig)
+        return SymbolSignature(
+            raw=raw_sig,
+            parameters=[],
+            return_type=None,
+            decorators=decorators,
+        )
 
     def _build_function_signature(self, node) -> SymbolSignature:
         """
@@ -574,25 +587,40 @@ class PythonCodeParser(AbstractCodeParser):
         alias: str | None = None
         dot: bool = False
 
-        # Parse with `ast` for a robust extraction
-        # TODO: Fix me
-        try:
-            stmt_node = ast.parse(raw_stmt).body[0]  # type: ignore[index]
-            if isinstance(stmt_node, ast.Import):
-                if stmt_node.names:
-                    first_alias = stmt_node.names[0]
-                    import_path = first_alias.name
-                    alias = first_alias.asname
-            elif isinstance(stmt_node, ast.ImportFrom):
-                level_prefix = "." * stmt_node.level if stmt_node.level else ""
-                module_part = stmt_node.module or ""
-                import_path = f"{level_prefix}{module_part}"
-                dot = stmt_node.level > 0
-                if stmt_node.names:
-                    alias = stmt_node.names[0].asname
-        except Exception:
-            # Fallback to raw text on parse error
-            import_path = raw_stmt
+        # Parse import statement
+        import_path: str | None = None
+        alias: str | None = None
+        dot: bool = False
+
+        if node.type == "import_statement":
+            first_item = next((c for c in node.children
+                               if c.type in ("aliased_import", "dotted_name")), None)
+            if first_item is not None:
+                if first_item.type == "aliased_import":
+                    name_node   = first_item.child_by_field_name("name")
+                    alias_node  = first_item.child_by_field_name("alias")
+                    import_path = name_node.text.decode("utf8") if name_node else None
+                    alias       = alias_node.text.decode("utf8") if alias_node else None
+                elif first_item.type == "dotted_name":
+                    import_path = first_item.text.decode("utf8")
+
+        elif node.type == "import_from_statement":
+            rel_node = next((c for c in node.children if c.type == "relative_import"), None)
+            mod_node = next((c for c in node.children if c.type == "dotted_name"), None)
+
+            rel_txt  = rel_node.text.decode("utf8") if rel_node else ""
+            mod_txt  = mod_node.text.decode("utf8") if mod_node else ""
+            import_path = f"{rel_txt}{mod_txt}" if (rel_txt or mod_txt) else None
+            dot = bool(rel_node)
+
+            aliased = next((c for c in node.children if c.type == "aliased_import"), None)
+            if aliased is not None:
+                alias_node = aliased.child_by_field_name("alias")
+                if alias_node is not None:
+                    alias = alias_node.text.decode("utf8")
+
+        else:
+            import_path = raw_stmt  # fallback for unexpected node kinds
 
         # Determine locality (strip leading dots for filesystem check)
         is_local = self._is_local_import(import_path.lstrip(".") if import_path else "")
