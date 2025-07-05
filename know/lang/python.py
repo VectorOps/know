@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 from tree_sitter import Parser, Language
 import tree_sitter_python as tspython
-from know.parsers import AbstractCodeParser, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
+from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
 from know.models import (
     ProgrammingLanguage,
     SymbolKind,
@@ -17,27 +17,35 @@ from know.models import (
     SymbolMetadata,
     ImportEdge,            # NEW – needed for get_import_summary
 )
-from know.settings import ProjectSettings
+from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
 from know.logger import KnowLogger
 from know.helpers import compute_file_hash, compute_symbol_hash
 from devtools import pprint
 
 
+_VENV_DIRS: set[str] = {".venv", "venv", "env", ".env"}
+_MODULE_SUFFIXES: tuple[str, ...] = (".py", ".pyc", ".so", ".pyd")
+
 PY_LANGUAGE = Language(tspython.language())
 
 
-class PythonCodeParser(AbstractCodeParser):
-    def __init__(self):
-        self.parser = Parser(PY_LANGUAGE)
-        # Cache file bytes during `parse` for fast preceding-comment lookup.
-        self._source_bytes: bytes = b""
+_parser: Parser = None
+def _get_parser():
+    global _parser
+    if not _parser:
+        _parser = Parser(PY_LANGUAGE)
+    return _parser
 
-    @staticmethod
-    def register():
-        parser = PythonCodeParser()
-        CodeParserRegistry.register_language(ProgrammingLanguage.PYTHON, parser)
-        CodeParserRegistry.register_parser(".py", parser)
+
+class PythonCodeParser(AbstractCodeParser):
+    def __init__(self, project: Project, rel_path: str):
+        self.parser = _get_parser()
+        self.project = project
+        self.rel_path = rel_path
+        self.source_bytes: bytes = b""
+        self.package: ParsedPackage | None = None
+        self.parsed_file: ParsedFile | None = None
 
     # ------------------------------------------------------------
     # Virtual-path / FQN helpers
@@ -62,13 +70,13 @@ class PythonCodeParser(AbstractCodeParser):
         """Join non-empty parts with a dot, skipping Nones / empty strings."""
         return ".".join([p for p in parts if p])
 
-    def parse(self, project: ProjectSettings, rel_path: str) -> ParsedFile:
+    def parse(self, cache: ProjectCache) -> ParsedFile:
         # Read the file content as bytes
-        file_path = os.path.join(project.project_path, rel_path)
+        file_path = os.path.join(self.project.settings.project_path, self.rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
             source_bytes = file.read()
-        self._source_bytes = source_bytes                # cache for comment lookup
+        self.source_bytes = source_bytes                # cache for comment lookup
 
         # ------------------------------------------------------------------
         # File hash
@@ -79,10 +87,10 @@ class PythonCodeParser(AbstractCodeParser):
         root_node = tree.root_node
 
         # Create a new ParsedPackage instance
-        package = ParsedPackage(
+        self.package = ParsedPackage(
             language=ProgrammingLanguage.PYTHON,
-            physical_path=rel_path,
-            virtual_path=self._rel_to_virtual_path(rel_path),
+            physical_path=self.rel_path,
+            virtual_path=self._rel_to_virtual_path(self.rel_path),
             imports=[]
         )
 
@@ -90,9 +98,9 @@ class PythonCodeParser(AbstractCodeParser):
         file_docstring = self._extract_docstring(root_node)
 
         # Initialize ParsedFile
-        parsed_file = ParsedFile(
-            package=package,
-            path=rel_path,
+        self.parsed_file = ParsedFile(
+            package=self.package,
+            path=self.rel_path,
             language=ProgrammingLanguage.PYTHON,
             docstring=file_docstring,
             file_hash=compute_file_hash(file_path),
@@ -103,14 +111,14 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
-            self._process_node(node, parsed_file, package, project)
+            self._process_node(node)
 
         # ------------------------------------------------------------------
         # Sync package-level imports with file-level imports
         # ------------------------------------------------------------------
-        package.imports = list(parsed_file.imports)
+        self.package.imports = list(self.parsed_file.imports)
 
-        return parsed_file
+        return self.parsed_file
 
     # ------------------------------------------------------------------
     # Generic node-dispatcher
@@ -118,39 +126,36 @@ class PythonCodeParser(AbstractCodeParser):
     def _process_node(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
-        project: ProjectSettings,
     ) -> None:
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
-            self._handle_import_statement(node, parsed_file, project)
+            self._handle_import_statement(node)
 
         elif node.type in ("function_definition", "async_function_definition"):
-            self._handle_function_definition(node, parsed_file, package)
+            self._handle_function_definition(node)
 
         elif node.type == "class_definition":
-            self._handle_class_definition(node, parsed_file, package)
+            self._handle_class_definition(node)
 
         elif node.type == "assignment":
-            self._handle_assignment(node, parsed_file, package)
+            self._handle_assignment(node)
 
         elif node.type == "decorated_definition":
-            self._handle_decorated_definition(node, parsed_file, package)
+            self._handle_decorated_definition(node)
 
         elif node.type == "expression_statement":
             assign_child = next((c for c in node.children if c.type == "assignment"), None)
             if assign_child is not None:
-                self._handle_assignment(assign_child, parsed_file, package)
+                self._handle_assignment(assign_child)
 
         elif node.type == "try_statement":
-            self._handle_try_statement(node, parsed_file, package, project)
+            self._handle_try_statement(node)
 
         # Unknown / unhandled → debug-log (mirrors previous behaviour)
         elif node.type != "comment":
             KnowLogger.log_event(
                 "UNKNOWN_NODE",
                 {
-                    "path": parsed_file.path,
+                    "path": self.parsed_file.path,
                     "type": node.type,
                     "line": node.start_point[0] + 1,
                     "byte_offset": node.start_byte,
@@ -204,7 +209,7 @@ class PythonCodeParser(AbstractCodeParser):
             if node.start_point[0] - sib.end_point[0] > 2:
                 break
             if sib.type == "comment":
-                raw = self._source_bytes[sib.start_byte : sib.end_byte].decode("utf8")
+                raw = self.source_bytes[sib.start_byte : sib.end_byte].decode("utf8")
                 comments.append(raw.rstrip())
                 sib = sib.prev_sibling
                 continue
@@ -407,7 +412,6 @@ class PythonCodeParser(AbstractCodeParser):
         self,
         name: str,
         node,
-        package: ParsedPackage,
         class_name: Optional[str] = None,
     ) -> ParsedSymbol:
         """
@@ -417,7 +421,7 @@ class PythonCodeParser(AbstractCodeParser):
         else is recorded as VARIABLE.
         """
         kind = SymbolKind.CONSTANT if self._is_constant_name(name) else SymbolKind.VARIABLE
-        fqn = self._join_fqn(package.virtual_path, class_name, name)
+        fqn = self._join_fqn(self.package.virtual_path, class_name, name)
         key = ".".join(filter(None, [class_name, name])) if class_name else name
         wrapper = node.parent if node.parent and node.parent.type == "expression_statement" else node
         return ParsedSymbol(
@@ -442,8 +446,6 @@ class PythonCodeParser(AbstractCodeParser):
     def _handle_assignment(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
         class_symbol: Optional[ParsedSymbol] = None,
     ):
         """
@@ -460,22 +462,21 @@ class PythonCodeParser(AbstractCodeParser):
         assign_symbol = self._create_assignment_symbol(
             name,
             node,
-            package,
             class_symbol.name if class_symbol else None,
         )
         if class_symbol:
             class_symbol.children.append(assign_symbol)
         else:
-            parsed_file.symbols.append(assign_symbol)
+            self.parsed_file.symbols.append(assign_symbol)
 
-    def _handle_class_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
+    def _handle_class_definition(self, node):
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Handle class definitions
         class_name = node.child_by_field_name('name').text.decode('utf8')
         symbol = ParsedSymbol(
             name=class_name,
-            fqn=self._join_fqn(package.virtual_path, class_name),
+            fqn=self._join_fqn(self.package.virtual_path, class_name),
             body=wrapper.text.decode('utf8'),
             key=class_name,
             hash=compute_symbol_hash(wrapper.text),
@@ -508,27 +509,27 @@ class PythonCodeParser(AbstractCodeParser):
 
             for node in nodes:
                 if node.type in ("function_definition", "async_function_definition"):
-                    method_symbol = self._create_function_symbol(node, package, class_name)
+                    method_symbol = self._create_function_symbol(node, class_name)
                     symbol.children.append(method_symbol)
 
                 elif node.type == "decorated_definition":
                     inner = next((c for c in node.children
                                   if c.type in ("function_definition", "async_function_definition")), None)
                     if inner is not None:
-                        method_symbol = self._create_function_symbol(inner, package, class_name)
+                        method_symbol = self._create_function_symbol(inner, class_name)
                         symbol.children.append(method_symbol)
 
                 elif node.type == "assignment":
-                    self._handle_assignment(node, parsed_file, package, symbol)
+                    self._handle_assignment(node, symbol)
 
                 elif node.type == "expression_statement":
                     assign_node = next((c for c in node.children if c.type == "assignment"), None)
                     if assign_node is not None:
-                        self._handle_assignment(assign_node, parsed_file, package, symbol)
+                        self._handle_assignment(assign_node, symbol)
 
-        parsed_file.symbols.append(symbol)
+        self.parsed_file.symbols.append(symbol)
 
-    def _create_function_symbol(self, node, package: ParsedPackage, class_name: str) -> ParsedSymbol:
+    def _create_function_symbol(self, node, class_name: str) -> ParsedSymbol:
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
@@ -536,7 +537,7 @@ class PythonCodeParser(AbstractCodeParser):
         key = f"{class_name}.{method_name}" if class_name else method_name
         return ParsedSymbol(
             name=method_name,
-            fqn=self._join_fqn(package.virtual_path, class_name, method_name),
+            fqn=self._join_fqn(self.package.virtual_path, class_name, method_name),
             body=wrapper.text.decode('utf8'),
             key=key,
             hash=compute_symbol_hash(wrapper.text),
@@ -553,7 +554,7 @@ class PythonCodeParser(AbstractCodeParser):
             children=[]
         )
 
-    def _handle_import_statement(self, node, parsed_file: ParsedFile, project: ProjectSettings):
+    def _handle_import_statement(self, node):
         """
         Handle `import` / `from … import …` statements and populate alias & dot flags.
 
@@ -574,6 +575,7 @@ class PythonCodeParser(AbstractCodeParser):
         dot: bool = False
 
         # Parse with `ast` for a robust extraction
+        # TODO: Fix me
         try:
             stmt_node = ast.parse(raw_stmt).body[0]  # type: ignore[index]
             if isinstance(stmt_node, ast.Import):
@@ -593,13 +595,13 @@ class PythonCodeParser(AbstractCodeParser):
             import_path = raw_stmt
 
         # Determine locality (strip leading dots for filesystem check)
-        is_local = self._is_local_import(import_path.lstrip(".") if import_path else "", project)
+        is_local = self._is_local_import(import_path.lstrip(".") if import_path else "")
 
         resolved_path: Optional[str] = None
         if is_local:
             # strip leading dots (relative-import syntax) before lookup
             resolved_path = self._resolve_local_import_path(
-                import_path.lstrip(".") if import_path else "", project
+                import_path.lstrip(".") if import_path else ""
             )
 
         import_edge = ParsedImportEdge(
@@ -608,11 +610,11 @@ class PythonCodeParser(AbstractCodeParser):
             alias=alias,
             dot=dot,
             external=not is_local,
-            raw=raw_stmt,                 # ← NEW – populate required field
+            raw=raw_stmt,
         )
-        parsed_file.imports.append(import_edge)
+        self.parsed_file.imports.append(import_edge)
 
-    def _handle_function_definition(self, node, parsed_file: ParsedFile, package: ParsedPackage):
+    def _handle_function_definition(self, node):
         """
         Handle top-level function definitions.
 
@@ -630,7 +632,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         symbol = ParsedSymbol(
             name=func_name,
-            fqn=self._join_fqn(package.virtual_path, func_name),
+            fqn=self._join_fqn(self.package.virtual_path, func_name),
             body=wrapper.text.decode("utf8"),
             key=func_name,
             hash=compute_symbol_hash(wrapper.text),
@@ -646,13 +648,11 @@ class PythonCodeParser(AbstractCodeParser):
             comment=self._get_preceding_comment(node),
             children=[],
         )
-        parsed_file.symbols.append(symbol)
+        self.parsed_file.symbols.append(symbol)
 
     def _handle_decorated_definition(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
         class_symbol: Optional[ParsedSymbol] = None,
     ):
         """
@@ -670,16 +670,13 @@ class PythonCodeParser(AbstractCodeParser):
             return
 
         if inner.type in ("function_definition", "async_function_definition"):
-            self._handle_function_definition(inner, parsed_file, package)
+            self._handle_function_definition(inner)
         elif inner.type == "class_definition":
-            self._handle_class_definition(inner, parsed_file, package)
+            self._handle_class_definition(inner)
 
     def _handle_try_statement(
         self,
         node,
-        parsed_file: ParsedFile,
-        package: ParsedPackage,
-        project: ProjectSettings,
     ):
         """
         Extract symbols that occur one level deep inside a *top-level* try-statement.
@@ -694,21 +691,18 @@ class PythonCodeParser(AbstractCodeParser):
             # plain `block`
             if child.type == "block":
                 for grand in child.children:
-                    self._process_node(grand, parsed_file, package, project)
+                    self._process_node(grand)
             # except_clause → grab its inner block
             elif child.type == "except_clause":
                 blk = next((c for c in child.children if c.type == "block"), None)
                 if blk is not None:
                     for grand in blk.children:
-                        self._process_node(grand, parsed_file, package, project)
+                        self._process_node(grand)
 
     # ------------------------------------------------------------------ #
     # Module-resolution helper                                           #
     # ------------------------------------------------------------------ #
-    _VENV_DIRS: set[str] = {".venv", "venv", "env", ".env"}
-    _MODULE_SUFFIXES: tuple[str, ...] = (".py", ".pyc", ".so", ".pyd")
-
-    def _locate_module_path(self, import_path: str, project: ProjectSettings) -> Optional[Path]:
+    def _locate_module_path(self, import_path: str) -> Optional[Path]:
         """
         Return the *absolute* Path of the *deepest* package/module that matches
         ``import_path`` inside the given project.
@@ -725,7 +719,7 @@ class PythonCodeParser(AbstractCodeParser):
         if not import_path:
             return None
 
-        project_root = Path(project.project_path).resolve()
+        project_root = Path(self.project.settings.project_path).resolve()
         parts = import_path.split(".")
         found: Optional[Path] = None  # remember the most-specific hit
 
@@ -733,11 +727,11 @@ class PythonCodeParser(AbstractCodeParser):
             base = project_root.joinpath(*parts[:idx])
 
             # Skip anything located inside a virtual-env folder
-            if any(seg in self._VENV_DIRS for seg in base.parts):
+            if any(seg in _VENV_DIRS for seg in base.parts):
                 continue
 
             # --- 1) concrete module file (preferred) ------------------------
-            for suffix in self._MODULE_SUFFIXES:
+            for suffix in _MODULE_SUFFIXES:
                 file_candidate = base.with_suffix(suffix)
                 if file_candidate.exists():
                     found = file_candidate
@@ -749,17 +743,18 @@ class PythonCodeParser(AbstractCodeParser):
 
         return found
 
-    def _resolve_local_import_path(self, import_path: str, project: ProjectSettings) -> Optional[str]:
-        path_obj = self._locate_module_path(import_path, project)
+    def _resolve_local_import_path(self, import_path: str) -> Optional[str]:
+        path_obj = self._locate_module_path(import_path)
         if path_obj is None:
             return None
-        project_root = Path(project.project_path).resolve()
+        project_root = Path(self.project.settings.project_path).resolve()
         return path_obj.relative_to(project_root).as_posix()
 
-    def _is_local_import(self, import_path: str, project: ProjectSettings) -> bool:
-        return self._locate_module_path(import_path, project) is not None
+    def _is_local_import(self, import_path: str) -> bool:
+        return self._locate_module_path(import_path) is not None
 
 
+class PythonLanguageHelper(AbstractLanguageHelper):
     def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0) -> str:
         """
         Return a human-readable summary for *sym*.

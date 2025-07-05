@@ -1,8 +1,9 @@
 from pathlib import Path
 import pytest
 
-from know.project import Project, upsert_parsed_file, scan_project_directory
+from know.project import Project, ProjectCache
 from know.settings import ProjectSettings
+from know.scanner import ParsingState, upsert_parsed_file, scan_project_directory
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
 from know.models import RepoMetadata
@@ -41,15 +42,15 @@ def _make_project(root: Path) -> Project:
     settings = ProjectSettings(project_path=str(root))
     #data_repo = InMemoryDataRepository()
     data_repo = DuckDBDataRepository()
-    CodeParserRegistry.register_parser(".py", PythonCodeParser())
+    CodeParserRegistry.register_parser(".py", PythonCodeParser)
     repo_meta = RepoMetadata(id=generate_id(), root_path=str(root))
     data_repo.repo.create(repo_meta)        # pre-seed repo table
     return Project(settings, data_repo, repo_meta)   # embeddings = None
 
 
-def _parse(parser: PythonCodeParser, settings: ProjectSettings, rel_path: str):
-    """Parse <rel_path> that already exists on disk and return ParsedFile."""
-    return parser.parse(settings, rel_path)
+def _parse(project: Project, rel_path: str):
+    parser = PythonCodeParser(project, rel_path)
+    return parser.parse(ProjectCache())
 
 
 # ---------------------------------------------------------------------------
@@ -69,19 +70,19 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     module_fp  = repo_dir / "mod.py"
     module2_fp = repo_dir / "mod2.py"
     module2_fp.write_text(MOD2_CODE)
-    parser     = PythonCodeParser()
 
     # build project instance
     project = _make_project(repo_dir)
-    settings = project.settings
 
     # ── 1) first version  → INSERT path ────────────────────────────────────
-    module_fp.write_text(CODE_V1)
-    parsed_v1 = _parse(parser, settings, "mod.py")
-    upsert_parsed_file(project, parsed_v1)
+    state = ParsingState()
 
-    parsed2_v1 = _parse(parser, settings, "mod2.py")
-    upsert_parsed_file(project, parsed2_v1)
+    module_fp.write_text(CODE_V1)
+    parsed_v1 = _parse(project, "mod.py")
+    upsert_parsed_file(project, state, parsed_v1)
+
+    parsed2_v1 = _parse(project, "mod2.py")
+    upsert_parsed_file(project, state, parsed2_v1)
 
     rs         = project.data_repository      # shorthand
     repo_meta  = project.get_repo()
@@ -112,9 +113,11 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     assert len(edges) == 1
 
     # ── 2) second version  → UPDATE / DELETE paths ─────────────────────────
+    state = ParsingState()
+
     module_fp.write_text(CODE_V2)             # CONST + import go away, foo body mutates
-    parsed_v2 = _parse(parser, settings, "mod.py")
-    upsert_parsed_file(project, parsed_v2)
+    parsed_v2 = _parse(project, "mod.py")
+    upsert_parsed_file(project, state, parsed_v2)
 
     # packages / files unchanged (update, not duplicate)
     assert len(rs.package.get_list_by_repo_id(repo_meta.id)) == 2

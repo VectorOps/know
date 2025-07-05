@@ -80,7 +80,7 @@ class SearchSymbolsTool(BaseTool):
 
         results: list[SymbolSearchResult] = []
         for s in syms:
-            parser: AbstractCodeParser | None = None
+            helper: AbstractLanguageHelper | None = None
 
             # TODO: Optimize to dedupe and get a list of files by ids
             fm: FileMetadata | None = None
@@ -90,13 +90,13 @@ class SearchSymbolsTool(BaseTool):
                 file_path = fm.path if fm else None
 
                 if fm.language:
-                    parser = CodeParserRegistry.get_language(fm.language)
+                    helper = CodeParserRegistry.get_helper(fm.language)
 
             sym_summary: Optional[str] = None
             sym_body:    Optional[str] = None
 
             if include_body != IncludeBody.NO and parser:
-                sym_body = parser.get_symbol_summary(s)
+                sym_body = helper.get_symbol_summary(s)
             elif include_body == IncludeBody.FULL:
                 sym_body = s.symbol_body
 

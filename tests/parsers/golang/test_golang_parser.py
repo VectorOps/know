@@ -3,6 +3,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from devtools import pprint
 
+from know.settings import ProjectSettings
+from know.project import init_project, ProjectCache
 from know.lang.golang import GolangCodeParser
 from know.models import ProgrammingLanguage, SymbolKind
 
@@ -12,10 +14,14 @@ from know.models import ProgrammingLanguage, SymbolKind
 # --------------------------------------------------------------------------- #
 def _make_dummy_project(root_dir: Path):
     """
-    Very small stub fulfilling the interface required by GolangCodeParser.parse().
-    The parser only relies on ``project_path``.
+    Build a real Project instance backed by the in-memory repository so the
+    parser can access `project.settings.project_path` and other facilities.
     """
-    return SimpleNamespace(project_path=str(root_dir))
+    settings = ProjectSettings(
+        project_path=str(root_dir),
+        repository_backend="memory",
+    )
+    return init_project(settings, refresh=False)
 
 
 # --------------------------------------------------------------------------- #
@@ -28,9 +34,10 @@ def test_golang_parser_on_sample_file():
     """
     samples_dir = Path(__file__).parent / "samples"
     project     = _make_dummy_project(samples_dir)
-    parser      = GolangCodeParser()
+    cache       = ProjectCache()
 
-    parsed_file = parser.parse(project, "main.go")
+    parser      = GolangCodeParser(project, "main.go")
+    parsed_file = parser.parse(cache)
 
     # ------------------------------------------------------------------ #
     # Basic assertions                                                    #

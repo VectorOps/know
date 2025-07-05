@@ -18,12 +18,13 @@ from devtools import pformat
 
 SYSTEM_PROMPT = """
 Please resolve the user's task by editing and testing the code files in your current code
-execution session. You are a deployed coding agent. The repo(s) are already cloned
+execution session. You are a deployed coding agent. The repo is already cloned
 in your working directory, and you must fully solve the problem for your answer to be
 considered correct. You also have access to special tools that allow quick navigation
 in the codebase. Use these tools to search for relevant code needed to solve users question.
 Design and architect the best solution and provide code diffs with explanation of the proposed
-changes to the user. Be conservative in number of files requested.
+changes to the user. Avoid reading excessive number of files - get *minimum* required set
+of file summaries to answer the question. Use symbol search to find relevant code snippets.
 """
 
 

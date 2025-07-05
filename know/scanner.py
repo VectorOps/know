@@ -79,8 +79,8 @@ def scan_project_directory(project: Project) -> None:
                 logger.debug(f"Unchanged file {rel_path}, skipping parse.")
                 continue
 
-        parser = CodeParserRegistry.get_parser(path.suffix)
-        if parser is None:
+        parser_cls = CodeParserRegistry.get_parser(path.suffix)
+        if parser_cls is None:
             logger.debug(f"No parser registered for {rel_path} – storing bare FileMetadata.")
 
             # Ensure FileMetadata exists / is up-to-date so the file is still discoverable
@@ -108,7 +108,8 @@ def scan_project_directory(project: Project) -> None:
             continue
 
         try:
-            parsed_file = parser.parse(project, cache, str(rel_path))
+            parser = parser_cls(project, str(rel_path))
+            parsed_file = parser.parse(cache)
             upsert_parsed_file(project, state, parsed_file)
         except Exception as exc:
             logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
@@ -143,7 +144,7 @@ def scan_project_directory(project: Project) -> None:
     assign_parents_to_orphan_methods(project)
 
     # Resolve import edges
-    project._resolve_pending_import_edges()
+    resolve_pending_import_edges(project, state)
 
     # Refresh any full text indexes
     project.data_repository.refresh_full_text_indexes()
@@ -185,7 +186,6 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         Map a ParsedImportEdge to an existing internal PackageMetadata.id
         (or None when the import is external / unknown).
         """
-        # print(parsed_imp)
         if parsed_imp.external or not parsed_imp.virtual_path:
             return None
 

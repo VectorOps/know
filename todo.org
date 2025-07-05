@@ -49,3 +49,4 @@
 * [ ] Python parser should preserve decorators when parsing symbols. Extend model to collect decorators and store them in model.
 * [X] Python parser does not parse symbols of decorated methods
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
+* [ ] Search for public symbols by default

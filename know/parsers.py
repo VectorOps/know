@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Type
 from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 from know.models import (
@@ -12,7 +12,7 @@ from know.models import (
     SymbolMetadata,
     ImportEdge,
 )
-from know.settings import ProjectSettings
+from know.project import Project, ProjectCache
 
 
 # Parser-specific data structures
@@ -115,25 +115,30 @@ class ParsedFile(BaseModel):
 class AbstractCodeParser(ABC):
     """
     Abstract base class for code parsers.
-
-    A code parser takes a Project and a relative file path,
-    and returns a FileMetadata object representing the parsed file.
     """
 
     @abstractmethod
-    def parse(self, project: ProjectSettings, rel_path: str) -> ParsedFile:
+    def __init__(self, project: Project, rel_path: str) -> None:
+        pass
+
+    @abstractmethod
+    def parse(self, cache: ProjectCache) -> ParsedFile:
         """
         Parse the file at the given relative path within the project.
 
         Args:
-            project: The Project instance.
-            rel_path: The file path relative to the project root.
+            cache: The ProjectCache instance
 
         Returns:
             ParsedFile: The parsed file metadata.
         """
         pass
 
+
+class AbstractLanguageHelper(ABC):
+    """
+    Abstract base language helper class
+    """
     @abstractmethod
     def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0) -> str:
         """
@@ -156,8 +161,8 @@ class CodeParserRegistry:
     Singleton registry mapping file extensions to CodeParser implementations.
     """
     _instance = None
-    _parsers: Dict[str, AbstractCodeParser] = {}
-    _lang_parsers: Dict[ProgrammingLanguage, AbstractCodeParser] = {}
+    _parsers: Dict[str, Type[AbstractCodeParser]] = {}
+    _lang_helpers: Dict[ProgrammingLanguage, AbstractCodeParser] = {}
 
     def __new__(cls):
         if cls._instance is None:
@@ -165,17 +170,17 @@ class CodeParserRegistry:
         return cls._instance
 
     @classmethod
-    def register_language(cls, lang: ProgrammingLanguage, parser: AbstractCodeParser) -> None:
-        cls._lang_parsers[lang] = parser
+    def register_helper(cls, lang: ProgrammingLanguage, helper: AbstractLanguageHelper) -> None:
+        cls._lang_helpers[lang] = helper
 
     @classmethod
-    def get_language(cls, lang: ProgrammingLanguage) -> Optional[AbstractCodeParser]:
-        return cls._lang_parsers[lang]
+    def get_helper(cls, lang: ProgrammingLanguage) -> Optional[AbstractLanguageHelper]:
+        return cls._lang_helpers[lang]
 
     @classmethod
-    def register_parser(cls, ext: str, parser: AbstractCodeParser) -> None:
+    def register_parser(cls, ext: str, parser: Type[AbstractCodeParser]) -> None:
         cls._parsers[ext] = parser
 
     @classmethod
-    def get_parser(cls, ext: str) -> Optional[AbstractCodeParser]:
+    def get_parser(cls, ext: str) -> Optional[Type[AbstractCodeParser]]:
         return cls._parsers.get(ext)

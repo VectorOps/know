@@ -78,23 +78,23 @@ class SummarizeFilesTool(BaseTool):
 
             symbols = symbol_repo.get_list_by_file_id(fm.id)
 
-            # Use language-specific get_symbol_summary when a parser exists.
+            # Use language-specific get_symbol_summary when a helper exists.
             # Work on *top-level* symbols only – nested ones are emitted by the
             # summary function itself.
-            parser: AbstractCodeParser | None = None
+            helper: AbstractLanguageHelper | None = None
             if fm.language is not None:
-                parser = CodeParserRegistry.get_language(fm.language)
+                helper = CodeParserRegistry.get_helper(fm.language)
 
-            if parser is not None:
-                import_lines = [parser.get_import_summary(e) for e in imp_edges]
+            if helper is not None:
+                import_lines = [helper.get_import_summary(e) for e in imp_edges]
             else:
                 import_lines = [_import_to_text(e) for e in imp_edges]
 
             top_level_syms = [s for s in symbols if s.parent_ref is None]
             top_level_syms.sort(key=lambda s: (s.start_line, s.start_col))
 
-            if parser is not None:
-                definitions_blocks = [parser.get_symbol_summary(s) for s in top_level_syms]
+            if helper is not None:
+                definitions_blocks = [helper.get_symbol_summary(s) for s in top_level_syms]
             else:
                 definitions_blocks = [_symbol_to_text(s) for s in top_level_syms]
 

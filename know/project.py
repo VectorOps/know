@@ -54,8 +54,8 @@ class Project:
         )
 
     def refresh(self):
-        from know.scanner import scan_project_directory
-        scanner.scan_project_directory(project)
+        from know import scanner
+        scanner.scan_project_directory(self)
 
 
 
@@ -77,7 +77,7 @@ class ProjectCache:
         self._cache.clear()
 
 
-def init_project(settings: ProjectSettings) -> Project:
+def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
     """
     Initializes the project. Settings object contains project path and/or project id.
     Then init project checks if RepoMetadata exists for the id (if provided) or absolute path.
@@ -129,6 +129,7 @@ def init_project(settings: ProjectSettings) -> Project:
     )
 
     # Recursively scan the project directory and parse source files
-    project.refresh()
+    if refresh:
+        project.refresh()
 
     return project

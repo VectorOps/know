@@ -1,12 +1,11 @@
 import pytest
 from pathlib import Path
 from devtools import pprint
-from know.settings import ProjectSettings
-from know.project import init_project
 
+from know.settings import ProjectSettings
+from know.project import init_project, ProjectCache
 from know.lang.python import PythonCodeParser
 from know.models import ProgrammingLanguage, SymbolKind, Modifier
-from know.project import ProjectCache
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -20,7 +19,7 @@ def _make_dummy_project(root_dir: Path):
         project_path=str(root_dir),
         repository_backend="memory",        # use the lightweight backend
     )
-    return init_project(settings)
+    return init_project(settings, refresh=False)
 
 
 # --------------------------------------------------------------------------- #
@@ -33,10 +32,10 @@ def test_python_parser_on_simple_file():
     """
     samples_dir = Path(__file__).parent / "samples"
     project      = _make_dummy_project(samples_dir)
-    parser       = PythonCodeParser()
     cache        = ProjectCache()
 
-    parsed_file = parser.parse(project, cache, "simple.py")
+    parser       = PythonCodeParser(project, "simple.py")
+    parsed_file  = parser.parse(cache)
 
     # ------------------------------------------------------------------ #
     # Basic assertions
