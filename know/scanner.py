@@ -321,6 +321,33 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     for key in obsolete_keys:
         symbol_repo.delete(existing_by_key[key].id)
 
+    # ── Symbol References ───────────────────────────────────────────────────
+    symbolref_repo = repo_store.symbolref
+
+    # remove all old refs for this file
+    for ref in symbolref_repo.get_list_by_file_id(file_meta.id):
+        symbolref_repo.delete(ref.id)
+
+    # helper to resolve internal package-ids for reference targets
+    def _resolve_pkg_id(virt_path: str | None) -> str | None:
+        if not virt_path:
+            return None
+        pkg = repo_store.package.get_by_virtual_path(virt_path)
+        return pkg.id if pkg else None
+
+    # (re)create refs from the freshly parsed data
+    for ref in parsed_file.symbol_refs:
+        kwargs = {
+            "repo_id": project.get_repo().id,
+            "package_id": pkg_meta.id,
+            "file_id": file_meta.id,
+            "name": ref.name,
+            "raw": ref.raw,
+            "type": getattr(ref, "typr", None),          # ParsedSymbolRef.typr → SymbolRef.type
+            "to_package_id": _resolve_pkg_id(getattr(ref, "to_package_path", None)),
+        }
+        symbolref_repo.create(SymbolRef(id=generate_id(), **kwargs))
+
 
 def assign_parents_to_orphan_methods(project: Project) -> None:
     """
