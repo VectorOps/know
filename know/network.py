@@ -1,26 +1,25 @@
 from collections import defaultdict
 from typing import Dict, Set, List
-import networkx as nx                       # NEW  – install `networkx` if not yet present
+import networkx as nx
 
 from know.models import FileMetadata, SymbolMetadata, SymbolRef
 from know.project import Project
-from know.scanner import ScanResult
+from know.project import ScanResult
 
 class RepoMap:
     """Keeps an up-to-date call/reference graph (file-level granularity)."""
 
     def __init__(self, project: Project):
         self.project = project
-        self.G = nx.MultiDiGraph()          # ← required MultiDiGraph
-        self._defs: Dict[str, str] = {}     # symbol-name → defining file-id
-        self._refs: Dict[str, Set[str]] = defaultdict(set)   # symbol-name → {ref_file_id,…}
-        self._path_to_fid: Dict[str, str] = {}               # rel_path → file_id
-        self._build_initial_graph()         # populate everything
+        self.G = nx.MultiDiGraph()
+        self._defs: Dict[str, str] = {}
+        self._refs: Dict[str, Set[str]] = defaultdict(set)
+        self._path_to_fid: Dict[str, str] = {}
 
     # ------------------------------------------------------------------  
     #  Initial full build
     # ------------------------------------------------------------------
-    def _build_initial_graph(self) -> None:
+    def build_initial_graph(self) -> None:
         repo_id = self.project.get_repo().id
         file_repo     = self.project.data_repository.file
         symbol_repo   = self.project.data_repository.symbol
@@ -41,6 +40,7 @@ class RepoMap:
         for name, def_file in self._defs.items():
             for ref_file in self._refs.get(name, []):
                 self.G.add_edge(ref_file, def_file, name=name)
+
     # ------------------------------------------------------------------  
     #  Incremental refresh
     # ------------------------------------------------------------------

@@ -5,6 +5,7 @@ from typing import Optional
 
 from dataclasses import dataclass, field
 
+from know.project import ScanResult            # NEW – moved there
 from know.helpers import compute_file_hash, generate_id, parse_gitignore
 from know.logger import KnowLogger as logger
 from know.models import (
@@ -13,7 +14,7 @@ from know.models import (
     SymbolMetadata,
     ImportEdge,
     SymbolKind,
-    SymbolRef,              # NEW
+    SymbolRef,
 )
 from know.data import SymbolSearchQuery
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
@@ -23,12 +24,6 @@ from know.project import Project, ProjectCache
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode", ".pytest_cache"}
 
 
-@dataclass
-class ScanResult:
-    """Result object returned by `scan_project_directory`."""
-    files_added:  list[str] = field(default_factory=list)
-    files_updated: list[str] = field(default_factory=list)
-    files_deleted: list[str] = field(default_factory=list)
 
 class ParsingState:
     def __init__(self):
@@ -49,7 +44,7 @@ def scan_project_directory(project: Project) -> ScanResult:
           Any exception raised is caught and logged at ERROR (with stack-trace).
     Returns a ScanResult object describing added/updated/deleted files.
     """
-    result = ScanResult()          # ← NEW
+    result = ScanResult()
     root_path: str | None = project.settings.project_path
     if not root_path:
         logger.warning("scan_project_directory skipped – project_path is not set.")
@@ -115,7 +110,7 @@ def scan_project_directory(project: Project) -> ScanResult:
                     last_updated=mod_time,
                 )
                 file_repo.create(fm)
-                result.files_added.append(str(rel_path))      # NEW
+                result.files_added.append(str(rel_path))
             else:
                 file_repo.update(
                     existing_meta.id,
@@ -124,7 +119,7 @@ def scan_project_directory(project: Project) -> ScanResult:
                         "last_updated": mod_time,
                     },
                 )
-                result.files_updated.append(str(rel_path))    # NEW
+                result.files_updated.append(str(rel_path))
             continue
 
         try:
@@ -132,9 +127,9 @@ def scan_project_directory(project: Project) -> ScanResult:
             parsed_file = parser.parse(cache)
             upsert_parsed_file(project, state, parsed_file)
             if existing_meta is None:
-                result.files_added.append(str(rel_path))      # NEW
+                result.files_added.append(str(rel_path))
             else:
-                result.files_updated.append(str(rel_path))    # NEW
+                result.files_updated.append(str(rel_path))
         except Exception as exc:
             logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
 
@@ -156,7 +151,7 @@ def scan_project_directory(project: Project) -> ScanResult:
             symbol_repo.delete_by_file_id(fm.id)
             # 2) delete the file metadata itself
             file_repo.delete(fm.id)
-            result.files_deleted.append(fm.path)              # NEW
+            result.files_deleted.append(fm.path)
 
     # ------------------------------------------------------------------
     #  Remove PackageMetadata entries that lost all their files
@@ -301,7 +296,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             "file_id": file_meta.id,
             "repo_id": project.get_repo().id,
             "parent_symbol_id": parent_id,
-            "package_id": pkg_meta.id,          # NEW
+            "package_id": pkg_meta.id,          # N
         })
 
         emb_calc = project.embeddings

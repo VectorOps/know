@@ -1,5 +1,7 @@
 from pathlib import Path
 from typing import Any, Optional
+from dataclasses import dataclass, field            # NEW
+from typing import TYPE_CHECKING                    # NEW
 from know.models import (
     RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata,
     ImportEdge, Vector, SymbolKind
@@ -12,6 +14,16 @@ from know.helpers import parse_gitignore, compute_file_hash, generate_id
 from know.settings import ProjectSettings
 from know.embeddings.interface import EmbeddingsCalculator
 from know.embeddings.factory import get_embeddings_calculator
+
+@dataclass
+class ScanResult:                                   # NEW
+    """Result object returned by `scan_project_directory`."""   # NEW
+    files_added:  list[str] = field(default_factory=list)       # NEW
+    files_updated: list[str] = field(default_factory=list)      # NEW
+    files_deleted: list[str] = field(default_factory=list)      # NEW
+
+if TYPE_CHECKING:                                   # NEW
+    from know.network import RepoMap                # NEW
 
 
 class Project:
@@ -30,6 +42,11 @@ class Project:
         self.data_repository = data_repository
         self._repo_metadata = repo_metadata
         self.embeddings = embeddings
+
+        # ── build call/reference graph ─────────────────────────────
+        from know.network import RepoMap            # LOCAL import, avoids cycle
+        self.repo_map: "RepoMap" = RepoMap(self)
+        self.repo_map.build_initial_graph()
 
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
@@ -55,7 +72,10 @@ class Project:
 
     def refresh(self):
         from know import scanner
-        scanner.scan_project_directory(self)
+        scan_result = scanner.scan_project_directory(self)
+        # keep the in-memory graph in sync
+        if hasattr(self, "repo_map"):
+            self.repo_map.refresh(scan_result)
 
 
 
