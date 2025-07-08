@@ -10,8 +10,7 @@ from know.logger import KnowLogger as logger
 from know.models import (
     FileMetadata, SymbolMetadata, SymbolRef, Visibility
 )
-from know.project import Project
-from know.project import ScanResult
+from know.project import Project, ScanResult
 
 
 @dataclass(slots=True)
