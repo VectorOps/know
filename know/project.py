@@ -35,6 +35,7 @@ class ProjectComponent(ABC):
     def refresh(self, scan_result: "ScanResult") -> None:
         ...
 
+
 class Project:
     """
     Represents a single project and offers various APIs to get information
@@ -52,27 +53,33 @@ class Project:
         self._repo_metadata = repo_metadata
         self.embeddings = embeddings
 
-        self._components: list[ProjectComponent] = []
+        self._components: dict[str, ProjectComponent] = {}
 
         # ── build call/reference graph ─────────────────────────────
-        # TODO: Fix circular import
-        from know.network import RepoMap                 # keep existing local import
-        self.repo_map: RepoMap = RepoMap(self)
-        self.register_component(self.repo_map)           # NEW
-
-        for comp in self._components:
+        for comp in self._components.values():
             try:
                 comp.initialize()
             except Exception as exc:
                 logger.error("Component %s failed to initialize: %s", comp, exc)
 
-    def register_component(self, component: "ProjectComponent") -> None:
-        if component not in self._components:
-            self._components.append(component)
+    def register_component(self, name: str, component: ProjectComponent) -> None:
+        """Register *component* under *name* and immediately call initialise()."""
+        if name in self._components:
+            logger.warning("Component %s already registered – ignored.", name)
+            return
+        self._components[name] = component
+        try:
+            component.initialize()
+        except Exception as exc:
+            logger.error("Component %s failed to initialize: %s", component, exc)
 
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
         return self._repo_metadata
+
+    def get_component(self, name: str) -> ProjectComponent | None:
+        """Return registered component (or None when unknown)."""
+        return self._components.get(name)
 
     def compute_embedding(
         self,
@@ -96,7 +103,7 @@ class Project:
         from know import scanner
         scan_result = scanner.scan_project_directory(self)
 
-        for comp in self._components:
+        for comp in self._components.values():
             try:
                 comp.refresh(scan_result)
             except Exception as exc:
