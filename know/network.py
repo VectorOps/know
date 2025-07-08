@@ -1,16 +1,17 @@
-import re                                       # NEW
-from dataclasses import dataclass               # NEW
-from typing import Any, Optional                # NEW
+import re
+from dataclasses import dataclass
+from typing import Any, Optional
 from collections import defaultdict
 from typing import Dict, Set, List
 import networkx as nx
 
-from know.logger import KnowLogger as logger   # NEW
+from know.logger import KnowLogger as logger
 from know.models import (
-    FileMetadata, SymbolMetadata, SymbolRef, Visibility   # NEW Visibility
+    FileMetadata, SymbolMetadata, SymbolRef, Visibility
 )
 from know.project import Project
 from know.project import ScanResult
+
 
 @dataclass(slots=True)
 class NameProps:                # cache entry for a single identifier
@@ -18,13 +19,14 @@ class NameProps:                # cache entry for a single identifier
     visibility: Optional[str]   # "public" / "private" / "protected" / …
     descriptiveness: float      # 0.0 … 1.0
 
+
 class RepoMap:
     """Keeps an up-to-date call/reference graph (file-level granularity)."""
 
     def __init__(self, project: Project):
         self.project = project
         self.G = nx.MultiDiGraph()
-        self._defs: Dict[str, str] = {}
+        self._defs: Dict[str, Set[str]] = defaultdict(set)   # was Dict[str, str]
         self._refs: Dict[str, Set[str]] = defaultdict(set)
         self._path_to_fid: Dict[str, str] = {}
         self._name_props: Dict[str, NameProps] = {}      # NEW  name → NameProps
@@ -32,6 +34,9 @@ class RepoMap:
     # ------------------------------------------------------------------  
     #  Debug helpers
     # ------------------------------------------------------------------
+
+    def get_definition_count(self, name: str) -> int:
+        return len(self._defs.get(name, []))
     def debug_summary(self) -> str:
         """Return short ‘N-nodes / M-edges’ summary, compatible with all NX ≥2.0."""
         if hasattr(nx, "info"):               # NetworkX < 3.0
@@ -103,7 +108,7 @@ class RepoMap:
             # collect defs
             for sym in symbol_repo.get_list_by_file_id(fm.id):
                 if sym.name:
-                    self._defs[sym.name] = fm.id
+                    self._defs[sym.name].add(fm.id)
                     self._name_props[sym.name] = self._make_props(sym)   # NEW
             # collect refs
             for ref in symbolref_repo.get_list_by_file_id(fm.id):
@@ -111,9 +116,10 @@ class RepoMap:
                     self._refs[ref.name].add(fm.id)
 
         # materialise edges
-        for name, def_file in self._defs.items():
+        for name, def_files in self._defs.items():
             for ref_file in self._refs.get(name, []):
-                self.G.add_edge(ref_file, def_file, name=name)
+                for def_file in def_files:
+                    self.G.add_edge(ref_file, def_file, name=name)
 
     # ------------------------------------------------------------------  
     #  Incremental refresh
@@ -133,10 +139,12 @@ class RepoMap:
             if self.G.has_node(fid):
                 self.G.remove_node(fid)
             # purge defs / refs caches
-            for n, df in list(self._defs.items()):
-                if df == fid:
-                    del self._defs[n]
-                    self._name_props.pop(n, None)            # NEW
+            for name, def_files in list(self._defs.items()):
+                if fid in def_files:
+                    def_files.remove(fid)
+                    if not def_files:
+                        del self._defs[name]
+                        self._name_props.pop(name, None)
             for refs in self._refs.values():
                 refs.discard(fid)
 
@@ -152,10 +160,12 @@ class RepoMap:
             # remove existing node & caches for this file
             if self.G.has_node(fid):
                 self.G.remove_node(fid)
-            for n, df in list(self._defs.items()):
-                if df == fid:
-                    del self._defs[n]
-                    self._name_props.pop(n, None)            # NEW
+            for name, def_files in list(self._defs.items()):
+                if fid in def_files:
+                    def_files.remove(fid)
+                    if not def_files:
+                        del self._defs[name]
+                        self._name_props.pop(name, None)
             for refs in self._refs.values():
                 refs.discard(fid)
 
@@ -165,7 +175,7 @@ class RepoMap:
 
             for sym in symbol_repo.get_list_by_file_id(fid):
                 if sym.name:
-                    self._defs[sym.name] = fid
+                    self._defs[sym.name].add(fid)
                     self._name_props[sym.name] = self._make_props(sym)   # NEW
                     new_def_names.add(sym.name)
 
@@ -177,13 +187,12 @@ class RepoMap:
             # ensure node exists
             self.G.add_node(fid)
 
-            # edges from this file’s refs → defs
+            # edges from this file’s refs → all its targets
             for name in new_ref_names:
-                def_fid = self._defs.get(name)
-                if def_fid:
+                for def_fid in self._defs.get(name, []):
                     self.G.add_edge(fid, def_fid, name=name)
 
-            # edges from other refs → new defs
+            # edges from other refs → new defs in this file
             for name in new_def_names:
                 for ref_fid in self._refs.get(name, []):
                     self.G.add_edge(ref_fid, fid, name=name)
