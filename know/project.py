@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any, Optional
 from dataclasses import dataclass, field            # NEW
 from typing import TYPE_CHECKING                    # NEW
+from abc import ABC, abstractmethod
 from know.models import (
     RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata,
     ImportEdge, Vector, SymbolKind
@@ -24,6 +25,16 @@ class ScanResult:
     files_deleted: list[str] = field(default_factory=list)
 
 
+class ProjectComponent(ABC):
+    """Lifecycle-hook interface for project-level components."""
+    @abstractmethod
+    def initialize(self) -> None:               # called once after registration
+        ...
+
+    @abstractmethod
+    def refresh(self, scan_result: "ScanResult") -> None:
+        ...
+
 class Project:
     """
     Represents a single project and offers various APIs to get information
@@ -41,12 +52,23 @@ class Project:
         self._repo_metadata = repo_metadata
         self.embeddings = embeddings
 
+        self._components: list[ProjectComponent] = []
+
         # ── build call/reference graph ─────────────────────────────
         # TODO: Fix circular import
-        from know.network import RepoMap
+        from know.network import RepoMap                 # keep existing local import
         self.repo_map: RepoMap = RepoMap(self)
-        # TODO: Explicit init
-        self.repo_map.build_initial_graph()
+        self.register_component(self.repo_map)           # NEW
+
+        for comp in self._components:
+            try:
+                comp.initialize()
+            except Exception as exc:
+                logger.error("Component %s failed to initialize: %s", comp, exc)
+
+    def register_component(self, component: "ProjectComponent") -> None:
+        if component not in self._components:
+            self._components.append(component)
 
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
@@ -74,9 +96,11 @@ class Project:
         from know import scanner
         scan_result = scanner.scan_project_directory(self)
 
-        # keep the in-memory graph in sync
-        if self.repo_map is not None:
-            self.repo_map.refresh(scan_result)
+        for comp in self._components:
+            try:
+                comp.refresh(scan_result)
+            except Exception as exc:
+                logger.error("Component %s failed to refresh: %s", comp, exc)
 
 
 

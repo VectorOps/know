@@ -10,7 +10,7 @@ from know.logger import KnowLogger as logger
 from know.models import (
     FileMetadata, SymbolMetadata, SymbolRef, Visibility
 )
-from know.project import Project, ScanResult
+from know.project import Project, ScanResult, ProjectComponent
 
 
 @dataclass(slots=True)
@@ -20,7 +20,7 @@ class NameProps:                # cache entry for a single identifier
     descriptiveness: float      # 0.0 … 1.0
 
 
-class RepoMap:
+class RepoMap(ProjectComponent):
     """Keeps an up-to-date call/reference graph (file-level granularity)."""
 
     DESCRIPTIVENESS_THRESHOLD = 0.5           # ≥0.5 → “descriptive”
@@ -45,6 +45,7 @@ class RepoMap:
 
     def get_definition_count(self, name: str) -> int:
         return len(self._defs.get(name, []))
+
     def debug_summary(self) -> str:
         """Return short ‘N-nodes / M-edges’ summary, compatible with all NX ≥2.0."""
         if hasattr(nx, "info"):               # NetworkX < 3.0
@@ -128,7 +129,8 @@ class RepoMap:
     # ------------------------------------------------------------------
     #  Initial full build
     # ------------------------------------------------------------------
-    def build_initial_graph(self) -> None:
+    def initialize(self) -> None:
+        """Build the initial call/reference graph."""
         repo_id = self.project.get_repo().id
         file_repo     = self.project.data_repository.file
         symbol_repo   = self.project.data_repository.symbol
@@ -160,6 +162,8 @@ class RepoMap:
     # ------------------------------------------------------------------  
     #  Incremental refresh
     # ------------------------------------------------------------------
+
+    # build_initial_graph method removed (now initialize)
     def refresh(self, scan: ScanResult) -> None:
         """Update graph after running `scanner.scan_project_directory`."""
         file_repo     = self.project.data_repository.file
