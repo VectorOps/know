@@ -5,7 +5,14 @@ from typing import Optional
 
 from know.helpers import compute_file_hash, generate_id, parse_gitignore
 from know.logger import KnowLogger as logger
-from know.models import FileMetadata, PackageMetadata, SymbolMetadata, ImportEdge, SymbolKind
+from know.models import (
+    FileMetadata,
+    PackageMetadata,
+    SymbolMetadata,
+    ImportEdge,
+    SymbolKind,
+    SymbolRef,              # NEW
+)
 from know.data import SymbolSearchQuery
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.project import Project, ProjectCache
