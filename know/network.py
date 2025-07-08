@@ -135,7 +135,11 @@ class RepoMap:
         """Return NX PageRank personalization vector."""
         boost_paths = boost_paths or []
         boost_symbols = boost_symbols or []
-        weights = {n: 1.0 for n in self.G.nodes}
+        weights: dict[str, float] = {}
+        for n in self.G.nodes:
+            # base weight = weighted degree; fall back to 1.0 when the node is isolated
+            w = float(self.G.degree(n, weight="weight")) or 1.0
+            weights[n] = w
         for p in boost_paths:
             fid = self._path_to_fid.get(p)
             if fid:
@@ -257,6 +261,7 @@ class RepoMap:
 
             # ensure self-loop for this node if needed
             self._ensure_self_loop(fid)
+
         # Ensure self-loops for all nodes (rule 7)
         for node in list(self.G.nodes):
             self._ensure_self_loop(node)
