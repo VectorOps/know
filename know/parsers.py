@@ -11,6 +11,7 @@ from know.models import (
     FileMetadata,
     SymbolMetadata,
     ImportEdge,
+    SymbolRefType,
 )
 from know.project import Project, ProjectCache
 
@@ -46,6 +47,21 @@ class ParsedPackage(BaseModel):
             "language": self.language,
             "virtual_path": self.virtual_path,
             "physical_path": self.physical_path,
+        }
+
+
+class ParsedSymbolRef(BaseModel):
+    name: str
+    raw: str
+    type: SymbolRefType
+    to_package_path: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "raw": self.raw,
+            "type": self.type,
+            "to_package_path": self.to_package_path,
         }
 
 
@@ -96,11 +112,12 @@ class ParsedFile(BaseModel):
     language: ProgrammingLanguage
     docstring: Optional[str] = None
 
-    file_hash: Optional[str] = None      # NEW – SHA-256 of full file
-    last_updated: Optional[float] = None   # filesystem modification time
+    file_hash: Optional[str] = None
+    last_updated: Optional[float] = None
 
     symbols: List[ParsedSymbol] = Field(default_factory=list)
     imports: List[ParsedImportEdge] = Field(default_factory=list)
+    symbol_refs: List[ParsedSymbolRef] = Field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {

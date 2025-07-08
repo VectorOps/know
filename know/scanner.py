@@ -344,16 +344,17 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
 
     # (re)create refs from the freshly parsed data
     for ref in parsed_file.symbol_refs:
-        kwargs = {
-            "repo_id": project.get_repo().id,
-            "package_id": pkg_meta.id,
-            "file_id": file_meta.id,
-            "name": ref.name,
-            "raw": ref.raw,
-            "type": ref.type,
-            "to_package_id": _resolve_pkg_id(ref.to_package_path),
-        }
-        symbolref_repo.create(SymbolRef(id=generate_id(), **kwargs))
+        ref_data = ref.to_dict()                # ← use helper
+        to_pkg_id = _resolve_pkg_id(ref_data.pop("to_package_path"))
+        ref_data.update(
+            {
+                "repo_id": project.get_repo().id,
+                "package_id": pkg_meta.id,
+                "file_id": file_meta.id,
+                "to_package_id": to_pkg_id,
+            }
+        )
+        symbolref_repo.create(SymbolRef(id=generate_id(), **ref_data))
 
 
 def assign_parents_to_orphan_methods(project: Project) -> None:

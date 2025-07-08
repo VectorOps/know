@@ -819,12 +819,10 @@ class PythonCodeParser(AbstractCodeParser):
 
                     refs.append(
                         ParsedSymbolRef(
-                            package=self.package,
-                            file=self.parsed_file,
                             name=call_name,
                             raw=raw,
-                            typr=SymbolRefType.CALL,
-                            to_package_id=None,       # resolved later
+                            type=SymbolRefType.CALL,
+                            to_package_path=to_pkg_path,
                         )
                     )
             # recurse
