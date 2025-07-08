@@ -1,5 +1,6 @@
 import sys
 import click
+from pathlib import Path               # NEW
 from know.project import init_project
 from know.settings import ProjectSettings, EmbeddingSettings
 
@@ -79,6 +80,14 @@ def cli(project_path,
     try:
         project = init_project(settings)
         click.echo(f"Project initialised. Repo-ID: {project.get_repo().id}")
+
+        # ── Repo-graph diagnostics ──────────────────────────────────────  NEW
+        graph = project.repo_map
+        click.echo(f"Repo-graph: {graph.debug_summary()}")   # human readable
+        dot_str = graph.to_dot()
+        dot_path = Path(project_path) / "repo_graph.dot"
+        dot_path.write_text(dot_str, encoding="utf-8")
+        click.echo(f"DOT file written to: {dot_path}")
     except Exception as exc:
         click.echo(f"Project initialisation failed: {exc}", err=True)
         sys.exit(1)
