@@ -243,6 +243,15 @@ class AbstractSymbolRefRepository(ABC):
     def delete(self, ref_id: str) -> bool:
         pass
 
+    # NEW ---------------------------------------------------------------
+    @abstractmethod
+    def delete_by_file_id(self, file_id: str) -> int:
+        """
+        Delete every SymbolRef whose ``file_id`` equals *file_id*.
+        Returns the number of deleted rows.
+        """
+        pass
+
 
 class AbstractDataRepository(ABC):
     @property

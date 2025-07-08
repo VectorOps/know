@@ -375,6 +375,13 @@ class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
     def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
         return [r for r in self._items.values() if r.repo_id == repo_id]
 
+    # NEW ---------------------------------------------------------------
+    def delete_by_file_id(self, file_id: str) -> int:
+        to_delete = [rid for rid, ref in self._items.items() if ref.file_id == file_id]
+        for rid in to_delete:
+            self._items.pop(rid, None)
+        return len(to_delete)
+
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
         tables = _MemoryTables()

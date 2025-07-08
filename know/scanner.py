@@ -125,7 +125,8 @@ def scan_project_directory(project: Project) -> None:
     #  Remove stale metadata for files that have disappeared from disk
     # ------------------------------------------------------------------
     file_repo   = project.data_repository.file
-    symbol_repo = project.data_repository.symbol
+    symbol_repo   = project.data_repository.symbol
+    symbolref_repo = project.data_repository.symbolref
     repo_id     = project.get_repo().id
 
     # All FileMetadata currently stored for this repo
@@ -133,7 +134,8 @@ def scan_project_directory(project: Project) -> None:
 
     for fm in existing_files:
         if fm.path not in processed_paths:
-            # 1) delete all symbols that belonged to the vanished file
+            # 1) delete all symbol-refs & symbols that belonged to the vanished file
+            symbolref_repo.delete_by_file_id(fm.id)
             for sym in symbol_repo.get_list_by_file_id(fm.id):
                 symbol_repo.delete(sym.id)
             # 2) delete the file metadata itself
@@ -332,8 +334,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     symbolref_repo = repo_store.symbolref
 
     # remove all old refs for this file
-    for ref in symbolref_repo.get_list_by_file_id(file_meta.id):
-        symbolref_repo.delete(ref.id)
+    symbolref_repo.delete_by_file_id(file_meta.id)
 
     # helper to resolve internal package-ids for reference targets
     def _resolve_pkg_id(virt_path: str | None) -> str | None:
@@ -350,8 +351,8 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             "file_id": file_meta.id,
             "name": ref.name,
             "raw": ref.raw,
-            "type": getattr(ref, "typr", None),          # ParsedSymbolRef.typr → SymbolRef.type
-            "to_package_id": _resolve_pkg_id(getattr(ref, "to_package_path", None)),
+            "type": ref.type,
+            "to_package_id": _resolve_pkg_id(ref.to_package_path),
         }
         symbolref_repo.create(SymbolRef(id=generate_id(), **kwargs))
 

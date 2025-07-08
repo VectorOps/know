@@ -390,22 +390,6 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
     table = "symbol_refs"
     model = SymbolRef
 
-    def __init__(self, conn: duckdb.DuckDBPyConnection):
-        super().__init__(conn)
-        # ensure table exists
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS symbol_refs (
-                id TEXT PRIMARY KEY,
-                repo_id TEXT NOT NULL,
-                package_id TEXT NOT NULL,
-                file_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                raw TEXT NOT NULL,
-                type TEXT NOT NULL,
-                to_package_id TEXT
-            );
-        """)
-
     def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
         rows = _row_to_dict(self.conn.execute(
             "SELECT * FROM symbol_refs WHERE file_id = ?", [file_id]))
@@ -420,6 +404,17 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
         rows = _row_to_dict(self.conn.execute(
             "SELECT * FROM symbol_refs WHERE repo_id = ?", [repo_id]))
         return [SymbolRef(**r) for r in rows]
+
+    # NEW ---------------------------------------------------------------
+    def delete_by_file_id(self, file_id: str) -> int:
+        """
+        Bulk-delete refs belonging to *file_id*.
+        DuckDB ≥0.8.0 supports RETURNING; we use that to count rows.
+        """
+        rows = self.conn.execute(
+            "DELETE FROM symbol_refs WHERE file_id = ? RETURNING id", [file_id]
+        ).fetchall()
+        return len(rows)
 
 # ---------------------------------------------------------------------------
 # Migration logic
