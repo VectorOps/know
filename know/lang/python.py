@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 from tree_sitter import Parser, Language
 import tree_sitter_python as tspython
-from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
+from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef
 from know.models import (
     ProgrammingLanguage,
     SymbolKind,
@@ -16,6 +16,7 @@ from know.models import (
     SymbolParameter,
     SymbolMetadata,
     ImportEdge,            # NEW – needed for get_import_summary
+    SymbolRefType,        # <-- ADDED
 )
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
@@ -112,6 +113,11 @@ class PythonCodeParser(AbstractCodeParser):
         # Traverse the syntax tree and populate Parsed structures
         for node in root_node.children:
             self._process_node(node)
+
+        # --------------------------------------------
+        # Collect outgoing symbol-references (calls)
+        # --------------------------------------------
+        self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
 
         # ------------------------------------------------------------------
         # Sync package-level imports with file-level imports
@@ -780,6 +786,53 @@ class PythonCodeParser(AbstractCodeParser):
 
     def _is_local_import(self, import_path: str) -> bool:
         return self._locate_module_path(import_path) is not None
+
+    # ------------------------------------------------------------------
+    # Outgoing symbol-reference (call) collector
+    # ------------------------------------------------------------------
+    def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
+        """
+        Walk *root* recursively, record every call-expression as
+        ParsedSymbolRef(… type=SymbolRefType.CALL …) and try to map the call
+        to an imported package via `self.parsed_file.imports`.
+        """
+        refs: list[ParsedSymbolRef] = []
+
+        def visit(node):
+            if node.type == "call":
+                fn_node = node.child_by_field_name("function")
+                if fn_node is not None:
+                    call_name = fn_node.text.decode("utf8")
+                    raw       = node.text.decode("utf8")
+
+                    # --- best-effort import-resolution --------------------
+                    to_pkg_path: str | None = None
+                    for imp in self.parsed_file.imports:
+                        # when `import pkg as alias`
+                        if imp.alias and (call_name == imp.alias or call_name.startswith(f"{imp.alias}.")):
+                            to_pkg_path = imp.virtual_path
+                            break
+                        # plain `import pkg.sub`  /  `from pkg.sub import …`
+                        if not imp.alias and (call_name == imp.virtual_path or call_name.startswith(f"{imp.virtual_path}.")):
+                            to_pkg_path = imp.virtual_path
+                            break
+
+                    refs.append(
+                        ParsedSymbolRef(
+                            package=self.package,
+                            file=self.parsed_file,
+                            name=call_name,
+                            raw=raw,
+                            typr=SymbolRefType.CALL,
+                            to_package_id=None,       # resolved later
+                        )
+                    )
+            # recurse
+            for ch in node.children:
+                visit(ch)
+
+        visit(root)
+        return refs
 
 
 class PythonLanguageHelper(AbstractLanguageHelper):
