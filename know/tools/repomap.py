@@ -1,16 +1,15 @@
 import re
 import math
-from dataclasses import dataclass
-from typing import Any, Optional
 from collections import defaultdict
-from typing import Dict, Set, List
+from dataclasses import dataclass
+from typing import Optional, Dict, Set, List
+
 import networkx as nx
 
 from know.logger import KnowLogger as logger
-from know.models import (
-    FileMetadata, SymbolMetadata, SymbolRef, Visibility
-)
+from know.models import SymbolMetadata, Visibility
 from know.project import Project, ScanResult, ProjectComponent
+from know.tools.base import BaseTool          # ← new
 
 
 @dataclass(slots=True)
@@ -251,3 +250,92 @@ class RepoMap(ProjectComponent):
         # Ensure self-loops for all nodes (rule 7)
         for node in list(self.G.nodes):
             self._ensure_self_loop(node)
+
+
+# Tool implementation
+class RepoMapScore(BaseTool._pyd_base_model):
+    file_path: str
+    score:     float
+
+
+class RepoMapTool(BaseTool):
+    """
+    Produce PageRank-based importance scores for project files using
+    the RepoMap graph.  The original graph is never mutated.
+    """
+    tool_name = "vectorops_repomap"
+
+    def execute(
+        self,
+        project: Project,
+        *,
+        symbol_name: Optional[str] = None,
+        file_path:   Optional[str] = None,
+        limit: int = 20,
+    ) -> List[RepoMapScore]:
+
+        repomap: RepoMap | None = project.get_component("repomap")
+        if repomap is None:
+            raise RuntimeError("RepoMap component is not available.")
+
+        # shallow-copy graph
+        G = repomap.G.copy()
+
+        # adjust edge weights based on input parameters
+        if symbol_name:
+            for _u, _v, _k, d in G.edges(keys=True, data=True):
+                if d.get("name") == symbol_name:
+                    d["weight"] = d.get("weight", 1.0) * 10.0
+        if file_path:
+            target_fid = repomap._path_to_fid.get(file_path)
+            if target_fid:
+                for u, v, _k, d in G.edges(keys=True, data=True):
+                    if u == target_fid or v == target_fid:
+                        d["weight"] = d.get("weight", 1.0) * 50.0
+
+        # PageRank
+        pr = nx.pagerank(G, weight="weight")
+
+        # helper to convert fid → path
+        fid_to_path = {fid: path for path, fid in repomap._path_to_fid.items()}
+
+        # collect & sort
+        top = sorted(pr.items(), key=lambda t: t[1], reverse=True)[: limit]
+        results = [
+            RepoMapScore(file_path=fid_to_path.get(fid, fid), score=score)
+            for fid, score in top
+        ]
+        return self.to_python(results)
+
+    def get_openai_schema(self) -> dict:
+        return {
+            "name": self.tool_name,
+            "description": (
+                "Run PageRank over the repository file-level reference graph "
+                "and return the most important files."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol_name": {
+                        "type": "string",
+                        "description": (
+                            "Boost all edges that represent references to this symbol "
+                            "(weight ×10)."
+                        ),
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": (
+                            "Boost all edges incident to the given file path (weight ×50)."
+                        ),
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": 20,
+                        "description": "Number of top files to return.",
+                    },
+                },
+            },
+        }
