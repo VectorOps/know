@@ -136,8 +136,7 @@ def scan_project_directory(project: Project) -> None:
         if fm.path not in processed_paths:
             # 1) delete all symbol-refs & symbols that belonged to the vanished file
             symbolref_repo.delete_by_file_id(fm.id)
-            for sym in symbol_repo.get_list_by_file_id(fm.id):
-                symbol_repo.delete(sym.id)
+            symbol_repo.delete_by_file_id(fm.id)
             # 2) delete the file metadata itself
             file_repo.delete(fm.id)
 

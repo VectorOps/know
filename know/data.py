@@ -149,6 +149,15 @@ class AbstractSymbolMetadataRepository(ABC):
     def get_by_id(self, symbol_id: str) -> Optional[SymbolMetadata]:
         pass
 
+    # bulk-delete ---------------------------------------------------
+    @abstractmethod
+    def delete_by_file_id(self, file_id: str) -> int:
+        """
+        Delete every SymbolMetadata whose ``file_id`` equals *file_id*.
+        Return number of deleted rows.
+        """
+        pass
+
     @abstractmethod
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         pass

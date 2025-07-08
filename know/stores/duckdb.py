@@ -372,6 +372,13 @@ LIMIT ? OFFSET ?
 
         return syms
 
+    # NEW -----------------------------------------------------------
+    def delete_by_file_id(self, file_id: str) -> int:
+        rows = self.conn.execute(
+            "DELETE FROM symbols WHERE file_id = ? RETURNING id", [file_id]
+        ).fetchall()
+        return len(rows)
+
 
 class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeRepository):
     table = "import_edges"

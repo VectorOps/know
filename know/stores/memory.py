@@ -348,6 +348,13 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
 
+    # NEW -----------------------------------------------------------
+    def delete_by_file_id(self, file_id: str) -> int:
+        to_delete = [sid for sid, sym in self._items.items() if sym.file_id == file_id]
+        for sid in to_delete:
+            self._items.pop(sid, None)
+        return len(to_delete)
+
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):
