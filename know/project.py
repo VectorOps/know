@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Type, Dict
 from dataclasses import dataclass, field            # NEW
 from typing import TYPE_CHECKING                    # NEW
 from abc import ABC, abstractmethod
@@ -27,6 +27,22 @@ class ScanResult:
 
 class ProjectComponent(ABC):
     """Lifecycle-hook interface for project-level components."""
+
+    component_name: str | None = None
+    _registry: Dict[str, Type["ProjectComponent"]] = {}
+
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        name = getattr(cls, "component_name", None) or cls.__name__.lower()
+        ProjectComponent._registry[name] = cls
+
+    def __init__(self, project: "Project"):
+        self.project = project
+
+    @classmethod
+    def get_registered_components(cls) -> Dict[str, Type["ProjectComponent"]]:
+        return dict(cls._registry)
+
     @abstractmethod
     def initialize(self) -> None:               # called once after registration
         ...
@@ -54,13 +70,13 @@ class Project:
         self.embeddings = embeddings
 
         self._components: dict[str, ProjectComponent] = {}
-
-        # ── build call/reference graph ─────────────────────────────
-        for comp in self._components.values():
+        for name, comp_cls in ProjectComponent.get_registered_components().items():
             try:
-                comp.initialize()
+                inst = comp_cls(self)
+                self._components[name] = inst
+                inst.initialize()
             except Exception as exc:
-                logger.error("Component %s failed to initialize: %s", comp, exc)
+                logger.error("Component %s failed to initialize: %s", comp_cls, exc)
 
     def register_component(self, name: str, component: ProjectComponent) -> None:
         """Register *component* under *name* and immediately call initialise()."""
@@ -76,6 +92,11 @@ class Project:
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
         return self._repo_metadata
+
+    def __getattr__(self, item: str):
+        if item in self._components:
+            return self._components[item]
+        raise AttributeError(f"{self.__class__.__name__} has no attribute {item!r}")
 
     def get_component(self, name: str) -> ProjectComponent | None:
         """Return registered component (or None when unknown)."""

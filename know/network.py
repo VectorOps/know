@@ -23,6 +23,8 @@ class NameProps:
 class RepoMap(ProjectComponent):
     """Keeps an up-to-date call/reference graph (file-level granularity)."""
 
+    component_name = "repo_map"
+
     DESCRIPTIVENESS_THRESHOLD = 0.5           # ≥0.5 → “descriptive”
     DESCRIPTIVE_MULTIPLIER    = 10.0
     PRIVATE_PROTECTED_MULT    = 0.1
@@ -32,7 +34,7 @@ class RepoMap(ProjectComponent):
     BOOST_FACTOR_DEFAULT      = 10.0          # for personalization helper
 
     def __init__(self, project: Project):
-        self.project = project
+        super().__init__(project)
         self.G = nx.MultiDiGraph()
         self._defs: Dict[str, Set[str]] = defaultdict(set)   # was Dict[str, str]
         self._refs: Dict[str, Set[str]] = defaultdict(set)
