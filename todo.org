@@ -41,12 +41,24 @@
 * [ ] When reparsing file and symbols did not change - do not recalculate embeddings
 * [ ] Build a tool that provides recommendations for a list of files/packages by applying PageRank algorithm to dependencies.
 * [X] Add package_id to symbols to speed up search
-* [ ] Add caching for go.mod at project level to avoid loading it for each and every Go file
+* [X] Add caching for go.mod at project level to avoid loading it for each and every Go file
 * [ ] Do not refresh DuckDB index if project did not change
 * [X] Figure out a way to have a single query parameter that searches code by embedding and documentation. Idea: calculate embedding vector for commend/docstring and use that instead of FTS. Fallback to FTS if embeddings are not enabled.
 * [X] Add symbol search test
 * [ ] Add reranking model support
-* [ ] Python parser should preserve decorators when parsing symbols. Extend model to collect decorators and store them in model.
+* [X] Python parser should preserve decorators when parsing symbols. Extend model to collect decorators and store them in model.
 * [X] Python parser does not parse symbols of decorated methods
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
-* [ ] Search for public symbols by default
+* [X] Search for public symbols by default
+* [ ] Recommendation engine
+** [ ] Store all references for each file
+- New model
+- Include import information, if it can be resolved
+** [ ] Create in-memory NetworkX graph similar to Aider?
+- Add all project public symbols and all references
+- Implement ranking algorithm to find recommendations
+  - Symbols names that are defined more than X times are deprioritized
+  - Symbols that are referenced in search query are boosted
+  - Symbols in files that are requested are boosted
+  - Descriptive names are prioritized
+  - Private symbols are deprioritized

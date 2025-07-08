@@ -54,6 +54,11 @@ class EdgeType(str, Enum):
     DATA_FLOW = "data_flow"
 
 
+class SymbolRefType(str, Enum):
+    CALL = "call"
+    TYPE = "type"
+
+
 Vector = List[float]  # alias for clarity when embedding
 
 # ---------------------------------------------------------------------------
@@ -121,7 +126,7 @@ class SymbolMetadata(BaseModel):
     id: Optional[str]
     repo_id: str
     file_id: Optional[str] = None
-    package_id: Optional[str] = None        # NEW – owning package
+    package_id: Optional[str] = None
     name: str
     fqn: Optional[str] = None
     symbol_key: Optional[str] = None
@@ -202,4 +207,17 @@ class ImportEdge(BaseModel):
 
     # Runtime links
     from_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
+    to_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
+
+
+class SymbolRef(BaseModel):
+    id: Optional[str]
+    repo_id: str
+    package_id: str
+    file_id: str
+    name: str
+    raw: str
+    type: SymbolRefType
+    to_package_id: Optional[str] = None
+
     to_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
