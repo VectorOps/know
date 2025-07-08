@@ -21,8 +21,13 @@ class RepoMap:
     #  Debug helpers
     # ------------------------------------------------------------------
     def debug_summary(self) -> str:
-        """One-line NetworkX summary (nodes / edges)."""
-        return nx.info(self.G)
+        """Return short ‘N-nodes / M-edges’ summary, compatible with all NX ≥2.0."""
+        if hasattr(nx, "info"):               # NetworkX < 3.0
+            return nx.info(self.G)
+        # NetworkX ≥3.0 dropped top-level info()
+        return f"{self.G.__class__.__name__} with " \
+               f"{self.G.number_of_nodes()} nodes and " \
+               f"{self.G.number_of_edges()} edges"
 
     def debug_edges(self) -> list[str]:
         """Return human-readable list of all edges with optional *name* attr."""
