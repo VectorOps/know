@@ -6,6 +6,7 @@ from know.models import (
     FileMetadata,
     SymbolMetadata,
     ImportEdge,
+    SymbolRef,
 )
 from know.data import (
     AbstractRepoMetadataRepository,
@@ -13,6 +14,7 @@ from know.data import (
     AbstractFileMetadataRepository,
     AbstractSymbolMetadataRepository,
     AbstractImportEdgeRepository,
+    AbstractSymbolRefRepository,
     AbstractDataRepository,
     SymbolSearchQuery,
     include_direct_descendants,
@@ -39,6 +41,7 @@ class _MemoryTables:
     files:   dict[str, FileMetadata]   = field(default_factory=dict)
     symbols: dict[str, SymbolMetadata] = field(default_factory=dict)
     edges:   dict[str, ImportEdge]     = field(default_factory=dict)
+    symbolrefs: dict[str, SymbolRef]   = field(default_factory=dict)
 
 class InMemoryBaseRepository(Generic[T]):
     def __init__(self, table: Dict[str, T]):
@@ -358,6 +361,20 @@ class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractI
         """Return all import-edges whose ``repo_id`` matches *repo_id*."""
         return [edge for edge in self._items.values() if edge.repo_id == repo_id]
 
+class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
+                                  AbstractSymbolRefRepository):
+    def __init__(self, tables: _MemoryTables):
+        super().__init__(tables.symbolrefs)
+
+    def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
+        return [r for r in self._items.values() if r.file_id == file_id]
+
+    def get_list_by_package_id(self, package_id: str) -> list[SymbolRef]:
+        return [r for r in self._items.values() if r.package_id == package_id]
+
+    def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
+        return [r for r in self._items.values() if r.repo_id == repo_id]
+
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
         tables = _MemoryTables()
@@ -366,6 +383,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         self._package = InMemoryPackageMetadataRepository(tables)
         self._symbol = InMemorySymbolMetadataRepository(tables)
         self._importedge = InMemoryImportEdgeRepository(tables)
+        self._symbolref  = InMemorySymbolRefRepository(tables)
 
     @property
     def repo(self) -> AbstractRepoMetadataRepository:
@@ -391,6 +409,10 @@ class InMemoryDataRepository(AbstractDataRepository):
     def importedge(self) -> AbstractImportEdgeRepository:
         """Access the import edge repository."""
         return self._importedge
+
+    @property
+    def symbolref(self) -> AbstractSymbolRefRepository:
+        return self._symbolref
 
     def refresh_full_text_indexes(self) -> None:  # new – required by interface
         return

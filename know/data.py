@@ -6,6 +6,7 @@ from know.models import (
     FileMetadata,
     SymbolMetadata,
     ImportEdge,
+    SymbolRef,
     SymbolKind,
     Visibility,
     Vector,
@@ -209,6 +210,39 @@ class AbstractImportEdgeRepository(ABC):
     def delete(self, edge_id: str) -> bool:
         pass
 
+class AbstractSymbolRefRepository(ABC):
+    @abstractmethod
+    def get_by_id(self, ref_id: str) -> Optional[SymbolRef]:
+        pass
+
+    @abstractmethod
+    def get_list_by_ids(self, ref_ids: list[str]) -> list[SymbolRef]:
+        pass
+
+    @abstractmethod
+    def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
+        pass
+
+    @abstractmethod
+    def get_list_by_package_id(self, package_id: str) -> list[SymbolRef]:
+        pass
+
+    @abstractmethod
+    def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
+        pass
+
+    @abstractmethod
+    def create(self, ref: SymbolRef) -> SymbolRef:
+        pass
+
+    @abstractmethod
+    def update(self, ref_id: str, data: Dict[str, Any]) -> Optional[SymbolRef]:
+        pass
+
+    @abstractmethod
+    def delete(self, ref_id: str) -> bool:
+        pass
+
 
 class AbstractDataRepository(ABC):
     @property
@@ -234,6 +268,11 @@ class AbstractDataRepository(ABC):
     @property
     @abstractmethod
     def importedge(self) -> AbstractImportEdgeRepository:
+        pass
+
+    @property
+    @abstractmethod
+    def symbolref(self) -> AbstractSymbolRefRepository:
         pass
 
     @abstractmethod

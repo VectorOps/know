@@ -15,6 +15,7 @@ from know.models import (
     SymbolMetadata,
     SymbolSignature,
     ImportEdge,
+    SymbolRef,
     Modifier,
 )
 from know.data import (
@@ -23,6 +24,7 @@ from know.data import (
     AbstractFileMetadataRepository,
     AbstractSymbolMetadataRepository,
     AbstractImportEdgeRepository,
+    AbstractSymbolRefRepository,
     AbstractDataRepository,
     SymbolSearchQuery,
     include_direct_descendants,
@@ -384,6 +386,41 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
             "SELECT * FROM import_edges WHERE repo_id = ?", [repo_id]))
         return [ImportEdge(**r) for r in rows]
 
+class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepository):
+    table = "symbol_refs"
+    model = SymbolRef
+
+    def __init__(self, conn: duckdb.DuckDBPyConnection):
+        super().__init__(conn)
+        # ensure table exists
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS symbol_refs (
+                id TEXT PRIMARY KEY,
+                repo_id TEXT NOT NULL,
+                package_id TEXT NOT NULL,
+                file_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                raw TEXT NOT NULL,
+                type TEXT NOT NULL,
+                to_package_id TEXT
+            );
+        """)
+
+    def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
+        rows = _row_to_dict(self.conn.execute(
+            "SELECT * FROM symbol_refs WHERE file_id = ?", [file_id]))
+        return [SymbolRef(**r) for r in rows]
+
+    def get_list_by_package_id(self, package_id: str) -> list[SymbolRef]:
+        rows = _row_to_dict(self.conn.execute(
+            "SELECT * FROM symbol_refs WHERE package_id = ?", [package_id]))
+        return [SymbolRef(**r) for r in rows]
+
+    def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
+        rows = _row_to_dict(self.conn.execute(
+            "SELECT * FROM symbol_refs WHERE repo_id = ?", [repo_id]))
+        return [SymbolRef(**r) for r in rows]
+
 # ---------------------------------------------------------------------------
 # Migration logic
 # ---------------------------------------------------------------------------
@@ -463,6 +500,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._repo_repo    = DuckDBRepoMetadataRepo(self._conn)
         self._symbol_repo  = DuckDBSymbolMetadataRepo(self._conn)
         self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
+        self._symbolref_repo = DuckDBSymbolRefRepo(self._conn)
 
     # ---------- interface impl ----------
     @property
@@ -484,6 +522,10 @@ class DuckDBDataRepository(AbstractDataRepository):
     @property
     def importedge(self) -> AbstractImportEdgeRepository:  # type: ignore[override]
         return self._edge_repo
+
+    @property
+    def symbolref(self) -> AbstractSymbolRefRepository:  # type: ignore[override]
+        return self._symbolref_repo
 
     def refresh_full_text_indexes(self) -> None:               # NEW
         try:
