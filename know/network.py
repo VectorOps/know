@@ -1,11 +1,22 @@
+import re                                       # NEW
+from dataclasses import dataclass               # NEW
+from typing import Any, Optional                # NEW
 from collections import defaultdict
 from typing import Dict, Set, List
 import networkx as nx
 
 from know.logger import KnowLogger as logger   # NEW
-from know.models import FileMetadata, SymbolMetadata, SymbolRef
+from know.models import (
+    FileMetadata, SymbolMetadata, SymbolRef, Visibility   # NEW Visibility
+)
 from know.project import Project
 from know.project import ScanResult
+
+@dataclass(slots=True)
+class NameProps:                # cache entry for a single identifier
+    name: str
+    visibility: Optional[str]   # "public" / "private" / "protected" / …
+    descriptiveness: float      # 0.0 … 1.0
 
 class RepoMap:
     """Keeps an up-to-date call/reference graph (file-level granularity)."""
@@ -16,6 +27,7 @@ class RepoMap:
         self._defs: Dict[str, str] = {}
         self._refs: Dict[str, Set[str]] = defaultdict(set)
         self._path_to_fid: Dict[str, str] = {}
+        self._name_props: Dict[str, NameProps] = {}      # NEW  name → NameProps
 
     # ------------------------------------------------------------------  
     #  Debug helpers
@@ -46,6 +58,37 @@ class RepoMap:
             logger.debug("DOT rendering failed: %s – falling back to edge list", exc)
             return "\n".join(self.debug_edges())
 
+    # ------------------------------------------------------------------
+    #  Name-property helpers                                # NEW
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _calc_descriptiveness(name: str) -> float:
+        """
+        Very light heuristic: split camel- / snake-case into words,
+        clamp (#words / 5) to [0,1].
+        """
+        if not name:
+            return 0.0
+        # camelCase → snake_case
+        snake = re.sub(r'(?<!^)(?=[A-Z])', '_', name)
+        words = [w for w in snake.split('_') if w]
+        return round(min(len(words) / 5.0, 1.0), 3)
+
+    def _make_props(self, sym: SymbolMetadata) -> NameProps:
+        """Build NameProps instance from a SymbolMetadata object."""
+        vis = sym.visibility.value if isinstance(sym.visibility, Visibility) else (
+            str(sym.visibility) if sym.visibility else None
+        )
+        return NameProps(
+            name=sym.name,
+            visibility=vis,
+            descriptiveness=self._calc_descriptiveness(sym.name),
+        )
+
+    def get_name_properties(self, name: str) -> Optional[NameProps]:
+        """External accessor used by recommendation engine."""
+        return self._name_props.get(name)
+
     # ------------------------------------------------------------------  
     #  Initial full build
     # ------------------------------------------------------------------
@@ -61,6 +104,7 @@ class RepoMap:
             for sym in symbol_repo.get_list_by_file_id(fm.id):
                 if sym.name:
                     self._defs[sym.name] = fm.id
+                    self._name_props[sym.name] = self._make_props(sym)   # NEW
             # collect refs
             for ref in symbolref_repo.get_list_by_file_id(fm.id):
                 if ref.name:
@@ -92,6 +136,7 @@ class RepoMap:
             for n, df in list(self._defs.items()):
                 if df == fid:
                     del self._defs[n]
+                    self._name_props.pop(n, None)            # NEW
             for refs in self._refs.values():
                 refs.discard(fid)
 
@@ -110,6 +155,7 @@ class RepoMap:
             for n, df in list(self._defs.items()):
                 if df == fid:
                     del self._defs[n]
+                    self._name_props.pop(n, None)            # NEW
             for refs in self._refs.values():
                 refs.discard(fid)
 
@@ -120,6 +166,7 @@ class RepoMap:
             for sym in symbol_repo.get_list_by_file_id(fid):
                 if sym.name:
                     self._defs[sym.name] = fid
+                    self._name_props[sym.name] = self._make_props(sym)   # NEW
                     new_def_names.add(sym.name)
 
             for ref in symbolref_repo.get_list_by_file_id(fid):
