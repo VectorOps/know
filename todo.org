@@ -51,7 +51,7 @@
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
 * [X] Search for public symbols by default
 * [ ] Recommendation engine
-** [ ] Store all references for each file
+** [X] Store all references for each file
 - New model
 - Include import information, if it can be resolved
 ** [ ] Create in-memory NetworkX graph similar to Aider?
@@ -62,3 +62,7 @@
   - Symbols in files that are requested are boosted
   - Descriptive names are prioritized
   - Private symbols are deprioritized
+** [ ] Figure out incremental graph updates
+** [ ] Create a tool that takes in file paths, query, runs above algorithm
+* [ ] Add infra to maintain in-memory tools like RepoMap
+** [ ] Enable/Disable RepoMap configuration flag

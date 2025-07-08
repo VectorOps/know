@@ -15,15 +15,13 @@ from know.settings import ProjectSettings
 from know.embeddings.interface import EmbeddingsCalculator
 from know.embeddings.factory import get_embeddings_calculator
 
-@dataclass
-class ScanResult:                                   # NEW
-    """Result object returned by `scan_project_directory`."""   # NEW
-    files_added:  list[str] = field(default_factory=list)       # NEW
-    files_updated: list[str] = field(default_factory=list)      # NEW
-    files_deleted: list[str] = field(default_factory=list)      # NEW
 
-if TYPE_CHECKING:                                   # NEW
-    from know.network import RepoMap                # NEW
+@dataclass
+class ScanResult:
+    """Result object returned by `scan_project_directory`."""
+    files_added:  list[str] = field(default_factory=list)
+    files_updated: list[str] = field(default_factory=list)
+    files_deleted: list[str] = field(default_factory=list)
 
 
 class Project:
@@ -44,8 +42,10 @@ class Project:
         self.embeddings = embeddings
 
         # ── build call/reference graph ─────────────────────────────
-        from know.network import RepoMap            # LOCAL import, avoids cycle
-        self.repo_map: "RepoMap" = RepoMap(self)
+        # TODO: Fix circular import
+        from know.network import RepoMap
+        self.repo_map: RepoMap = RepoMap(self)
+        # TODO: Explicit init
         self.repo_map.build_initial_graph()
 
     def get_repo(self) -> RepoMetadata:
@@ -73,8 +73,9 @@ class Project:
     def refresh(self):
         from know import scanner
         scan_result = scanner.scan_project_directory(self)
+
         # keep the in-memory graph in sync
-        if hasattr(self, "repo_map"):
+        if self.repo_map is not None:
             self.repo_map.refresh(scan_result)
 
 

@@ -125,32 +125,7 @@ class RepoMap:
         if self.G.degree(fid) == 0:
             self.G.add_edge(fid, fid, name="__self__", weight=self.ISOLATED_SELF_WEIGHT)
 
-    def build_pagerank_personalization(
-            self,
-            *,
-            boost_paths: list[str] | None = None,
-            boost_symbols: list[str] | None = None,
-            boost_factor: float = BOOST_FACTOR_DEFAULT,
-        ) -> dict[str, float]:
-        """Return NX PageRank personalization vector."""
-        boost_paths = boost_paths or []
-        boost_symbols = boost_symbols or []
-        weights: dict[str, float] = {}
-        for n in self.G.nodes:
-            # base weight = weighted degree; fall back to 1.0 when the node is isolated
-            w = float(self.G.degree(n, weight="weight")) or 1.0
-            weights[n] = w
-        for p in boost_paths:
-            fid = self._path_to_fid.get(p)
-            if fid:
-                weights[fid] *= boost_factor
-        for s in boost_symbols:
-            for fid in self._defs.get(s, set()) | self._refs.get(s, set()):
-                weights[fid] *= boost_factor
-        total = sum(weights.values()) or 1.0
-        return {n: w / total for n, w in weights.items()}
-
-    # ------------------------------------------------------------------  
+    # ------------------------------------------------------------------
     #  Initial full build
     # ------------------------------------------------------------------
     def build_initial_graph(self) -> None:
@@ -177,6 +152,7 @@ class RepoMap:
                 for def_file in def_files:
                     w = self._compute_edge_weight(name)
                     self.G.add_edge(ref_file, def_file, name=name, weight=w)
+
         # Ensure self-loops for all nodes (rule 7)
         for fid in self._path_to_fid.values():
             self._ensure_self_loop(fid)
