@@ -14,7 +14,7 @@ from know.project import Project, ScanResult, ProjectComponent
 
 
 @dataclass(slots=True)
-class NameProps:                # cache entry for a single identifier
+class NameProps:
     name: str
     visibility: Optional[str]   # "public" / "private" / "protected" / …
     descriptiveness: float      # 0.0 … 1.0
@@ -109,9 +109,10 @@ class RepoMap(ProjectComponent):
     def _compute_edge_weight(self, name: str) -> float:
         weight = 1.0
         props = self._name_props.get(name)
-        if props and props.descriptiveness >= self.DESCRIPTIVENESS_THRESHOLD:
-            weight *= self.DESCRIPTIVE_MULTIPLIER
-        if props and props.visibility in ("private", "protected"):
+        if props:
+            weight *= props.descriptiveness * self.DESCRIPTIVE_MULTIPLIER
+        if props and props.visibility in (Visibility.PRIVATE.value,
+                                          Visibility.PROTECTED.value):
             weight *= self.PRIVATE_PROTECTED_MULT
         if len(self._defs.get(name, [])) >= self.POLYDEF_THRESHOLD:
             weight *= self.POLYDEF_MULTIPLIER
@@ -162,8 +163,6 @@ class RepoMap(ProjectComponent):
     # ------------------------------------------------------------------  
     #  Incremental refresh
     # ------------------------------------------------------------------
-
-    # build_initial_graph method removed (now initialize)
     def refresh(self, scan: ScanResult) -> None:
         """Update graph after running `scanner.scan_project_directory`."""
         file_repo     = self.project.data_repository.file
