@@ -1,4 +1,5 @@
 import re
+import math
 from dataclasses import dataclass
 from typing import Any, Optional
 from collections import defaultdict
@@ -22,6 +23,14 @@ class NameProps:                # cache entry for a single identifier
 
 class RepoMap:
     """Keeps an up-to-date call/reference graph (file-level granularity)."""
+
+    DESCRIPTIVENESS_THRESHOLD = 0.5           # ≥0.5 → “descriptive”
+    DESCRIPTIVE_MULTIPLIER    = 10.0
+    PRIVATE_PROTECTED_MULT    = 0.1
+    POLYDEF_THRESHOLD         = 6             # ≥6 distinct definition files
+    POLYDEF_MULTIPLIER        = 0.1
+    ISOLATED_SELF_WEIGHT      = 0.1           # rule 7
+    BOOST_FACTOR_DEFAULT      = 10.0          # for personalization helper
 
     def __init__(self, project: Project):
         self.project = project
@@ -94,6 +103,50 @@ class RepoMap:
         """External accessor used by recommendation engine."""
         return self._name_props.get(name)
 
+    # ------------------------------------------------------------------
+    #  Edge-weighting, self-loop, and personalization helpers
+    # ------------------------------------------------------------------
+    def _compute_edge_weight(self, name: str) -> float:
+        weight = 1.0
+        props = self._name_props.get(name)
+        if props and props.descriptiveness >= self.DESCRIPTIVENESS_THRESHOLD:
+            weight *= self.DESCRIPTIVE_MULTIPLIER
+        if props and props.visibility in ("private", "protected"):
+            weight *= self.PRIVATE_PROTECTED_MULT
+        if len(self._defs.get(name, [])) >= self.POLYDEF_THRESHOLD:
+            weight *= self.POLYDEF_MULTIPLIER
+        refs_cnt = len(self._refs.get(name, [])) or 1
+        weight *= math.sqrt(refs_cnt)          # rule 5
+        return weight
+
+    def _ensure_self_loop(self, fid: str) -> None:
+        """Guarantee rule 7 for *fid*."""
+        if self.G.has_edge(fid, fid):
+            return
+        if self.G.degree(fid) == 0:
+            self.G.add_edge(fid, fid, name="__self__", weight=self.ISOLATED_SELF_WEIGHT)
+
+    def build_pagerank_personalization(
+            self,
+            *,
+            boost_paths: list[str] | None = None,
+            boost_symbols: list[str] | None = None,
+            boost_factor: float = BOOST_FACTOR_DEFAULT,
+        ) -> dict[str, float]:
+        """Return NX PageRank personalization vector."""
+        boost_paths = boost_paths or []
+        boost_symbols = boost_symbols or []
+        weights = {n: 1.0 for n in self.G.nodes}
+        for p in boost_paths:
+            fid = self._path_to_fid.get(p)
+            if fid:
+                weights[fid] *= boost_factor
+        for s in boost_symbols:
+            for fid in self._defs.get(s, set()) | self._refs.get(s, set()):
+                weights[fid] *= boost_factor
+        total = sum(weights.values()) or 1.0
+        return {n: w / total for n, w in weights.items()}
+
     # ------------------------------------------------------------------  
     #  Initial full build
     # ------------------------------------------------------------------
@@ -119,7 +172,11 @@ class RepoMap:
         for name, def_files in self._defs.items():
             for ref_file in self._refs.get(name, []):
                 for def_file in def_files:
-                    self.G.add_edge(ref_file, def_file, name=name)
+                    w = self._compute_edge_weight(name)
+                    self.G.add_edge(ref_file, def_file, name=name, weight=w)
+        # Ensure self-loops for all nodes (rule 7)
+        for fid in self._path_to_fid.values():
+            self._ensure_self_loop(fid)
 
     # ------------------------------------------------------------------  
     #  Incremental refresh
@@ -189,10 +246,18 @@ class RepoMap:
 
             # edges from this file’s refs → all its targets
             for name in new_ref_names:
+                w = self._compute_edge_weight(name)
                 for def_fid in self._defs.get(name, []):
-                    self.G.add_edge(fid, def_fid, name=name)
+                    self.G.add_edge(fid, def_fid, name=name, weight=w)
 
             # edges from other refs → new defs in this file
             for name in new_def_names:
+                w = self._compute_edge_weight(name)
                 for ref_fid in self._refs.get(name, []):
-                    self.G.add_edge(ref_fid, fid, name=name)
+                    self.G.add_edge(ref_fid, fid, name=name, weight=w)
+
+            # ensure self-loop for this node if needed
+            self._ensure_self_loop(fid)
+        # Ensure self-loops for all nodes (rule 7)
+        for node in list(self.G.nodes):
+            self._ensure_self_loop(node)
