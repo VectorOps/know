@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Dict, Set, List
 import networkx as nx
 
+from know.logger import KnowLogger as logger   # NEW
 from know.models import FileMetadata, SymbolMetadata, SymbolRef
 from know.project import Project
 from know.project import ScanResult
@@ -15,6 +16,30 @@ class RepoMap:
         self._defs: Dict[str, str] = {}
         self._refs: Dict[str, Set[str]] = defaultdict(set)
         self._path_to_fid: Dict[str, str] = {}
+
+    # ------------------------------------------------------------------  
+    #  Debug helpers
+    # ------------------------------------------------------------------
+    def debug_summary(self) -> str:
+        """One-line NetworkX summary (nodes / edges)."""
+        return nx.info(self.G)
+
+    def debug_edges(self) -> list[str]:
+        """Return human-readable list of all edges with optional *name* attr."""
+        return [f"{u} -> {v} ({d.get('name', '')})" for u, v, d in self.G.edges(data=True)]
+
+    def to_dot(self) -> str:
+        """
+        Render the graph as a GraphViz DOT string using NetworkX’s
+        ``nx_pydot.to_pydot`` helper.  Falls back to edge list if pydot
+        is unavailable.
+        """
+        try:
+            from networkx.drawing.nx_pydot import to_pydot
+            return to_pydot(self.G).to_string()
+        except Exception as exc:       # ImportError or other pydot issues
+            logger.debug("DOT rendering failed: %s – falling back to edge list", exc)
+            return "\n".join(self.debug_edges())
 
     # ------------------------------------------------------------------  
     #  Initial full build
