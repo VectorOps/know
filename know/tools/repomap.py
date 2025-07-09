@@ -19,8 +19,8 @@ from know.tools.base import BaseTool          # ← new
 # ------------------------------------------------------------------
 #  Module-level constants
 # ------------------------------------------------------------------
-SYMBOL_EDGE_BOOST: float  = 5.0       # stronger multiplier – must be > FILE_EDGE_BOOST (10)
-FILE_EDGE_BOOST:   float  = 10.0      # multiplier for edges incident to requested files
+SYMBOL_EDGE_BOOST: float  = 15.0       # stronger multiplier – must be > FILE_EDGE_BOOST (10)
+FILE_EDGE_BOOST:   float  = 50.0      # multiplier for edges incident to requested files
 DESCRIPTIVE_MULTIPLIER    = 4.0
 PRIVATE_PROTECTED_MULT    = 0.1
 POLYDEF_THRESHOLD         = 6             # >= 6 distinct definition files
@@ -115,7 +115,7 @@ class RepoMap(ProjectComponent):
     # ------------------------------------------------------------------
     #  Edge-weighting, self-loop, and personalization helpers
     # ------------------------------------------------------------------
-    def _compute_edge_weight(self, name: str) -> float:
+    def _compute_edge_data(self, name: str) -> dict[str, float]:
         base = 1.0
         props = self._name_props.get(name)
         if props:
@@ -131,21 +131,19 @@ class RepoMap(ProjectComponent):
         refs_cnt = len(self._refs.get(name, []))
         weight   = base * math.log1p(refs_cnt)
 
-        # keep diagnostics side-by-side with calculated weight  # NEW
-        self._weight_stats[name] = {
-            "defs_cnt":    defs_cnt,
-            "refs_cnt":    refs_cnt,
+        return {
             "base_weight": base,
-            "weight":      weight,
+            "defs_cnt":   defs_cnt,
+            "refs_cnt":   refs_cnt,
+            "weight":     weight,
         }
-        return weight
 
     def _ensure_self_loop(self, fid: str) -> None:
         if self.G.has_edge(fid, fid):
             return
 
-        if self.G.degree(fid) == 0:
-            self.G.add_edge(fid, fid, name="__self__", weight=ISOLATED_SELF_WEIGHT)
+        #if self.G.degree(fid) == 0:
+        self.G.add_edge(fid, fid, name="", weight=ISOLATED_SELF_WEIGHT)
 
     # ------------------------------------------------------------------
     #  Initial full build
@@ -324,12 +322,24 @@ class RepoMapTool(BaseTool):
             boosted    = base
             if sym_set and d.get("name") in sym_set:
                 boosted *= SYMBOL_EDGE_BOOST
-            if path_set and u in path_set:
-                boosted *= FILE_EDGE_BOOST
             d["weight"] = boosted * math.sqrt(refs_cnt)
 
+        # ── new: teleport-bias for selected files ─────────────────────────
+        personalization: dict[str, float] | None = None
+        if path_set:
+            boost = BOOST_FACTOR_DEFAULT          # module constant (=10.0)
+            pers  = {n: (boost if n in path_set else 1.0) for n in G.nodes}
+            tot   = sum(pers.values())
+            personalization = {k: v / tot for k, v in pers.items()}
+
         # PageRank
-        pr = nx.pagerank(G, weight="weight")
+        pr = nx.pagerank(
+            G,
+            weight="weight",
+            **({"personalization": personalization} if personalization else {}),
+        )
+
+        # print(pr)
 
         # collect & sort
         top = sorted(pr.items(), key=lambda t: t[1], reverse=True)[: limit]
