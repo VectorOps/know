@@ -316,15 +316,14 @@ class RepoMapTool(BaseTool):
         G = repomap.G.copy()
 
         # Prepare sets for boosting
-        sym_set: set[str]  = set(symbol_names or [])
-        path_set: set[str] = set(file_paths or [])
+        sym_set: set[str]     = set(symbol_names or [])
+        path_set: set[str]    = set(file_paths  or [])   # ← keep **unchanged**
 
-        # ────────────────────────────────────────────────────────────
-        # if a symbol was mentioned, treat all its definition files as
-        # “mentioned files” as well (needed for proper boosting / bias)
-        if sym_set:
+        # build helper that contains all paths relevant for boosting
+        important_paths: set[str] = set(path_set)
+        if sym_set:                                 # add definition files only here
             for name in sym_set:
-                path_set.update(repomap._defs.get(name, ()))
+                important_paths.update(repomap._defs.get(name, ()))
 
         # Adjust edge weights based on input parameters
         for u, v, _k, d in G.edges(keys=True, data=True):
@@ -340,8 +339,8 @@ class RepoMapTool(BaseTool):
             if sym_set and d.get("name") in sym_set:
                 base *= SYMBOL_EDGE_BOOST
 
-            # NEW: boost every edge that leaves a mentioned file
-            if path_set and u in path_set and u != v:
+            # boost every edge that leaves an “important” file
+            if important_paths and u in important_paths and u != v:
                 base *= FILE_EDGE_BOOST
 
             d["weight"] = base * math.sqrt(refs_cnt)
@@ -353,7 +352,7 @@ class RepoMapTool(BaseTool):
         # boosting should rely on edge weights alone.
         if sym_set:
             boost = BOOST_FACTOR_DEFAULT
-            pers = {n: boost for n in path_set if n in G}   # keep only existing nodes
+            pers = {n: boost for n in important_paths if n in G}
             if pers:
                 tot = sum(pers.values())
                 personalization = {k: v / tot for k, v in pers.items()}
