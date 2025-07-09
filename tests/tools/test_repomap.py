@@ -76,6 +76,10 @@ def _build_project():
     dr.symbol.create(_create_symbol(repo_id, f_c.id, pkg_id, "beta"))
     dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "beta"))
 
+    # (NEW) make d.py also call “func” → two outgoing edges from d.py,
+    # so edge-weight boosting on “beta” can dominate the distribution.
+    dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "func"))
+
     project = Project(_DummySettings(), dr, dr.repo.get_by_id(repo_id))
     return project, f_a.path, f_b.path, f_c.path, f_d.path
 
@@ -150,6 +154,7 @@ def test_repomap_tool_pagerank_and_boost():
     project, a_path, b_path, c_path, d_path = _build_project()
 
     # baseline – a.py should outrank b.py, c.py should outrank d.py
+    print(1)
     res = tool.execute(project)
     order = [r["file_path"] for r in res]
     assert order.index(a_path) < order.index(b_path)
@@ -162,11 +167,13 @@ def test_repomap_tool_pagerank_and_boost():
     assert score_c > score_d
 
     # boost edges incident to d.py – outgoing-edge boost elevates *target* (c.py)
+    print(2)
     res_boost = tool.execute(project, file_paths=[d_path])
     order_boost = [r["file_path"] for r in res_boost]
     assert order_boost.index(c_path) < order_boost.index(d_path)   # outgoing-edge boost elevates *target* (c.py)
 
     # boost edges incident to b.py – a.py now ranks highest
+    print(3)
     res_boost = tool.execute(project, file_paths=[b_path])
     assert res_boost[0]["file_path"] == a_path                     # a.py now ranks highest
     score_boost_a = res_boost[0]["score"]
@@ -174,8 +181,9 @@ def test_repomap_tool_pagerank_and_boost():
     assert score_boost_a > score_boost_b
 
     # ------------------------------------------------------------------
-    # boost by symbol name – edges carrying “beta” are multiplied (×10)
-    # ⇒ definition file c.py must outrank a.py after the boost
+    # boost by symbol name – edges carrying “beta” are multiplied (*10)
+    # - definition file c.py must outrank a.py after the boost
+    print(4)
     res_sym_boost = tool.execute(project, symbol_names=["beta"])
     order_sym_boost = [r["file_path"] for r in res_sym_boost]
     assert order_sym_boost.index(c_path) < order_sym_boost.index(a_path)
