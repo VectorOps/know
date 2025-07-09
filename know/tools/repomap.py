@@ -41,8 +41,8 @@ class RepoMap(ProjectComponent):
     def __init__(self, project: Project):
         super().__init__(project)
         self.G = nx.MultiDiGraph()
-        self._defs: Dict[str, Set[str]] = defaultdict(set)   # was Dict[str, str]
-        self._refs: Dict[str, Set[str]] = defaultdict(set)
+        self._defs: Dict[str, Set[str]] = defaultdict(set)   # now stores file paths
+        self._refs: Dict[str, Set[str]] = defaultdict(set)   # now stores file paths
         self._path_to_fid: Dict[str, str] = {}
         self._name_props: Dict[str, NameProps] = {}      # NEW  name → NameProps
         self._weight_stats: dict[str, dict[str, float]] = {}   # NEW
@@ -151,27 +151,29 @@ class RepoMap(ProjectComponent):
         symbolref_repo = self.project.data_repository.symbolref
 
         for fm in file_repo.get_list_by_repo_id(repo_id):
-            self._path_to_fid[fm.path] = fm.id
+            path = fm.path
+            fid  = fm.id
+            self._path_to_fid[path] = fid          # keep helper mapping
             # collect defs
-            for sym in symbol_repo.get_list_by_file_id(fm.id):
+            for sym in symbol_repo.get_list_by_file_id(fid):
                 if sym.name:
-                    self._defs[sym.name].add(fm.id)
+                    self._defs[sym.name].add(path)         # definitions
                     self._name_props[sym.name] = self._make_props(sym)   # NEW
             # collect refs
-            for ref in symbolref_repo.get_list_by_file_id(fm.id):
+            for ref in symbolref_repo.get_list_by_file_id(fid):
                 if ref.name:
-                    self._refs[ref.name].add(fm.id)
+                    self._refs[ref.name].add(path)         # references
 
         # materialise edges
         for name, def_files in self._defs.items():
-            for ref_file in self._refs.get(name, []):
-                for def_file in def_files:
+            for ref_path in self._refs.get(name, []):
+                for def_path in def_files:
                     w = self._compute_edge_weight(name)
-                    self.G.add_edge(ref_file, def_file, name=name, weight=w)
+                    self.G.add_edge(ref_path, def_path, name=name, weight=w)
 
         # Ensure self-loops for all nodes (rule 7)
-        for fid in self._path_to_fid.values():
-            self._ensure_self_loop(fid)
+        for path in self._path_to_fid.keys():
+            self._ensure_self_loop(path)
 
     # ------------------------------------------------------------------
     #  Incremental refresh
@@ -184,21 +186,20 @@ class RepoMap(ProjectComponent):
 
         # ----- handle deleted files ------------------------------------
         for rel_path in scan.files_deleted:
-            fid = self._path_to_fid.pop(rel_path, None)
-            if fid is None:
-                continue
+            path = rel_path
+            self._path_to_fid.pop(path, None)
             # drop node & incident edges
-            if self.G.has_node(fid):
-                self.G.remove_node(fid)
+            if self.G.has_node(path):
+                self.G.remove_node(path)
             # purge defs / refs caches
             for name, def_files in list(self._defs.items()):
-                if fid in def_files:
-                    def_files.remove(fid)
+                if path in def_files:
+                    def_files.remove(path)
                     if not def_files:
                         del self._defs[name]
                         self._name_props.pop(name, None)
             for refs in self._refs.values():
-                refs.discard(fid)
+                refs.discard(path)
 
         # ----- handle added & updated files ----------------------------
         changed = list(scan.files_added) + list(scan.files_updated)
@@ -206,20 +207,20 @@ class RepoMap(ProjectComponent):
             fm = file_repo.get_by_path(rel_path)
             if fm is None:
                 continue
-            fid = fm.id
-            self._path_to_fid[rel_path] = fid
+            path, fid = fm.path, fm.id
+            self._path_to_fid[path] = fid
 
             # remove existing node & caches for this file
-            if self.G.has_node(fid):
-                self.G.remove_node(fid)
+            if self.G.has_node(path):
+                self.G.remove_node(path)
             for name, def_files in list(self._defs.items()):
-                if fid in def_files:
-                    def_files.remove(fid)
+                if path in def_files:
+                    def_files.remove(path)
                     if not def_files:
                         del self._defs[name]
                         self._name_props.pop(name, None)
             for refs in self._refs.values():
-                refs.discard(fid)
+                refs.discard(path)
 
             # ----- rebuild caches for this file -----------------------
             new_def_names: Set[str] = set()
@@ -227,32 +228,32 @@ class RepoMap(ProjectComponent):
 
             for sym in symbol_repo.get_list_by_file_id(fid):
                 if sym.name:
-                    self._defs[sym.name].add(fid)
+                    self._defs[sym.name].add(path)
                     self._name_props[sym.name] = self._make_props(sym)   # NEW
                     new_def_names.add(sym.name)
 
             for ref in symbolref_repo.get_list_by_file_id(fid):
                 if ref.name:
-                    self._refs[ref.name].add(fid)
+                    self._refs[ref.name].add(path)
                     new_ref_names.add(ref.name)
 
             # ensure node exists
-            self.G.add_node(fid)
+            self.G.add_node(path)
 
             # edges from this file’s refs → all its targets
             for name in new_ref_names:
                 w = self._compute_edge_weight(name)
-                for def_fid in self._defs.get(name, []):
-                    self.G.add_edge(fid, def_fid, name=name, weight=w)
+                for def_path in self._defs.get(name, []):
+                    self.G.add_edge(path, def_path, name=name, weight=w)
 
             # edges from other refs → new defs in this file
             for name in new_def_names:
                 w = self._compute_edge_weight(name)
-                for ref_fid in self._refs.get(name, []):
-                    self.G.add_edge(ref_fid, fid, name=name, weight=w)
+                for ref_path in self._refs.get(name, []):
+                    self.G.add_edge(ref_path, path, name=name, weight=w)
 
             # ensure self-loop for this node if needed
-            self._ensure_self_loop(fid)
+            self._ensure_self_loop(path)
 
         # Ensure self-loops for all nodes (rule 7)
         for node in list(self.G.nodes):
@@ -302,32 +303,25 @@ class RepoMapTool(BaseTool):
 
         # Prepare sets for boosting
         sym_set: set[str]  = set(symbol_names or [])
-        path_set: set[str] = set(file_paths  or [])
-
-        # translate file paths → file-ids
-        target_fids: set[str] = {
-            fid for p in path_set
-            if (fid := repomap._path_to_fid.get(p))
-        }
+        path_set: set[str] = set(file_paths or [])
 
         # Adjust edge weights based on input parameters
         for u, v, _k, d in G.edges(keys=True, data=True):
             if sym_set and d.get("name") in sym_set:
                 d["weight"] = d.get("weight", 1.0) * SYMBOL_EDGE_BOOST
-            if target_fids and (u in target_fids or v in target_fids):
+            if path_set and (u in path_set or v in path_set):
                 d["weight"] = d.get("weight", 1.0) * FILE_EDGE_BOOST
+
+        print([f"{u} -> {v} ({d.get('name', '')}) ({d.get('weight')})" for u, v, d in G.edges(data=True)])
 
         # PageRank
         pr = nx.pagerank(G, weight="weight")
 
-        # helper to convert fid → path
-        fid_to_path = {fid: path for path, fid in repomap._path_to_fid.items()}
-
         # collect & sort
         top = sorted(pr.items(), key=lambda t: t[1], reverse=True)[: limit]
         results = [
-            RepoMapScore(file_path=fid_to_path.get(fid, fid), score=score)
-            for fid, score in top
+            RepoMapScore(file_path=path, score=score)
+            for path, score in top
         ]
         return self.to_python(results)
 
