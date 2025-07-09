@@ -338,9 +338,9 @@ class RepoMapTool(BaseTool):
             fs = build_file_summary(project, path)   # default → public symbols only
             results.append(
                 RepoMapScore(
-                    file_path = path,
-                    score     = score,
-                    summary   = fs.definitions if fs else None,
+                    file_path=path,
+                    score=score,
+                    summary=fs.definitions if fs else None,
                 )
             )
         return self.to_python(results)
