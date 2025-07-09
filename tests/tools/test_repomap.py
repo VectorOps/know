@@ -9,6 +9,7 @@ from know.project import Project
 from know.network import RepoMap
 from know.stores.memory import InMemoryDataRepository
 from know.scanner import ScanResult
+from know.tools.repomap import RepoMapTool   # NEW
 
 
 class _DummySettings:
@@ -50,6 +51,25 @@ def _create_ref(repo_id: str, file_id: str, pkg_id: str, name="func"):
         raw=f"{name}()",
         type=SymbolRefType.CALL,
     )
+
+# ---------- helpers for RepoMapTool test ----------  # NEW
+def _build_project():
+    dr = InMemoryDataRepository()
+    repo_id = generate_id()
+    pkg_id  = generate_id()
+
+    dr.repo.create(RepoMetadata(id=repo_id, root_path=""))
+    dr.package.create(PackageMetadata(id=pkg_id, repo_id=repo_id))
+
+    f_a = _create_file(repo_id, pkg_id, "a.py")      # defines func
+    f_b = _create_file(repo_id, pkg_id, "b.py")      # calls   func
+    dr.file.create(f_a); dr.file.create(f_b)
+
+    dr.symbol.create(_create_symbol(repo_id, f_a.id, pkg_id, "func"))
+    dr.symbolref.create(_create_ref(repo_id, f_b.id, pkg_id, "func"))
+
+    project = Project(_DummySettings(), dr, dr.repo.get_by_id(repo_id))
+    return project, "a.py", "b.py"
 
 
 def test_repo_map_build_and_refresh():
@@ -115,3 +135,23 @@ def test_repo_map_build_and_refresh():
     u, v, d = edges[0]
     assert (u, v) == (c_file.id, f1.id)
     assert d["name"] == "func"
+
+# ---------- RepoMapTool tests ----------  # NEW
+def test_repomap_tool_pagerank_and_boost():
+    tool = RepoMapTool()                       # registers RepoMap component
+    project, a_path, b_path = _build_project()
+
+    # baseline – a.py should outrank b.py
+    res = tool.execute(project)
+    assert res[0].file_path == a_path
+    assert {r.file_path for r in res[:2]} == {a_path, b_path}
+    score_a = next(r.score for r in res if r.file_path == a_path)
+    score_b = next(r.score for r in res if r.file_path == b_path)
+    assert score_a > score_b
+
+    # boost edges incident to b.py – b.py should now outrank a.py
+    res_boost = tool.execute(project, file_path=b_path)
+    assert res_boost[0].file_path == b_path
+    score_boost_b = res_boost[0].score
+    score_boost_a = next(r.score for r in res_boost if r.file_path == a_path)
+    assert score_boost_b > score_boost_a
