@@ -11,7 +11,7 @@ from know.tools.file_summary_helper import build_file_summary
 # ------------------------------------------------------------------
 #  Module-level constants
 # ------------------------------------------------------------------
-SYMBOL_EDGE_BOOST: float = 5.0      # multiplier for edges that match requested symbols
+SYMBOL_EDGE_BOOST: float = 15.0     # stronger multiplier – must be > FILE_EDGE_BOOST (10)
 FILE_EDGE_BOOST:   float = 10.0      # multiplier for edges incident to requested files
 from pydantic import BaseModel
 
@@ -324,6 +324,8 @@ class RepoMapTool(BaseTool):
                 new_w *= FILE_EDGE_BOOST
             max_boost = max(SYMBOL_EDGE_BOOST, FILE_EDGE_BOOST)
             d["weight"] = min(orig_w * max_boost, new_w)
+
+        print([f"{u} -> {v} ({d.get('name', '')}) ({d.get('weight')})" for u, v, d in G.edges(data=True)])
 
         # PageRank
         pr = nx.pagerank(G, weight="weight")
