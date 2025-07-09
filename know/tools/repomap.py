@@ -296,12 +296,16 @@ class RepoMapTool(BaseTool):
         symbol_names: Optional[Sequence[str]] = None,
         file_paths: Optional[Sequence[str]] = None,
         limit: int = 20,
+        include_summary_for_mentioned: bool = False,      # NEW FLAG
     ) -> List[RepoMapScore]:
         """
         Run PageRank on the file-level reference graph, optionally boosting
         edges whose `name` matches any symbol in `symbol_names` and/or
         edges outgoing from any file in `file_paths`.
         Returns a list of RepoMapScore objects for the top files.
+
+        By default, summaries for files explicitly listed in `file_paths`
+        are omitted unless `include_summary_for_mentioned` is True.
         """
 
         repomap: RepoMap | None = project.get_component("repomap")
@@ -329,8 +333,8 @@ class RepoMapTool(BaseTool):
         if path_set:
             boost = BOOST_FACTOR_DEFAULT
             # only create entries for the mentioned files that actually exist in the graph
-            pers = {n: boost for n in path_set if n in G.nodes}
-            if pers:                                # skip personalization when none match
+            pers = {n: boost for n in path_set}
+            if pers:
                 tot = sum(pers.values())
                 personalization = {k: v / tot for k, v in pers.items()}
 
@@ -349,11 +353,14 @@ class RepoMapTool(BaseTool):
         results: list[RepoMapScore] = []
         for path, score in top:
             fs = build_file_summary(project, path)   # default → public symbols only
+            include_summary = include_summary_for_mentioned or path not in path_set
+            summary_val = (fs.definitions if fs else None) if include_summary else None
+
             results.append(
                 RepoMapScore(
                     file_path=path,
                     score=score,
-                    summary=fs.definitions if fs else None,
+                    summary=summary_val,
                 )
             )
         return self.to_python(results)
@@ -383,6 +390,11 @@ class RepoMapTool(BaseTool):
                         "minimum": 1,
                         "default": 20,
                         "description": "Number of top files to return.",
+                    },
+                    "include_summary_for_mentioned": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "If true, include summaries for files explicitly listed in `file_paths`; otherwise omit them."
                     },
                 },
             },
