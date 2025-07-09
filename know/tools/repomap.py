@@ -11,8 +11,8 @@ from know.tools.file_summary_helper import build_file_summary
 # ------------------------------------------------------------------
 #  Module-level constants
 # ------------------------------------------------------------------
-SYMBOL_EDGE_BOOST: float = 10.0      # multiplier for edges that match requested symbols
-FILE_EDGE_BOOST:   float = 50.0      # multiplier for edges incident to requested files
+SYMBOL_EDGE_BOOST: float = 5.0      # multiplier for edges that match requested symbols
+FILE_EDGE_BOOST:   float = 10.0      # multiplier for edges incident to requested files
 from pydantic import BaseModel
 
 from know.logger import KnowLogger as logger
@@ -33,11 +33,11 @@ class RepoMap(ProjectComponent):
     component_name = "repomap"
 
     DESCRIPTIVENESS_THRESHOLD = 0.5           # ≥0.5 → “descriptive”
-    DESCRIPTIVE_MULTIPLIER    = 10.0
+    DESCRIPTIVE_MULTIPLIER    = 4.0
     PRIVATE_PROTECTED_MULT    = 0.1
     POLYDEF_THRESHOLD         = 6             # ≥6 distinct definition files
     POLYDEF_MULTIPLIER        = 0.1
-    ISOLATED_SELF_WEIGHT      = 0.1           # rule 7
+    ISOLATED_SELF_WEIGHT      = 0.3           # rule 7
     BOOST_FACTOR_DEFAULT      = 10.0          # for personalization helper
 
     def __init__(self, project: Project):
@@ -124,11 +124,17 @@ class RepoMap(ProjectComponent):
             if props.visibility in (Visibility.PRIVATE.value,
                                     Visibility.PROTECTED.value):
                 base *= self.PRIVATE_PROTECTED_MULT
-        refs_cnt = len(self._refs.get(name, [])) or 1
-        weight   = base * math.sqrt(refs_cnt)
+
+        defs_cnt = len(self._defs.get(name, []))
+        if defs_cnt >= self.POLYDEF_THRESHOLD:
+            base *= self.POLYDEF_MULTIPLIER
+
+        refs_cnt = len(self._refs.get(name, []))
+        weight   = base * math.log1p(refs_cnt)      # log1p(0) == 0
 
         # keep diagnostics side-by-side with calculated weight  # NEW
         self._weight_stats[name] = {
+            "defs_cnt":    defs_cnt,
             "refs_cnt":    refs_cnt,
             "base_weight": base,
             "weight":      weight,
@@ -136,7 +142,6 @@ class RepoMap(ProjectComponent):
         return weight
 
     def _ensure_self_loop(self, fid: str) -> None:
-        """Guarantee rule 7 for *fid*."""
         if self.G.has_edge(fid, fid):
             return
         if self.G.degree(fid) == 0:
@@ -173,7 +178,7 @@ class RepoMap(ProjectComponent):
                     w = self._compute_edge_weight(name)
                     self.G.add_edge(ref_path, def_path, name=name, weight=w)
 
-        # Ensure self-loops for all nodes (rule 7)
+        # Ensure self-loops for all nodes
         for path in self._path_to_fid.keys():
             self._ensure_self_loop(path)
 
@@ -311,18 +316,23 @@ class RepoMapTool(BaseTool):
 
         # Adjust edge weights based on input parameters
         for u, v, _k, d in G.edges(keys=True, data=True):
+            orig_w = d.get("weight", 1.0)
+            new_w  = orig_w
             if sym_set and d.get("name") in sym_set:
-                d["weight"] = d.get("weight", 1.0) * SYMBOL_EDGE_BOOST
+                new_w *= SYMBOL_EDGE_BOOST
             if path_set and u in path_set:
-                d["weight"] = d.get("weight", 1.0) * FILE_EDGE_BOOST
-
-        print([f"{u} -> {v} ({d.get('name', '')}) ({d.get('weight')})" for u, v, d in G.edges(data=True)])
+                new_w *= FILE_EDGE_BOOST
+            max_boost = max(SYMBOL_EDGE_BOOST, FILE_EDGE_BOOST)
+            d["weight"] = min(orig_w * max_boost, new_w)
 
         # PageRank
         pr = nx.pagerank(G, weight="weight")
 
         # collect & sort
         top = sorted(pr.items(), key=lambda t: t[1], reverse=True)[: limit]
+
+        print(pr.items(), top)
+
         results: list[RepoMapScore] = []
         for path, score in top:
             fs = build_file_summary(project, path)   # default → public symbols only
