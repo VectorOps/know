@@ -103,8 +103,8 @@ def test_repo_map_build_and_refresh():
     rm.initialize()                       # RepoMap now builds itself via `initialize`
 
     # initial assertions
-    assert set(rm.G.nodes) == {f1.id, f2.id}
-    assert rm.G.has_edge(f2.id, f1.id)
+    assert set(rm.G.nodes) == {f1.path, f2.path}
+    assert rm.G.has_edge(f2.path, f1.path)
     assert any(d["name"] == "func" for *_ , d in rm.G.edges(data=True))
 
     # ── emulate scanner diff  (delete b.py, update a.py, add c.py) ────────
@@ -125,15 +125,15 @@ def test_repo_map_build_and_refresh():
 
     # ── post-refresh assertions ───────────────────────────────────────────
     # b.py removed
-    assert f2.id not in rm.G.nodes
+    assert f2.path not in rm.G.nodes
     # graph nodes now a.py + c.py
-    assert set(rm.G.nodes) == {f1.id, c_file.id}
+    assert set(rm.G.nodes) == {f1.path, c_file.path}
     # exactly one edge: c.py -> a.py labelled “func”
     # ignore automatically inserted self-loops (u == v)
     edges = [(u, v, d) for u, v, d in rm.G.edges(data=True) if u != v]
     assert len(edges) == 1
     u, v, d = edges[0]
-    assert (u, v) == (c_file.id, f1.id)
+    assert (u, v) == (c_file.path, f1.path)
     assert d["name"] == "func"
 
 # ---------- RepoMapTool tests ----------
@@ -150,7 +150,7 @@ def test_repomap_tool_pagerank_and_boost():
     assert score_a > score_b
 
     # boost edges incident to b.py – b.py should now outrank a.py
-    res_boost = tool.execute(project, file_path=b_path)
+    res_boost = tool.execute(project, file_paths=[b_path])
     assert res_boost[0]["file_path"] == b_path
     score_boost_b = res_boost[0]["score"]
     score_boost_a = next(r["score"] for r in res_boost if r["file_path"] == a_path)
