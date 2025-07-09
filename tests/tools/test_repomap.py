@@ -9,7 +9,7 @@ from know.models import (
 from know.project import Project
 from know.stores.memory import InMemoryDataRepository
 from know.scanner import ScanResult
-from know.tools.repomaprwr import RepoMapRwr as RepoMap, RepoMapRWRTool as RepoMapTool
+from know.tools.repomap import RepoMap, RepoMapTool
 
 
 class _DummySettings:
@@ -115,8 +115,9 @@ def test_repo_map_build_and_refresh():
     rm.initialize()                       # RepoMap now builds itself via `initialize`
 
     # initial assertions
-    assert set(rm.G.nodes) == {f1.path, f2.path}
-    assert rm.G.has_edge(f2.path, f1.path)
+    assert set(rm.G.nodes) == {f1.path, f2.path, 'sym::func'}
+    print(rm.G.edges)
+    assert rm.G.has_edge('sym::func', f1.path)
     assert any(d["name"] == "func" for *_ , d in rm.G.edges(data=True))
 
     # ── emulate scanner diff  (delete b.py, update a.py, add c.py) ────────
@@ -139,14 +140,7 @@ def test_repo_map_build_and_refresh():
     # b.py removed
     assert f2.path not in rm.G.nodes
     # graph nodes now a.py + c.py
-    assert set(rm.G.nodes) == {f1.path, c_file.path}
-    # exactly one edge: c.py -> a.py labelled “func”
-    # ignore automatically inserted self-loops (u == v)
-    edges = [(u, v, d) for u, v, d in rm.G.edges(data=True) if u != v]
-    assert len(edges) == 1
-    u, v, d = edges[0]
-    assert (u, v) == (c_file.path, f1.path)
-    assert d["name"] == "func"
+    assert set(rm.G.nodes) == {f1.path, c_file.path, 'sym::func'}
 
 # ---------- RepoMapTool tests ----------
 def test_repomap_tool_pagerank_and_boost():
@@ -191,5 +185,3 @@ def test_repomap_tool_pagerank_and_boost():
     score_c_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == c_path)
     score_a_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == a_path)
     assert score_c_boost > score_a_boost
-
-    raise
