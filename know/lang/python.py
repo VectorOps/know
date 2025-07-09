@@ -802,25 +802,24 @@ class PythonCodeParser(AbstractCodeParser):
             if node.type == "call":
                 fn_node = node.child_by_field_name("function")
                 if fn_node is not None:
-                    call_name = fn_node.text.decode("utf8")
-                    raw       = node.text.decode("utf8")
+                    full_name = fn_node.text.decode("utf8")          # may contain dotted path
+                    simple_name = full_name.split(".")[-1]           # keep only final identifier
+                    raw = node.text.decode("utf8")
 
-                    # --- best-effort import-resolution --------------------
+                    # --- best-effort import-resolution -------------------
                     to_pkg_path: str | None = None
                     for imp in self.parsed_file.imports:
-                        # when `import pkg as alias`
-                        if imp.alias and (call_name == imp.alias or call_name.startswith(f"{imp.alias}.")):
+                        if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
                             to_pkg_path = imp.virtual_path
                             break
-                        # plain `import pkg.sub`  /  `from pkg.sub import …`
-                        if not imp.alias and (call_name == imp.virtual_path or call_name.startswith(f"{imp.virtual_path}.")):
+                        if not imp.alias and (full_name == imp.virtual_path or full_name.startswith(f"{imp.virtual_path}.")):
                             to_pkg_path = imp.virtual_path
                             break
 
                     refs.append(
                         ParsedSymbolRef(
-                            name=call_name,
-                            raw=raw,
+                            name=simple_name,          # store only the plain symbol name
+                            raw=raw,                   # keep full expression here
                             type=SymbolRefType.CALL,
                             to_package_path=to_pkg_path,
                         )
