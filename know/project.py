@@ -58,9 +58,7 @@ class Project:
     @classmethod
     def register_component(cls, comp_cls: Type[ProjectComponent], 
                           name: str | None = None) -> None:
-        n = name or getattr(comp_cls, "component_name", None) \
-                 or comp_cls.__name__.lower()
-        cls._component_registry[n] = comp_cls
+        cls._component_registry[comp_cls.component_name] = comp_cls
 
     def __init__(
         self,
@@ -75,7 +73,7 @@ class Project:
         self.embeddings = embeddings
 
         self._components: dict[str, ProjectComponent] = {}
-        for name, comp_cls in self.__class__._component_registry.items():
+        for name, comp_cls in self._component_registry.items():
             try:
                 inst = comp_cls(self)
                 self._components[name] = inst

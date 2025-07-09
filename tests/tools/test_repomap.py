@@ -76,7 +76,7 @@ def _build_project():
     dr.symbol.create(_create_symbol(repo_id, f_c.id, pkg_id, "beta"))
     dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "beta"))
 
-    # (NEW) make d.py also call “func” → two outgoing edges from d.py,
+    # make d.py also call “func” → two outgoing edges from d.py,
     # so edge-weight boosting on “beta” can dominate the distribution.
     dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "func"))
 
