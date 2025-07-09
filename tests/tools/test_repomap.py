@@ -172,3 +172,14 @@ def test_repomap_tool_pagerank_and_boost():
     score_boost_a = res_boost[0]["score"]
     score_boost_b = next(r["score"] for r in res_boost if r["file_path"] == b_path)
     assert score_boost_a > score_boost_b
+
+    # ------------------------------------------------------------------
+    # boost by symbol name – edges carrying “beta” are multiplied (×10)
+    # ⇒ definition file c.py must outrank a.py after the boost
+    res_sym_boost = tool.execute(project, symbol_names=["beta"])
+    order_sym_boost = [r["file_path"] for r in res_sym_boost]
+    assert order_sym_boost.index(c_path) < order_sym_boost.index(a_path)
+
+    score_c_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == c_path)
+    score_a_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == a_path)
+    assert score_c_boost > score_a_boost
