@@ -2,9 +2,16 @@ import re
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional, Dict, Set, List
+from typing import Optional, Dict, Set, List, Sequence
 
 import networkx as nx
+
+# ------------------------------------------------------------------
+#  Module-level constants
+# ------------------------------------------------------------------
+SYMBOL_EDGE_BOOST: float = 10.0      # multiplier for edges that match requested symbols
+FILE_EDGE_BOOST:   float = 50.0      # multiplier for edges incident to requested files
+from pydantic import BaseModel
 
 from know.logger import KnowLogger as logger
 from know.models import SymbolMetadata, Visibility
@@ -253,7 +260,7 @@ class RepoMap(ProjectComponent):
 
 
 # Tool implementation
-class RepoMapScore(BaseTool._pyd_base_model):
+class RepoMapScore(BaseModel):
     file_path: str
     score:     float
 
@@ -261,7 +268,8 @@ class RepoMapScore(BaseTool._pyd_base_model):
 class RepoMapTool(BaseTool):
     """
     Produce PageRank-based importance scores for project files using
-    the RepoMap graph.  The original graph is never mutated.
+    the RepoMap graph. The original graph is never mutated.
+    Accepts lists of symbol names and/or file paths to boost related edges.
     """
     tool_name = "vectorops_repomap"
 
@@ -274,10 +282,16 @@ class RepoMapTool(BaseTool):
         self,
         project: Project,
         *,
-        symbol_name: Optional[str] = None,
-        file_path:   Optional[str] = None,
+        symbol_names: Optional[Sequence[str]] = None,
+        file_paths: Optional[Sequence[str]] = None,
         limit: int = 20,
     ) -> List[RepoMapScore]:
+        """
+        Run PageRank on the file-level reference graph, optionally boosting
+        edges whose `name` matches any symbol in `symbol_names` (×10) and/or
+        edges incident to any file in `file_paths` (×50).
+        Returns a list of RepoMapScore objects for the top files.
+        """
 
         repomap: RepoMap | None = project.get_component("repomap")
         if repomap is None:
@@ -286,17 +300,22 @@ class RepoMapTool(BaseTool):
         # shallow-copy graph
         G = repomap.G.copy()
 
-        # adjust edge weights based on input parameters
-        if symbol_name:
-            for _u, _v, _k, d in G.edges(keys=True, data=True):
-                if d.get("name") == symbol_name:
-                    d["weight"] = d.get("weight", 1.0) * 10.0
-        if file_path:
-            target_fid = repomap._path_to_fid.get(file_path)
-            if target_fid:
-                for u, v, _k, d in G.edges(keys=True, data=True):
-                    if u == target_fid or v == target_fid:
-                        d["weight"] = d.get("weight", 1.0) * 50.0
+        # Prepare sets for boosting
+        sym_set: set[str]  = set(symbol_names or [])
+        path_set: set[str] = set(file_paths  or [])
+
+        # translate file paths → file-ids
+        target_fids: set[str] = {
+            fid for p in path_set
+            if (fid := repomap._path_to_fid.get(p))
+        }
+
+        # Adjust edge weights based on input parameters
+        for u, v, _k, d in G.edges(keys=True, data=True):
+            if sym_set and d.get("name") in sym_set:
+                d["weight"] = d.get("weight", 1.0) * SYMBOL_EDGE_BOOST
+            if target_fids and (u in target_fids or v in target_fids):
+                d["weight"] = d.get("weight", 1.0) * FILE_EDGE_BOOST
 
         # PageRank
         pr = nx.pagerank(G, weight="weight")
@@ -322,18 +341,15 @@ class RepoMapTool(BaseTool):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "symbol_name": {
-                        "type": "string",
-                        "description": (
-                            "Boost all edges that represent references to this symbol "
-                            "(weight ×10)."
-                        ),
+                    "symbol_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Boost edges whose `name` attribute matches any of these symbols (×10)."
                     },
-                    "file_path": {
-                        "type": "string",
-                        "description": (
-                            "Boost all edges incident to the given file path (weight ×50)."
-                        ),
+                    "file_paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Boost edges incident to any of the given file paths (×50)."
                     },
                     "limit": {
                         "type": "integer",
