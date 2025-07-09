@@ -336,17 +336,19 @@ class RepoMapTool(BaseTool):
                 base *= SYMBOL_EDGE_BOOST
 
             # NEW: boost every edge that leaves a mentioned file
-            if path_set and u in path_set:
+            if path_set and u in path_set and u != v:
                 base *= FILE_EDGE_BOOST
 
             d["weight"] = base * math.sqrt(refs_cnt)
 
         # ── new: teleport-bias for selected files ─────────────────────────
         personalization: dict[str, float] | None = None
-        if path_set:
+        # only build a personalised teleport vector when the user
+        # actually mentioned symbols (sym_set ≠ ∅).  Pure file-based
+        # boosting should rely on edge weights alone.
+        if sym_set:
             boost = BOOST_FACTOR_DEFAULT
-            # only create entries for the mentioned files that actually exist in the graph
-            pers = {n: boost for n in path_set}
+            pers = {n: boost for n in path_set if n in G}   # keep only existing nodes
             if pers:
                 tot = sum(pers.values())
                 personalization = {k: v / tot for k, v in pers.items()}
@@ -357,8 +359,6 @@ class RepoMapTool(BaseTool):
             weight="weight",
             personalization=personalization,
         )
-
-        print(pr)
 
         # collect & sort
         top = sorted(pr.items(), key=lambda t: t[1], reverse=True)[: limit]
