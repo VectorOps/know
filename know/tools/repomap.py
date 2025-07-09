@@ -327,19 +327,21 @@ class RepoMapTool(BaseTool):
         # ── new: teleport-bias for selected files ─────────────────────────
         personalization: dict[str, float] | None = None
         if path_set:
-            boost = BOOST_FACTOR_DEFAULT          # module constant (=10.0)
-            pers  = {n: (boost if n in path_set else 1.0) for n in G.nodes}
-            tot   = sum(pers.values())
-            personalization = {k: v / tot for k, v in pers.items()}
+            boost = BOOST_FACTOR_DEFAULT
+            # only create entries for the mentioned files that actually exist in the graph
+            pers = {n: boost for n in path_set if n in G.nodes}
+            if pers:                                # skip personalization when none match
+                tot = sum(pers.values())
+                personalization = {k: v / tot for k, v in pers.items()}
 
         # PageRank
         pr = nx.pagerank(
             G,
             weight="weight",
-            **({"personalization": personalization} if personalization else {}),
+            personalization=personalization,
         )
 
-        # print(pr)
+        print(pr)
 
         # collect & sort
         top = sorted(pr.items(), key=lambda t: t[1], reverse=True)[: limit]
