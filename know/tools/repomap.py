@@ -290,7 +290,7 @@ class RepoMapTool(BaseTool):
         """
         Run PageRank on the file-level reference graph, optionally boosting
         edges whose `name` matches any symbol in `symbol_names` (×10) and/or
-        edges incident to any file in `file_paths` (×50).
+        edges outgoing from any file in `file_paths` (×50).
         Returns a list of RepoMapScore objects for the top files.
         """
 
@@ -309,7 +309,7 @@ class RepoMapTool(BaseTool):
         for u, v, _k, d in G.edges(keys=True, data=True):
             if sym_set and d.get("name") in sym_set:
                 d["weight"] = d.get("weight", 1.0) * SYMBOL_EDGE_BOOST
-            if path_set and (u in path_set or v in path_set):
+            if path_set and u in path_set:
                 d["weight"] = d.get("weight", 1.0) * FILE_EDGE_BOOST
 
         print([f"{u} -> {v} ({d.get('name', '')}) ({d.get('weight')})" for u, v, d in G.edges(data=True)])
@@ -343,7 +343,7 @@ class RepoMapTool(BaseTool):
                     "file_paths": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Boost edges incident to any of the given file paths (×50)."
+                        "description": "Boost edges outgoing from any of the given file paths (×50)."
                     },
                     "limit": {
                         "type": "integer",
