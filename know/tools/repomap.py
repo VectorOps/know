@@ -6,6 +6,8 @@ from typing import Optional, Dict, Set, List, Sequence
 
 import networkx as nx
 
+from know.tools.file_summary_helper import build_file_summary
+
 # ------------------------------------------------------------------
 #  Module-level constants
 # ------------------------------------------------------------------
@@ -264,6 +266,7 @@ class RepoMap(ProjectComponent):
 class RepoMapScore(BaseModel):
     file_path: str
     score:     float
+    summary:   str | None = None
 
 
 class RepoMapTool(BaseTool):
@@ -275,7 +278,8 @@ class RepoMapTool(BaseTool):
     tool_name = "vectorops_repomap"
 
     def __init__(self, *a, **kw):
-        from know.project import Project   # local import avoids circularity
+        # TODO: fix me. Local import avoids circularity
+        from know.project import Project
         Project.register_component(RepoMap)
         super().__init__(*a, **kw)
 
@@ -289,8 +293,8 @@ class RepoMapTool(BaseTool):
     ) -> List[RepoMapScore]:
         """
         Run PageRank on the file-level reference graph, optionally boosting
-        edges whose `name` matches any symbol in `symbol_names` (×10) and/or
-        edges outgoing from any file in `file_paths` (×50).
+        edges whose `name` matches any symbol in `symbol_names` and/or
+        edges outgoing from any file in `file_paths`.
         Returns a list of RepoMapScore objects for the top files.
         """
 
@@ -319,10 +323,16 @@ class RepoMapTool(BaseTool):
 
         # collect & sort
         top = sorted(pr.items(), key=lambda t: t[1], reverse=True)[: limit]
-        results = [
-            RepoMapScore(file_path=path, score=score)
-            for path, score in top
-        ]
+        results: list[RepoMapScore] = []
+        for path, score in top:
+            fs = build_file_summary(project, path)   # default → public symbols only
+            results.append(
+                RepoMapScore(
+                    file_path = path,
+                    score     = score,
+                    summary   = fs.definitions if fs else None,
+                )
+            )
         return self.to_python(results)
 
     def get_openai_schema(self) -> dict:
@@ -338,12 +348,12 @@ class RepoMapTool(BaseTool):
                     "symbol_names": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Boost edges whose `name` attribute matches any of these symbols (×10)."
+                        "description": "Boost edges whose `name` attribute matches any of these symbols."
                     },
                     "file_paths": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Boost edges outgoing from any of the given file paths (×50)."
+                        "description": "Boost edges outgoing from any of the given file paths."
                     },
                     "limit": {
                         "type": "integer",
