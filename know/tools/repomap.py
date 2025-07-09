@@ -319,7 +319,7 @@ class RepoMapTool(BaseTool):
         sym_set: set[str]  = set(symbol_names or [])
         path_set: set[str] = set(file_paths or [])
 
-        # NEW ────────────────────────────────────────────────────────────
+        # ────────────────────────────────────────────────────────────
         # if a symbol was mentioned, treat all its definition files as
         # “mentioned files” as well (needed for proper boosting / bias)
         if sym_set:
@@ -328,6 +328,11 @@ class RepoMapTool(BaseTool):
 
         # Adjust edge weights based on input parameters
         for u, v, _k, d in G.edges(keys=True, data=True):
+            # keep the original weight of the artificial self-loop
+            # (u == v) – we neither change nor boost it
+            if u == v:
+                continue
+
             base     = d.get("base_weight", d.get("weight", 1.0))
             refs_cnt = d.get("refs_cnt", 0)
 
