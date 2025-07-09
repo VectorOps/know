@@ -20,7 +20,7 @@ from know.tools.base import BaseTool          # ← new
 #  Module-level constants
 # ------------------------------------------------------------------
 SYMBOL_EDGE_BOOST: float  = 15.0       # stronger multiplier – must be > FILE_EDGE_BOOST (10)
-FILE_EDGE_BOOST:   float  = 50.0      # multiplier for edges incident to requested files
+FILE_EDGE_BOOST:   float  = 10.0      # multiplier for edges incident to requested files
 DESCRIPTIVE_MULTIPLIER    = 4.0
 PRIVATE_PROTECTED_MULT    = 0.1
 POLYDEF_THRESHOLD         = 6             # >= 6 distinct definition files
@@ -319,14 +319,27 @@ class RepoMapTool(BaseTool):
         sym_set: set[str]  = set(symbol_names or [])
         path_set: set[str] = set(file_paths or [])
 
+        # NEW ────────────────────────────────────────────────────────────
+        # if a symbol was mentioned, treat all its definition files as
+        # “mentioned files” as well (needed for proper boosting / bias)
+        if sym_set:
+            for name in sym_set:
+                path_set.update(repomap._defs.get(name, ()))
+
         # Adjust edge weights based on input parameters
         for u, v, _k, d in G.edges(keys=True, data=True):
-            base       = d.get("base_weight", d.get("weight", 1.0))
-            refs_cnt   = d.get("refs_cnt", 0)
-            boosted    = base
+            base     = d.get("base_weight", d.get("weight", 1.0))
+            refs_cnt = d.get("refs_cnt", 0)
+
+            # already present: boost by symbol name
             if sym_set and d.get("name") in sym_set:
-                boosted *= SYMBOL_EDGE_BOOST
-            d["weight"] = boosted * math.sqrt(refs_cnt)
+                base *= SYMBOL_EDGE_BOOST
+
+            # NEW: boost every edge that leaves a mentioned file
+            if path_set and u in path_set:
+                base *= FILE_EDGE_BOOST
+
+            d["weight"] = base * math.sqrt(refs_cnt)
 
         # ── new: teleport-bias for selected files ─────────────────────────
         personalization: dict[str, float] | None = None
