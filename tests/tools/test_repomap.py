@@ -1,4 +1,5 @@
 import pytest
+
 from know.helpers import generate_id
 from know.models import (
     RepoMetadata, PackageMetadata, FileMetadata,
@@ -6,10 +7,9 @@ from know.models import (
     SymbolRef, SymbolRefType,
 )
 from know.project import Project
-from know.network import RepoMap
 from know.stores.memory import InMemoryDataRepository
 from know.scanner import ScanResult
-from know.tools.repomap import RepoMapTool   # NEW
+from know.tools.repomap import RepoMap, RepoMapTool
 
 
 class _DummySettings:
@@ -136,22 +136,22 @@ def test_repo_map_build_and_refresh():
     assert (u, v) == (c_file.id, f1.id)
     assert d["name"] == "func"
 
-# ---------- RepoMapTool tests ----------  # NEW
+# ---------- RepoMapTool tests ----------
 def test_repomap_tool_pagerank_and_boost():
     tool = RepoMapTool()                       # registers RepoMap component
     project, a_path, b_path = _build_project()
 
     # baseline – a.py should outrank b.py
     res = tool.execute(project)
-    assert res[0].file_path == a_path
-    assert {r.file_path for r in res[:2]} == {a_path, b_path}
-    score_a = next(r.score for r in res if r.file_path == a_path)
-    score_b = next(r.score for r in res if r.file_path == b_path)
+    assert res[0]["file_path"] == a_path
+    assert {r["file_path"] for r in res[:2]} == {a_path, b_path}
+    score_a = next(r["score"] for r in res if r["file_path"] == a_path)
+    score_b = next(r["score"] for r in res if r["file_path"] == b_path)
     assert score_a > score_b
 
     # boost edges incident to b.py – b.py should now outrank a.py
     res_boost = tool.execute(project, file_path=b_path)
-    assert res_boost[0].file_path == b_path
-    score_boost_b = res_boost[0].score
-    score_boost_a = next(r.score for r in res_boost if r.file_path == a_path)
+    assert res_boost[0]["file_path"] == b_path
+    score_boost_b = res_boost[0]["score"]
+    score_boost_a = next(r["score"] for r in res_boost if r["file_path"] == a_path)
     assert score_boost_b > score_boost_a
