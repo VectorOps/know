@@ -296,7 +296,7 @@ class RepoMapTool(BaseTool):
         symbol_names: Optional[Sequence[str]] = None,
         file_paths: Optional[Sequence[str]] = None,
         limit: int = 20,
-        include_summary_for_mentioned: bool = False,      # NEW FLAG
+        mentioned_summary: bool = False,
     ) -> List[RepoMapScore]:
         """
         Run PageRank on the file-level reference graph, optionally boosting
@@ -352,9 +352,12 @@ class RepoMapTool(BaseTool):
 
         results: list[RepoMapScore] = []
         for path, score in top:
-            fs = build_file_summary(project, path)   # default → public symbols only
-            include_summary = include_summary_for_mentioned or path not in path_set
-            summary_val = (fs.definitions if fs else None) if include_summary else None
+            include_summary = mentioned_summary or path not in path_set
+
+            summary_val: str | None = None
+            if include_summary:
+                fs = build_file_summary(project, path)   # generate only when needed
+                summary_val = fs.definitions if fs else None
 
             results.append(
                 RepoMapScore(
@@ -391,7 +394,7 @@ class RepoMapTool(BaseTool):
                         "default": 20,
                         "description": "Number of top files to return.",
                     },
-                    "include_summary_for_mentioned": {
+                    "mentioned_summary": {
                         "type": "boolean",
                         "default": False,
                         "description": "If true, include summaries for files explicitly listed in `file_paths`; otherwise omit them."
