@@ -265,6 +265,11 @@ class RepoMapTool(BaseTool):
     """
     tool_name = "vectorops_repomap"
 
+    def __init__(self, *a, **kw):
+        from know.project import Project   # local import avoids circularity
+        Project.register_component(RepoMap)
+        super().__init__(*a, **kw)
+
     def execute(
         self,
         project: Project,

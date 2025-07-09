@@ -29,19 +29,14 @@ class ProjectComponent(ABC):
     """Lifecycle-hook interface for project-level components."""
 
     component_name: str | None = None
-    _registry: Dict[str, Type["ProjectComponent"]] = {}
-
-    def __init_subclass__(cls, **kw):
-        super().__init_subclass__(**kw)
-        name = getattr(cls, "component_name", None) or cls.__name__.lower()
-        ProjectComponent._registry[name] = cls
 
     def __init__(self, project: "Project"):
         self.project = project
 
     @classmethod
-    def get_registered_components(cls) -> Dict[str, Type["ProjectComponent"]]:
-        return dict(cls._registry)
+    def get_registered_components(cls):
+        from know.project import Project
+        return dict(Project._component_registry)
 
     @abstractmethod
     def initialize(self) -> None:               # called once after registration
@@ -57,6 +52,16 @@ class Project:
     Represents a single project and offers various APIs to get information
     about the project or notify of project file changes.
     """
+
+    _component_registry: Dict[str, Type[ProjectComponent]] = {}
+
+    @classmethod
+    def register_component(cls, comp_cls: Type[ProjectComponent], 
+                          name: str | None = None) -> None:
+        n = name or getattr(comp_cls, "component_name", None) \
+                 or comp_cls.__name__.lower()
+        cls._component_registry[n] = comp_cls
+
     def __init__(
         self,
         settings: ProjectSettings,
@@ -70,7 +75,7 @@ class Project:
         self.embeddings = embeddings
 
         self._components: dict[str, ProjectComponent] = {}
-        for name, comp_cls in ProjectComponent.get_registered_components().items():
+        for name, comp_cls in self.__class__._component_registry.items():
             try:
                 inst = comp_cls(self)
                 self._components[name] = inst
@@ -78,7 +83,7 @@ class Project:
             except Exception as exc:
                 logger.error("Component %s failed to initialize: %s", comp_cls, exc)
 
-    def register_component(self, name: str, component: ProjectComponent) -> None:
+    def add_component(self, name: str, component: ProjectComponent) -> None:
         """Register *component* under *name* and immediately call initialise()."""
         if name in self._components:
             logger.warning("Component %s already registered – ignored.", name)
@@ -88,6 +93,8 @@ class Project:
             component.initialize()
         except Exception as exc:
             logger.error("Component %s failed to initialize: %s", component, exc)
+
+    register_component_instance = add_component
 
     def get_repo(self) -> RepoMetadata:
         """Return related RepoMetadata."""
