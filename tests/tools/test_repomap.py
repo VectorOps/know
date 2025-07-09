@@ -9,7 +9,7 @@ from know.models import (
 from know.project import Project
 from know.stores.memory import InMemoryDataRepository
 from know.scanner import ScanResult
-from know.tools.repomap import RepoMap, RepoMapTool
+from know.tools.repomaprwr import RepoMapRwr as RepoMap, RepoMapRWRTool as RepoMapTool
 
 
 class _DummySettings:
@@ -191,3 +191,5 @@ def test_repomap_tool_pagerank_and_boost():
     score_c_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == c_path)
     score_a_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == a_path)
     assert score_c_boost > score_a_boost
+
+    raise

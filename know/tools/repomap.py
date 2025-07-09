@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from know.logger import KnowLogger as logger
 from know.models import SymbolMetadata, Visibility
 from know.project import Project, ScanResult, ProjectComponent
-from know.tools.base import BaseTool          # ← new
+from know.tools.base import BaseTool
 
 
 # ------------------------------------------------------------------
