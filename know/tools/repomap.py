@@ -8,11 +8,6 @@ import networkx as nx
 
 from know.tools.file_summary_helper import build_file_summary
 
-# ------------------------------------------------------------------
-#  Module-level constants
-# ------------------------------------------------------------------
-SYMBOL_EDGE_BOOST: float = 15.0     # stronger multiplier – must be > FILE_EDGE_BOOST (10)
-FILE_EDGE_BOOST:   float = 10.0      # multiplier for edges incident to requested files
 from pydantic import BaseModel
 
 from know.logger import KnowLogger as logger
@@ -21,24 +16,29 @@ from know.project import Project, ScanResult, ProjectComponent
 from know.tools.base import BaseTool          # ← new
 
 
+# ------------------------------------------------------------------
+#  Module-level constants
+# ------------------------------------------------------------------
+SYMBOL_EDGE_BOOST: float  = 5.0       # stronger multiplier – must be > FILE_EDGE_BOOST (10)
+FILE_EDGE_BOOST:   float  = 10.0      # multiplier for edges incident to requested files
+DESCRIPTIVE_MULTIPLIER    = 4.0
+PRIVATE_PROTECTED_MULT    = 0.1
+POLYDEF_THRESHOLD         = 6             # >= 6 distinct definition files
+POLYDEF_MULTIPLIER        = 0.1
+ISOLATED_SELF_WEIGHT      = 0.3           # rule 7
+BOOST_FACTOR_DEFAULT      = 10.0          # for personalization helper
+
+
 @dataclass(slots=True)
 class NameProps:
     name: str
     visibility: Optional[str]   # "public" / "private" / "protected" / …
-    descriptiveness: float      # 0.0 … 1.0
+    descriptiveness: float      # 0.0 ... 1.0
 
 
 class RepoMap(ProjectComponent):
     """Keeps an up-to-date call/reference graph (file-level granularity)."""
     component_name = "repomap"
-
-    DESCRIPTIVENESS_THRESHOLD = 0.5           # ≥0.5 → “descriptive”
-    DESCRIPTIVE_MULTIPLIER    = 4.0
-    PRIVATE_PROTECTED_MULT    = 0.1
-    POLYDEF_THRESHOLD         = 6             # ≥6 distinct definition files
-    POLYDEF_MULTIPLIER        = 0.1
-    ISOLATED_SELF_WEIGHT      = 0.3           # rule 7
-    BOOST_FACTOR_DEFAULT      = 10.0          # for personalization helper
 
     def __init__(self, project: Project):
         super().__init__(project)
@@ -47,7 +47,6 @@ class RepoMap(ProjectComponent):
         self._refs: Dict[str, Set[str]] = defaultdict(set)   # now stores file paths
         self._path_to_fid: Dict[str, str] = {}
         self._name_props: Dict[str, NameProps] = {}      # NEW  name → NameProps
-        self._weight_stats: dict[str, dict[str, float]] = {}   # NEW
 
     # ------------------------------------------------------------------
     #  Debug helpers
@@ -88,7 +87,7 @@ class RepoMap(ProjectComponent):
     @staticmethod
     def _calc_descriptiveness(name: str) -> float:
         """
-        Very light heuristic: split camel- / snake-case into words,
+        Very light heuristic: split camel / snake-case into words,
         clamp (#words / 5) to [0,1].
         """
         if not name:
@@ -120,17 +119,17 @@ class RepoMap(ProjectComponent):
         base = 1.0
         props = self._name_props.get(name)
         if props:
-            base *= props.descriptiveness * self.DESCRIPTIVE_MULTIPLIER
+            base *= props.descriptiveness * DESCRIPTIVE_MULTIPLIER
             if props.visibility in (Visibility.PRIVATE.value,
                                     Visibility.PROTECTED.value):
-                base *= self.PRIVATE_PROTECTED_MULT
+                base *= PRIVATE_PROTECTED_MULT
 
         defs_cnt = len(self._defs.get(name, []))
-        if defs_cnt >= self.POLYDEF_THRESHOLD:
-            base *= self.POLYDEF_MULTIPLIER
+        if defs_cnt >= POLYDEF_THRESHOLD:
+            base *= POLYDEF_MULTIPLIER
 
         refs_cnt = len(self._refs.get(name, []))
-        weight   = base * math.log1p(refs_cnt)      # log1p(0) == 0
+        weight   = base * math.log1p(refs_cnt)
 
         # keep diagnostics side-by-side with calculated weight  # NEW
         self._weight_stats[name] = {
@@ -144,8 +143,9 @@ class RepoMap(ProjectComponent):
     def _ensure_self_loop(self, fid: str) -> None:
         if self.G.has_edge(fid, fid):
             return
+
         if self.G.degree(fid) == 0:
-            self.G.add_edge(fid, fid, name="__self__", weight=self.ISOLATED_SELF_WEIGHT)
+            self.G.add_edge(fid, fid, name="__self__", weight=ISOLATED_SELF_WEIGHT)
 
     # ------------------------------------------------------------------
     #  Initial full build
@@ -165,7 +165,7 @@ class RepoMap(ProjectComponent):
             for sym in symbol_repo.get_list_by_file_id(fid):
                 if sym.name:
                     self._defs[sym.name].add(path)         # definitions
-                    self._name_props[sym.name] = self._make_props(sym)   # NEW
+                    self._name_props[sym.name] = self._make_props(sym)
             # collect refs
             for ref in symbolref_repo.get_list_by_file_id(fid):
                 if ref.name:
@@ -175,8 +175,9 @@ class RepoMap(ProjectComponent):
         for name, def_files in self._defs.items():
             for ref_path in self._refs.get(name, []):
                 for def_path in def_files:
-                    w = self._compute_edge_weight(name)
-                    self.G.add_edge(ref_path, def_path, name=name, weight=w)
+                    edge_data = self._compute_edge_data(name)
+                    w = edge_data.pop("weight")
+                    self.G.add_edge(ref_path, def_path, name=name, weight=w, **edge_data)
 
         # Ensure self-loops for all nodes
         for path in self._path_to_fid.keys():
@@ -249,15 +250,17 @@ class RepoMap(ProjectComponent):
 
             # edges from this file’s refs → all its targets
             for name in new_ref_names:
-                w = self._compute_edge_weight(name)
+                edge_data = self._compute_edge_data(name)
+                w = edge_data.pop("weight")
                 for def_path in self._defs.get(name, []):
-                    self.G.add_edge(path, def_path, name=name, weight=w)
+                    self.G.add_edge(path, def_path, name=name, weight=w, **edge_data)
 
             # edges from other refs → new defs in this file
             for name in new_def_names:
-                w = self._compute_edge_weight(name)
+                edge_data = self._compute_edge_data(name)
+                w = edge_data.pop("weight")
                 for ref_path in self._refs.get(name, []):
-                    self.G.add_edge(ref_path, path, name=name, weight=w)
+                    self.G.add_edge(ref_path, path, name=name, weight=w, **edge_data)
 
             # ensure self-loop for this node if needed
             self._ensure_self_loop(path)
@@ -316,24 +319,20 @@ class RepoMapTool(BaseTool):
 
         # Adjust edge weights based on input parameters
         for u, v, _k, d in G.edges(keys=True, data=True):
-            orig_w = d.get("weight", 1.0)
-            new_w  = orig_w
+            base       = d.get("base_weight", d.get("weight", 1.0))
+            refs_cnt   = d.get("refs_cnt", 0)
+            boosted    = base
             if sym_set and d.get("name") in sym_set:
-                new_w *= SYMBOL_EDGE_BOOST
+                boosted *= SYMBOL_EDGE_BOOST
             if path_set and u in path_set:
-                new_w *= FILE_EDGE_BOOST
-            max_boost = max(SYMBOL_EDGE_BOOST, FILE_EDGE_BOOST)
-            d["weight"] = min(orig_w * max_boost, new_w)
-
-        print([f"{u} -> {v} ({d.get('name', '')}) ({d.get('weight')})" for u, v, d in G.edges(data=True)])
+                boosted *= FILE_EDGE_BOOST
+            d["weight"] = boosted * math.sqrt(refs_cnt)
 
         # PageRank
         pr = nx.pagerank(G, weight="weight")
 
         # collect & sort
         top = sorted(pr.items(), key=lambda t: t[1], reverse=True)[: limit]
-
-        print(pr.items(), top)
 
         results: list[RepoMapScore] = []
         for path, score in top:
