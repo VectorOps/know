@@ -161,14 +161,14 @@ def test_repomap_tool_pagerank_and_boost():
     score_d = next(r["score"] for r in res if r["file_path"] == d_path)
     assert score_c > score_d
 
-    # boost edges incident to d.py – d.py should now outrank c.py
+    # boost edges incident to d.py – outgoing-edge boost elevates *target* (c.py)
     res_boost = tool.execute(project, file_paths=[d_path])
     order_boost = [r["file_path"] for r in res_boost]
-    assert order_boost.index(d_path) < order_boost.index(c_path)
+    assert order_boost.index(c_path) < order_boost.index(d_path)   # outgoing-edge boost elevates *target* (c.py)
 
-    # boost edges incident to b.py – b.py should now outrank a.py
+    # boost edges incident to b.py – a.py now ranks highest
     res_boost = tool.execute(project, file_paths=[b_path])
-    assert res_boost[0]["file_path"] == b_path
-    score_boost_b = res_boost[0]["score"]
-    score_boost_a = next(r["score"] for r in res_boost if r["file_path"] == a_path)
-    assert score_boost_b > score_boost_a
+    assert res_boost[0]["file_path"] == a_path                     # a.py now ranks highest
+    score_boost_a = res_boost[0]["score"]
+    score_boost_b = next(r["score"] for r in res_boost if r["file_path"] == b_path)
+    assert score_boost_a > score_boost_b
