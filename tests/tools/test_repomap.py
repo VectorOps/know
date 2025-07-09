@@ -68,8 +68,16 @@ def _build_project():
     dr.symbol.create(_create_symbol(repo_id, f_a.id, pkg_id, "func"))
     dr.symbolref.create(_create_ref(repo_id, f_b.id, pkg_id, "func"))
 
+    # --- extra files and symbols/refs for "beta"
+    f_c = _create_file(repo_id, pkg_id, "c.py")   # defines “beta”
+    f_d = _create_file(repo_id, pkg_id, "d.py")   # calls   “beta”
+    dr.file.create(f_c); dr.file.create(f_d)
+
+    dr.symbol.create(_create_symbol(repo_id, f_c.id, pkg_id, "beta"))
+    dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "beta"))
+
     project = Project(_DummySettings(), dr, dr.repo.get_by_id(repo_id))
-    return project, "a.py", "b.py"
+    return project, f_a.path, f_b.path, f_c.path, f_d.path
 
 
 def test_repo_map_build_and_refresh():
@@ -139,15 +147,24 @@ def test_repo_map_build_and_refresh():
 # ---------- RepoMapTool tests ----------
 def test_repomap_tool_pagerank_and_boost():
     tool = RepoMapTool()                       # registers RepoMap component
-    project, a_path, b_path = _build_project()
+    project, a_path, b_path, c_path, d_path = _build_project()
 
-    # baseline – a.py should outrank b.py
+    # baseline – a.py should outrank b.py, c.py should outrank d.py
     res = tool.execute(project)
-    assert res[0]["file_path"] == a_path
-    assert {r["file_path"] for r in res[:2]} == {a_path, b_path}
+    order = [r["file_path"] for r in res]
+    assert order.index(a_path) < order.index(b_path)
+    assert order.index(c_path) < order.index(d_path)
     score_a = next(r["score"] for r in res if r["file_path"] == a_path)
     score_b = next(r["score"] for r in res if r["file_path"] == b_path)
     assert score_a > score_b
+    score_c = next(r["score"] for r in res if r["file_path"] == c_path)
+    score_d = next(r["score"] for r in res if r["file_path"] == d_path)
+    assert score_c > score_d
+
+    # boost edges incident to d.py – d.py should now outrank c.py
+    res_boost = tool.execute(project, file_paths=[d_path])
+    order_boost = [r["file_path"] for r in res_boost]
+    assert order_boost.index(d_path) < order_boost.index(c_path)
 
     # boost edges incident to b.py – b.py should now outrank a.py
     res_boost = tool.execute(project, file_paths=[b_path])
