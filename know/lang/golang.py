@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, List
 from tree_sitter import Parser, Language
 import tree_sitter_go as tsgo
-from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge
+from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef
 from know.models import (
     ProgrammingLanguage,
     SymbolKind,
@@ -15,6 +15,7 @@ from know.models import (
     SymbolParameter,
     SymbolMetadata,
     ImportEdge,
+    SymbolRefType,
 )
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
@@ -139,6 +140,11 @@ class GolangCodeParser(AbstractCodeParser):
         # Visit all top-level nodes (imports, functions, types, vars, etc)
         for node in root_node.children:
             self._process_node(node)
+
+        # --------------------------------------------
+        # Collect outgoing symbol-references (calls & types)
+        # --------------------------------------------
+        self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
 
         self.package.imports = list(self.parsed_file.imports)
 
@@ -888,6 +894,71 @@ class GolangCodeParser(AbstractCodeParser):
                         children=[],
                     )
                 )
+
+    def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
+        """
+        Walk *root* recursively and return a list of ParsedSymbolRef objects.
+        • Collect call-expressions  -> SymbolRefType.CALL
+        • Collect type usages       -> SymbolRefType.TYPE
+        A best-effort import–resolution maps the reference to an imported
+        package via self.parsed_file.imports.
+        """
+        refs: list[ParsedSymbolRef] = []
+
+        def _resolve_pkg(full_name: str) -> str | None:
+            for imp in self.parsed_file.imports:
+                if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
+                    return imp.virtual_path
+                if not imp.alias and (full_name == imp.virtual_path or full_name.startswith(f"{imp.virtual_path}.")):
+                    return imp.virtual_path
+            return None
+
+        # helper for creating a TYPE ref
+        def _add_type_ref(node):
+            full_name = self.source_bytes[node.start_byte: node.end_byte].decode("utf8")
+            simple    = full_name.split(".")[-1]
+            refs.append(
+                ParsedSymbolRef(
+                    name=simple,
+                    raw=full_name,
+                    type=SymbolRefType.TYPE,
+                    to_package_path=_resolve_pkg(full_name),
+                )
+            )
+
+        def visit(node):
+            # ---------- call expressions ----------
+            if node.type == "call_expression":
+                fn_node = node.child_by_field_name("function")
+                if fn_node is not None:
+                    full_name = self.source_bytes[fn_node.start_byte: fn_node.end_byte].decode("utf8")
+                    simple    = full_name.split(".")[-1]
+                    raw_expr  = self.source_bytes[node.start_byte: node.end_byte].decode("utf8")
+                    refs.append(
+                        ParsedSymbolRef(
+                            name=simple,
+                            raw=raw_expr,
+                            type=SymbolRefType.CALL,
+                            to_package_path=_resolve_pkg(full_name),
+                        )
+                    )
+
+            # ---------- type references ----------
+            if node.type in ("type_identifier", "qualified_identifier", "selector_expression"):
+                # skip definitions:  type <name> …
+                if node.type == "type_identifier" and node.parent and node.parent.type == "type_spec":
+                    if node.parent.child_by_field_name("name") is node:
+                        pass  # definition – ignore
+                    else:
+                        _add_type_ref(node)
+                else:
+                    _add_type_ref(node)
+
+            for ch in node.children:
+                visit(ch)
+
+        visit(root)
+        return refs
 
 
 class GolangLanguageHelper(AbstractLanguageHelper):
