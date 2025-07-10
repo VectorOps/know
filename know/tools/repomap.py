@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------
 from __future__ import annotations
 
-import math, re
+import math, re, os
 from dataclasses import dataclass
 from collections import defaultdict
 from typing import Dict, Optional, Sequence, Set
@@ -263,7 +263,7 @@ class RepoMapTool(BaseTool):
     Only builds a personalization vector; the heavy graph is maintained
     by the `RepoMap` component.
     """
-    tool_name = "vectorops_repomap_rwr"
+    tool_name = "vectorops_repomap"
 
     def __init__(self, *a, **kw):
         from know.project import Project
@@ -277,6 +277,7 @@ class RepoMapTool(BaseTool):
         *,
         symbol_names: Optional[Sequence[str]] = None,
         file_paths:   Optional[Sequence[str]] = None,
+        prompt:       Optional[str]           = None,     # NEW
         limit:        int   = LIMIT_DEFAULT,
         restart_prob: float = RESTART_PROB,
         include_summary_for_mentioned: bool = False,
@@ -289,6 +290,34 @@ class RepoMapTool(BaseTool):
                 "`project.get_component('repomap')` (or ensure it is "
                 "initialised) before using this tool."
             )
+
+        # ---------------------------------------------------------------
+        # 0.  Extract symbol / file hints from a free-text *prompt*
+        # ---------------------------------------------------------------
+        symbol_names_set: Set[str] = set(symbol_names or [])
+        file_paths_set:   Set[str] = set(file_paths or [])
+
+        if prompt:
+            txt = prompt
+
+            # ----- file names / paths ----------------------------------
+            for path in repomap._path_to_fid.keys():
+                if path in txt or os.path.basename(path) in txt:
+                    file_paths_set.add(path)
+
+            # ----- symbol names ----------------------------------------
+            known_syms = set(repomap._defs.keys()) | set(repomap._refs.keys())
+            tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_\.]*", txt)
+            for tok in tokens:
+                last = tok.rsplit(".", 1)[-1]
+                if tok in known_syms:
+                    symbol_names_set.add(tok)
+                if last in known_syms:
+                    symbol_names_set.add(last)
+
+        # convert back to the lists consumed below
+        symbol_names = list(symbol_names_set) if symbol_names_set else None
+        file_paths   = list(file_paths_set)   if file_paths_set   else None
 
         G = repomap.G
         sym_node = repomap.sym_node
@@ -377,6 +406,13 @@ class RepoMapTool(BaseTool):
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "File paths explicitly mentioned in the user request.",
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": (
+                            "Arbitrary free-text.  Any symbol or file names mentioned here "
+                            "will be detected and used as additional boost seeds."
+                        ),
                     },
                     "limit": {
                         "type": "integer",
