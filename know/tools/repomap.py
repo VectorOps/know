@@ -315,6 +315,9 @@ class RepoMapTool(BaseTool):
                 if last in known_syms:
                     symbol_names_set.add(last)
 
+        #print(symbol_names_set)
+        #print(file_paths_set)
+
         # convert back to the lists consumed below
         symbol_names = list(symbol_names_set) if symbol_names_set else None
         file_paths   = list(file_paths_set)   if file_paths_set   else None

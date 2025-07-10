@@ -8,6 +8,7 @@ wheels/
 .DS_Store
 *.duckdb
 .symbol_search_history
+.repomap_history
 
 # Virtual environments
 .venv/
