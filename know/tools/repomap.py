@@ -102,6 +102,7 @@ class RepoMap(ProjectComponent):
 
     def _compute_edge_data(self, name: str) -> float:
         base = 1.0
+
         props = self._name_props.get(name)
         if props:
             base *= props.descriptiveness * DESCRIPTIVE_MULTIPLIER
@@ -113,7 +114,12 @@ class RepoMap(ProjectComponent):
             base *= POLYDEF_MULTIPLIER
 
         refs_cnt = len(self._refs.get(name, []))
-        weight   = base * math.log1p(refs_cnt)
+        weight_factor = math.log1p(refs_cnt) if refs_cnt > 0 else 1.0
+
+        weight = base * weight_factor
+
+        if weight <= 0.0:
+            weight = MIN_WEIGHT
 
         return weight
 
@@ -309,6 +315,10 @@ class RepoMapTool(BaseTool):
             personalization = {k: v / tot for k, v in seeds.items()}
         else:
             personalization = None  # vanilla PageRank == fully random restart
+
+        #print(personalization)
+        #for k in [f"{u} -> {v} ({d.get('name', '')}) ({d.get('weight')})" for u, v, d in G.edges(data=True)]:
+        #    print(k)
 
         # -----------------------------------------------------------------
         #  2. Run Random-Walk-with-Restart (= personalised PageRank)
