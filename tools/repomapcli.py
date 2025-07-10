@@ -62,10 +62,11 @@ def main() -> None:
         )
     project = init_project(ProjectSettings(**ps_kwargs))
 
-    repomap_tool = ToolRegistry.get("vectorops_repomap_rwr")
+    repomap_tool = ToolRegistry.get("vectorops_repomap")
 
     symbol_seeds: list[str] = []
     file_seeds:   list[str] = []
+    prompt_text:  str | None = None          # NEW – free-text prompt seed
 
     print("RepoMap interactive CLI.  Type '/help' for commands, '/exit' to quit.")
     session = PromptSession(history=FileHistory(".repomap_history"))
@@ -92,6 +93,7 @@ def main() -> None:
                         "  /files                – list project files\n"
                         "  /sym  <name>          – add symbol seed\n"
                         "  /file <rel/path.py>   – add file-path seed\n"
+                        "  /prompt <text>       – set/replace free-text prompt\n"
                         "  /list                 – show current seeds\n"
                         "  /run                  – run RepoMap and show scores\n"
                         "  /clear                – clear all seeds\n"
@@ -116,13 +118,23 @@ def main() -> None:
                         file_seeds.append(arg)
                         print(f"added file:   {arg!r}")
 
+                elif cmd == "/prompt":
+                    if arg:
+                        prompt_text = arg
+                        print(f"prompt set to: {prompt_text!r}")
+                    else:
+                        prompt_text = None
+                        print("prompt cleared.")
+
                 elif cmd == "/list":
                     print("Symbol seeds:", symbol_seeds or "—")
                     print("File   seeds:", file_seeds or "—")
+                    print("Prompt text :", repr(prompt_text) if prompt_text else "—")
 
                 elif cmd == "/clear":
                     symbol_seeds.clear()
                     file_seeds.clear()
+                    prompt_text = None             # NEW
                     print("Seeds cleared.")
 
                 elif cmd == "/run":
@@ -130,7 +142,8 @@ def main() -> None:
                         res = repomap_tool.execute(
                             project,
                             symbol_names=symbol_seeds or None,
-                            file_paths=file_seeds or None,
+                            file_paths=file_seeds   or None,
+                            prompt=prompt_text,              # NEW
                             limit=args.limit,
                         )
                         _print_scores(res)
