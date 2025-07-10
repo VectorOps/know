@@ -22,9 +22,9 @@ from know.logger import KnowLogger as logger
 #  Tunables that are *still* used
 # ---------------------------------------------------------------------
 RESTART_PROB           = 0.15
-EDGE_W_DEF             = 3.0        # file ⇆ symbol definition
-EDGE_W_REF             = 1.0        # file → symbol reference
-EDGE_W_IMPORT          = 0.5        # (optional) file → file imports
+EDGE_W_DEF             = 3.0
+EDGE_W_REF             = 1.0
+EDGE_W_IMPORT          = 0.5
 MIN_WEIGHT             = 1e-9
 LIMIT_DEFAULT          = 20
 
@@ -277,13 +277,13 @@ class RepoMapTool(BaseTool):
         *,
         symbol_names: Optional[Sequence[str]] = None,
         file_paths:   Optional[Sequence[str]] = None,
-        prompt:       Optional[str]           = None,     # NEW
+        prompt:       Optional[str]           = None,
         limit:        int   = LIMIT_DEFAULT,
         restart_prob: float = RESTART_PROB,
         include_summary_for_mentioned: bool = False,
     ) -> list[RepoMapScore]:
 
-        repomap: RepoMap = project.get_component("repomap")  # type: ignore
+        repomap: RepoMap = project.get_component("repomap")
         if repomap is None:
             raise RuntimeError(
                 "RepoMap component is missing.  Call "
@@ -413,7 +413,7 @@ class RepoMapTool(BaseTool):
                     "prompt": {
                         "type": "string",
                         "description": (
-                            "Arbitrary free-text.  Any symbol or file names mentioned here "
+                            "Arbitrary free-text. Any symbol or file names mentioned here "
                             "will be detected and used as additional boost seeds."
                         ),
                     },

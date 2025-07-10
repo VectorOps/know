@@ -50,19 +50,15 @@
 * [X] Python parser does not parse symbols of decorated methods
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
 * [X] Search for public symbols by default
-* [ ] Recommendation engine
+* [X] Recommendation engine
 ** [X] Store all references for each file
 - New model
 - Include import information, if it can be resolved
-** [ ] Create in-memory NetworkX graph similar to Aider?
+** [X] Create in-memory NetworkX graph
 - Add all project public symbols and all references
 - Implement ranking algorithm to find recommendations
-  - Symbols names that are defined more than X times are deprioritized
-  - Symbols that are referenced in search query are boosted
-  - Symbols in files that are requested are boosted
-  - Descriptive names are prioritized
-  - Private symbols are deprioritized
-** [ ] Figure out incremental graph updates
-** [ ] Create a tool that takes in file paths, query, runs above algorithm
+** [X] Figure out incremental graph updates
+** [X] Create a tool that takes in file paths, query, runs above algorithm
 * [ ] Add infra to maintain in-memory tools like RepoMap
 ** [ ] Enable/Disable RepoMap configuration flag
+* [ ] Create a simple web ui to navigate project database
