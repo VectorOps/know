@@ -148,7 +148,6 @@ def test_repomap_tool_pagerank_and_boost():
     project, a_path, b_path, c_path, d_path = _build_project()
 
     # baseline – a.py should outrank b.py, c.py should outrank d.py
-    print(1)
     res = tool.execute(project)
     order = [r["file_path"] for r in res]
     assert order.index(a_path) < order.index(b_path)
@@ -161,13 +160,11 @@ def test_repomap_tool_pagerank_and_boost():
     assert score_c > score_d
 
     # boost edges incident to d.py – outgoing-edge boost elevates *target* (c.py)
-    print(2)
     res_boost = tool.execute(project, file_paths=[d_path])
     order_boost = [r["file_path"] for r in res_boost]
     assert order_boost.index(c_path) < order_boost.index(d_path)   # outgoing-edge boost elevates *target* (c.py)
 
     # boost edges incident to b.py – a.py now ranks highest
-    print(3)
     res_boost = tool.execute(project, file_paths=[b_path])
     assert res_boost[0]["file_path"] == a_path                     # a.py now ranks highest
     score_boost_a = res_boost[0]["score"]
@@ -177,7 +174,6 @@ def test_repomap_tool_pagerank_and_boost():
     # ------------------------------------------------------------------
     # boost by symbol name – edges carrying “beta” are multiplied (*10)
     # - definition file c.py must outrank a.py after the boost
-    print(4)
     res_sym_boost = tool.execute(project, symbol_names=["beta"])
     order_sym_boost = [r["file_path"] for r in res_sym_boost]
     assert order_sym_boost.index(c_path) < order_sym_boost.index(a_path)
@@ -185,3 +181,23 @@ def test_repomap_tool_pagerank_and_boost():
     score_c_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == c_path)
     score_a_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == a_path)
     assert score_c_boost > score_a_boost
+
+
+# ---------- prompt-parsing tests ----------------------------------------
+def test_repomap_tool_prompt_parsing():
+    tool = RepoMapTool()                                 # registers RepoMap component
+    project, a_path, b_path, c_path, d_path = _build_project()
+
+    # --- prompt mentions a *symbol* (“beta”) ----------------------------
+    res_prompt_sym = tool.execute(project,
+                                  prompt="We should refactor the beta function soon.")
+    order_sym = [r["file_path"] for r in res_prompt_sym]
+    # “beta” boost must make its definition file (c.py) outrank a.py
+    assert order_sym.index(c_path) < order_sym.index(a_path)
+
+    # --- prompt mentions a *file* (“d.py”) ------------------------------
+    res_prompt_file = tool.execute(project,
+                                   prompt=f"Please review the logic in {d_path}.")
+    order_file = [r["file_path"] for r in res_prompt_file]
+    # outgoing-edge boost from d.py must elevate its target (c.py)
+    assert order_file.index(c_path) < order_file.index(d_path)
