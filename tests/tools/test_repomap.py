@@ -201,3 +201,24 @@ def test_repomap_tool_prompt_parsing():
     order_file = [r["file_path"] for r in res_prompt_file]
     # outgoing-edge boost from d.py must elevate its target (c.py)
     assert order_file.index(c_path) < order_file.index(d_path)
+
+
+# ---------- token-limit tests -------------------------------------------
+def test_repomap_tool_token_budget():
+    tool = RepoMapTool()
+    project, *_ = _build_project()
+
+    # very small token budget – force tool to trim output
+    res = tool.execute(
+        project,
+        token_limit_count=5,               # tiny budget
+        token_limit_model="gpt-3.5-turbo"  # arbitrary model name
+    )
+
+    # helper replicating fallback logic in _count_tokens
+    total_tokens = sum(
+        len(r["summary"].split()) for r in res
+        if r.get("summary")
+    )
+    # all returned summaries must fit in the budget
+    assert total_tokens <= 5

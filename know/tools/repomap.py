@@ -43,6 +43,25 @@ def _sym_node(name: str) -> str:
     return f"sym::{name}"
 
 
+# ----------- token helper -------------------------------------------
+def _count_tokens(text: str, model: str) -> int:
+    """
+    Return approximate token count for *text* using litellm;
+    fall back to whitespace split if litellm is unavailable.
+    """
+    try:
+        import litellm
+        # litellm ≥0.1
+        if hasattr(litellm, "token_counter"):
+            return litellm.token_counter.text_token_count(text, model)
+        # legacy import path
+        from litellm.utils import token_counter
+        return token_counter.text_token_count(text, model)
+    except Exception:
+        # crude fallback
+        return len(re.findall(r"\w+", text))
+
+
 @dataclass(slots=True)
 class NameProps:
     name: str
@@ -281,6 +300,8 @@ class RepoMapTool(BaseTool):
         limit:        int   = LIMIT_DEFAULT,
         restart_prob: float = RESTART_PROB,
         include_summary_for_mentioned: bool = False,
+        token_limit_count: int | None = None,          # NEW
+        token_limit_model: str | None = None,          # NEW
     ) -> list[RepoMapScore]:
 
         repomap: RepoMap = project.get_component("repomap")
@@ -376,12 +397,23 @@ class RepoMapTool(BaseTool):
         mentioned = set(file_paths or [])
         results: list[RepoMapScore] = []
 
+        tokens_used = 0
         for path, score in ranked:
             need_summary = include_summary_for_mentioned or path not in mentioned
             summary = None
+            summary_tokens = 0
+
             if need_summary:
                 fs = build_file_summary(project, path)
                 summary = fs.definitions if fs else None
+                if summary and token_limit_count and token_limit_model:
+                    summary_tokens = _count_tokens(summary, token_limit_model)
+
+            # -- enforce token budget ---------------------------------------
+            if token_limit_count and token_limit_model:
+                if tokens_used + summary_tokens > token_limit_count:
+                    break                                # stop adding further records
+                tokens_used += summary_tokens
 
             results.append(
                 RepoMapScore(file_path=path, score=score, summary=summary)
@@ -440,6 +472,17 @@ class RepoMapTool(BaseTool):
                             "If true, attach summaries even to the files that the "
                             "user explicitly mentioned."
                         ),
+                    },
+                    "token_limit_count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": None,
+                        "description": "Maximum total tokens allowed in summaries.",
+                    },
+                    "token_limit_model": {
+                        "type": "string",
+                        "default": None,
+                        "description": "Model name used for token counting.",
                     },
                 },
             },
