@@ -42,6 +42,8 @@ def _print_scores(scores: List[Dict[str, Any]]) -> None:
         return
     for r in scores:
         print(f"{r['file_path']:60}  {r['score']:.6f}")
+        if r.get("summary"):
+            print(f"   {r['summary']}")
     print(f"{len(scores)} file(s).")
 
 
@@ -67,6 +69,9 @@ def main() -> None:
     symbol_seeds: list[str] = []
     file_seeds:   list[str] = []
     prompt_text:  str | None = None          # NEW – free-text prompt seed
+    include_summaries: bool = False          # NEW – include summaries?
+    token_limit_count: int | None = None     # NEW – summary token budget
+    token_limit_model: str | None = None     # NEW – model name for budget
 
     print("RepoMap interactive CLI.  Type '/help' for commands, '/exit' to quit.")
     session = PromptSession(history=FileHistory(".repomap_history"))
@@ -97,6 +102,9 @@ def main() -> None:
                         "  /list                 – show current seeds\n"
                         "  /run                  – run RepoMap and show scores\n"
                         "  /clear                – clear all seeds\n"
+                        "  /summary [on|off]        – toggle / force summaries\n"
+                        "  /tokens  <count> <model> – set summary-token budget\n"
+                        "  /tokens  clear           – remove token budget\n"
                         "  /exit                 – quit"
                     )
 
@@ -130,6 +138,11 @@ def main() -> None:
                     print("Symbol seeds:", symbol_seeds or "—")
                     print("File   seeds:", file_seeds or "—")
                     print("Prompt text :", repr(prompt_text) if prompt_text else "—")
+                    print("Summaries    :", "on" if include_summaries else "off")
+                    print("Token budget :", (
+                        f"{token_limit_count} @ {token_limit_model}"
+                        if token_limit_count and token_limit_model else "—"
+                    ))
 
                 elif cmd == "/clear":
                     symbol_seeds.clear()
@@ -137,14 +150,44 @@ def main() -> None:
                     prompt_text = None             # NEW
                     print("Seeds cleared.")
 
+                elif cmd == "/summary":                # NEW
+                    if arg.lower() in {"on", "yes"}:
+                        include_summaries = True
+                    elif arg.lower() in {"off", "no"}:
+                        include_summaries = False
+                    else:                              # toggle when no/unknown arg
+                        include_summaries = not include_summaries
+                    print(f"Summaries {'enabled' if include_summaries else 'disabled'}.")
+
+                elif cmd == "/tokens":                 # NEW
+                    if not arg:
+                        if token_limit_count and token_limit_model:
+                            print(f"Token limit: {token_limit_count} @ {token_limit_model}")
+                        else:
+                            print("No token limit set.")
+                    elif arg.strip().lower() == "clear":
+                        token_limit_count = token_limit_model = None
+                        print("Token limit cleared.")
+                    else:
+                        parts = arg.split(maxsplit=1)
+                        if len(parts) == 2 and parts[0].isdigit():
+                            token_limit_count = int(parts[0])
+                            token_limit_model = parts[1]
+                            print(f"Token limit set: {token_limit_count} @ {token_limit_model}")
+                        else:
+                            print("Usage: /tokens <count> <model>  or  /tokens clear")
+
                 elif cmd == "/run":
                     try:
                         res = repomap_tool.execute(
                             project,
                             symbol_names=symbol_seeds or None,
                             file_paths=file_seeds   or None,
-                            prompt=prompt_text,              # NEW
+                            prompt=prompt_text,
                             limit=args.limit,
+                            include_summary_for_mentioned=include_summaries,   # NEW
+                            token_limit_count=token_limit_count,               # NEW
+                            token_limit_model=token_limit_model,               # NEW
                         )
                         _print_scores(res)
                     except Exception as exc:             # noqa: BLE001
