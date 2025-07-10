@@ -5,7 +5,7 @@ from devtools import pprint
 from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.python import PythonCodeParser
-from know.models import ProgrammingLanguage, SymbolKind, Modifier
+from know.models import ProgrammingLanguage, SymbolKind, Modifier, SymbolRefType
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -127,3 +127,9 @@ def test_python_parser_on_simple_file():
     # ------------------------------------------------------------------ #
     assert top_level["fn"].docstring == "\"docstring!\""
     assert "Multiline" in (top_level["_foo"].docstring or "")
+
+    # ------------------------------------------------------------------ #
+    # Symbol references                                                  #
+    # ------------------------------------------------------------------ #
+    # simple.py contains no function-call expressions – expect none
+    assert parsed_file.symbol_refs == [] or len(parsed_file.symbol_refs) == 0

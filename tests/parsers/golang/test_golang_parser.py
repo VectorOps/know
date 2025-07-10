@@ -7,6 +7,7 @@ from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.golang import GolangCodeParser
 from know.models import ProgrammingLanguage, SymbolKind
+from know.models import SymbolRefType          # NEW
 
 
 # --------------------------------------------------------------------------- #
@@ -107,3 +108,20 @@ def test_golang_parser_on_sample_file():
     # Child symbols of struct S should all be properties
     for child in struct_s.children:
         assert child.kind == SymbolKind.PROPERTY
+
+    # ------------------------------------------------------------------ #
+    # Symbol references                                                  #
+    # ------------------------------------------------------------------ #
+    refs = parsed_file.symbol_refs
+    assert len(refs) >= 3                       # at least S, m(), foobar()
+
+    ref_set = {(r.name, r.type) for r in refs}
+
+    assert ("foobar", SymbolRefType.CALL) in ref_set
+    assert ("m",      SymbolRefType.CALL) in ref_set
+    assert ("S",      SymbolRefType.TYPE) in ref_set
+
+    # verify package-resolution for the aliased k.foobar() call
+    foobar_ref = next(r for r in refs
+                      if r.name == "foobar" and r.type == SymbolRefType.CALL)
+    assert foobar_ref.to_package_path == "example.com/m"
