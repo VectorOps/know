@@ -131,5 +131,10 @@ def test_python_parser_on_simple_file():
     # ------------------------------------------------------------------ #
     # Symbol references                                                  #
     # ------------------------------------------------------------------ #
-    # simple.py contains no function-call expressions – expect none
-    assert parsed_file.symbol_refs == [] or len(parsed_file.symbol_refs) == 0
+    # One call-expression was added at the end of the sample file:  d()
+    assert len(parsed_file.symbol_refs) == 1
+
+    ref = parsed_file.symbol_refs[0]
+    assert ref.name == "d"
+    assert ref.type == SymbolRefType.CALL
+    assert ref.to_package_path == ".foobuz"
