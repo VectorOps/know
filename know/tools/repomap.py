@@ -7,6 +7,7 @@ import math, re, os
 from dataclasses import dataclass
 from collections import defaultdict
 from typing import Dict, Optional, Sequence, Set
+from litellm import token_counter
 
 import networkx as nx
 from pydantic import BaseModel
@@ -45,21 +46,7 @@ def _sym_node(name: str) -> str:
 
 # ----------- token helper -------------------------------------------
 def _count_tokens(text: str, model: str) -> int:
-    """
-    Return approximate token count for *text* using litellm;
-    fall back to whitespace split if litellm is unavailable.
-    """
-    try:
-        import litellm
-        # litellm ≥0.1
-        if hasattr(litellm, "token_counter"):
-            return litellm.token_counter.text_token_count(text, model)
-        # legacy import path
-        from litellm.utils import token_counter
-        return token_counter.text_token_count(text, model)
-    except Exception:
-        # crude fallback
-        return len(re.findall(r"\w+", text))
+    return token_counter(text=text, model=model)
 
 
 @dataclass(slots=True)
@@ -307,7 +294,7 @@ class RepoMapTool(BaseTool):
         repomap: RepoMap = project.get_component("repomap")
         if repomap is None:
             raise RuntimeError(
-                "RepoMap component is missing.  Call "
+                "RepoMap component is missing. Call "
                 "`project.get_component('repomap')` (or ensure it is "
                 "initialised) before using this tool."
             )

@@ -3,7 +3,7 @@
 * [X] Add language to symbol and use it find parser when generating a summary
 * [X] Fix python decorators to be included in raw symbol output
 * [X] Implement recursive parsing function. Do not parse the file if it's hash did not change.
-* [ ] Add data access helper that reads file from data store along with all symbols
+* [X] Add data access helper that reads file from data store along with all symbols
 * [X] Add a helper to resolve import edge dependencies
 * [X] Need to delete files, packages, symbols, etc that are no longer exist on the disk
 * [X] Create helper methods to return models from parser objects
@@ -16,7 +16,7 @@
 ** [ ] TypeScript
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed
-* [ ] Expose a helper method in Project class to calculate embedding for the arbitrary search term
+* [X] Expose a helper method in Project class to calculate embedding for the arbitrary search term
 * [ ] Better in-memory vector index
 * [X] Create a helper that generates a summary view of a file
 * [ ] MCP-compatible tool definition support

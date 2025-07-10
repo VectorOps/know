@@ -79,3 +79,6 @@ class Test:
 @dummy
 class Foobar(Foo, Bar, Buzz):
     pass
+
+
+d()
