@@ -286,7 +286,7 @@ class RepoMapTool(BaseTool):
         prompt:       Optional[str]           = None,
         limit:        int   = LIMIT_DEFAULT,
         restart_prob: float = RESTART_PROB,
-        include_summary_for_mentioned: bool = False,
+        include_summary: bool = True,
         token_limit_count: int | None = None,          # NEW
         token_limit_model: str | None = None,          # NEW
     ) -> list[RepoMapScore]:
@@ -386,7 +386,7 @@ class RepoMapTool(BaseTool):
 
         tokens_used = 0
         for path, score in ranked:
-            need_summary = include_summary_for_mentioned or path not in mentioned
+            need_summary = include_summary and path not in mentioned
             summary = None
             summary_tokens = 0
 
@@ -452,12 +452,11 @@ class RepoMapTool(BaseTool):
                             "(typical values 0.1 – 0.2)."
                         ),
                     },
-                    "include_summary_for_mentioned": {
+                    "include_summary": {
                         "type": "boolean",
-                        "default": False,
+                        "default": True,
                         "description": (
-                            "If true, attach summaries even to the files that the "
-                            "user explicitly mentioned."
+                            "If true, attach file summaries in the response."
                         ),
                     },
                     "token_limit_count": {

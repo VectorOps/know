@@ -156,8 +156,14 @@ class PythonCodeParser(AbstractCodeParser):
         elif node.type == "try_statement":
             self._handle_try_statement(node)
 
+        elif node.type == "pass_statement":
+            return
+
+        elif node.type == "comment":
+            return
+
         # Unknown / unhandled → debug-log (mirrors previous behaviour)
-        elif node.type != "comment":
+        else:
             KnowLogger.log_event(
                 "UNKNOWN_NODE",
                 {

@@ -63,8 +63,6 @@ CREATE TABLE IF NOT EXISTS symbols (
     score_coverage DOUBLE,
     score_security_flags TEXT[],
     embedding_code_vec FLOAT[1024],
-    embedding_doc_vec FLOAT[1024],
-    embedding_sig_vec FLOAT[1024],
     embedding_model TEXT
 );
 

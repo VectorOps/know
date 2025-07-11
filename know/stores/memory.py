@@ -160,8 +160,8 @@ class InMemoryFileMetadataRepository(
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
-    RRF_CODE_WEIGHT: float = 0.35
-    RRF_FTS_WEIGHT:  float = 0.30
+    RRF_CODE_WEIGHT: float = 0.7
+    RRF_FTS_WEIGHT:  float = 0.3
     # minimum cosine similarity for an embedding to participate in ranking
     EMBEDDING_SIM_THRESHOLD: float = 0.4
 

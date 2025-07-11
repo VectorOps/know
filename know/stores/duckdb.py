@@ -194,8 +194,8 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
     }
 
     RRF_K: int = 60          # tuning-parameter k (see RRF paper)
-    RRF_CODE_WEIGHT: float = 0.35   # 0.7 split over 2 embedding signals
-    RRF_FTS_WEIGHT:  float = 0.30
+    RRF_CODE_WEIGHT: float = 0.7
+    RRF_FTS_WEIGHT:  float = 0.3
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         syms = super().get_list_by_ids(symbol_ids)
@@ -263,7 +263,7 @@ WITH candidates AS (
             cte_parts.append("""
 , rank_fts_scores AS (
     SELECT id,
-           fts_main_symbols.match_bm25(id, ?, conjunctive := true) as score
+           fts_main_symbols.match_bm25(id, ?) as score
     FROM candidates
 ), rank_fts AS (
     SELECT id,
@@ -287,6 +287,7 @@ WITH candidates AS (
     WHERE dist IS NOT NULL
       AND dist >= 0.4
 )""")
+            params.append(query.embedding_query)
 
         has_ranking = has_fts or has_embedding
         if has_ranking:
