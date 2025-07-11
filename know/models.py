@@ -150,7 +150,6 @@ class SymbolMetadata(BaseModel):
 
     # Embedding
     embedding_code_vec: Optional[Vector] = None
-    embedding_doc_vec: Optional[Vector] = None
     embedding_sig_vec: Optional[Vector] = None
     embedding_model: Optional[str] = None
 

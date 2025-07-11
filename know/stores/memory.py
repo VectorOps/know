@@ -161,7 +161,6 @@ class InMemoryFileMetadataRepository(
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
     RRF_CODE_WEIGHT: float = 0.35
-    RRF_DOC_WEIGHT:  float = 0.35
     RRF_FTS_WEIGHT:  float = 0.30
     # minimum cosine similarity for an embedding to participate in ranking
     EMBEDDING_SIM_THRESHOLD: float = 0.4
@@ -270,7 +269,6 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
         fts_rank : dict[str, int] = {}
         code_rank: dict[str, int] = {}
-        doc_rank : dict[str, int] = {}
 
         # ----- FTS ranks ------------------------------------------------
         if has_fts:
@@ -299,24 +297,12 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             code_sims.sort(key=lambda t: t[1], reverse=True)
             code_rank = {s.id: i + 1 for i, (s, _) in enumerate(code_sims)}
 
-            doc_sims: list[tuple[SymbolMetadata, float]] = []
-            for s in candidates:
-                vec = getattr(s, "embedding_doc_vec", None)
-                if vec:
-                    sim = _cosine(qvec, vec)                      # type: ignore[arg-type]
-                    if sim >= self.EMBEDDING_SIM_THRESHOLD:
-                        doc_sims.append((s, sim))
-            doc_sims.sort(key=lambda t: t[1], reverse=True)
-            doc_rank = {s.id: i + 1 for i, (s, _) in enumerate(doc_sims)}
-
         # ----- fuse with Reciprocal-Rank Fusion ------------------------
         fused_score: dict[str, float] = {}
         for s in candidates:
             score = 0.0
             if s.id in code_rank:
                 score += 1.0 / (self.RRF_K + code_rank[s.id])
-            if s.id in doc_rank:
-                score += 1.0 / (self.RRF_K + doc_rank[s.id])
             if s.id in fts_rank:
                 score += 1.0 / (self.RRF_K + fts_rank[s.id])
             fused_score[s.id] = score
@@ -324,7 +310,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         if has_fts or has_embedding:
             ranked_candidates = [
                 s for s in candidates
-                if s.id in code_rank or s.id in doc_rank or s.id in fts_rank
+                if s.id in code_rank or s.id in fts_rank
             ]
             ranked_candidates.sort(
                 key=lambda s: (-fused_score.get(s.id, 0.0), s.name or "")

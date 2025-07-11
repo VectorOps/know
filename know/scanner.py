@@ -280,12 +280,8 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         nonlocal obsolete_keys
         existing = existing_by_key.get(sym.key)
 
-        if sym.key == "SymbolSearchQuery.embedding_query":
-            print(repr(sym.key), file_meta.id, existing)
-
         is_new_symbol = existing is None
         code_changed = is_new_symbol or existing.symbol_hash != sym.hash
-        doc_changed  = is_new_symbol or existing.docstring != sym.docstring or existing.comment != sym.comment
         sig_changed  = is_new_symbol or (
             sym.signature
             and (existing.signature is None or existing.signature.raw != sym.signature.raw)
@@ -304,18 +300,10 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             try:
                 if code_changed:
                     sm_kwargs["embedding_code_vec"] = emb_calc.get_code_embedding(sym.body)
-                if sym.docstring and doc_changed:
-                    docs = []
-                    if sym.comment:
-                        docs.append(sym.comment)
-                    if sym.docstring:
-                        docs.append(sym.docstring)
-                    needle = "\n".join(docs)
-                    sm_kwargs["embedding_doc_vec"] = emb_calc.get_text_embedding(needle)
                 if sym.signature and sig_changed:
                     sm_kwargs["embedding_sig_vec"] = emb_calc.get_code_embedding(sym.signature.raw)
                 # record model name only when at least one vector was (re)generated
-                if any([code_changed, doc_changed, sig_changed]):
+                if any([code_changed, sig_changed]):
                     sm_kwargs["embedding_model"] = emb_calc.get_model_name()
             except Exception as exc:
                 logger.error(f"Embedding generation failed for symbol {sym.name}: {exc}")
