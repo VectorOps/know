@@ -21,7 +21,6 @@ from know.data import (
 )
 from dataclasses import dataclass, field
 import math
-import faiss
 import numpy as np
 from know.embeddings.interface import EMBEDDING_DIM
 
@@ -177,10 +176,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         super().__init__(tables.symbols)
         self._file_items = tables.files          # needed for package lookup
 
-        self._faiss_index = faiss.IndexIDMap(faiss.IndexFlatIP(EMBEDDING_DIM))
-        self._str2int: dict[str, int] = {}
-        self._int2str: dict[int, str] = {}
-        self._next_int_id: int = 0
+        self._embeddings: dict[str, np.ndarray] = {}
 
     @staticmethod
     def _norm(v: list[float]) -> np.ndarray:
@@ -191,22 +187,10 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     def _index_upsert(self, sym: SymbolMetadata) -> None:
         if not sym.embedding_code_vec:
             return
-        vec = self._norm(sym.embedding_code_vec).reshape(1, -1)
-        iid = self._str2int.get(sym.id)
-        if iid is None:
-            iid = self._next_int_id
-            self._next_int_id += 1
-            self._str2int[sym.id] = iid
-            self._int2str[iid] = sym.id
-        else:
-            self._faiss_index.remove_ids(np.asarray([iid], dtype="int64"))
-        self._faiss_index.add_with_ids(vec, np.asarray([iid], dtype="int64"))
+        self._embeddings[sym.id] = self._norm(sym.embedding_code_vec)
 
     def _index_remove(self, sid: str) -> None:
-        iid = self._str2int.pop(sid, None)
-        if iid is not None:
-            self._int2str.pop(iid, None)
-            self._faiss_index.remove_ids(np.asarray([iid], dtype="int64"))
+        self._embeddings.pop(sid, None)
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:  # NEW
         syms = super().get_list_by_ids(symbol_ids)
@@ -321,20 +305,20 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
         # ----- embedding ranks -----------------------------------------
         if has_embedding:
-            qvec = self._norm(query.embedding_query).reshape(1, -1)     # type: ignore[arg-type]
-            D, I = self._faiss_index.search(qvec, self.EMBEDDING_TOP_K)
+            qvec = self._norm(query.embedding_query)  # shape (dim,)
             id_candidates = {c.id for c in candidates}
-            code_sims: list[tuple[SymbolMetadata, float]] = []
-            for dist, iid in zip(D[0], I[0]):
-                if iid == -1:
-                    break
-                sid = self._int2str.get(int(iid))
-                if not sid or sid not in id_candidates:
+            sims: list[tuple[SymbolMetadata, float]] = []
+            for sid in id_candidates:
+                vec = self._embeddings.get(sid)
+                if vec is None:
                     continue
-                if dist < self.EMBEDDING_SIM_THRESHOLD:
-                    break          # neighbours are sorted; remaining ones will be worse
-                code_sims.append((self._items[sid], float(dist)))
-            code_rank = {s.id: i + 1 for i, (s, _) in enumerate(code_sims)}
+                sim = float(np.dot(qvec, vec))  # cosine (both normalised)
+                if sim < self.EMBEDDING_SIM_THRESHOLD:
+                    continue
+                sims.append((self._items[sid], sim))
+            sims.sort(key=lambda p: p[1], reverse=True)               # best first
+            sims = sims[: self.EMBEDDING_TOP_K]
+            code_rank = {s.id: i + 1 for i, (s, _) in enumerate(sims)}
 
         # ----- fuse with Reciprocal-Rank Fusion ------------------------
         fused_score: dict[str, float] = {}
