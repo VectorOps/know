@@ -272,8 +272,13 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         # ----- FTS ranks ------------------------------------------------
         if has_fts:
             q_tokens = self._tokenise(query.doc_needle)
-            docs     = [
-                (s, self._tokenise(f"{s.docstring or ''} {s.comment or ''}"))
+            docs = [
+                (
+                    s,
+                    self._tokenise(
+                        f"{s.name or ''} {s.fqn or ''} {s.docstring or ''} {s.comment or ''}"
+                    ),
+                )
                 for s in candidates
             ]
             fts_rank = self._bm25_ranks(docs, q_tokens)

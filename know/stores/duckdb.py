@@ -534,7 +534,7 @@ class DuckDBDataRepository(AbstractDataRepository):
             self._conn.execute("PRAGMA drop_fts_index('symbols');")
             self._conn.execute(
                 "PRAGMA create_fts_index('symbols', "
-                "'id', 'docstring', 'comment');"
+                "'id', 'name', 'fqn', 'docstring', 'comment');"
             )
         except Exception as ex:
             # index absent or extension unavailable – ignore
