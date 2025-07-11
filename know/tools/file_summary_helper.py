@@ -14,15 +14,15 @@ class FileSummary(BaseModel):
 # ──────────────────────────────────────────────────────────────
 #  internal helpers
 # ──────────────────────────────────────────────────────────────
-def _symbol_to_text(sym: SymbolMetadata) -> str:
+def _symbol_to_text(sym: SymbolMetadata, skip_docs: bool = False) -> str:
     parts: list[str] = []
-    if sym.comment:
+    if not skip_docs and sym.comment:
         parts.append(sym.comment.strip())
     if getattr(sym, "signature", None) and sym.signature and sym.signature.raw:
         parts.append(sym.signature.raw.strip())
     else:
         parts.append(sym.name)
-    if sym.docstring:
+    if not skip_docs and sym.docstring:
         parts.append(sym.docstring.strip())
     return "\n".join(parts)
 
@@ -39,6 +39,7 @@ def build_file_summary(
     project: Project,
     rel_path: str,
     symbol_visibility: str | None = None,
+    skip_docs: bool = False,
 ) -> Optional[FileSummary]:
     """
     Return a FileSummary for *rel_path* or ``None`` when the file is
@@ -74,8 +75,8 @@ def build_file_summary(
     top_level.sort(key=lambda s: (s.start_line, s.start_col))
 
     definitions_blocks = (
-        [helper.get_symbol_summary(s) for s in top_level] if helper
-        else [_symbol_to_text(s) for s in top_level]
+        [helper.get_symbol_summary(s, skip_docs=skip_docs) for s in top_level] if helper
+        else [_symbol_to_text(s, skip_docs=skip_docs) for s in top_level]
     )
 
     # join sections ------------------------------------------------------

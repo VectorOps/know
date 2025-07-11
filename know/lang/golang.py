@@ -996,7 +996,9 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
     def get_symbol_summary(self,
                            sym: SymbolMetadata,
-                           indent: int = 0) -> str:
+                           indent: int = 0,
+                           *,
+                           skip_docs: bool = False) -> str:
         """
         Produce a human-readable summary for *sym* (Go flavour).
 
@@ -1009,7 +1011,7 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         lines: list[str] = []
 
         # ---------- preceding comment / doc ----------
-        if sym.docstring:
+        if not skip_docs and sym.docstring:
             for ln in sym.docstring.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
 
@@ -1038,6 +1040,6 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
         elif sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE):
             for child in getattr(sym, "children", []):
-                lines.append(self.get_symbol_summary(child, indent + 4))
+                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
 
         return "\n".join(lines)

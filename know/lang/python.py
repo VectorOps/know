@@ -839,7 +839,7 @@ class PythonCodeParser(AbstractCodeParser):
 
 
 class PythonLanguageHelper(AbstractLanguageHelper):
-    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0) -> str:
+    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0, *, skip_docs: bool = False) -> str:
         """
         Return a human-readable summary for *sym*.
 
@@ -853,7 +853,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         lines: list[str] = []
 
         # ---------- preceding comment ----------
-        if sym.comment:
+        if not skip_docs and sym.comment:
             for ln in sym.comment.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
 
@@ -881,6 +881,8 @@ class PythonLanguageHelper(AbstractLanguageHelper):
 
         # ---------- body / docstring ----------
         def _emit_docstring(ds: str, base_indent: str) -> None:
+            if skip_docs:
+                return
             ds_lines = ds.strip().splitlines()
             if len(ds_lines) == 1:
                 lines.append(f'{base_indent}{ds_lines[0].strip()}')
@@ -890,18 +892,18 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                     lines.append(f"{base_indent}{l.strip()}")
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
-            if sym.docstring:
+            if not skip_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             lines.append(f"{IND}    ...")
 
         elif sym.kind == SymbolKind.CLASS:
-            if sym.docstring:
+            if not skip_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             for child in sym.children:
-                lines.append(self.get_symbol_summary(child, indent + 4))
+                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
 
         # (Variables / constants etc. – docstring only)
-        elif sym.docstring:
+        elif not skip_docs and sym.docstring:
             _emit_docstring(sym.docstring, IND)
 
         return "\n".join(lines)
