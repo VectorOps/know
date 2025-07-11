@@ -287,6 +287,7 @@ class RepoMapTool(BaseTool):
         limit:        int   = LIMIT_DEFAULT,
         restart_prob: float = RESTART_PROB,
         include_summary: bool = True,
+        skip_docs: bool = True,
         token_limit_count: int | None = None,          # NEW
         token_limit_model: str | None = None,          # NEW
     ) -> list[RepoMapScore]:
@@ -391,7 +392,11 @@ class RepoMapTool(BaseTool):
             summary_tokens = 0
 
             if need_summary:
-                fs = build_file_summary(project, path)
+                fs = build_file_summary(
+                    project,
+                    path,
+                    skip_docs=skip_docs,
+                )
                 summary = fs.definitions if fs else None
                 if summary and token_limit_count and token_limit_model:
                     summary_tokens = _count_tokens(summary, token_limit_model)
@@ -457,6 +462,14 @@ class RepoMapTool(BaseTool):
                         "default": True,
                         "description": (
                             "If true, attach file summaries in the response."
+                        ),
+                    },
+                    "skip_docs": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": (
+                            "If true, omit comments and docstrings in the generated "
+                            "file summaries (helps stay within token budgets)."
                         ),
                     },
                     "token_limit_count": {

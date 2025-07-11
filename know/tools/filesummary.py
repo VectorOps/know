@@ -16,17 +16,26 @@ class SummarizeFilesTool(BaseTool):
         self,
         project: Project,
         paths: Sequence[str],
-        symbol_visibility: str = None,
+        symbol_visibility: str | None = None,
+        skip_docs: bool = False,
     ) -> List[FileSummary]:
         """
         Given a *project* and an iterable of project-relative *paths*,
         return a list of FileSummary objects where *definitions* contains
         the concatenated textual representation of every symbol found in
         the corresponding file.
+
+        If *skip_docs* is true, omit preceding comments and docstrings
+        from the summary.
         """
         summaries: list[FileSummary] = []
         for rel_path in paths:
-            fs = build_file_summary(project, rel_path, symbol_visibility)
+            fs = build_file_summary(
+                project,
+                rel_path,
+                symbol_visibility,
+                skip_docs=skip_docs,
+            )
             if fs:
                 summaries.append(fs)
         return self.to_python(summaries)
@@ -59,7 +68,15 @@ class SummarizeFilesTool(BaseTool):
                             "Restrict by visibility modifier (`public`, `protected`, `private`) "
                             "or use `all` to include every symbol. Defaults to `public`."
                         ),
-                    }
+                    },
+                    "skip_docs": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": (
+                            "If true, omit preceding comments and docstrings "
+                            "from the summary."
+                        ),
+                    },
                 },
                 "required": ["paths"],
             },
