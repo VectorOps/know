@@ -280,7 +280,6 @@ class RepoMapTool(BaseTool):
     def execute(
         self,
         project: Project,
-        *,
         symbol_names: Optional[Sequence[str]] = None,
         file_paths:   Optional[Sequence[str]] = None,
         prompt:       Optional[str]           = None,
@@ -288,8 +287,8 @@ class RepoMapTool(BaseTool):
         restart_prob: float = RESTART_PROB,
         include_summary: bool = True,
         skip_docs: bool = True,
-        token_limit_count: int | None = None,          # NEW
-        token_limit_model: str | None = None,          # NEW
+        token_limit_count: int | None = None,
+        token_limit_model: str | None = None,
     ) -> list[RepoMapScore]:
 
         repomap: RepoMap = project.get_component("repomap")
@@ -446,42 +445,6 @@ class RepoMapTool(BaseTool):
                         "minimum": 1,
                         "default": LIMIT_DEFAULT,
                         "description": "Number of top files to return.",
-                    },
-                    "restart_prob": {
-                        "type": "number",
-                        "minimum": 0.0,
-                        "maximum": 1.0,
-                        "default": RESTART_PROB,
-                        "description": (
-                            "Probability of restarting the walk at the seed set "
-                            "(typical values 0.1 – 0.2)."
-                        ),
-                    },
-                    "include_summary": {
-                        "type": "boolean",
-                        "default": True,
-                        "description": (
-                            "If true, attach file summaries in the response."
-                        ),
-                    },
-                    "skip_docs": {
-                        "type": "boolean",
-                        "default": True,
-                        "description": (
-                            "If true, omit comments and docstrings in the generated "
-                            "file summaries (helps stay within token budgets)."
-                        ),
-                    },
-                    "token_limit_count": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "default": None,
-                        "description": "Maximum total tokens allowed in summaries.",
-                    },
-                    "token_limit_model": {
-                        "type": "string",
-                        "default": None,
-                        "description": "Model name used for token counting.",
                     },
                 },
             },

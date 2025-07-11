@@ -839,7 +839,7 @@ class PythonCodeParser(AbstractCodeParser):
 
 
 class PythonLanguageHelper(AbstractLanguageHelper):
-    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0, *, skip_docs: bool = False) -> str:
+    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0, skip_docs: bool = False) -> str:
         """
         Return a human-readable summary for *sym*.
 

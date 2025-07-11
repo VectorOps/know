@@ -997,7 +997,6 @@ class GolangLanguageHelper(AbstractLanguageHelper):
     def get_symbol_summary(self,
                            sym: SymbolMetadata,
                            indent: int = 0,
-                           *,
                            skip_docs: bool = False) -> str:
         """
         Produce a human-readable summary for *sym* (Go flavour).

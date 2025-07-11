@@ -185,9 +185,9 @@ def main() -> None:
                             file_paths=file_seeds   or None,
                             prompt=prompt_text,
                             limit=args.limit,
-                            include_summary_for_mentioned=include_summaries,   # NEW
-                            token_limit_count=token_limit_count,               # NEW
-                            token_limit_model=token_limit_model,               # NEW
+                            include_summary=include_summaries,
+                            token_limit_count=token_limit_count,
+                            token_limit_model=token_limit_model,
                         )
                         _print_scores(res)
                     except Exception as exc:             # noqa: BLE001
