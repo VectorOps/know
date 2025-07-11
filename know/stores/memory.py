@@ -21,6 +21,9 @@ from know.data import (
 )
 from dataclasses import dataclass, field
 import math
+import faiss
+import numpy as np
+from know.embeddings.interface import EMBEDDING_DIM
 
 def _cosine(a: list[float], b: list[float]) -> float:
     """
@@ -164,6 +167,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     RRF_FTS_WEIGHT:  float = 0.3
     # minimum cosine similarity for an embedding to participate in ranking
     EMBEDDING_SIM_THRESHOLD: float = 0.4
+    EMBEDDING_TOP_K: int = 1000   # how many neighbours to ask FAISS for
 
     # ---------- BM25 params ----------
     BM25_K1: float = 1.5
@@ -172,6 +176,37 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.symbols)
         self._file_items = tables.files          # needed for package lookup
+
+        self._faiss_index = faiss.IndexIDMap(faiss.IndexFlatIP(EMBEDDING_DIM))
+        self._str2int: dict[str, int] = {}
+        self._int2str: dict[int, str] = {}
+        self._next_int_id: int = 0
+
+    @staticmethod
+    def _norm(v: list[float]) -> np.ndarray:
+        a = np.asarray(v, dtype="float32")
+        n = np.linalg.norm(a)
+        return a / n if n else a
+
+    def _index_upsert(self, sym: SymbolMetadata) -> None:
+        if not sym.embedding_code_vec:
+            return
+        vec = self._norm(sym.embedding_code_vec).reshape(1, -1)
+        iid = self._str2int.get(sym.id)
+        if iid is None:
+            iid = self._next_int_id
+            self._next_int_id += 1
+            self._str2int[sym.id] = iid
+            self._int2str[iid] = sym.id
+        else:
+            self._faiss_index.remove_ids(np.asarray([iid], dtype="int64"))
+        self._faiss_index.add_with_ids(vec, np.asarray([iid], dtype="int64"))
+
+    def _index_remove(self, sid: str) -> None:
+        iid = self._str2int.pop(sid, None)
+        if iid is not None:
+            self._int2str.pop(iid, None)
+            self._faiss_index.remove_ids(np.asarray([iid], dtype="int64"))
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:  # NEW
         syms = super().get_list_by_ids(symbol_ids)
@@ -286,15 +321,19 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
         # ----- embedding ranks -----------------------------------------
         if has_embedding:
-            qvec = query.embedding_query          # type: ignore[arg-type]
-
+            qvec = self._norm(query.embedding_query).reshape(1, -1)     # type: ignore[arg-type]
+            D, I = self._faiss_index.search(qvec, self.EMBEDDING_TOP_K)
+            id_candidates = {c.id for c in candidates}
             code_sims: list[tuple[SymbolMetadata, float]] = []
-            for s in candidates:
-                if s.embedding_code_vec:
-                    sim = _cosine(qvec, s.embedding_code_vec)     # type: ignore[arg-type]
-                    if sim >= self.EMBEDDING_SIM_THRESHOLD:
-                        code_sims.append((s, sim))
-            code_sims.sort(key=lambda t: t[1], reverse=True)
+            for dist, iid in zip(D[0], I[0]):
+                if iid == -1:
+                    break
+                sid = self._int2str.get(int(iid))
+                if not sid or sid not in id_candidates:
+                    continue
+                if dist < self.EMBEDDING_SIM_THRESHOLD:
+                    break          # neighbours are sorted; remaining ones will be worse
+                code_sims.append((self._items[sid], float(dist)))
             code_rank = {s.id: i + 1 for i, (s, _) in enumerate(code_sims)}
 
         # ----- fuse with Reciprocal-Rank Fusion ------------------------
@@ -347,6 +386,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         to_delete = [sid for sid, sym in self._items.items() if sym.file_id == file_id]
         for sid in to_delete:
             self._items.pop(sid, None)
+            self._index_remove(sid)
         return len(to_delete)
 
 
