@@ -192,6 +192,26 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     def _index_remove(self, sid: str) -> None:
         self._embeddings.pop(sid, None)
 
+    def create(self, item: SymbolMetadata) -> SymbolMetadata:
+        res = super().create(item)
+        self._index_upsert(item)
+        return res
+
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[SymbolMetadata]:
+        res = super().update(item_id, data)
+        if res:
+            if res.embedding_code_vec:
+                self._index_upsert(res)
+            else:
+                self._index_remove(item_id)
+        return res
+
+    def delete(self, item_id: str) -> bool:
+        ok = super().delete(item_id)
+        if ok:
+            self._index_remove(item_id)
+        return ok
+
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:  # NEW
         syms = super().get_list_by_ids(symbol_ids)
         SymbolMetadata.resolve_symbol_hierarchy(syms)
@@ -365,14 +385,12 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
 
-    # NEW -----------------------------------------------------------
     def delete_by_file_id(self, file_id: str) -> int:
         to_delete = [sid for sid, sym in self._items.items() if sym.file_id == file_id]
         for sid in to_delete:
             self._items.pop(sid, None)
             self._index_remove(sid)
         return len(to_delete)
-
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):
