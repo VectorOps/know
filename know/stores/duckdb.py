@@ -194,6 +194,9 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
     }
 
     RRF_K: int = 60          # tuning-parameter k (see RRF paper)
+    RRF_CODE_WEIGHT: float = 0.35   # 0.7 split over 2 embedding signals
+    RRF_DOC_WEIGHT:  float = 0.35
+    RRF_FTS_WEIGHT:  float = 0.30
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         syms = super().get_list_by_ids(symbol_ids)
@@ -305,14 +308,21 @@ WITH candidates AS (
             union_parts: list[str] = []
 
             if has_embedding:
-                union_parts.append("SELECT id, 1.0 / (? + code_rank) AS score FROM rank_code")
-                params.append(self.RRF_K)
-                union_parts.append("SELECT id, 1.0 / (? + doc_rank) AS score FROM rank_doc")
-                params.append(self.RRF_K)
+                union_parts.append(
+                    "SELECT id, ? / (? + code_rank) AS score FROM rank_code"
+                )
+                params.extend([self.RRF_CODE_WEIGHT, self.RRF_K])
+
+                union_parts.append(
+                    "SELECT id, ? / (? + doc_rank) AS score FROM rank_doc"
+                )
+                params.extend([self.RRF_DOC_WEIGHT, self.RRF_K])
 
             if has_fts:
-                union_parts.append("SELECT id, 1.0 / (? + fts_rank) AS score FROM rank_fts")
-                params.append(self.RRF_K)
+                union_parts.append(
+                    "SELECT id, ? / (? + fts_rank) AS score FROM rank_fts"
+                )
+                params.extend([self.RRF_FTS_WEIGHT, self.RRF_K])
 
             cte_parts.append(f"""
 , rrf_scores AS (
