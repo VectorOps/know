@@ -32,19 +32,18 @@ class ParsingState:
 # ----------------------------------------------------------------------
 # Embedding helpers
 # ----------------------------------------------------------------------
-def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str) -> None:
-    """Request an embedding for *body* and persist it once ready."""
-    def _on_vec(vec: Vector, *, _sym_id=sym_id):
+def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str, *, sync: bool = False) -> None:
+    if sync:                                       # ← new branch
         try:
+            vec = emb_calc.get_embedding(body)
             symbol_repo.update(
-                _sym_id,
-                {
-                    "embedding_code_vec": vec,
-                    "embedding_model": emb_calc.get_model_name(),
-                },
+                sym_id,
+                {"embedding_code_vec": vec,
+                 "embedding_model":  emb_calc.get_model_name()},
             )
-        except Exception as exc:          # pragma: no cover
-            logger.error(f"Failed to store embedding for symbol {_sym_id}: {exc}")
+        except Exception as exc:                   # pragma: no cover
+            logger.error(f"Failed to store embedding for symbol {sym_id}: {exc}")
+        return                                     # done synchronously
 
     # normal-priority request
     emb_calc.get_embedding_callback(body, _on_vec)
@@ -68,7 +67,10 @@ def schedule_missing_embeddings(project: "Project") -> None:
             break
         for sym in page:
             if sym.body:
-                schedule_symbol_embedding(symbol_repo, emb_calc, sym.id, sym.body)
+                schedule_symbol_embedding(
+                    symbol_repo, emb_calc, sym.id, sym.body,
+                    sync=project.settings.sync_embeddings,   # ← added
+                )
         offset += PAGE_SIZE
 
 
@@ -346,7 +348,10 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             existing_by_key[sym.key] = sm  # type: ignore[assignment]
 
         if code_changed and emb_calc:
-            schedule_symbol_embedding(symbol_repo, emb_calc, sym_id, sym.body)
+            schedule_symbol_embedding(
+                symbol_repo, emb_calc, sym_id, sym.body,
+                sync=project.settings.sync_embeddings,   # ← added
+            )
 
         # ── this symbol exists in the latest parse → keep it
         obsolete_keys.discard(sym.key)
