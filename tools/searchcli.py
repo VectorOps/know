@@ -16,6 +16,11 @@ from know.tools.base import ToolRegistry
 from know.tools.symbolsearch import IncludeBody   # enum
 from know.logger import logger   # optional (use same logger as chatcli)
 
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+)
+
 
 def _parse_cli() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Interactive symbol search CLI.")

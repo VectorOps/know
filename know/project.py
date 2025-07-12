@@ -10,7 +10,7 @@ from know.models import (
 from know.data import AbstractDataRepository, SymbolSearchQuery
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
-from know.logger import KnowLogger as logger
+from know.logger import logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
 from know.settings import ProjectSettings
 from know.embeddings import EmbeddingWorker
@@ -56,7 +56,7 @@ class Project:
 
     @classmethod
     def register_component(cls, comp_cls: Type[ProjectComponent], 
-                          name: str | None = None) -> None:
+                           name: str | None = None) -> None:
         cls._component_registry[comp_cls.component_name] = comp_cls
 
     def __init__(
@@ -78,18 +78,18 @@ class Project:
                 self._components[name] = inst
                 inst.initialize()
             except Exception as exc:
-                logger.error("Component %s failed to initialize: %s", comp_cls, exc)
+                logger.error("Component failed to initialize", name=name, exc=exc)
 
     def add_component(self, name: str, component: ProjectComponent) -> None:
         """Register *component* under *name* and immediately call initialise()."""
         if name in self._components:
-            logger.warning("Component %s already registered – ignored.", name)
+            logger.warning("Component already registered – ignored.", name=name)
             return
         self._components[name] = component
         try:
             component.initialize()
         except Exception as exc:
-            logger.error("Component %s failed to initialize: %s", component, exc)
+            logger.error("Component failed to initialize", name=name, exc=exc)
 
     register_component_instance = add_component
 
@@ -119,11 +119,11 @@ class Project:
         from know import scanner
         scan_result = scanner.scan_project_directory(self)
 
-        for comp in self._components.values():
+        for name, comp in self._components.items():
             try:
                 comp.refresh(scan_result)
             except Exception as exc:
-                logger.error("Component %s failed to refresh: %s", comp, exc)
+                logger.error("Component failed to refresh", name=name, exc=exc)
 
 
 

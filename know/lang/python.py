@@ -20,7 +20,7 @@ from know.models import (
 )
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
-from know.logger import KnowLogger
+from know.logger import logger
 from know.helpers import compute_file_hash, compute_symbol_hash
 from devtools import pprint
 
@@ -164,16 +164,13 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Unknown / unhandled → debug-log (mirrors previous behaviour)
         else:
-            KnowLogger.log_event(
-                "UNKNOWN_NODE",
-                {
-                    "path": self.parsed_file.path,
-                    "type": node.type,
-                    "line": node.start_point[0] + 1,
-                    "byte_offset": node.start_byte,
-                    "raw": node.text.decode("utf8", errors="replace"),
-                },
-                level=logging.DEBUG,
+            logger.debug(
+                "Unknown node",
+                path=self.parsed_file.path,
+                type=node.type,
+                line=node.start_point[0] + 1,
+                byte_offset=node.start_byte,
+                raw=node.text.decode("utf8", errors="replace"),
             )
 
     def _extract_docstring(self, node) -> Optional[str]:

@@ -19,7 +19,7 @@ from know.models import (
 )
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
-from know.logger import KnowLogger
+from know.logger import logger
 from know.helpers import compute_file_hash, compute_symbol_hash
 
 
@@ -172,16 +172,13 @@ class GolangCodeParser(AbstractCodeParser):
         elif node.type == "package_clause":
             pass
         else:
-            KnowLogger.log_event(
-                "GO_UNKNOWN_NODE",
-                {
-                    "path": self.parsed_file.path,
-                    "type": node.type,
-                    "line": node.start_point[0] + 1,
-                    "byte_offset": node.start_byte,
-                    "raw": node.text.decode("utf8", errors="replace"),
-                },
-                level=logging.DEBUG,
+            logger.debug(
+                "Unknown Go node",
+                path=self.parsed_file.path,
+                type=node.type,
+                line=node.start_point[0] + 1,
+                byte_offset=node.start_byte,
+                raw=node.text.decode("utf8", errors="replace"),
             )
 
     def _extract_package_name(self, root_node) -> Optional[str]:
@@ -224,11 +221,11 @@ class GolangCodeParser(AbstractCodeParser):
                 else self.module_path.split("/")[-1]
             )
             if pkg_ident and pkg_ident != expected_pkg:
-                KnowLogger.warning(
-                    "Go package mismatch: %s (clause) vs %s (dir) in %s",
-                    pkg_ident,
-                    expected_pkg,
-                    self.rel_path,
+                logger.warning(
+                    "Go package mismatch",
+                    clause=pkg_ident,
+                    expected=expected_pkg,
+                    path=self.rel_path,
                 )
 
             return full_path or pkg_ident or self._rel_to_virtual_path(self.rel_path)

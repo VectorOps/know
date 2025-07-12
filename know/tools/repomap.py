@@ -16,7 +16,6 @@ from know.project import Project, ScanResult, ProjectComponent
 from know.models import SymbolMetadata, Visibility
 from know.tools.base import BaseTool
 from know.tools.file_summary_helper import build_file_summary
-from know.logger import KnowLogger as logger
 
 
 # ---------------------------------------------------------------------

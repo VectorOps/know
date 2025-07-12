@@ -209,6 +209,5 @@ class EmbeddingWorker:
             if item.callback is not None:
                 try:
                     item.callback(vector)
-                except Exception:  # pragma: no cover
-                    # we purposely swallow exceptions from user callbacks
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to call callback function", exc=exc)

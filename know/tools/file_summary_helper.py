@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Sequence, Optional, List
 from pydantic import BaseModel
 
-from know.logger import KnowLogger as logger
+from know.logger import logger
 from know.parsers import CodeParserRegistry, AbstractLanguageHelper
 from know.project import Project
 from know.models import ImportEdge, Visibility, SymbolMetadata
@@ -27,10 +27,7 @@ def _symbol_to_text(sym: SymbolMetadata, skip_docs: bool = False) -> str:
     return "\n".join(parts)
 
 def _import_to_text(imp: ImportEdge) -> str:
-    if imp.raw:
-        return imp.raw.strip()
-    logger.warning("Unable to generate summary for import", data={"id": imp.id})
-    return ""
+    return imp.raw.strip()
 
 # ──────────────────────────────────────────────────────────────
 #  public API
@@ -51,7 +48,7 @@ def build_file_summary(
 
     fm = file_repo.get_by_path(rel_path)
     if not fm:
-        logger.warning("File '%s' not found in repository – skipped.", rel_path)
+        logger.warning("File not found in repository – skipped.", path=rel_path)
         return None
 
     # visibility handling ------------------------------------------------

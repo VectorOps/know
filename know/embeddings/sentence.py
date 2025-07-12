@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import time
-from know.logger import KnowLogger
 
 from typing import List, Optional, Any
 import hashlib, json
@@ -19,10 +18,10 @@ except ImportError as exc:  # pragma: no cover
 
 from know.embeddings.interface import EmbeddingCalculator, EMBEDDING_DIM
 from know.models import Vector
+from know.logger import logger
 
-# Ensure `sentence_transformers` messages are emitted at INFO or above and
-# handled by the global logging configuration defined in know.logger.
-logging.getLogger("sentence_transformers").setLevel(logging.INFO)
+# TODO: Move to config
+logging.getLogger("sentence_transformers").setLevel(logging.DEBUG)
 
 
 class LocalEmbeddingCalculator(EmbeddingCalculator):
@@ -87,9 +86,10 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
     # --------------------------------------------------------------------- #
     def _get_model(self) -> SentenceTransformer:
         if self._model is None:
-            KnowLogger.log_event(
+            logger.debug(
                 "embeddings_model_initializing",
-                {"model_name": self._model_name, "device": self._device},
+                model_name=self._model_name,
+                device=self._device,
             )
             self._model = SentenceTransformer(
                 self._model_name,
@@ -97,18 +97,18 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                 truncate_dim=EMBEDDING_DIM,
                 **self._model_kwargs,
             )
-            KnowLogger.log_event(
+            logger.debug(
                 "embeddings_model_ready",
-                {"model_name": self._model_name, "normalize": self._normalize},
-                level=logging.DEBUG,
+                model_name=self._model_name,
+                normalize=self._normalize,
             )
         return self._model
 
     def _encode_uncached(self, texts: List[str]) -> List[Vector]:
-        KnowLogger.log_event(
+        logger.debug(
             "embeddings_encode",
-            {"model_name": self._model_name, "num_texts": len(texts)},
-            level=logging.DEBUG,
+            model_name=self._model_name,
+            num_texts=len(texts),
         )
         try:
             start_ts = time.perf_counter()
@@ -120,20 +120,17 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
             )
             duration = time.perf_counter() - start_ts
             self._last_encode_time = duration
-            KnowLogger.log_event(
+            logger.debug(
                 "embeddings_encode_time",
-                {
-                    "model_name": self._model_name,
-                    "num_texts": len(texts),
-                    "duration_sec": duration,
-                },
-                level=logging.DEBUG,
+                model_name=self._model_name,
+                num_texts=len(texts),
+                duration_sec=duration,
             )
         except Exception as exc:
-            KnowLogger.log_event(
+            logger.debug(
                 "embeddings_encode_error",
-                {"model_name": self._model_name, "error": str(exc)},
-                level=logging.ERROR,
+                model_name=self._model_name,
+                exc=exc,
             )
             raise
         # Ensure list[float] return type.
@@ -142,9 +139,9 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
             emb_list = emb.tolist() if hasattr(emb, "tolist") else list(emb)
 
             # guarantee fixed length = EMBEDDING_DIM
-            if len(emb_list) < EMBEDDING_DIM:                     # pad
+            if len(emb_list) < EMBEDDING_DIM:
                 emb_list.extend([0.0] * (EMBEDDING_DIM - len(emb_list)))
-            elif len(emb_list) > EMBEDDING_DIM:                   # truncate (safety)
+            elif len(emb_list) > EMBEDDING_DIM:
                 emb_list = emb_list[:EMBEDDING_DIM]
 
             processed.append(emb_list)

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from know.project import ScanResult            # NEW – moved there
 from know.helpers import compute_file_hash, generate_id, parse_gitignore
-from know.logger import KnowLogger as logger
+from know.logger import logger
 from know.models import (
     FileMetadata,
     PackageMetadata,
@@ -23,6 +23,7 @@ from know.project import Project, ProjectCache
 
 # TODO: Make configurable
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode", ".pytest_cache"}
+
 
 class ParsingState:
     def __init__(self):
@@ -137,18 +138,18 @@ def scan_project_directory(project: Project) -> ScanResult:
         if existing_meta:
             mod_time: float = path.stat().st_mtime
             if existing_meta.last_updated == mod_time:
-                logger.debug(f"Unchanged file {rel_path}, skipping parse.")
+                logger.debug("Unchanged file, skipping parse.", path=rel_path)
                 continue
 
             file_hash: str = compute_file_hash(str(path))
             # TODO: Do we even need this?
             if existing_meta and existing_meta.file_hash == file_hash:
-                logger.debug(f"Unchanged file {rel_path}, skipping parse.")
+                logger.debug(f"Unchanged file, skipping parse.", path=rel_path)
                 continue
 
         parser_cls = CodeParserRegistry.get_parser(path.suffix)
         if parser_cls is None:
-            logger.debug(f"No parser registered for {rel_path} – storing bare FileMetadata.")
+            logger.debug("No parser registered for path – storing bare FileMetadata.", path=rel_path)
 
             # Ensure FileMetadata exists / is up-to-date so the file is still discoverable
             file_hash = compute_file_hash(str(path))
@@ -185,7 +186,7 @@ def scan_project_directory(project: Project) -> ScanResult:
             else:
                 result.files_updated.append(str(rel_path))
         except Exception as exc:
-            logger.error(f"Failed to parse {rel_path}: {exc}", exc_info=True)
+            logger.error("Failed to parse file", path=rel_path, exc=exc)
 
     # ------------------------------------------------------------------
     #  Remove stale metadata for files that have disappeared from disk
@@ -213,7 +214,7 @@ def scan_project_directory(project: Project) -> ScanResult:
     package_repo = project.data_repository.package
     removed_pkgs = package_repo.delete_orphaned()
     if removed_pkgs:
-        logger.debug(f"Deleted {removed_pkgs} orphaned packages.")
+        logger.debug("Deleted orphaned packages.", packages=removed_pkgs)
 
     # Resolve orphaned method symbols → assign missing parent references
     assign_parents_to_orphan_methods(project)

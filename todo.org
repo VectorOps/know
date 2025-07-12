@@ -75,3 +75,6 @@
 * [ ] Validate traversal logic to ensure we can not go outside of the project directory.
 * [ ] Add a way to destroy the project. This should also shutdown/stop embedding worker.
 ** [ ] Add a destory() method to embedding worker
+* [ ] Add a way to initialize project, but only scan and work from a subpath
+* [ ] Strip spaces from multi-line commends, but recover when generating summaries
+* [ ] Instead of having multiple flags for summary/full/none, add enum to tools

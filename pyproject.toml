@@ -21,6 +21,7 @@ dependencies = [
     "prompt-toolkit>=3.0.51",
     "tree-sitter-go>=0.23.4",
     "networkx>=3.5",
+    "structlog>=25.4.0",
 ]
 
 [tool.uv]

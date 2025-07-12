@@ -4,7 +4,7 @@ import os
 from typing import Sequence, List
 from pydantic import BaseModel
 
-from know.logger import KnowLogger as logger
+from know.logger import logger
 from know.project import Project
 from know.tools.base import BaseTool
 
@@ -33,7 +33,7 @@ class ReadFilesTool(BaseTool):
         for rel_path in paths:
             fm = file_repo.get_by_path(rel_path)
             if fm is None:
-                logger.warning(f"File '{rel_path}' not found in repository – skipped.")
+                logger.warning("File not found in repository – skipped.", path=rel_path)
                 continue
 
             abs_path = os.path.join(root_path, rel_path)
@@ -41,7 +41,7 @@ class ReadFilesTool(BaseTool):
                 with open(abs_path, "r", encoding="utf-8") as f:
                     text = f.read()
             except OSError as exc:
-                logger.error(f"Unable to read '{abs_path}': {exc}")
+                logger.error("Unable to read file", path=abs_path, exc=exc)
                 continue
 
             results.append(FileContent(path=rel_path, content=text))

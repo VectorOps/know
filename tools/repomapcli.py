@@ -12,6 +12,11 @@ from know.project import init_project
 from know.tools.base import ToolRegistry
 from know.logger import logger
 
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+)
+
 
 def _parse_cli() -> argparse.Namespace:
     p = argparse.ArgumentParser(
