@@ -1,4 +1,5 @@
 import re      # for tokenisation
+import threading
 from typing import Optional, Dict, Any, List, TypeVar, Generic
 from know.models import (
     RepoMetadata,
@@ -38,90 +39,103 @@ T = TypeVar("T")
 
 @dataclass
 class _MemoryTables:
-    repos:   dict[str, RepoMetadata]   = field(default_factory=dict)
-    packages:dict[str, PackageMetadata]= field(default_factory=dict)
-    files:   dict[str, FileMetadata]   = field(default_factory=dict)
-    symbols: dict[str, SymbolMetadata] = field(default_factory=dict)
-    edges:   dict[str, ImportEdge]     = field(default_factory=dict)
-    symbolrefs: dict[str, SymbolRef]   = field(default_factory=dict)
+    repos:      dict[str, RepoMetadata]   = field(default_factory=dict)
+    packages:   dict[str, PackageMetadata]= field(default_factory=dict)
+    files:      dict[str, FileMetadata]   = field(default_factory=dict)
+    symbols:    dict[str, SymbolMetadata] = field(default_factory=dict)
+    edges:      dict[str, ImportEdge]     = field(default_factory=dict)
+    symbolrefs: dict[str, SymbolRef]      = field(default_factory=dict)
+    lock:       threading.RLock           = field(
+        default_factory=threading.RLock, repr=False, compare=False
+    )
 
 class InMemoryBaseRepository(Generic[T]):
-    def __init__(self, table: Dict[str, T]):
+    def __init__(self, table: Dict[str, T], lock: threading.RLock):
         self._items = table
+        self._lock  = lock
 
     def get_by_id(self, item_id: str) -> Optional[T]:
         """Get an item by its ID."""
-        return self._items.get(item_id)
+        with self._lock:
+            return self._items.get(item_id)
 
     def get_list_by_ids(self, item_ids: list[str]) -> list[T]:
         """Get a list of items by their IDs."""
-        return [self._items[iid] for iid in item_ids if iid in self._items]
+        with self._lock:
+            return [self._items[iid] for iid in item_ids if iid in self._items]
 
     def create(self, item: T) -> T:
         """Create a new item entry."""
-        self._items[item.id] = item
+        with self._lock:
+            self._items[item.id] = item
         return item
 
     def update(self, item_id: str, data: Dict[str, Any]) -> Optional[T]:
         """Update an item by its ID."""
-        item = self._items.get(item_id)
-        if not item:
-            return None
-        # Pydantic v2: use `model_copy`, fall back to legacy `copy`.
-        if hasattr(item, "model_copy"):              # Pydantic >= 2
-            updated = item.model_copy(update=data)
-            self._items[item_id] = updated
-            return updated
-        if hasattr(item, "copy"):                    # Pydantic < 2
-            updated = item.copy(update=data)
-            self._items[item_id] = updated
-            return updated
-        # For dataclasses, update fields in place
-        for k, v in data.items():
-            setattr(item, k, v)
-        return item
+        with self._lock:
+            item = self._items.get(item_id)
+            if not item:
+                return None
+            # Pydantic v2: use `model_copy`, fall back to legacy `copy`.
+            if hasattr(item, "model_copy"):              # Pydantic >= 2
+                updated = item.model_copy(update=data)
+                self._items[item_id] = updated
+                return updated
+            if hasattr(item, "copy"):                    # Pydantic < 2
+                updated = item.copy(update=data)
+                self._items[item_id] = updated
+                return updated
+            # For dataclasses, update fields in place
+            for k, v in data.items():
+                setattr(item, k, v)
+            return item
 
     def delete(self, item_id: str) -> bool:
         """Delete an item by its ID."""
-        return self._items.pop(item_id, None) is not None
+        with self._lock:
+            return self._items.pop(item_id, None) is not None
 
 class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], AbstractRepoMetadataRepository):
     def __init__(self, tables: _MemoryTables):
-        super().__init__(tables.repos)
+        super().__init__(tables.repos, tables.lock)
 
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""
-        for repo in self._items.values():
-            if repo.root_path == root_path:
-                return repo
+        with self._lock:
+            for repo in self._items.values():
+                if repo.root_path == root_path:
+                    return repo
         return None
 
 class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata], AbstractPackageMetadataRepository):
     def __init__(self, tables: _MemoryTables):
-        super().__init__(tables.packages)
+        super().__init__(tables.packages, tables.lock)
         self._file_items = tables.files
 
     def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
         """
         Return the first PackageMetadata whose physical_path equals *path*.
         """
-        for pkg in self._items.values():
-            if pkg.physical_path == path:
-                return pkg
+        with self._lock:
+            for pkg in self._items.values():
+                if pkg.physical_path == path:
+                    return pkg
         return None
 
     def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:
         """
         Return the first PackageMetadata whose physical_path equals *path*.
         """
-        for pkg in self._items.values():
-            if pkg.virtual_path == path:
-                return pkg
+        with self._lock:
+            for pkg in self._items.values():
+                if pkg.virtual_path == path:
+                    return pkg
         return None
 
     def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
         """Return all packages that belong to *repo_id*."""
-        return [pkg for pkg in self._items.values() if pkg.repo_id == repo_id]
+        with self._lock:
+            return [pkg for pkg in self._items.values() if pkg.repo_id == repo_id]
 
     def delete_orphaned(
         self,
@@ -130,35 +144,39 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
         Delete every PackageMetadata that is not referenced by any
         FileMetadata in *file_repo*.  Returns the number of deletions.
         """
-        used_pkg_ids = {f.package_id for f in self._file_items.values() if f.package_id}
-        removed = 0
-        for pkg_id in list(self._items):
-            if pkg_id not in used_pkg_ids:
-                self.delete(pkg_id)
-                removed += 1
-        return removed
+        with self._lock:
+            used_pkg_ids = {f.package_id for f in self._file_items.values() if f.package_id}
+            removed = 0
+            for pkg_id in list(self._items):
+                if pkg_id not in used_pkg_ids:
+                    self.delete(pkg_id)
+                    removed += 1
+            return removed
 
 class InMemoryFileMetadataRepository(
     InMemoryBaseRepository[FileMetadata],
     AbstractFileMetadataRepository,
 ):
     def __init__(self, tables: _MemoryTables):
-        super().__init__(tables.files)
+        super().__init__(tables.files, tables.lock)
 
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
         """Get a file by its project-relative path."""
-        for file in self._items.values():
-            if file.path == path:
-                return file
+        with self._lock:
+            for file in self._items.values():
+                if file.path == path:
+                    return file
         return None
 
     def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
         """Return all files whose ``repo_id`` matches *repo_id*."""
-        return [f for f in self._items.values() if f.repo_id == repo_id]
+        with self._lock:
+            return [f for f in self._items.values() if f.repo_id == repo_id]
 
     def get_list_by_package_id(self, package_id: str) -> list[FileMetadata]:
         """Return all files whose ``package_id`` matches *package_id*."""
-        return [f for f in self._items.values() if f.package_id == package_id]
+        with self._lock:
+            return [f for f in self._items.values() if f.package_id == package_id]
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
@@ -173,7 +191,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     BM25_B:  float = 0.75
 
     def __init__(self, tables: _MemoryTables):
-        super().__init__(tables.symbols)
+        super().__init__(tables.symbols, tables.lock)
         self._file_items = tables.files          # needed for package lookup
 
         self._embeddings: dict[str, np.ndarray] = {}
@@ -187,10 +205,12 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     def _index_upsert(self, sym: SymbolMetadata) -> None:
         if not sym.embedding_code_vec:
             return
-        self._embeddings[sym.id] = self._norm(sym.embedding_code_vec)
+        with self._lock:
+            self._embeddings[sym.id] = self._norm(sym.embedding_code_vec)
 
     def _index_remove(self, sid: str) -> None:
-        self._embeddings.pop(sid, None)
+        with self._lock:
+            self._embeddings.pop(sid, None)
 
     def create(self, item: SymbolMetadata) -> SymbolMetadata:
         res = super().create(item)
@@ -219,7 +239,8 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
         """Return all symbols that belong to the given *file_id*."""
-        res = [sym for sym in self._items.values() if sym.file_id == file_id]
+        with self._lock:
+            res = [sym for sym in self._items.values() if sym.file_id == file_id]
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
 
@@ -228,9 +249,10 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         Return all symbols that belong to *package_id* (prefer the symbol’s
         own package_id field.
         """
-        res: list[SymbolMetadata] = [
-            s for s in self._items.values() if s.package_id == package_id
-        ]
+        with self._lock:
+            res: list[SymbolMetadata] = [
+                s for s in self._items.values() if s.package_id == package_id
+            ]
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
 
@@ -276,9 +298,13 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         return {sid: rank + 1 for rank, (sid, _) in enumerate(scored)}
 
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
-        # ---------- candidate set: repo + scalar filters ----------
+        with self._lock:
+            # ---------- candidate set: repo + scalar filters ----------
+            items      = list(self._items.values())
+            embeddings = dict(self._embeddings)
+
         candidates: list[SymbolMetadata] = [
-            s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
+            s for s in items if getattr(s, "repo_id", None) == repo_id
         ]
 
         # scalar filters ......................................................
@@ -334,13 +360,13 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             id_candidates = {c.id for c in candidates}
             sims: list[tuple[SymbolMetadata, float]] = []
             for sid in id_candidates:
-                vec = self._embeddings.get(sid)
+                vec = embeddings.get(sid)
                 if vec is None:
                     continue
                 sim = float(np.dot(qvec, vec))  # cosine (both normalised)
                 if sim < self.EMBEDDING_SIM_THRESHOLD:
                     continue
-                sims.append((self._items[sid], sim))
+                sims.append((items[sid], sim))
             sims.sort(key=lambda p: p[1], reverse=True)               # best first
             sims = sims[: self.EMBEDDING_TOP_K]
             code_rank = {s.id: i + 1 for i, (s, _) in enumerate(sims)}
@@ -386,48 +412,56 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         """
         if not parent_ids:
             return []
-        res = [s for s in self._items.values() if s.parent_symbol_id in parent_ids]
+        with self._lock:
+            res = [s for s in self._items.values() if s.parent_symbol_id in parent_ids]
         SymbolMetadata.resolve_symbol_hierarchy(res)
         return res
 
     def delete_by_file_id(self, file_id: str) -> int:
-        to_delete = [sid for sid, sym in self._items.items() if sym.file_id == file_id]
-        for sid in to_delete:
-            self._items.pop(sid, None)
-            self._index_remove(sid)
+        with self._lock:
+            to_delete = [sid for sid, sym in self._items.items() if sym.file_id == file_id]
+            for sid in to_delete:
+                self._items.pop(sid, None)
+                self._index_remove(sid)
         return len(to_delete)
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):
-        super().__init__(tables.edges)
+        super().__init__(tables.edges, tables.lock)
 
     def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
         """Return all import-edges whose *from_package_id* equals *package_id*."""
-        return [edge for edge in self._items.values() if edge.from_package_id == package_id]
+        with self._lock:
+            return [edge for edge in self._items.values() if edge.from_package_id == package_id]
 
     def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
         """Return all import-edges whose ``repo_id`` matches *repo_id*."""
-        return [edge for edge in self._items.values() if edge.repo_id == repo_id]
+        with self._lock:
+            return [edge for edge in self._items.values() if edge.repo_id == repo_id]
 
 class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
                                   AbstractSymbolRefRepository):
     def __init__(self, tables: _MemoryTables):
-        super().__init__(tables.symbolrefs)
+        super().__init__(tables.symbolrefs, tables.lock)
 
     def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
-        return [r for r in self._items.values() if r.file_id == file_id]
+        with self._lock:
+            return [r for r in self._items.values() if r.file_id == file_id]
 
     def get_list_by_package_id(self, package_id: str) -> list[SymbolRef]:
-        return [r for r in self._items.values() if r.package_id == package_id]
+        with self._lock:
+            return [r for r in self._items.values() if r.package_id == package_id]
 
     def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
-        return [r for r in self._items.values() if r.repo_id == repo_id]
+        with self._lock:
+            return [r for r in self._items.values() if r.repo_id == repo_id]
 
     # NEW ---------------------------------------------------------------
     def delete_by_file_id(self, file_id: str) -> int:
-        to_delete = [rid for rid, ref in self._items.items() if ref.file_id == file_id]
-        for rid in to_delete:
-            self._items.pop(rid, None)
+        with self._lock:
+            to_delete = [rid for rid, ref in self._items.items() if ref.file_id == file_id]
+            for rid in to_delete:
+                self._items.pop(rid, None)
         return len(to_delete)
 
 class InMemoryDataRepository(AbstractDataRepository):
