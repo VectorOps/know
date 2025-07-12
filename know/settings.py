@@ -30,15 +30,18 @@ class ProjectSettings:
     project_id: str = None
     repository_backend: str = "memory"
     repository_connection: str | None = None
+    sync_embeddings: bool = False
 
     def __init__(self
                  , project_path: str = None
                  , project_id: str = None
                  , embedding: EmbeddingSettings = None
                  , repository_backend: str = "memory"
-                 , repository_connection: str | None = None):
+                 , repository_connection: str | None = None
+                 , sync_embeddings: bool = False):
         self.project_path = project_path
         self.project_id = project_id
         self.embedding  = embedding
         self.repository_backend  = repository_backend
         self.repository_connection = repository_connection
+        self.sync_embeddings = sync_embeddings
