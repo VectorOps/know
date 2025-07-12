@@ -10,6 +10,7 @@ from typing import Callable, Deque, Optional
 from know.embeddings.interface import EmbeddingCalculator
 from know.models import Vector
 from know.embeddings.cache import (
+    EmbeddingCacheBackend,          #  NEW  (typing)
     DuckDBEmbeddingCacheBackend,
     SQLiteEmbeddingCacheBackend,
 )
@@ -35,10 +36,19 @@ class EmbeddingWorker:
     _calc_type: str
     _calc_kwargs: dict
 
-    def __init__(self, calc_type: str, **calc_kwargs):
+    def __init__(
+        self,
+        calc_type: str,
+        *,
+        cache_backend: str | None = None,     #  NEW
+        cache_path: str | None = None,        #  NEW
+        **calc_kwargs,
+    ):
         self._calc_type = calc_type
         self._calc_kwargs = calc_kwargs
-        self._calc = None  # lazy – initialised in worker thread
+        self._cache_backend = cache_backend   #  NEW
+        self._cache_path   = cache_path       #  NEW
+        self._calc: Optional[EmbeddingCalculator] = None  # lazy – initialised in worker thread
 
         self._queue: Deque[_QueueItem] = collections.deque()
         self._cv = threading.Condition()
@@ -82,20 +92,7 @@ class EmbeddingWorker:
         if key in ("local", "sentence"):
             from know.embeddings.sentence import LocalEmbeddingCalculator
 
-            # Extract (and remove) cache-related kwargs meant for the worker.
-            cache_backend_name = self._calc_kwargs.pop("cache_backend", None)
-            cache_path         = self._calc_kwargs.pop("cache_path", None)
-
-            cache_obj = None
-            if cache_backend_name is not None:
-                backend_map = {
-                    "duckdb": DuckDBEmbeddingCacheBackend,
-                    "sqlite": SQLiteEmbeddingCacheBackend,
-                }
-                if cache_backend_name not in backend_map:
-                    raise ValueError(f"Unknown cache backend: {cache_backend_name}")
-                cache_obj = backend_map[cache_backend_name](cache_path)
-
+            cache_obj = _build_cache_backend(self._cache_backend, self._cache_path)
             return LocalEmbeddingCalculator(cache=cache_obj, **self._calc_kwargs)
 
         raise ValueError(f"Unknown EmbeddingCalculator type: {self._calc_type}")
@@ -113,7 +110,6 @@ class EmbeddingWorker:
 
     def _worker_loop(self) -> None:
         """Continuously process items from the queue."""
-        # local creation of the calculator avoids expensive model load in main thread
         self._calc = self._create_calculator()
 
         while True:
