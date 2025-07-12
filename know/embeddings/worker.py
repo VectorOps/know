@@ -22,6 +22,21 @@ class _QueueItem:
     # exactly one of the three targets is non-None
     sync_fut: Optional[concurrent.futures.Future[Vector]] = None
     async_fut: Optional[asyncio.Future[Vector]] = None
+
+
+def _build_cache_backend(
+    name: str | None,
+    path: str | None,
+) -> EmbeddingCacheBackend | None:
+    if name is None:
+        return None
+    backend_map = {
+        "duckdb": DuckDBEmbeddingCacheBackend,
+        "sqlite": SQLiteEmbeddingCacheBackend,
+    }
+    if name not in backend_map:
+        raise ValueError(f"Unknown cache backend: {name}")
+    return backend_map[name](path)
     callback: Optional[Callable[[Vector], None]] = None
 
 
