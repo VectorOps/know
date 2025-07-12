@@ -62,8 +62,9 @@ class EmbeddingWorker:
         self._calc_type = calc_type
         self._model_name = model_name
         self._calc_kwargs = calc_kwargs
-        self._cache_backend = cache_backend
-        self._cache_path   = cache_path
+        self._cache_manager: EmbeddingCacheBackend | None = _build_cache_backend(
+            cache_backend, cache_path
+        )
         self._calc: Optional[EmbeddingCalculator] = None  # lazy – initialised in worker thread
 
         self._queue: Deque[_QueueItem] = collections.deque()
@@ -108,6 +109,19 @@ class EmbeddingWorker:
         """Callback-based request."""
         self._enqueue(_QueueItem(text=text, callback=cb), priority=interactive)
 
+    def destroy(self, timeout: float | None = None) -> None:
+        """
+        Stop the background worker thread and wait until it terminates.
+        Idempotent – safe to call multiple times.
+        """
+        if not self._thread.is_alive():
+            return
+        self._stop_event.set()
+        # Wake the worker if it is waiting for jobs
+        with self._cv:
+            self._cv.notify_all()
+        self._thread.join(timeout)
+
     # ------------------------------------------------------------------ #
     # local factory – formerly in know.embeddings.factory
     # ------------------------------------------------------------------ #
@@ -120,10 +134,9 @@ class EmbeddingWorker:
         if key in ("local", "sentence"):
             from know.embeddings.sentence import LocalEmbeddingCalculator
 
-            cache_obj = _build_cache_backend(self._cache_backend, self._cache_path)
             return LocalEmbeddingCalculator(
                 model_name=self._model_name,
-                cache=cache_obj,
+                cache=self._cache_manager,
                 **self._calc_kwargs,
             )
 
