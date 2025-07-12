@@ -9,6 +9,10 @@ from typing import Callable, Deque, Optional
 
 from know.embeddings.interface import EmbeddingCalculator
 from know.models import Vector
+from know.embeddings.cache import (
+    DuckDBEmbeddingCacheBackend,
+    SQLiteEmbeddingCacheBackend,
+)
 
 
 @dataclass
@@ -76,10 +80,23 @@ class EmbeddingWorker:
         """
         key = self._calc_type.lower()
         if key in ("local", "sentence"):
-            # Heavy dependency imported only when needed.
             from know.embeddings.sentence import LocalEmbeddingCalculator
 
-            return LocalEmbeddingCalculator(**self._calc_kwargs)
+            # Extract (and remove) cache-related kwargs meant for the worker.
+            cache_backend_name = self._calc_kwargs.pop("cache_backend", None)
+            cache_path         = self._calc_kwargs.pop("cache_path", None)
+
+            cache_obj = None
+            if cache_backend_name is not None:
+                backend_map = {
+                    "duckdb": DuckDBEmbeddingCacheBackend,
+                    "sqlite": SQLiteEmbeddingCacheBackend,
+                }
+                if cache_backend_name not in backend_map:
+                    raise ValueError(f"Unknown cache backend: {cache_backend_name}")
+                cache_obj = backend_map[cache_backend_name](cache_path)
+
+            return LocalEmbeddingCalculator(cache=cache_obj, **self._calc_kwargs)
 
         raise ValueError(f"Unknown EmbeddingCalculator type: {self._calc_type}")
 

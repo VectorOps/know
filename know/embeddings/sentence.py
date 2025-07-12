@@ -6,11 +6,7 @@ from know.logger import KnowLogger
 
 from typing import List, Optional, Any
 import hashlib, json
-from know.embeddings.cache import (
-    EmbeddingCacheBackend,
-    DuckDBEmbeddingCacheBackend,
-    SQLiteEmbeddingCacheBackend,
-)
+from know.embeddings.cache import EmbeddingCacheBackend
 
 try:
     from sentence_transformers import SentenceTransformer  # third-party
@@ -21,16 +17,15 @@ except ImportError as exc:  # pragma: no cover
         "Install it with:  pip install sentence-transformers"
     ) from exc
 
-from know.embeddings.interface import EmbeddingsCalculator, EMBEDDING_DIM
+from know.embeddings.interface import EmbeddingCalculator, EMBEDDING_DIM
 from know.models import Vector
-
 
 # Ensure `sentence_transformers` messages are emitted at INFO or above and
 # handled by the global logging configuration defined in know.logger.
 logging.getLogger("sentence_transformers").setLevel(logging.INFO)
 
 
-class LocalEmbeddingsCalculator(EmbeddingsCalculator):
+class LocalEmbeddingCalculator(EmbeddingCalculator):
     """
     EmbeddingsCalculator implementation backed by `sentence-transformers`.
 
@@ -58,10 +53,26 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
         batch_size: int = 32,
         quantize: bool = False,
         quantize_bits: int = 8,
-        cache_backend: str = "duckdb",
-        cache_path: str | None = None,
+        cache: EmbeddingCacheBackend | None = None,
         **model_kwargs: Any,
     ):
+        """
+        Parameters
+        ----------
+        model_name:
+            HuggingFace hub model name or local path.
+        normalize_embeddings:
+            Whether to L2-normalize vectors returned by the model.
+        device:
+            Torch device string (e.g. "cuda", "cpu", "cuda:0").  If ``None`` the
+            underlying library chooses automatically.
+        batch_size:
+            Number of texts to encode per batch.
+        **model_kwargs:
+            Arbitrary keyword arguments forwarded to ``SentenceTransformer``.
+        cache:
+            Optional pre-initialised EmbeddingCacheBackend instance.
+        """
         self._model_name = model_name
         self._normalize = normalize_embeddings
         self._device = device
@@ -70,13 +81,7 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
         self._model: Optional[SentenceTransformer] = None  # lazy loaded
         self._last_encode_time: Optional[float] = None
 
-        backend_map = {
-            "duckdb": DuckDBEmbeddingCacheBackend,
-            "sqlite": SQLiteEmbeddingCacheBackend,
-        }
-        self._cache: EmbeddingCacheBackend | None = None
-        if cache_backend in backend_map:
-            self._cache = backend_map[cache_backend](cache_path)
+        self._cache: EmbeddingCacheBackend | None = cache
 
     # --------------------------------------------------------------------- #
     # Internal helpers
@@ -178,10 +183,7 @@ class LocalEmbeddingsCalculator(EmbeddingsCalculator):
     def get_model_name(self):
         return self._model_name
 
-    def get_code_embedding(self, text: str) -> Vector:
-        return self._encode([text])[0]
-
-    def get_text_embedding(self, text: str) -> Vector:
+    def get_embedding(self, text: str) -> Vector:
         return self._encode([text])[0]
 
     def get_last_encode_time(self) -> Optional[float]:
