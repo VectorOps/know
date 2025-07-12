@@ -5,7 +5,7 @@ import collections
 import concurrent.futures
 import threading
 from dataclasses import dataclass
-from typing import Callable, Deque, Optional
+from typing import Callable, Deque, Optional, Any
 
 from know.embeddings.interface import EmbeddingCalculator
 from know.models import Vector
@@ -68,8 +68,17 @@ class EmbeddingWorker:
 
         self._queue: Deque[_QueueItem] = collections.deque()
         self._cv = threading.Condition()
+        self._stop_event = threading.Event()          # NEW – shut-down signal
         self._thread = threading.Thread(target=self._worker_loop, daemon=True)
         self._thread.start()
+
+    # ---------------- context manager ----------------
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.destroy()        # ensure clean shutdown
+        return False          # propagate exceptions
 
     # ------------------------------------------------------------------ #
     # public API
@@ -124,6 +133,8 @@ class EmbeddingWorker:
     # internal helpers
     # ------------------------------------------------------------------ #
     def _enqueue(self, item: _QueueItem, *, priority: bool) -> None:
+        if self._stop_event.is_set():
+            raise RuntimeError("EmbeddingWorker has been destroyed.")
         with self._cv:
             if priority:
                 self._queue.appendleft(item)
@@ -135,10 +146,12 @@ class EmbeddingWorker:
         """Continuously process items from the queue."""
         self._calc = self._create_calculator()
 
-        while True:
+        while not self._stop_event.is_set():
             with self._cv:
-                while not self._queue:
+                while not self._queue and not self._stop_event.is_set():
                     self._cv.wait()
+                if self._stop_event.is_set():
+                    break
                 item = self._queue.popleft()
 
             # actual work (outside the lock)
