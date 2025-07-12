@@ -21,6 +21,14 @@ from know.data import SymbolSearchQuery
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.project import Project, ProjectCache
 
+# TODO: Make configurable
+IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode", ".pytest_cache"}
+
+class ParsingState:
+    def __init__(self):
+        self.pending_import_edges: list[ImportEdge] = []
+
+
 # ----------------------------------------------------------------------
 # Embedding helpers
 # ----------------------------------------------------------------------
@@ -37,8 +45,10 @@ def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str) -> 
             )
         except Exception as exc:          # pragma: no cover
             logger.error(f"Failed to store embedding for symbol {_sym_id}: {exc}")
+
     # normal-priority request
     emb_calc.get_embedding_callback(body, _on_vec)
+
 
 def schedule_missing_embeddings(project: "Project") -> None:
     """Enqueue embeddings for all symbols that still lack a vector."""
@@ -47,16 +57,19 @@ def schedule_missing_embeddings(project: "Project") -> None:
         return
     symbol_repo = project.data_repository.symbol
     repo_id     = project.get_repo().id
-    query = SymbolSearchQuery(embedding=False, limit=100_000)
-    for sym in symbol_repo.search(repo_id, query):
-        if sym.body:
-            schedule_symbol_embedding(symbol_repo, emb_calc, sym.id, sym.body)
-
-
-
-class ParsingState:
-    def __init__(self):
-        self.pending_import_edges: list[ImportEdge] = []
+    PAGE_SIZE = 1_000
+    offset = 0
+    while True:
+        page = symbol_repo.search(
+            repo_id,
+            SymbolSearchQuery(embedding=False, limit=PAGE_SIZE, offset=offset),
+        )
+        if not page:                 # no more results
+            break
+        for sym in page:
+            if sym.body:
+                schedule_symbol_embedding(symbol_repo, emb_calc, sym.id, sym.body)
+        offset += PAGE_SIZE
 
 
 def scan_project_directory(project: Project) -> ScanResult:
@@ -386,13 +399,24 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     symbol_repo = project.data_repository.symbol
     repo_id = project.get_repo().id
 
-    # 1) fetch all top-level methods (= orphaned)
-    query = SymbolSearchQuery(
-        symbol_kind=SymbolKind.METHOD,
-        top_level_only=True,
-        limit=100_000,          # effectively “no limit”
-    )
-    orphan_methods = symbol_repo.search(repo_id, query)
+    PAGE_SIZE = 1_000
+    orphan_methods: list[SymbolMetadata] = []
+    offset = 0
+    while True:
+        page = symbol_repo.search(
+            repo_id,
+            SymbolSearchQuery(
+                symbol_kind=SymbolKind.METHOD,
+                top_level_only=True,
+                limit=PAGE_SIZE,
+                offset=offset,
+            ),
+        )
+        if not page:
+            break
+        orphan_methods.extend(page)
+        offset += PAGE_SIZE
+
     if not orphan_methods:
         return
 
