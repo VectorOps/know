@@ -238,6 +238,11 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         if query.top_level_only:
             base_where.append("s.parent_symbol_id IS NULL")
 
+        if query.embedding is True:          # only symbols WITH an embedding
+            base_where.append("s.embedding_code_vec IS NOT NULL")
+        elif query.embedding is False:       # only symbols WITHOUT an embedding
+            base_where.append("s.embedding_code_vec IS NULL")
+
         # Compose base WHERE clause string
         base_where_clause = " AND ".join(base_where)
 

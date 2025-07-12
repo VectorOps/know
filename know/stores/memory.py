@@ -299,6 +299,11 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         if query.top_level_only:
             candidates = [s for s in candidates if s.parent_symbol_id is None]
 
+        if query.embedding is True:
+            candidates = [s for s in candidates if s.embedding_code_vec is not None]
+        elif query.embedding is False:
+            candidates = [s for s in candidates if s.embedding_code_vec is None]
+
         has_fts       = bool(query.doc_needle)
         has_embedding = bool(query.embedding_query)
 
