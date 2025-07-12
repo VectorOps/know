@@ -7,7 +7,6 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Deque, Optional
 
-from know.embeddings.factory import get_embeddings_calculator
 from know.embeddings.interface import EmbeddingCalculator
 from know.models import Vector
 
@@ -68,6 +67,23 @@ class EmbeddingWorker:
         self._enqueue(_QueueItem(text=text, callback=cb), priority=interactive)
 
     # ------------------------------------------------------------------ #
+    # local factory – formerly in know.embeddings.factory
+    # ------------------------------------------------------------------ #
+    def _create_calculator(self) -> EmbeddingCalculator:
+        """
+        Lazily build the EmbeddingCalculator required by this worker.
+        Supported keys: "local", "sentence"  (alias for the same impl).
+        """
+        key = self._calc_type.lower()
+        if key in ("local", "sentence"):
+            # Heavy dependency imported only when needed.
+            from know.embeddings.sentence import LocalEmbeddingCalculator
+
+            return LocalEmbeddingCalculator(**self._calc_kwargs)
+
+        raise ValueError(f"Unknown EmbeddingCalculator type: {self._calc_type}")
+
+    # ------------------------------------------------------------------ #
     # internal helpers
     # ------------------------------------------------------------------ #
     def _enqueue(self, item: _QueueItem, *, priority: bool) -> None:
@@ -81,7 +97,7 @@ class EmbeddingWorker:
     def _worker_loop(self) -> None:
         """Continuously process items from the queue."""
         # local creation of the calculator avoids expensive model load in main thread
-        self._calc = get_embeddings_calculator(self._calc_type, **self._calc_kwargs)
+        self._calc = self._create_calculator()
 
         while True:
             with self._cv:
