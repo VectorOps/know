@@ -4,6 +4,7 @@ import asyncio
 import collections
 import concurrent.futures
 import threading
+import logging          # NEW – for error reporting
 from dataclasses import dataclass
 from typing import Callable, Deque, Optional, Any
 
@@ -175,9 +176,20 @@ class EmbeddingWorker:
                 item = self._queue.popleft()
 
             # actual work (outside the lock)
-            vector: Vector = self._calc.get_embedding(item.text)
+            try:
+                vector: Vector = self._calc.get_embedding(item.text)
+            except Exception as exc:                           # NEW – keep worker alive
+                logging.exception("EmbeddingWorker: embedding computation failed")
+                # propagate failure to caller(s)
+                if item.sync_fut is not None and not item.sync_fut.done():
+                    item.sync_fut.set_exception(exc)
+                if item.async_fut is not None and not item.async_fut.done():
+                    loop = item.async_fut.get_loop()
+                    loop.call_soon_threadsafe(item.async_fut.set_exception, exc)
+                # (callbacks expect a Vector – we omit calling them on error)
+                continue                                       # process next queue item
 
-            # deliver result
+            # deliver successful result (unchanged)
             if item.sync_fut is not None and not item.sync_fut.done():
                 item.sync_fut.set_result(vector)
 
