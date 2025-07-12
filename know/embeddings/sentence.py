@@ -179,8 +179,11 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
     def get_model_name(self):
         return self._model_name
 
+    def get_embeddings(self, texts: list[str]) -> list[Vector]:
+        return self._encode(texts)
+
     def get_embedding(self, text: str) -> Vector:
-        return self._encode([text])[0]
+        return self.get_embeddings([text])[0]
 
     def get_last_encode_time(self) -> Optional[float]:
         """

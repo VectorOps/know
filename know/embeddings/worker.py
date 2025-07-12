@@ -4,6 +4,7 @@ import asyncio
 import collections
 import concurrent.futures
 import threading
+import time
 from dataclasses import dataclass
 from typing import Callable, Deque, Optional, Any
 
@@ -58,6 +59,8 @@ class EmbeddingWorker:
         model_name: str,
         cache_backend: str | None = None,
         cache_path: str | None = None,
+        batch_size: int = 32,
+        batch_wait_ms: float = 5,
         **calc_kwargs,
     ):
         self._calc_type = calc_type
@@ -73,6 +76,9 @@ class EmbeddingWorker:
         self._stop_event = threading.Event()          # NEW – shut-down signal
         self._thread = threading.Thread(target=self._worker_loop, daemon=True)
         self._thread.start()
+
+        self._batch_size = batch_size
+        self._batch_wait = batch_wait_ms / 1000.0   # convert to seconds
 
     # ---------------- context manager ----------------
     def __enter__(self):
@@ -181,33 +187,47 @@ class EmbeddingWorker:
                     self._cv.wait()
                 if self._stop_event.is_set():
                     break
-                item = self._queue.popleft()
+                first_item = self._queue.popleft()
 
-            # actual work (outside the lock)
+                # collect extra items up to batch_size, waiting briefly
+                batch: list[_QueueItem] = [first_item]
+                deadline = time.monotonic() + self._batch_wait
+                while len(batch) < self._batch_size:
+                    timeout = deadline - time.monotonic()
+                    if timeout <= 0:
+                        break
+                    if not self._queue:
+                        self._cv.wait(timeout=timeout)
+                        if self._stop_event.is_set():
+                            break
+                        if not self._queue:
+                            continue
+                    batch.append(self._queue.popleft())
+            # ---- outside lock from here ----
+
+            texts = [it.text for it in batch]
+
             try:
-                vector: Vector = self._calc.get_embedding(item.text)
+                vectors = self._calc.get_embeddings(texts)
             except Exception as exc:
                 logger.error("Embedding computation failed", exc=exc)
-
-                if item.sync_fut is not None and not item.sync_fut.done():
-                    item.sync_fut.set_exception(exc)
-
-                if item.async_fut is not None and not item.async_fut.done():
-                    loop = item.async_fut.get_loop()
-                    loop.call_soon_threadsafe(item.async_fut.set_exception, exc)
-
+                for it in batch:
+                    if it.sync_fut is not None and not it.sync_fut.done():
+                        it.sync_fut.set_exception(exc)
+                    if it.async_fut is not None and not it.async_fut.done():
+                        loop = it.async_fut.get_loop()
+                        loop.call_soon_threadsafe(it.async_fut.set_exception, exc)
                 continue
 
-            # deliver successful result (unchanged)
-            if item.sync_fut is not None and not item.sync_fut.done():
-                item.sync_fut.set_result(vector)
-
-            if item.async_fut is not None and not item.async_fut.done():
-                loop = item.async_fut.get_loop()
-                loop.call_soon_threadsafe(item.async_fut.set_result, vector)
-
-            if item.callback is not None:
-                try:
-                    item.callback(vector)
-                except Exception as exc:
-                    logger.debug("Failed to call callback function", exc=exc)
+            # deliver successful results
+            for it, vector in zip(batch, vectors):
+                if it.sync_fut is not None and not it.sync_fut.done():
+                    it.sync_fut.set_result(vector)
+                if it.async_fut is not None and not it.async_fut.done():
+                    loop = it.async_fut.get_loop()
+                    loop.call_soon_threadsafe(it.async_fut.set_result, vector)
+                if it.callback is not None:
+                    try:
+                        it.callback(vector)
+                    except Exception as exc:
+                        logger.debug("Failed to call callback function", exc=exc)
