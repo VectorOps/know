@@ -21,8 +21,36 @@ from know.data import SymbolSearchQuery
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.project import Project, ProjectCache
 
-# TODO: Make configurable
-IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode", ".pytest_cache"}
+# ----------------------------------------------------------------------
+# Embedding helpers
+# ----------------------------------------------------------------------
+def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str) -> None:
+    """Request an embedding for *body* and persist it once ready."""
+    def _on_vec(vec: Vector, *, _sym_id=sym_id):
+        try:
+            symbol_repo.update(
+                _sym_id,
+                {
+                    "embedding_code_vec": vec,
+                    "embedding_model": emb_calc.get_model_name(),
+                },
+            )
+        except Exception as exc:          # pragma: no cover
+            logger.error(f"Failed to store embedding for symbol {_sym_id}: {exc}")
+    # normal-priority request
+    emb_calc.get_embedding_callback(body, _on_vec)
+
+def schedule_missing_embeddings(project: "Project") -> None:
+    """Enqueue embeddings for all symbols that still lack a vector."""
+    emb_calc = project.embeddings
+    if not emb_calc:
+        return
+    symbol_repo = project.data_repository.symbol
+    repo_id     = project.get_repo().id
+    query = SymbolSearchQuery(embedding=False, limit=100_000)
+    for sym in symbol_repo.search(repo_id, query):
+        if sym.body:
+            schedule_symbol_embedding(symbol_repo, emb_calc, sym.id, sym.body)
 
 
 
@@ -304,26 +332,8 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             # cache the newly-created symbol for potential children look-ups
             existing_by_key[sym.key] = sm  # type: ignore[assignment]
 
-        # ------------------------------------------------------------------
-        #  Schedule async embedding calculation (NEW)
-        # ------------------------------------------------------------------
         if code_changed and emb_calc:
-            def _on_vec(vec: Vector, *, _sym_id=sym_id):
-                try:
-                    symbol_repo.update(
-                        _sym_id,
-                        {
-                            "embedding_code_vec": vec,
-                            "embedding_model":   emb_calc.get_model_name(),
-                        },
-                    )
-                except Exception as exc:          # pragma: no cover
-                    logger.error(
-                        f"Failed to store embedding for symbol {_sym_id}: {exc}"
-                    )
-
-            # push request to worker (non-interactive → normal priority)
-            emb_calc.get_embedding_callback(sym.body, _on_vec)
+            schedule_symbol_embedding(symbol_repo, emb_calc, sym_id, sym.body)
 
         # ── this symbol exists in the latest parse → keep it
         obsolete_keys.discard(sym.key)

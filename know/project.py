@@ -13,8 +13,7 @@ from know.stores.duckdb import DuckDBDataRepository
 from know.logger import KnowLogger as logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
 from know.settings import ProjectSettings
-from know.embeddings.interface import EmbeddingsCalculator
-from know.embeddings.factory import get_embeddings_calculator
+from know.embeddings import EmbeddingWorker
 
 
 @dataclass
@@ -65,7 +64,7 @@ class Project:
         settings: ProjectSettings,
         data_repository: AbstractDataRepository,
         repo_metadata: RepoMetadata,
-        embeddings: EmbeddingsCalculator | None = None,
+        embeddings: EmbeddingWorker | None = None,
     ):
         self.settings = settings
         self.data_repository = data_repository
@@ -110,20 +109,11 @@ class Project:
     def compute_embedding(
         self,
         text: str,
-        *,
-        is_code: bool = False,
     ) -> Optional[Vector]:
-        """
-        Return an embedding vector for *text* using the project’s
-        EmbeddingsCalculator.
-        """
         if self.embeddings is None:
             return None
-        return (
-            self.embeddings.get_code_embedding(text)
-            if is_code
-            else self.embeddings.get_text_embedding(text)
-        )
+
+        return self.embeddings.get_embedding(text)
 
     def refresh(self):
         from know import scanner
@@ -185,29 +175,32 @@ def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
         )
         repo_repository.create(repo_metadata)
 
-    embeddings_calculator: EmbeddingsCalculator | None = None
+    embeddings: EmbeddingWorker | None = None
     if settings.embedding and settings.embedding.enabled:
-        embeddings_calculator = get_embeddings_calculator(
+        embeddings = EmbeddingWorker(
             settings.embedding.calculator_type,
+            cache_backend=settings.embedding.cache_backend,
+            cache_path=settings.embedding.cache_path,
             model_name=settings.embedding.model_name,
             normalize_embeddings=settings.embedding.normalize_embeddings,
             device=settings.embedding.device,
             batch_size=settings.embedding.batch_size,
             quantize=settings.embedding.quantize,
             quantize_bits=settings.embedding.quantize_bits,
-            cache_backend=settings.embedding.cache_backend,
-            cache_path=settings.embedding.cache_path,
         )
 
     project = Project(
         settings,
         data_repository,
         repo_metadata,
-        embeddings=embeddings_calculator,   # pass along
+        embeddings=embeddings,   # pass along
     )
 
     # Recursively scan the project directory and parse source files
     if refresh:
         project.refresh()
+        # enqueue embeddings for symbols that still miss them
+        from know import scanner as _scanner
+        _scanner.schedule_missing_embeddings(project)
 
     return project
