@@ -109,6 +109,13 @@ class EmbeddingWorker:
         """Callback-based request."""
         self._enqueue(_QueueItem(text=text, callback=cb), priority=interactive)
 
+    def get_cache_manager(self) -> EmbeddingCacheBackend | None:
+        """
+        Return the EmbeddingCacheBackend instance used by this worker
+        (may be None when caching is disabled).
+        """
+        return self._cache_manager
+
     def destroy(self, timeout: float | None = None) -> None:
         """
         Stop the background worker thread and wait until it terminates.

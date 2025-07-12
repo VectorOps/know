@@ -8,7 +8,7 @@ from know.data import SymbolSearchQuery
 
 pytest.importorskip("sentence_transformers")
 
-from know.embeddings.sentence import LocalEmbeddingsCalculator
+from know.embeddings import EmbeddingWorker
 
 # Use official embedding model
 QWEN_MODEL = "Qwen/Qwen3-Embedding-0.6B"
@@ -16,8 +16,9 @@ QWEN_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 @pytest.fixture(scope="module")
 def emb_calc():
     try:
-        calc = LocalEmbeddingsCalculator(model_name=QWEN_MODEL)
-        return calc
+        calc = EmbeddingWorker("local", model_name=QWEN_MODEL)
+        yield calc
+        calc.destroy()
     except Exception:
         pytest.skip(f"Couldn't load embedding model {QWEN_MODEL}")
 
@@ -73,7 +74,7 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
     ids_by_theme = {}
     for i, (theme, docstring, body) in enumerate(themes):
         sid = f"s_{i}"
-        vec = emb_calc.get_code_embedding(docstring)
+        vec = emb_calc.get_embedding(docstring)
         assert len(vec) == 1024
         if theme not in ids_by_theme:
             ids_by_theme[theme] = []
@@ -103,14 +104,14 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
     assert any("Network" in s.name for s in res_net), f"Top network/HTTP: {[s.name for s in res_net]}"
 
     # Embedding search: retrieve all 'Sorting' (clustered), using first Sorting docstring as query
-    sort_vec = emb_calc.get_code_embedding(themes[0][1])
+    sort_vec = emb_calc.get_embedding(themes[0][1])
     emb_sort = sym_repo.search(rid, SymbolSearchQuery(embedding_query=sort_vec, limit=5))
     sort_names = [s.name for s in emb_sort]
     # At least 2/3 of the top 3 should be 'Sorting' related
     assert sum("Sorting" in n for n in sort_names[:3]) >= 2, f"Top emb: {sort_names[:3]}"
 
     # Embedding search: retrieve all 'Math' symbols
-    math_vec = emb_calc.get_code_embedding(themes[5][1])
+    math_vec = emb_calc.get_embedding(themes[5][1])
     emb_math = sym_repo.search(rid, SymbolSearchQuery(embedding_query=math_vec, limit=5))
     math_names = [s.name for s in emb_math]
     assert sum("Math" in n for n in math_names[:3]) >= 2, f"Top math: {math_names[:3]}"

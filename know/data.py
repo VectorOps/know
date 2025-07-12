@@ -140,8 +140,10 @@ class SymbolSearchQuery:
     limit: Optional[int] = None
     # Zero-based offset
     offset: Optional[int] = None
-    # return only root-level symbols (no parent)
+    # Return only top-level symbols
     top_level_only: Optional[bool] = False
+    # Return symbols with or without embedding vectors
+    embedding: Optional[bool] = None
 
 
 class AbstractSymbolMetadataRepository(ABC):

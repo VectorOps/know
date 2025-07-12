@@ -1,4 +1,5 @@
 from __future__ import annotations
+import threading
 import os
 import duckdb
 import json
@@ -68,6 +69,11 @@ class _DuckDBBaseRepo(Generic[T]):
     _json_fields: set[str] = set()                    # columns stored as JSON
     _json_parsers: dict[str, Callable[[Any], Any]] = {}   # field → decode-fn
 
+    def cursor(self):
+        cur = self.conn.cursor()
+        cur.execute("USE db")
+        return cur
+
     def __init__(self, conn: duckdb.DuckDBPyConnection):
         self.conn = conn
 
@@ -93,21 +99,21 @@ class _DuckDBBaseRepo(Generic[T]):
 
     # ---------- CRUD ----------
     def get_by_id(self, item_id: str) -> Optional[T]:
-        rows = _row_to_dict(self.conn.execute(f"SELECT * FROM {self.table} WHERE id = ?", [item_id]))
+        rows = _row_to_dict(self.cursor().execute(f"SELECT * FROM {self.table} WHERE id = ?", [item_id]))
         return self.model(**self._deserialize_row(rows[0])) if rows else None
 
     def get_list_by_ids(self, item_ids: list[str]) -> list[T]:
         if not item_ids:
             return []
         placeholders = ", ".join("?" for _ in item_ids)
-        rows = _row_to_dict(self.conn.execute(f"SELECT * FROM {self.table} WHERE id IN ({placeholders})", item_ids))
+        rows = _row_to_dict(self.cursor().execute(f"SELECT * FROM {self.table} WHERE id IN ({placeholders})", item_ids))
         return [self.model(**self._deserialize_row(r)) for r in rows]
 
     def create(self, item: T) -> T:
         data = self._serialize_json(item.model_dump(exclude_none=True))
         cols = ", ".join(data.keys())
         placeholders = ", ".join("?" for _ in data)
-        self.conn.execute(f"INSERT INTO {self.table} ({cols}) VALUES ({placeholders})", list(data.values()))
+        self.cursor().execute(f"INSERT INTO {self.table} ({cols}) VALUES ({placeholders})", list(data.values()))
         return item
 
     def update(self, item_id: str, data: Dict[str, Any]) -> Optional[T]:
@@ -116,11 +122,11 @@ class _DuckDBBaseRepo(Generic[T]):
         data = self._serialize_json(data.copy())
         set_clause = ", ".join(f"{k}=?" for k in data)
         params = list(data.values()) + [item_id]
-        self.conn.execute(f"UPDATE {self.table} SET {set_clause} WHERE id = ?", params)
+        self.cursor().execute(f"UPDATE {self.table} SET {set_clause} WHERE id = ?", params)
         return self.get_by_id(item_id)
 
     def delete(self, item_id: str) -> bool:
-        self.conn.execute(f"DELETE FROM {self.table} WHERE id = ?", [item_id])
+        self.cursor().execute(f"DELETE FROM {self.table} WHERE id = ?", [item_id])
         return True
 
 # ---------------------------------------------------------------------------
@@ -132,7 +138,7 @@ class DuckDBRepoMetadataRepo(_DuckDBBaseRepo[RepoMetadata], AbstractRepoMetadata
     model = RepoMetadata
 
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM repos WHERE root_path = ?", [root_path]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM repos WHERE root_path = ?", [root_path]))
         return RepoMetadata(**rows[0]) if rows else None
 
 
@@ -145,22 +151,22 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         self._file_repo = file_repo
 
     def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM packages WHERE physical_path = ?", [path]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM packages WHERE physical_path = ?", [path]))
         return PackageMetadata(**rows[0]) if rows else None
 
     def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM packages WHERE virtual_path = ?", [path]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM packages WHERE virtual_path = ?", [path]))
         return PackageMetadata(**rows[0]) if rows else None
 
     def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
-        rows = _row_to_dict(self.conn.execute(
+        rows = _row_to_dict(self.cursor().execute(
             "SELECT * FROM packages WHERE repo_id = ?", [repo_id]))
         return [PackageMetadata(**r) for r in rows]
 
     def delete_orphaned(self) -> int:
         used_pkg_ids = {row["package_id"] for row in
-                        _row_to_dict(self.conn.execute("SELECT DISTINCT package_id FROM files WHERE package_id IS NOT NULL"))}
-        rows = _row_to_dict(self.conn.execute("SELECT id FROM packages"))
+                        _row_to_dict(self.cursor().execute("SELECT DISTINCT package_id FROM files WHERE package_id IS NOT NULL"))}
+        rows = _row_to_dict(self.cursor().execute("SELECT id FROM packages"))
         orphan_ids = [r["id"] for r in rows if r["id"] not in used_pkg_ids]
         for oid in orphan_ids:
             self.delete(oid)
@@ -172,15 +178,15 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
     model = FileMetadata
 
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM files WHERE path = ?", [path]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM files WHERE path = ?", [path]))
         return FileMetadata(**rows[0]) if rows else None
 
     def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM files WHERE repo_id = ?", [repo_id]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM files WHERE repo_id = ?", [repo_id]))
         return [FileMetadata(**r) for r in rows]
 
     def get_list_by_package_id(self, package_id: str) -> list[FileMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM files WHERE package_id = ?", [package_id]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM files WHERE package_id = ?", [package_id]))
         return [FileMetadata(**r) for r in rows]
 
 
@@ -203,13 +209,13 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         return syms
 
     def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM symbols WHERE file_id = ?", [file_id]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM symbols WHERE file_id = ?", [file_id]))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
 
     def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM symbols WHERE package_id = ?", [package_id]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM symbols WHERE package_id = ?", [package_id]))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
@@ -343,7 +349,7 @@ LIMIT ? OFFSET ?
 
         sql = "".join(cte_parts) + final_select
 
-        rows = _row_to_dict(self.conn.execute(sql, params))
+        rows = _row_to_dict(self.cursor().execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
         syms = include_direct_descendants(self, syms)
         return syms
@@ -357,7 +363,7 @@ LIMIT ? OFFSET ?
             return []
         placeholders = ", ".join("?" for _ in parent_ids)
         rows = _row_to_dict(
-            self.conn.execute(
+            self.cursor().execute(
                 f"SELECT * FROM symbols WHERE parent_symbol_id IN ({placeholders})",
                 parent_ids,
             )
@@ -370,7 +376,7 @@ LIMIT ? OFFSET ?
 
     # NEW -----------------------------------------------------------
     def delete_by_file_id(self, file_id: str) -> int:
-        rows = self.conn.execute(
+        rows = self.cursor().execute(
             "DELETE FROM symbols WHERE file_id = ? RETURNING id", [file_id]
         ).fetchall()
         return len(rows)
@@ -381,11 +387,11 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
     model = ImportEdge
 
     def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
-        rows = _row_to_dict(self.conn.execute("SELECT * FROM import_edges WHERE from_package_id = ?", [package_id]))
+        rows = _row_to_dict(self.cursor().execute("SELECT * FROM import_edges WHERE from_package_id = ?", [package_id]))
         return [ImportEdge(**r) for r in rows]
 
     def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
-        rows = _row_to_dict(self.conn.execute(
+        rows = _row_to_dict(self.cursor().execute(
             "SELECT * FROM import_edges WHERE repo_id = ?", [repo_id]))
         return [ImportEdge(**r) for r in rows]
 
@@ -394,17 +400,17 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
     model = SymbolRef
 
     def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
-        rows = _row_to_dict(self.conn.execute(
+        rows = _row_to_dict(self.cursor().execute(
             "SELECT * FROM symbol_refs WHERE file_id = ?", [file_id]))
         return [SymbolRef(**r) for r in rows]
 
     def get_list_by_package_id(self, package_id: str) -> list[SymbolRef]:
-        rows = _row_to_dict(self.conn.execute(
+        rows = _row_to_dict(self.cursor().execute(
             "SELECT * FROM symbol_refs WHERE package_id = ?", [package_id]))
         return [SymbolRef(**r) for r in rows]
 
     def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
-        rows = _row_to_dict(self.conn.execute(
+        rows = _row_to_dict(self.cursor().execute(
             "SELECT * FROM symbol_refs WHERE repo_id = ?", [repo_id]))
         return [SymbolRef(**r) for r in rows]
 
@@ -414,7 +420,7 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
         Bulk-delete refs belonging to *file_id*.
         DuckDB ≥0.8.0 supports RETURNING; we use that to count rows.
         """
-        rows = self.conn.execute(
+        rows = self.cursor().execute(
             "DELETE FROM symbol_refs WHERE file_id = ? RETURNING id", [file_id]
         ).fetchall()
         return len(rows)

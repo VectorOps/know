@@ -205,6 +205,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     def _index_upsert(self, sym: SymbolMetadata) -> None:
         if not sym.embedding_code_vec:
             return
+
         with self._lock:
             self._embeddings[sym.id] = self._norm(sym.embedding_code_vec)
 
@@ -300,105 +301,97 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
         with self._lock:
             # ---------- candidate set: repo + scalar filters ----------
-            items      = list(self._items.values())
-            embeddings = dict(self._embeddings)
+            candidates: list[SymbolMetadata] = [
+                s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
+            ]
 
-        candidates: list[SymbolMetadata] = [
-            s for s in items if getattr(s, "repo_id", None) == repo_id
-        ]
+            # scalar filters ......................................................
+            if query.symbol_fqn:
+                needle_fqn = query.symbol_fqn.lower()
+                candidates = [s for s in candidates if (s.fqn or "").lower() == needle_fqn]
 
-        # scalar filters ......................................................
-        if query.symbol_fqn:
-            needle_fqn = query.symbol_fqn.lower()
-            candidates = [s for s in candidates if (s.fqn or "").lower() == needle_fqn]
+            if query.symbol_name:
+                needle = query.symbol_name.lower()
+                candidates = [s for s in candidates if needle in (s.name or "").lower()]
 
-        if query.symbol_name:
-            needle = query.symbol_name.lower()
-            candidates = [s for s in candidates if needle in (s.name or "").lower()]
+            if query.symbol_kind:
+                candidates = [s for s in candidates if s.kind == query.symbol_kind]
 
-        if query.symbol_kind:
-            candidates = [s for s in candidates if s.kind == query.symbol_kind]
+            if query.symbol_visibility:
+                candidates = [s for s in candidates if s.visibility == query.symbol_visibility]
 
-        if query.symbol_visibility:
-            candidates = [s for s in candidates if s.visibility == query.symbol_visibility]
+            if query.top_level_only:
+                candidates = [s for s in candidates if s.parent_symbol_id is None]
 
-        if query.top_level_only:
-            candidates = [s for s in candidates if s.parent_symbol_id is None]
+            has_fts       = bool(query.doc_needle)
+            has_embedding = bool(query.embedding_query)
 
-        if query.embedding is True:
-            candidates = [s for s in candidates if s.embedding_code_vec is not None]
-        elif query.embedding is False:
-            candidates = [s for s in candidates if s.embedding_code_vec is None]
+            # ---------------------------------------------------------------
+            # unified ranking  (RRF over optional FTS / embedding signals)
+            # ---------------------------------------------------------------
 
-        has_fts       = bool(query.doc_needle)
-        has_embedding = bool(query.embedding_query)
+            fts_rank : dict[str, int] = {}
+            code_rank: dict[str, int] = {}
 
-        # ---------------------------------------------------------------
-        # unified ranking  (RRF over optional FTS / embedding signals)
-        # ---------------------------------------------------------------
+            # ----- FTS ranks ------------------------------------------------
+            if has_fts:
+                q_tokens = self._tokenise(query.doc_needle)
+                docs = [
+                    (
+                        s,
+                        self._tokenise(
+                            f"{s.name or ''} {s.fqn or ''} {s.docstring or ''} {s.comment or ''}"
+                        ),
+                    )
+                    for s in candidates
+                ]
+                fts_rank = self._bm25_ranks(docs, q_tokens)
 
-        fts_rank : dict[str, int] = {}
-        code_rank: dict[str, int] = {}
+            # ----- embedding ranks -----------------------------------------
+            if has_embedding:
+                qvec = self._norm(query.embedding_query)  # shape (dim,)
+                id_candidates = {c.id for c in candidates}
+                sims: list[tuple[SymbolMetadata, float]] = []
+                for sid in id_candidates:
+                    vec = self._embeddings.get(sid)
+                    if vec is None:
+                        continue
+                    sim = float(np.dot(qvec, vec))  # cosine (both normalised)
+                    if sim < self.EMBEDDING_SIM_THRESHOLD:
+                        continue
+                    sims.append((self._items[sid], sim))
+                sims.sort(key=lambda p: p[1], reverse=True)               # best first
+                sims = sims[: self.EMBEDDING_TOP_K]
+                code_rank = {s.id: i + 1 for i, (s, _) in enumerate(sims)}
 
-        # ----- FTS ranks ------------------------------------------------
-        if has_fts:
-            q_tokens = self._tokenise(query.doc_needle)
-            docs = [
-                (
-                    s,
-                    self._tokenise(
-                        f"{s.name or ''} {s.fqn or ''} {s.docstring or ''} {s.comment or ''}"
-                    ),
+            # ----- fuse with Reciprocal-Rank Fusion ------------------------
+            fused_score: dict[str, float] = {}
+            for s in candidates:
+                score = 0.0
+                if s.id in code_rank:
+                    score += 1.0 / (self.RRF_K + code_rank[s.id])
+                if s.id in fts_rank:
+                    score += 1.0 / (self.RRF_K + fts_rank[s.id])
+                fused_score[s.id] = score
+
+            if has_fts or has_embedding:
+                ranked_candidates = [
+                    s for s in candidates
+                    if s.id in code_rank or s.id in fts_rank
+                ]
+                ranked_candidates.sort(
+                    key=lambda s: (-fused_score.get(s.id, 0.0), s.name or "")
                 )
-                for s in candidates
-            ]
-            fts_rank = self._bm25_ranks(docs, q_tokens)
+                candidates = ranked_candidates
+            else:
+                candidates.sort(key=lambda s: s.name or "")
 
-        # ----- embedding ranks -----------------------------------------
-        if has_embedding:
-            qvec = self._norm(query.embedding_query)  # shape (dim,)
-            id_candidates = {c.id for c in candidates}
-            sims: list[tuple[SymbolMetadata, float]] = []
-            for sid in id_candidates:
-                vec = embeddings.get(sid)
-                if vec is None:
-                    continue
-                sim = float(np.dot(qvec, vec))  # cosine (both normalised)
-                if sim < self.EMBEDDING_SIM_THRESHOLD:
-                    continue
-                sims.append((items[sid], sim))
-            sims.sort(key=lambda p: p[1], reverse=True)               # best first
-            sims = sims[: self.EMBEDDING_TOP_K]
-            code_rank = {s.id: i + 1 for i, (s, _) in enumerate(sims)}
+            results = candidates
 
-        # ----- fuse with Reciprocal-Rank Fusion ------------------------
-        fused_score: dict[str, float] = {}
-        for s in candidates:
-            score = 0.0
-            if s.id in code_rank:
-                score += 1.0 / (self.RRF_K + code_rank[s.id])
-            if s.id in fts_rank:
-                score += 1.0 / (self.RRF_K + fts_rank[s.id])
-            fused_score[s.id] = score
-
-        if has_fts or has_embedding:
-            ranked_candidates = [
-                s for s in candidates
-                if s.id in code_rank or s.id in fts_rank
-            ]
-            ranked_candidates.sort(
-                key=lambda s: (-fused_score.get(s.id, 0.0), s.name or "")
-            )
-            candidates = ranked_candidates
-        else:
-            candidates.sort(key=lambda s: s.name or "")
-
-        results = candidates
-
-        # ---------- pagination + hierarchy resolution -------------------------
-        offset = query.offset or 0
-        limit  = query.limit  or 20
-        results = results[offset: offset + limit]
+            # ---------- pagination + hierarchy resolution -------------------------
+            offset = query.offset or 0
+            limit  = query.limit  or 20
+            results = results[offset: offset + limit]
 
         results = include_direct_descendants(self, results)
 

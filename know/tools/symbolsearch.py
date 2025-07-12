@@ -62,7 +62,7 @@ class SearchSymbolsTool(BaseTool):
         # ------------------------------------------------------------
         embedding_vec = None
         if query:
-            embedding_vec = project.compute_embedding(query, is_code=True)
+            embedding_vec = project.compute_embedding(query)
 
         repo_id = project.get_repo().id
         query   = SymbolSearchQuery(

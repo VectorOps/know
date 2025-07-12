@@ -32,18 +32,25 @@ class ParsingState:
 # ----------------------------------------------------------------------
 # Embedding helpers
 # ----------------------------------------------------------------------
-def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str, *, sync: bool = False) -> None:
-    if sync:                                       # ← new branch
+def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str, sync: bool = False) -> None:
+    def _on_vec(vec: Vector) -> None:
         try:
-            vec = emb_calc.get_embedding(body)
             symbol_repo.update(
                 sym_id,
-                {"embedding_code_vec": vec,
-                 "embedding_model":  emb_calc.get_model_name()},
+                {
+                    "embedding_code_vec": vec,
+                    "embedding_model": emb_calc.get_model_name(),
+                },
             )
-        except Exception as exc:                   # pragma: no cover
-            logger.error(f"Failed to store embedding for symbol {sym_id}: {exc}")
-        return                                     # done synchronously
+        except Exception as exc:                            # pragma: no cover
+            logger.error(
+                f"Failed to update embedding for symbol {sym_id}: {exc}",
+                exc_info=True,
+            )
+
+    if sync:                                       # ← new branch
+        _on_vec(emb_calc.get_embedding(body))
+        return
 
     # normal-priority request
     emb_calc.get_embedding_callback(body, _on_vec)
@@ -66,10 +73,13 @@ def schedule_missing_embeddings(project: "Project") -> None:
         if not page:                 # no more results
             break
         for sym in page:
-            if sym.body:
+            if sym.symbol_body:
                 schedule_symbol_embedding(
-                    symbol_repo, emb_calc, sym.id, sym.body,
-                    sync=project.settings.sync_embeddings,   # ← added
+                    symbol_repo,
+                    emb_calc,
+                    sym_id=sym.id,
+                    body=sym.symbol_body,
+                    sync=project.settings.sync_embeddings,
                 )
         offset += PAGE_SIZE
 
