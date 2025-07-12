@@ -4,12 +4,12 @@ import asyncio
 import collections
 import concurrent.futures
 import threading
-import logging          # NEW – for error reporting
 from dataclasses import dataclass
 from typing import Callable, Deque, Optional, Any
 
 from know.embeddings.interface import EmbeddingCalculator
 from know.models import Vector
+from know.logger import logger
 from know.embeddings.cache import (
     EmbeddingCacheBackend,
     DuckDBEmbeddingCacheBackend,
@@ -79,8 +79,8 @@ class EmbeddingWorker:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.destroy()        # ensure clean shutdown
-        return False          # propagate exceptions
+        self.destroy()
+        return False
 
     # ------------------------------------------------------------------ #
     # public API
@@ -116,6 +116,14 @@ class EmbeddingWorker:
         (may be None when caching is disabled).
         """
         return self._cache_manager
+
+    def get_queue_size(self) -> int:
+        """
+        Thread-safe helper returning the current number of pending
+        embedding requests in the worker queue.
+        """
+        with self._cv:
+            return len(self._queue)
 
     def destroy(self, timeout: float | None = None) -> None:
         """
@@ -178,16 +186,17 @@ class EmbeddingWorker:
             # actual work (outside the lock)
             try:
                 vector: Vector = self._calc.get_embedding(item.text)
-            except Exception as exc:                           # NEW – keep worker alive
-                logging.exception("EmbeddingWorker: embedding computation failed")
-                # propagate failure to caller(s)
+            except Exception as exc:
+                logger.error("Embedding computation failed", exc=exc)
+
                 if item.sync_fut is not None and not item.sync_fut.done():
                     item.sync_fut.set_exception(exc)
+
                 if item.async_fut is not None and not item.async_fut.done():
                     loop = item.async_fut.get_loop()
                     loop.call_soon_threadsafe(item.async_fut.set_exception, exc)
-                # (callbacks expect a Vector – we omit calling them on error)
-                continue                                       # process next queue item
+
+                continue
 
             # deliver successful result (unchanged)
             if item.sync_fut is not None and not item.sync_fut.done():
