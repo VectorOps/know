@@ -15,6 +15,7 @@ from know.models import (
     ImportEdge,
     SymbolKind,
     SymbolRef,
+    Vector,
 )
 from know.data import SymbolSearchQuery
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
@@ -282,10 +283,6 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
 
         is_new_symbol = existing is None
         code_changed = is_new_symbol or existing.symbol_hash != sym.hash
-        sig_changed  = is_new_symbol or (
-            sym.signature
-            and (existing.signature is None or existing.signature.raw != sym.signature.raw)
-        )
 
         sm_kwargs = sym.to_dict()
         sm_kwargs.update({
@@ -296,17 +293,6 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         })
 
         emb_calc = project.embeddings
-        if emb_calc:
-            try:
-                if code_changed:
-                    sm_kwargs["embedding_code_vec"] = emb_calc.get_code_embedding(sym.body)
-                if sym.signature and sig_changed:
-                    sm_kwargs["embedding_sig_vec"] = emb_calc.get_code_embedding(sym.signature.raw)
-                # record model name only when at least one vector was (re)generated
-                if any([code_changed, sig_changed]):
-                    sm_kwargs["embedding_model"] = emb_calc.get_model_name()
-            except Exception as exc:
-                logger.error(f"Embedding generation failed for symbol {sym.name}: {exc}")
 
         if existing:
             symbol_repo.update(existing.id, sm_kwargs)
@@ -317,6 +303,27 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             sym_id = sm.id  # type: ignore[attr-defined]
             # cache the newly-created symbol for potential children look-ups
             existing_by_key[sym.key] = sm  # type: ignore[assignment]
+
+        # ------------------------------------------------------------------
+        #  Schedule async embedding calculation (NEW)
+        # ------------------------------------------------------------------
+        if code_changed and emb_calc:
+            def _on_vec(vec: Vector, *, _sym_id=sym_id):
+                try:
+                    symbol_repo.update(
+                        _sym_id,
+                        {
+                            "embedding_code_vec": vec,
+                            "embedding_model":   emb_calc.get_model_name(),
+                        },
+                    )
+                except Exception as exc:          # pragma: no cover
+                    logger.error(
+                        f"Failed to store embedding for symbol {_sym_id}: {exc}"
+                    )
+
+            # push request to worker (non-interactive → normal priority)
+            emb_calc.get_embedding_callback(sym.body, _on_vec)
 
         # ── this symbol exists in the latest parse → keep it
         obsolete_keys.discard(sym.key)
