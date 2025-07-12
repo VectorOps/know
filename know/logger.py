@@ -1,7 +1,7 @@
 import json
 import logging
 from logging.config import dictConfig
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # --------------------------------------------------------------------------- #
 # Logging configuration
@@ -58,36 +58,36 @@ class KnowLogger:
     # Standard logging wrappers
     # ------------------------------------------------------------------ #
     @classmethod
-    def debug(cls, msg: str, *args, **kwargs) -> None:
-        cls._logger.debug(msg, *args, **kwargs)
+    def debug(cls, event_type: str, **data: Any) -> None:
+        cls._log_event(event_type, level=logging.DEBUG, **data)
 
     @classmethod
-    def info(cls, msg: str, *args, **kwargs) -> None:
-        cls._logger.info(msg, *args, **kwargs)
+    def info(cls, event_type: str, **data: Any) -> None:
+        cls._log_event(event_type, level=logging.INFO, **data)
 
     @classmethod
-    def warning(cls, msg: str, *args, **kwargs) -> None:
-        cls._logger.warning(msg, *args, **kwargs)
+    def warning(cls, event_type: str, **data: Any) -> None:
+        cls._log_event(event_type, level=logging.WARNING, **data)
 
     @classmethod
-    def error(cls, msg: str, *args, **kwargs) -> None:
-        cls._logger.error(msg, *args, **kwargs)
+    def error(cls, event_type: str, **data: Any) -> None:
+        cls._log_event(event_type, level=logging.ERROR, **data)
 
     @classmethod
-    def critical(cls, msg: str, *args, **kwargs) -> None:
-        cls._logger.critical(msg, *args, **kwargs)
+    def critical(cls, event_type: str, **data: Any) -> None:
+        cls._log_event(event_type, level=logging.CRITICAL, **data)
 
     # ------------------------------------------------------------------ #
     # Structured event logging
     # ------------------------------------------------------------------ #
     @classmethod
-    def log_event(
+    def _log_event(
         cls,
         event_type: str,
-        data: Optional[Dict[str, Any]] = None,
         *,
         level: int = logging.INFO,
         log: logging.Logger | None = None,
+        **data: Any,
     ) -> None:
         payload: Dict[str, Any] = {"event": event_type}
         if data:
