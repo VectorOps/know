@@ -122,7 +122,7 @@ class PythonCodeParser(AbstractCodeParser):
         node,
     ) -> None:
         symbols_before = len(self.parsed_file.symbols)
-        imports_before = len(self.parsed_file.imports)          # NEW
+        imports_before = len(self.parsed_file.imports)
         skip_symbol_check = False
 
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
@@ -171,7 +171,7 @@ class PythonCodeParser(AbstractCodeParser):
         if (
             not skip_symbol_check
             and len(self.parsed_file.symbols) == symbols_before
-            and len(self.parsed_file.imports) == imports_before  # NEW
+            and len(self.parsed_file.imports) == imports_before
         ):
             logger.warning(
                 "Parser handled node but produced no symbols or imports",
@@ -426,7 +426,8 @@ class PythonCodeParser(AbstractCodeParser):
         Constant-like ALL_CAPS identifiers are marked as CONSTANT, everything
         else is recorded as VARIABLE.
         """
-        kind = SymbolKind.CONSTANT if self._is_constant_name(name) else SymbolKind.VARIABLE
+        base_name = name.rsplit(".", 1)[-1]          # handle dotted attr targets
+        kind = SymbolKind.CONSTANT if self._is_constant_name(base_name) else SymbolKind.VARIABLE
         fqn = self._join_fqn(self.package.virtual_path, class_name, name)
         key = ".".join(filter(None, [class_name, name])) if class_name else name
         wrapper = node.parent if node.parent and node.parent.type == "expression_statement" else node
@@ -461,9 +462,15 @@ class PythonCodeParser(AbstractCodeParser):
         everything else is SymbolKind.VARIABLE.
         """
         target_node = node.child_by_field_name("left") or node.children[0]
-        if target_node.type != "identifier":
-            return
-        name = target_node.text.decode("utf8")
+
+        # accept both plain identifiers and dotted attribute targets
+        if target_node.type == "identifier":
+            name = target_node.text.decode("utf8")
+        elif target_node.type == "attribute":
+            # keep full dotted path (e.g. "sys.real_prefix")
+            name = target_node.text.decode("utf8")
+        else:
+            return      # unsupported assignment target – skip
 
         assign_symbol = self._create_assignment_symbol(
             name,
@@ -860,25 +867,25 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         IND = " " * indent
         lines: list[str] = []
 
-        # ---------- preceding comment ----------
+        # preceding comment
         if not skip_docs and sym.comment:
             for ln in sym.comment.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
 
-        # ---------- decorators ----------
+        # decorators
         if sym.signature and sym.signature.decorators:
             for deco in sym.signature.decorators:
                 # add leading '@' if `_build_*_signature` stored only the expression
                 deco_txt = deco if deco.lstrip().startswith("@") else f"@{deco}"
                 lines.append(f"{IND}{deco_txt}")
 
-        # ---------- LITERAL (early return) ----------   # NEW
+        # early return literal
         if sym.kind == SymbolKind.LITERAL:
             body_line = (sym.symbol_body or "").splitlines()[0].rstrip()
             lines.append(f"{IND}{body_line}")
             return "\n".join(lines)
 
-        # ---------- header line ----------
+        # header line
         if sym.signature and sym.signature.raw:
             header = sym.signature.raw.rstrip()
         else:
@@ -893,7 +900,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             header += ":"
         lines.append(f"{IND}{header}")
 
-        # ---------- body / docstring ----------
+        # body / docstring
         def _emit_docstring(ds: str, base_indent: str) -> None:
             if skip_docs:
                 return
