@@ -84,6 +84,47 @@ def schedule_missing_embeddings(project: "Project") -> None:
                 )
         offset += PAGE_SIZE
 
+def schedule_outdated_embeddings(project: "Project") -> None:
+    """
+    Re-enqueue embeddings for all symbols whose stored vector was
+    generated with a *different* model than the one currently configured
+    in `project.embeddings`.
+    """
+    emb_calc = project.embeddings
+    if not emb_calc:      # embeddings disabled
+        return
+
+    model_name   = emb_calc.get_model_name()
+    symbol_repo  = project.data_repository.symbol
+    repo_id      = project.get_repo().id
+    PAGE_SIZE    = 1_000
+    offset       = 0
+
+    while True:
+        page = symbol_repo.search(
+            repo_id,
+            SymbolSearchQuery(limit=PAGE_SIZE, offset=offset),   # fetch next slice
+        )
+        if not page:
+            break
+
+        for sym in page:
+            # symbol already has an embedding → but with a *different* model
+            if (
+                sym.symbol_body
+                and sym.embedding_model
+                and sym.embedding_model != model_name
+            ):
+                schedule_symbol_embedding(
+                    symbol_repo,
+                    emb_calc,
+                    sym_id=sym.id,
+                    body=sym.symbol_body,
+                    sync=project.settings.sync_embeddings,
+                )
+
+        offset += PAGE_SIZE
+
 
 def scan_project_directory(project: Project) -> ScanResult:
     """
@@ -222,6 +263,9 @@ def scan_project_directory(project: Project) -> ScanResult:
 
     # Refresh any full text indexes
     project.data_repository.refresh_full_text_indexes()
+
+    schedule_missing_embeddings(project)
+    schedule_outdated_embeddings(project)
 
     return result
 
