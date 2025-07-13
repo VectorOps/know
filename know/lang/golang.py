@@ -663,6 +663,7 @@ class GolangCodeParser(AbstractCodeParser):
     ) -> None:
         # iterate over possible method_spec nodes
         for m in iface_node.children:
+            print(m)
             if m.type != "method_spec":
                 continue
 
@@ -1037,8 +1038,9 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         elif sym.kind == SymbolKind.INTERFACE:
             header = f"type {sym.name} interface {{"
             lines.append(f"{IND}{header}")
-            for child in getattr(sym, "children", []):
-                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
+            if sym.children:
+                for child in sym.children:
+                    lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
             lines.append(f"{IND}}}")
             return "\n".join(lines)
         else:
@@ -1048,6 +1050,6 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
             lines.append(f"{IND}    ...")
-            lines.append(f"{IND}}}")             # ← NEW – close the stub body
+            lines.append(f"{IND}}}")
 
         return "\n".join(lines)
