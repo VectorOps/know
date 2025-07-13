@@ -171,6 +171,7 @@ class PythonCodeParser(AbstractCodeParser):
                 path=self.parsed_file.path,
                 node_type=node.type,
                 line=node.start_point[0] + 1,
+                raw=node.text.decode("utf8", errors="replace"),   # NEW
             )
 
     def _clean_docstring(self, doc: str) -> str:

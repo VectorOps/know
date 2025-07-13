@@ -159,9 +159,11 @@ class GolangCodeParser(AbstractCodeParser):
             return
 
         symbols_before = len(self.parsed_file.symbols)
+        skip_symbol_check = False
 
         if node.type == "import_declaration":
             self._handle_import_declaration(node)
+            skip_symbol_check = True
         elif node.type == "function_declaration":
             self._handle_function_declaration(node)
         elif node.type == "method_declaration":
@@ -172,17 +174,9 @@ class GolangCodeParser(AbstractCodeParser):
             self._handle_const_declaration(node)
         elif node.type == "var_declaration":
             self._handle_var_declaration(node)
-
-        # ‑- warn if the handler didn’t add any symbols
-        if node.type not in ("import_declaration",) and \
-           len(self.parsed_file.symbols) == symbols_before:
-            logger.warning(
-                "Parser handled node but produced no symbols",
-                path=self.parsed_file.path,
-                node_type=node.type,
-                line=node.start_point[0] + 1,
-            )
         else:
+            skip_symbol_check = True
+
             logger.debug(
                 "Unknown Go node",
                 path=self.parsed_file.path,
@@ -190,6 +184,16 @@ class GolangCodeParser(AbstractCodeParser):
                 line=node.start_point[0] + 1,
                 byte_offset=node.start_byte,
                 raw=node.text.decode("utf8", errors="replace"),
+            )
+
+        # warn if the handler didn’t add any symbols
+        if not skip_symbol_check and len(self.parsed_file.symbols) == symbols_before:
+            logger.warning(
+                "Parser handled node but produced no symbols",
+                path=self.parsed_file.path,
+                node_type=node.type,
+                line=node.start_point[0] + 1,
+                raw=node.text.decode("utf8", errors="replace"),   # NEW
             )
 
     def _extract_package_name(self, root_node) -> Optional[str]:
@@ -293,7 +297,7 @@ class GolangCodeParser(AbstractCodeParser):
                 if child.type == "import_spec":
                     self._process_import_spec(child)
                 elif child.type == "import_spec_list":
-                    _walk(child)                # recurse into grouped list
+                    _walk(child)
         _walk(node)
 
     def _process_import_spec(
