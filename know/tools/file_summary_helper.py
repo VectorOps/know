@@ -6,6 +6,8 @@ from know.logger import logger
 from know.parsers import CodeParserRegistry, AbstractLanguageHelper
 from know.project import Project
 from know.models import ImportEdge, Visibility, SymbolMetadata
+from know.tools.base import SummaryMode
+import os
 
 class FileSummary(BaseModel):
     path: str
@@ -35,13 +37,26 @@ def _import_to_text(imp: ImportEdge) -> str:
 def build_file_summary(
     project: Project,
     rel_path: str,
-    symbol_visibility: str | None = None,
-    skip_docs: bool = False,
+    summary_mode: SummaryMode = SummaryMode.ShortSummary,
 ) -> Optional[FileSummary]:
     """
     Return a FileSummary for *rel_path* or ``None`` when the file is
     unknown to the repository.
     """
+    if summary_mode is SummaryMode.Skip:
+        return None
+
+    if summary_mode is SummaryMode.Full:
+        abs_path = os.path.join(project.settings.project_path, rel_path)
+        try:
+            with open(abs_path, "r", encoding="utf-8") as f:
+                return FileSummary(path=rel_path, definitions=f.read())
+        except OSError as exc:
+            logger.error("Unable to read file", path=abs_path, exc=exc)
+            return None
+
+    skip_docs = summary_mode is SummaryMode.ShortSummary
+
     file_repo   = project.data_repository.file
     symbol_repo = project.data_repository.symbol
     edge_repo   = project.data_repository.importedge
@@ -50,11 +65,6 @@ def build_file_summary(
     if not fm:
         logger.warning("File not found in repository – skipped.", path=rel_path)
         return None
-
-    # visibility handling ------------------------------------------------
-    if symbol_visibility is None:
-        symbol_visibility = Visibility.PUBLIC.value
-    vis = None if symbol_visibility == "all" else Visibility(symbol_visibility)
 
     # imports ------------------------------------------------------------
     import_edges = edge_repo.get_list_by_source_package_id(fm.package_id) if fm.package_id else []
@@ -66,8 +76,6 @@ def build_file_summary(
 
     # symbols ------------------------------------------------------------
     symbols = symbol_repo.get_list_by_file_id(fm.id)
-    if vis is not None:
-        symbols = [s for s in symbols if s.visibility == vis.value]
     top_level = [s for s in symbols if s.parent_ref is None]
     top_level.sort(key=lambda s: (s.start_line, s.start_col))
 

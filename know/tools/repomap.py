@@ -13,6 +13,7 @@ from litellm import token_counter
 import networkx as nx
 from pydantic import BaseModel
 from know.logger import logger
+from know.tools.base import SummaryMode
 
 from know.project import Project, ScanResult, ProjectComponent
 from know.models import SymbolMetadata, Visibility

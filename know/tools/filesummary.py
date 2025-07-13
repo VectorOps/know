@@ -5,6 +5,7 @@ from typing import Sequence, List
 from .base import BaseTool
 
 from know.tools.file_summary_helper import FileSummary, build_file_summary
+from know.tools.base import SummaryMode
 
 from know.project import Project
 from know.models import Visibility
@@ -30,12 +31,8 @@ class SummarizeFilesTool(BaseTool):
         """
         summaries: list[FileSummary] = []
         for rel_path in paths:
-            fs = build_file_summary(
-                project,
-                rel_path,
-                symbol_visibility,
-                skip_docs=skip_docs,
-            )
+            mode = SummaryMode.ShortSummary if skip_docs else SummaryMode.FullSummary
+            fs = build_file_summary(project, rel_path, mode)
             if fs:
                 summaries.append(fs)
         return self.to_python(summaries)
