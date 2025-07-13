@@ -1,22 +1,15 @@
 from __future__ import annotations
 
 from typing import List, Sequence, Optional
-from enum import Enum
 
 from pydantic import BaseModel
 
 from know.data import SymbolSearchQuery
 from know.models import SymbolKind, Visibility
 from know.project import Project
-from know.tools.base import BaseTool
+from know.tools.base import BaseTool, SummaryMode
 from know.parsers import CodeParserRegistry, AbstractCodeParser
 from know.models import FileMetadata
-
-
-class IncludeBody(str, Enum):
-    NO = "no"
-    SUMMARY = "summary"
-    FULL = "full"
 
 
 class SymbolSearchResult(BaseModel):
@@ -43,7 +36,7 @@ class SearchSymbolsTool(BaseTool):
         query: Optional[str] = None,
         limit: int | None = 20,
         offset: int | None = 0,
-        include_body: IncludeBody = IncludeBody.SUMMARY,
+        summary_mode: SummaryMode = SummaryMode.ShortSummary,
     ) -> List[SymbolSearchResult]:
 
         if symbol_visibility is None:
@@ -95,10 +88,13 @@ class SearchSymbolsTool(BaseTool):
             sym_summary: Optional[str] = None
             sym_body:    Optional[str] = None
 
-            if include_body != IncludeBody.NO and helper:
-                sym_body = helper.get_symbol_summary(s)
-            elif include_body == IncludeBody.FULL:
-                sym_body = s.symbol_body
+            sym_body = None
+            if summary_mode != SummaryMode.Skip:
+                if summary_mode == SummaryMode.Full:          # full source
+                    sym_body = s.symbol_body
+                elif helper is not None:                      # short / full summary
+                    skip_docs = summary_mode == SummaryMode.ShortSummary
+                    sym_body  = helper.get_symbol_summary(s, skip_docs=skip_docs)
 
             results.append(
                 SymbolSearchResult(
@@ -116,14 +112,14 @@ class SearchSymbolsTool(BaseTool):
     def get_openai_schema(self) -> dict:
         kind_enum        = [k.value for k in SymbolKind]
         visibility_enum  = [v.value for v in Visibility] + ["all"]
+        summary_enum = [m.value for m in SummaryMode]
 
         return {
             "name": self.tool_name,
             "description": (
                 "Search for symbols (functions, classes, variables, etc.) in the current repository. "
                 "All supplied filters are combined with logical **AND**. When both keyword and semantic "
-                "search are available, semantic (vector-based) search is preferred. "
-                "Control how much source code is returned with the `include_body` option."
+                "search are available, semantic (vector-based) search is preferred."
             ),
             "parameters": {
                 "type": "object",
@@ -171,16 +167,17 @@ class SearchSymbolsTool(BaseTool):
                         "default": 0,
                         "description": "Number of results to skip (for pagination)."
                     },
-                    "include_body": {
+                    "summary_mode": {
                         "type": "string",
-                        "enum": [e.value for e in IncludeBody],
-                        "default": IncludeBody.SUMMARY.value,
+                        "enum": summary_enum,
+                        "default": SummaryMode.ShortSummary.value,
                         "description": (
                             "Amount of source code to include with each match:\n"
-                            "• `no` – metadata only (no code or summary)\n"
-                            "• `summary` – metadata plus a brief synopsis **(default)**\n"
-                            "• `full` – metadata plus the complete symbol body"
-                        )
+                            "• `no` – metadata only\n"
+                            "• `summary_short` – brief synopsis (no docstrings)\n"
+                            "• `summary_full` – synopsis incl. docstrings\n"
+                            "• `full` – complete symbol body"
+                        ),
                     },
                 },
             },
