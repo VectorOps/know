@@ -18,7 +18,7 @@ class SummarizeFilesTool(BaseTool):
         project: Project,
         paths: Sequence[str],
         symbol_visibility: str | None = None,
-        skip_docs: bool = False,
+        summary_mode: SummaryMode = SummaryMode.ShortSummary,
     ) -> List[FileSummary]:
         """
         Given a *project* and an iterable of project-relative *paths*,
@@ -31,7 +31,7 @@ class SummarizeFilesTool(BaseTool):
         """
         summaries: list[FileSummary] = []
         for rel_path in paths:
-            mode = SummaryMode.ShortSummary if skip_docs else SummaryMode.FullSummary
+            mode = summary_mode
             fs = build_file_summary(project, rel_path, mode)
             if fs:
                 summaries.append(fs)
@@ -39,6 +39,7 @@ class SummarizeFilesTool(BaseTool):
 
     def get_openai_schema(self) -> dict:
         visibility_enum = [v.value for v in Visibility] + ["all"]
+        summary_enum = [m.value for m in SummaryMode]
 
         return {
             "name": self.tool_name,
@@ -66,12 +67,13 @@ class SummarizeFilesTool(BaseTool):
                             "or use `all` to include every symbol. Defaults to `public`."
                         ),
                     },
-                    "skip_docs": {
-                        "type": "boolean",
-                        "default": False,
+                    "summary_mode": {
+                        "type": "string",
+                        "enum": summary_enum,
+                        "default": SummaryMode.ShortSummary.value,
                         "description": (
-                            "If true, omit preceding comments and docstrings "
-                            "from the summary."
+                            "Level of detail for the generated summary "
+                            "(`no`/`summary_short`/`summary_full`/`full`)."
                         ),
                     },
                 },

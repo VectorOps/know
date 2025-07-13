@@ -304,7 +304,7 @@ class RepoMapTool(BaseTool):
         limit:        int   = LIMIT_DEFAULT,
         restart_prob: float = RESTART_PROB,
         include_summary: bool = True,
-        skip_docs: bool = True,
+        summary_mode: SummaryMode = SummaryMode.ShortSummary,
         min_symbol_len: int = 3,
         token_limit_count: int | None = None,
         token_limit_model: str | None = None,
@@ -448,6 +448,8 @@ class RepoMapTool(BaseTool):
 
     # ---------- OpenAI schema (unchanged aside from defaults) ----------
     def get_openai_schema(self) -> dict:
+        summary_enum = [m.value for m in SummaryMode]
+
         return {
             "name": self.tool_name,
             "description": (
@@ -479,6 +481,15 @@ class RepoMapTool(BaseTool):
                         "minimum": 1,
                         "default": LIMIT_DEFAULT,
                         "description": "Number of top files to return.",
+                    },
+                    "summary_mode": {
+                        "type": "string",
+                        "enum": summary_enum,
+                        "default": SummaryMode.ShortSummary.value,
+                        "description": (
+                            "Level of detail for file summaries that may accompany "
+                            "each result (`no`/`summary_short`/`summary_full`/`full`)."
+                        ),
                     },
                 },
             },
