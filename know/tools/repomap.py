@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math, re, os
+import time
 from dataclasses import dataclass
 from collections import defaultdict
 from typing import Dict, Optional, Sequence, Set
@@ -11,6 +12,7 @@ from litellm import token_counter
 
 import networkx as nx
 from pydantic import BaseModel
+from know.logger import logger
 
 from know.project import Project, ScanResult, ProjectComponent
 from know.models import SymbolMetadata, Visibility
@@ -290,6 +292,8 @@ class RepoMapTool(BaseTool):
         token_limit_model: str | None = None,
     ) -> list[RepoMapScore]:
 
+        _t_start = time.perf_counter()
+
         repomap: RepoMap = project.get_component("repomap")
         if repomap is None:
             raise RuntimeError(
@@ -408,6 +412,11 @@ class RepoMapTool(BaseTool):
             results.append(
                 RepoMapScore(file_path=path, score=score, summary=summary)
             )
+
+        _elapsed = time.perf_counter() - _t_start
+        logger.debug("RepoMapTool.execute finished",
+                     duration_sec=round(_elapsed, 4),
+                     results=len(results))
 
         return self.to_python(results)
 
