@@ -707,7 +707,7 @@ class GolangCodeParser(AbstractCodeParser):
             body=body_str,
             key=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
             hash=compute_symbol_hash(body_bytes),
-            kind=SymbolKind.METHOD,
+            kind=SymbolKind.METHOD_DEF,
             start_line=m.start_point[0] + 1,
             end_line=m.end_point[0] + 1,
             start_byte=start_b,
@@ -1027,6 +1027,13 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
         # ---------- header line ----------
         header: str
+        if sym.kind == SymbolKind.METHOD_DEF:
+            sig = "()"
+            if sym.signature and sym.signature.raw:
+                sig = sym.signature.raw.strip()
+            header = f"{sym.name}{sig}"
+            lines.append(f"{IND}{header}")
+            return "\n".join(lines)
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
             sig = "()"
             if sym.signature and sym.signature.raw:
