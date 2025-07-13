@@ -121,8 +121,12 @@ class PythonCodeParser(AbstractCodeParser):
         self,
         node,
     ) -> None:
+        symbols_before = len(self.parsed_file.symbols)
+        skip_symbol_check = False
+
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
             self._handle_import_statement(node)
+            skip_symbol_check = True
 
         elif node.type in ("function_definition", "async_function_definition"):
             self._handle_function_definition(node)
@@ -160,6 +164,7 @@ class PythonCodeParser(AbstractCodeParser):
                 byte_offset=node.start_byte,
                 raw=node.text.decode("utf8", errors="replace"),
             )
+            skip_symbol_check = True
         if not skip_symbol_check and len(self.parsed_file.symbols) == symbols_before:
             logger.warning(
                 "Parser handled node but produced no symbols",
