@@ -98,16 +98,18 @@ class RepoMap(ProjectComponent):
         if not name:
             return 0.0
 
-        # ----- word-based score (unchanged) ------------------------------
+        # word-based score
         snake = re.sub(r'(?<!^)(?=[A-Z])', '_', name)
         words = [w for w in snake.split('_') if w]
-        word_score = min(len(words) / 5.0, 1.0)          # ≥5 words ⇒ cap at 1.0
+        word_score = min(len(words) / 6.0, 1.0)          # >=6 words - cap at 1.0
 
-        # ----- length-based score ---------------------------------------
-        length_score = min(len(name) / 30.0, 1.0)        # ≥30 chars ⇒ cap at 1.0
+        # length-based score
+        length_score = min(len(name) / 30.0, 1.0)        # >=30 chars - cap at 1.0
+
+        #print(name, word_score, length_score)
 
         # final descriptiveness
-        return round((word_score + length_score) / 2.0, 3)
+        return round((word_score + length_score) / 2.0, 4)
 
     def _make_props(self, sym: SymbolMetadata) -> NameProps:
         vis = (
@@ -302,6 +304,7 @@ class RepoMapTool(BaseTool):
         restart_prob: float = RESTART_PROB,
         include_summary: bool = True,
         skip_docs: bool = True,
+        min_symbol_len: int = 3,
         token_limit_count: int | None = None,
         token_limit_model: str | None = None,
     ) -> list[RepoMapScore]:
@@ -338,10 +341,15 @@ class RepoMapTool(BaseTool):
                     tok = tok[:-1]
                 if not tok:
                     continue
+                if len(tok) < min_symbol_len:
+                    continue
+
                 last = tok.rsplit(".", 1)[-1]
+
                 if tok in known_syms:
                     symbol_names_set.add(tok)
-                if last in known_syms:
+
+                if len(last) >= min_symbol_len and last in known_syms:
                     symbol_names_set.add(last)
 
         print(file_paths_set, symbol_names_set)
