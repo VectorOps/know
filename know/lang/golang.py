@@ -159,7 +159,7 @@ class GolangCodeParser(AbstractCodeParser):
             return
 
         symbols_before = len(self.parsed_file.symbols)
-        imports_before = len(self.parsed_file.imports)          # NEW
+        imports_before = len(self.parsed_file.imports)
         skip_symbol_check = False
 
         if node.type == "import_declaration":
@@ -191,7 +191,7 @@ class GolangCodeParser(AbstractCodeParser):
         if (
             not skip_symbol_check
             and len(self.parsed_file.symbols) == symbols_before
-            and len(self.parsed_file.imports) == imports_before  # NEW
+            and len(self.parsed_file.imports) == imports_before
         ):
             logger.warning(
                 "Parser handled node but produced no symbols or imports",
@@ -227,6 +227,14 @@ class GolangCodeParser(AbstractCodeParser):
         """
         pkg_ident = self._extract_package_name(root_node)
 
+        # Special case – package "main" represents a command, not an importable
+        # module.  Use only the file’s directory (or "." for the project root) as
+        # virtual path so nothing inside the project can import it, and skip all
+        # go.mod based resolution / warnings.
+        if pkg_ident == "main":
+            rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
+            return rel_dir or "."
+
         if self.module_path:
             rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
             full_path = (
@@ -240,7 +248,7 @@ class GolangCodeParser(AbstractCodeParser):
                 if rel_dir
                 else self.module_path.split("/")[-1]
             )
-            if pkg_ident and pkg_ident != expected_pkg:
+            if pkg_ident and pkg_ident != expected_pkg and pkg_ident != "main":
                 logger.warning(
                     "Go package mismatch",
                     clause=pkg_ident,
