@@ -13,10 +13,10 @@ class EmbeddingCalculator(ABC):
         pass
 
     @abstractmethod
-    def get_embeddings(self, texts: list[str]) -> list[Vector]:
+    def get_embedding_list(self, texts: list[str]) -> list[Vector]:
         """Return one vector per *texts* element (must keep order)."""
         ...
 
     # single-text convenience wrapper (NOT abstract any more)
     def get_embedding(self, text: str) -> Vector:
-        return self.get_embeddings([text])[0]
+        return self.get_embedding_list([text])[0]

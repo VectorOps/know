@@ -7,6 +7,7 @@ wheels/
 *.egg-info
 .DS_Store
 *.duckdb
+*.duckdb.wal
 .symbol_search_history
 .repomap_history
 

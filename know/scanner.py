@@ -138,13 +138,11 @@ def scan_project_directory(project: Project) -> ScanResult:
         if existing_meta:
             mod_time: float = path.stat().st_mtime
             if existing_meta.last_updated == mod_time:
-                logger.debug("Unchanged file, skipping parse.", path=rel_path)
                 continue
 
             file_hash: str = compute_file_hash(str(path))
             # TODO: Do we even need this?
             if existing_meta and existing_meta.file_hash == file_hash:
-                logger.debug(f"Unchanged file, skipping parse.", path=rel_path)
                 continue
 
         parser_cls = CodeParserRegistry.get_parser(path.suffix)

@@ -57,14 +57,16 @@ class EmbeddingWorker:
         self,
         calc_type: str,
         model_name: str,
+        device: str | none = None,
         cache_backend: str | None = None,
         cache_path: str | None = None,
-        batch_size: int = 32,
+        batch_size: int = 1,
         batch_wait_ms: float = 5,
-        **calc_kwargs,
+        calc_kwargs: any = None,
     ):
         self._calc_type = calc_type
         self._model_name = model_name
+        self._device = device
         self._calc_kwargs = calc_kwargs
         self._cache_manager: EmbeddingCacheBackend | None = _build_cache_backend(
             cache_backend, cache_path
@@ -152,14 +154,17 @@ class EmbeddingWorker:
         Lazily build the EmbeddingCalculator required by this worker.
         Supported keys: "local", "sentence"  (alias for the same impl).
         """
+        calc_kwargs = self._calc_kwargs or {}
+
         key = self._calc_type.lower()
         if key in ("local", "sentence"):
             from know.embeddings.sentence import LocalEmbeddingCalculator
 
             return LocalEmbeddingCalculator(
                 model_name=self._model_name,
+                device=self._device,
                 cache=self._cache_manager,
-                **self._calc_kwargs,
+                **calc_kwargs,
             )
 
         raise ValueError(f"Unknown EmbeddingCalculator type: {self._calc_type}")
@@ -182,11 +187,14 @@ class EmbeddingWorker:
         self._calc = self._create_calculator()
 
         while not self._stop_event.is_set():
+            # collect up to batch worth of events
             with self._cv:
                 while not self._queue and not self._stop_event.is_set():
                     self._cv.wait()
+
                 if self._stop_event.is_set():
                     break
+
                 first_item = self._queue.popleft()
 
                 # collect extra items up to batch_size, waiting briefly
@@ -196,38 +204,48 @@ class EmbeddingWorker:
                     timeout = deadline - time.monotonic()
                     if timeout <= 0:
                         break
+
                     if not self._queue:
                         self._cv.wait(timeout=timeout)
+
                         if self._stop_event.is_set():
                             break
+
                         if not self._queue:
                             continue
-                    batch.append(self._queue.popleft())
-            # ---- outside lock from here ----
 
+                    batch.append(self._queue.popleft())
+
+            # outside lock from here
             texts = [it.text for it in batch]
 
             try:
-                vectors = self._calc.get_embeddings(texts)
+                vectors = self._calc.get_embedding_list(texts)
             except Exception as exc:
                 logger.error("Embedding computation failed", exc=exc)
+
                 for it in batch:
                     if it.sync_fut is not None and not it.sync_fut.done():
                         it.sync_fut.set_exception(exc)
                     if it.async_fut is not None and not it.async_fut.done():
                         loop = it.async_fut.get_loop()
                         loop.call_soon_threadsafe(it.async_fut.set_exception, exc)
+
                 continue
 
             # deliver successful results
             for it, vector in zip(batch, vectors):
                 if it.sync_fut is not None and not it.sync_fut.done():
                     it.sync_fut.set_result(vector)
+
                 if it.async_fut is not None and not it.async_fut.done():
                     loop = it.async_fut.get_loop()
                     loop.call_soon_threadsafe(it.async_fut.set_result, vector)
+
                 if it.callback is not None:
                     try:
                         it.callback(vector)
                     except Exception as exc:
                         logger.debug("Failed to call callback function", exc=exc)
+
+            logger.debug("embedding queue length", len=self.get_queue_size())

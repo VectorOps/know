@@ -78,3 +78,4 @@
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 * [ ] Strip spaces from multi-line commends, but recover when generating summaries
 * [ ] Instead of having multiple flags for summary/full/none, add enum to tools
+* [ ] If embedding model for the vector does not match current embedding model - either update OR skip

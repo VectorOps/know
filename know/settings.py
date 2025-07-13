@@ -4,22 +4,16 @@ class EmbeddingSettings:
         *,
         calculator_type: str = "local",
         model_name: str = "all-MiniLM-L6-v2",
-        normalize_embeddings: bool = True,
         device: str | None = None,
-        batch_size: int = 32,
-        quantize: bool = False,
-        quantize_bits: int = 8,
+        batch_size: int = 128,
         enabled: bool = False,
         cache_path: str | None = None,
         cache_backend: str = "duckdb",
     ):
         self.calculator_type   = calculator_type
         self.model_name        = model_name
-        self.normalize_embeddings = normalize_embeddings
         self.device            = device
         self.batch_size        = batch_size
-        self.quantize          = quantize
-        self.quantize_bits     = quantize_bits
         self.enabled           = enabled
         self.cache_path        = cache_path
         self.cache_backend     = cache_backend

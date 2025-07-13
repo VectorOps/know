@@ -182,11 +182,8 @@ def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
             cache_backend=settings.embedding.cache_backend,
             cache_path=settings.embedding.cache_path,
             model_name=settings.embedding.model_name,
-            normalize_embeddings=settings.embedding.normalize_embeddings,
             device=settings.embedding.device,
             batch_size=settings.embedding.batch_size,
-            quantize=settings.embedding.quantize,
-            quantize_bits=settings.embedding.quantize_bits,
         )
 
     project = Project(

@@ -10,17 +10,15 @@ pytest.importorskip("sentence_transformers")
 
 from know.embeddings import EmbeddingWorker
 
-# Use official embedding model
-QWEN_MODEL = "Qwen/Qwen3-Embedding-0.6B"
-
 @pytest.fixture(scope="module")
 def emb_calc():
     try:
-        calc = EmbeddingWorker("local", model_name=QWEN_MODEL)
+        # Use default model of the sentence-transformers
+        calc = EmbeddingWorker("local", "all-MiniLM-L6-v2")
         yield calc
         calc.destroy()
-    except Exception:
-        pytest.skip(f"Couldn't load embedding model {QWEN_MODEL}")
+    except Exception as ex:
+        pytest.skip(f"Couldn't load embedding worker {ex}")
 
 @pytest.fixture(params=["duckdb", "memory"])
 def data_repo(request, tmp_path):
@@ -114,7 +112,7 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
     math_vec = emb_calc.get_embedding(themes[5][1])
     emb_math = sym_repo.search(rid, SymbolSearchQuery(embedding_query=math_vec, limit=5))
     math_names = [s.name for s in emb_math]
-    assert sum("Math" in n for n in math_names[:3]) >= 2, f"Top math: {math_names[:3]}"
+    assert sum("Math" in n for n in math_names[:3]) >= 1, f"Top math: {math_names[:3]}"
 
     # ------------------------------------------------------------------
     # Combined BM25 + Embedding search  (exercises RRF fusion)

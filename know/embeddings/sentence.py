@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+import os
 
 from typing import List, Optional, Any
 import hashlib, json
@@ -19,9 +20,6 @@ except ImportError as exc:  # pragma: no cover
 from know.embeddings.interface import EmbeddingCalculator, EMBEDDING_DIM
 from know.models import Vector
 from know.logger import logger
-
-# TODO: Move to config
-logging.getLogger("sentence_transformers").setLevel(logging.DEBUG)
 
 
 class LocalEmbeddingCalculator(EmbeddingCalculator):
@@ -46,12 +44,10 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
     def __init__(
         self,
         model_name: str = "all-MiniLM-L6-v2",
-        normalize_embeddings: bool = True,
         device: Optional[str] = None,
-        batch_size: int = 32,
-        quantize: bool = False,
-        quantize_bits: int = 8,
+        batch_size: int = 4,
         cache: EmbeddingCacheBackend | None = None,
+        normalize_embeddings: bool = True,
         **model_kwargs: Any,
     ):
         """
@@ -97,6 +93,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                 truncate_dim=EMBEDDING_DIM,
                 **self._model_kwargs,
             )
+
             logger.debug(
                 "embeddings_model_ready",
                 model_name=self._model_name,
@@ -112,12 +109,16 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
         )
         try:
             start_ts = time.perf_counter()
+
             embeddings = self._get_model().encode(
                 texts,
                 batch_size=self._batch_size,
                 normalize_embeddings=self._normalize,
                 show_progress_bar=False,
             )
+
+            #import torch.mps; print(f'alloc: {torch.mps.current_allocated_memory():,}, driver: {torch.mps.driver_allocated_memory():,}')
+
             duration = time.perf_counter() - start_ts
             self._last_encode_time = duration
             logger.debug(
@@ -133,6 +134,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                 exc=exc,
             )
             raise
+
         # Ensure list[float] return type.
         processed: List[Vector] = []
         for emb in embeddings:
@@ -179,11 +181,8 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
     def get_model_name(self):
         return self._model_name
 
-    def get_embeddings(self, texts: list[str]) -> list[Vector]:
+    def get_embedding_list(self, texts: list[str]) -> list[Vector]:
         return self._encode(texts)
-
-    def get_embedding(self, text: str) -> Vector:
-        return self.get_embeddings([text])[0]
 
     def get_last_encode_time(self) -> Optional[float]:
         """
