@@ -31,24 +31,37 @@ class SearchSymbolsTool(BaseTool):
         *,
         symbol_name: Optional[str] = None,
         symbol_fqn: Optional[str] = None,
-        symbol_kind: Optional[str] = None,
-        symbol_visibility: Optional[str] = None,
+        symbol_kind: Optional[SymbolKind | str] = None,
+        symbol_visibility: Optional[Visibility | str] = None,
         query: Optional[str] = None,
         limit: int | None = 20,
         offset: int | None = 0,
-        summary_mode: SummaryMode = SummaryMode.ShortSummary,
+        summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
     ) -> List[SymbolSearchResult]:
+        # ------------------------------------------------------------
+        # normalise string / enum inputs
+        # ------------------------------------------------------------
+        # ─ symbol_kind ───────────────────────────────────────────────
+        if symbol_kind is None:
+            kind: SymbolKind | None = None
+        elif isinstance(symbol_kind, SymbolKind):
+            kind = symbol_kind
+        else:
+            kind = SymbolKind(symbol_kind)
 
+        # ─ symbol_visibility ────────────────────────────────────────
         if symbol_visibility is None:
-            symbol_visibility = Visibility.PUBLIC.value      # default → public
-
-        # translate enums if string values are given
-        kind = SymbolKind(symbol_kind) if symbol_kind else None
-
-        if symbol_visibility == "all":
-            vis = None                               # no visibility filter
+            vis: Visibility | None = Visibility.PUBLIC
+        elif isinstance(symbol_visibility, Visibility):
+            vis = symbol_visibility
+        elif str(symbol_visibility).lower() == "all":
+            vis = None                       # sentinel → no visibility filter
         else:
             vis = Visibility(symbol_visibility)
+
+        # ─ summary_mode ─────────────────────────────────────────────
+        if isinstance(summary_mode, str):
+            summary_mode = SummaryMode(summary_mode)
 
         # ------------------------------------------------------------
         # transform free-text query → embedding vector (if requested)
@@ -161,22 +174,12 @@ class SearchSymbolsTool(BaseTool):
                         "default": 20,
                         "description": "Maximum number of results to return."
                     },
-                    "offset": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "default": 0,
-                        "description": "Number of results to skip (for pagination)."
-                    },
                     "summary_mode": {
                         "type": "string",
                         "enum": summary_enum,
                         "default": SummaryMode.ShortSummary.value,
                         "description": (
-                            "Amount of source code to include with each match:\n"
-                            "• `no` – metadata only\n"
-                            "• `summary_short` – brief synopsis (no docstrings)\n"
-                            "• `summary_full` – synopsis incl. docstrings\n"
-                            "• `full` – complete symbol body"
+                            "Amount of source code to include with each match"
                         ),
                     },
                 },
