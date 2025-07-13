@@ -971,14 +971,16 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         1) the original raw string stored in ``imp.raw``;
         2) a best-effort reconstruction from the edge fields.
         """
-        if getattr(imp, "raw", None):
+        if imp.raw:
+            if "import" not in imp.raw:
+                return f"import {imp.raw}"
+
             return imp.raw.strip()
 
         path  = getattr(imp, "to_package_path", "") or ""
         alias = getattr(imp, "alias", None)
         dot   = bool(getattr(imp, "dot", False))
 
-        # ----- reconstruction -----------------------------------------
         if dot:
             return f'import . "{path}"'.strip()
 
@@ -1022,20 +1024,28 @@ class GolangLanguageHelper(AbstractLanguageHelper):
                 header += " {"
         elif sym.kind == SymbolKind.CLASS:          # struct
             header = f"type {sym.name} struct {{"
+            lines.append(f"{IND}{header}")
+            in_body = [c for c in getattr(sym, "children", []) if c.kind != SymbolKind.METHOD]
+            methods = [c for c in getattr(sym, "children", []) if c.kind == SymbolKind.METHOD]
+            for child in in_body:
+                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
+            lines.append(f"{IND}}}")
+            for m in methods:
+                lines.append(self.get_symbol_summary(m, indent, skip_docs=skip_docs))
+            return "\n".join(lines)
         elif sym.kind == SymbolKind.INTERFACE:
             header = f"type {sym.name} interface {{"
+            lines.append(f"{IND}{header}")
+            for child in getattr(sym, "children", []):
+                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
+            lines.append(f"{IND}}}")
+            return "\n".join(lines)
         else:
             # constants / vars etc. – first line of body
             header = (getattr(sym, "symbol_body", "") or "").splitlines()[0].rstrip()
+            lines.append(f"{IND}{header}")
 
-        lines.append(f"{IND}{header}")
-
-        # ---------- body / children ----------
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
             lines.append(f"{IND}    ...")
-
-        elif sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE):
-            for child in getattr(sym, "children", []):
-                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
 
         return "\n".join(lines)
