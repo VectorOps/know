@@ -427,7 +427,7 @@ class RepoMapTool(BaseTool):
                 path,
                 effective_mode,
             )
-            summary = fs.definitions if fs else None
+            summary = fs.content if fs else None
             if summary and token_limit_count and token_limit_model:
                 summary_tokens = _count_tokens(summary, token_limit_model)
 

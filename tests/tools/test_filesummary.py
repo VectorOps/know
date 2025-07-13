@@ -2,6 +2,7 @@ import textwrap
 
 from know.settings import ProjectSettings
 from know.project import init_project
+from know.tools.base import SummaryMode
 from know.tools.filesummary import SummarizeFilesTool
 
 
@@ -40,14 +41,14 @@ def _setup_project(tmp_path):
 def test_filesummary_returns_expected_content(tmp_path):
     project = _setup_project(tmp_path)
 
-    res = SummarizeFilesTool().execute(project, ["foo.py"])
+    res = SummarizeFilesTool().execute(project, ["foo.py"], summary_mode=SummaryMode.FullSummary)
     assert len(res) == 1
 
     summary = res[0]
     assert summary['path'] == "foo.py"
 
     # Expect both symbols (and their docs / comments) to be present
-    definitions = summary['definitions']
+    definitions = summary['content']
     assert "def foo" in definitions
     assert "Function docstring" in definitions
     assert "class Bar" in definitions
