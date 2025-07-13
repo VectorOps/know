@@ -154,6 +154,12 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         node,
     ) -> None:
+        # ignore comments / package lines right away
+        if node.type in ("comment", "package_clause"):
+            return
+
+        symbols_before = len(self.parsed_file.symbols)
+
         if node.type == "import_declaration":
             self._handle_import_declaration(node)
         elif node.type == "function_declaration":
@@ -166,11 +172,16 @@ class GolangCodeParser(AbstractCodeParser):
             self._handle_const_declaration(node)
         elif node.type == "var_declaration":
             self._handle_var_declaration(node)
-        # Ignore comments and package declarations for now
-        elif node.type == "comment":
-            pass
-        elif node.type == "package_clause":
-            pass
+
+        # ‑- warn if the handler didn’t add any symbols
+        if node.type not in ("import_declaration",) and \
+           len(self.parsed_file.symbols) == symbols_before:
+            logger.warning(
+                "Parser handled node but produced no symbols",
+                path=self.parsed_file.path,
+                node_type=node.type,
+                line=node.start_point[0] + 1,
+            )
         else:
             logger.debug(
                 "Unknown Go node",
