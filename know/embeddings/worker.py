@@ -5,7 +5,7 @@ import collections
 import concurrent.futures
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Deque, Optional, Any
 
 from know.embeddings.interface import EmbeddingCalculator
@@ -21,10 +21,9 @@ from know.embeddings.cache import (
 @dataclass
 class _QueueItem:
     text: str
-    # exactly one of the three targets is non-None
-    sync_fut: Optional[concurrent.futures.Future[Vector]] = None
-    async_fut: Optional[asyncio.Future[Vector]] = None
-    callback: Optional[Callable[[Vector], None]] = None
+    sync_futs: list[concurrent.futures.Future[Vector]] = field(default_factory=list)
+    async_futs: list[asyncio.Future[Vector]] = field(default_factory=list)
+    callbacks: list[Callable[[Vector], None]] = field(default_factory=list)
 
 
 def _build_cache_backend(
@@ -75,14 +74,16 @@ class EmbeddingWorker:
 
         self._queue: Deque[_QueueItem] = collections.deque()
         self._cv = threading.Condition()
-        self._stop_event = threading.Event()          # NEW – shut-down signal
+        self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._worker_loop, daemon=True)
         self._thread.start()
+
+        self._pending: dict[str, _QueueItem] = {}        # NEW – dedup map
 
         self._batch_size = batch_size
         self._batch_wait = batch_wait_ms / 1000.0   # convert to seconds
 
-    # ---------------- context manager ----------------
+    # context manager
     def __enter__(self):
         return self
 
@@ -90,23 +91,21 @@ class EmbeddingWorker:
         self.destroy()
         return False
 
-    # ------------------------------------------------------------------ #
     # public API
-    # ------------------------------------------------------------------ #
     def get_model_name(self) -> str:
         return self._model_name
 
     def get_embedding(self, text: str) -> Vector:
         """Synchronous request – always treated as *priority*."""
         fut: concurrent.futures.Future[Vector] = concurrent.futures.Future()
-        self._enqueue(_QueueItem(text=text, sync_fut=fut), priority=True)
+        self._enqueue(_QueueItem(text=text, sync_futs=[fut]), priority=True)
         return fut.result()
 
     async def get_embedding_async(self, text: str, interactive: bool = False) -> Vector:
         """Asynchronous request.  If *interactive* → priority queue."""
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[Vector] = loop.create_future()
-        self._enqueue(_QueueItem(text=text, async_fut=fut), priority=interactive)
+        self._enqueue(_QueueItem(text=text, async_futs=[fut]), priority=interactive)
         return await fut
 
     def get_embedding_callback(
@@ -116,7 +115,7 @@ class EmbeddingWorker:
         interactive: bool = False,
     ) -> None:
         """Callback-based request."""
-        self._enqueue(_QueueItem(text=text, callback=cb), priority=interactive)
+        self._enqueue(_QueueItem(text=text, callbacks=[cb]), priority=interactive)
 
     def get_cache_manager(self) -> EmbeddingCacheBackend | None:
         """
@@ -146,9 +145,7 @@ class EmbeddingWorker:
             self._cv.notify_all()
         self._thread.join(timeout)
 
-    # ------------------------------------------------------------------ #
     # local factory – formerly in know.embeddings.factory
-    # ------------------------------------------------------------------ #
     def _create_calculator(self) -> EmbeddingCalculator:
         """
         Lazily build the EmbeddingCalculator required by this worker.
@@ -169,17 +166,28 @@ class EmbeddingWorker:
 
         raise ValueError(f"Unknown EmbeddingCalculator type: {self._calc_type}")
 
-    # ------------------------------------------------------------------ #
     # internal helpers
-    # ------------------------------------------------------------------ #
     def _enqueue(self, item: _QueueItem, *, priority: bool) -> None:
         if self._stop_event.is_set():
             raise RuntimeError("EmbeddingWorker has been destroyed.")
+
         with self._cv:
-            if priority:
-                self._queue.appendleft(item)
-            else:
-                self._queue.append(item)
+            txt = item.text
+            if txt in self._pending:                    # already queued → merge
+                existing = self._pending[txt]
+                existing.sync_futs.extend(item.sync_futs)
+                existing.async_futs.extend(item.async_futs)
+                existing.callbacks.extend(item.callbacks)
+                if priority:                            # optional re-prioritise
+                    try:
+                        self._queue.remove(existing)
+                    except ValueError:
+                        pass
+                    self._queue.appendleft(existing)
+            else:                                       # first time seen
+                self._pending[txt] = item
+                self._queue.appendleft(item) if priority else self._queue.append(item)
+
             self._cv.notify()
 
     def _worker_loop(self) -> None:
@@ -225,11 +233,16 @@ class EmbeddingWorker:
                 logger.error("Embedding computation failed", exc=exc)
 
                 for it in batch:
-                    if it.sync_fut is not None and not it.sync_fut.done():
-                        it.sync_fut.set_exception(exc)
-                    if it.async_fut is not None and not it.async_fut.done():
-                        loop = it.async_fut.get_loop()
-                        loop.call_soon_threadsafe(it.async_fut.set_exception, exc)
+                    for fut in it.sync_futs:
+                        if not fut.done():
+                            fut.set_exception(exc)
+                    for afut in it.async_futs:
+                        if not afut.done():
+                            loop = afut.get_loop()
+                            loop.call_soon_threadsafe(afut.set_exception, exc)
+
+                    with self._cv:
+                        self._pending.pop(it.text, None)
 
                 continue
 
