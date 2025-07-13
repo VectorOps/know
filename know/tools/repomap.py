@@ -80,6 +80,9 @@ class RepoMap(ProjectComponent):
         self._refs: Dict[str, Set[str]]  = defaultdict(set)   # symbol -> {file}
         self._name_props: Dict[str, NameProps] = {}
 
+    def destroy(self):
+        pass
+
     # ---------- public helpers ------------------------------------------
     def sym_node(self, name: str) -> str:
         return _sym_node(name)

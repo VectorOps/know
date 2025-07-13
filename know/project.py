@@ -135,12 +135,7 @@ class Project:
     def destroy(self, *, timeout: float | None = None) -> None:
         """
         Release every resource held by this Project instance.
-
-        1. call `destroy()` on all registered components
-        2. stop/destroy the embedding worker (if any)
-        3. close the underlying data-repository
         """
-        # (1) destroy components
         for name, comp in list(self._components.items()):
             try:
                 comp.destroy()
@@ -148,7 +143,6 @@ class Project:
                 logger.error("Component failed to destroy", name=name, exc=exc)
         self._components.clear()
 
-        # (2) destroy embedding worker
         if self.embeddings is not None:
             try:
                 self.embeddings.destroy(timeout=timeout)
@@ -156,7 +150,6 @@ class Project:
                 logger.error("Failed to destroy EmbeddingWorker", exc=exc)
             self.embeddings = None
 
-        # (3) close data repository
         try:
             self.data_repository.close()
         except Exception as exc:

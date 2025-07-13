@@ -265,6 +265,10 @@ class AbstractSymbolRefRepository(ABC):
 
 
 class AbstractDataRepository(ABC):
+    @abstractmethod
+    def close(self) -> None:
+        pass
+
     @property
     @abstractmethod
     def repo(self) -> AbstractRepoMetadataRepository:

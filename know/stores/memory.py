@@ -467,6 +467,9 @@ class InMemoryDataRepository(AbstractDataRepository):
         self._importedge = InMemoryImportEdgeRepository(tables)
         self._symbolref  = InMemorySymbolRefRepository(tables)
 
+    def close(self):
+        pass
+
     @property
     def repo(self) -> AbstractRepoMetadataRepository:
         """Access the repo metadata repository."""

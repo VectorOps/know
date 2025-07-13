@@ -506,6 +506,9 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
         self._symbolref_repo = DuckDBSymbolRefRepo(self._conn)
 
+    def close(self):
+        pass
+
     # ---------- interface impl ----------
     @property
     def repo(self) -> AbstractRepoMetadataRepository:     # type: ignore[override]
