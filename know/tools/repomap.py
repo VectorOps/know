@@ -488,7 +488,7 @@ class RepoMapTool(BaseTool):
                         "default": SummaryMode.ShortSummary.value,
                         "description": (
                             "Level of detail for file summaries that may accompany "
-                            "each result (`no`/`summary_short`/`summary_full`/`full`)."
+                            "each result (`skip`/`summary_short`/`summary_full`/`full`)."
                         ),
                     },
                 },

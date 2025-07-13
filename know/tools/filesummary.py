@@ -20,15 +20,6 @@ class SummarizeFilesTool(BaseTool):
         symbol_visibility: str | None = None,
         summary_mode: SummaryMode = SummaryMode.ShortSummary,
     ) -> List[FileSummary]:
-        """
-        Given a *project* and an iterable of project-relative *paths*,
-        return a list of FileSummary objects where *definitions* contains
-        the concatenated textual representation of every symbol found in
-        the corresponding file.
-
-        If *skip_docs* is true, omit preceding comments and docstrings
-        from the summary.
-        """
         summaries: list[FileSummary] = []
         for rel_path in paths:
             mode = summary_mode
@@ -44,9 +35,10 @@ class SummarizeFilesTool(BaseTool):
         return {
             "name": self.tool_name,
             "description": (
-                "Generate a text summary for each supplied file consisting "
+                "Return a text summary for each supplied file consisting "
                 "of its import statements and top-level symbol definitions."
-                "Use this tool to find overview of the interesting files."
+                "Use this tool to find overview of the interesting files. Prefer "
+                "the default summary_short mode, but request full file if needed."
             ),
             "parameters": {
                 "type": "object",
@@ -73,7 +65,7 @@ class SummarizeFilesTool(BaseTool):
                         "default": SummaryMode.ShortSummary.value,
                         "description": (
                             "Level of detail for the generated summary "
-                            "(`no`/`summary_short`/`summary_full`/`full`)."
+                            "(`skip`/`summary_short`/`summary_full`/`full`)."
                         ),
                     },
                 },

@@ -6,6 +6,13 @@ from enum import Enum
 from pydantic import BaseModel
 
 
+class SummaryMode(str, Enum):
+    Skip = "skip"
+    ShortSummary = "summary_short"
+    FullSummary = "summary_full"
+    Full = "full"
+
+
 class BaseTool(ABC):
     tool_name: str
 
