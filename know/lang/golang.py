@@ -810,12 +810,25 @@ class GolangCodeParser(AbstractCodeParser):
         Extract every constant defined in a `const_declaration` (single-line or
         grouped) and register it as a ParsedSymbol with kind = CONSTANT.
         """
-        # ── find all `const_spec` nodes (covers both forms `const Foo = …`
-        #    and  `const ( Foo = …; Bar = … )`)
-        specs = [c for c in node.children if c.type == "const_spec"] or [node]
+        # --- obtain every `const_spec` regardless of grouping -------------
+        specs = [c for c in node.children if c.type == "const_spec"]
+
+        # grouped form → specs are nested inside a `const_spec_list` node
+        if not specs:
+            for lst in (c for c in node.children if c.type == "const_spec_list"):
+                specs.extend([c for c in lst.children if c.type == "const_spec"])
+
+        # fallback – treat whole node as single spec when nothing found
+        if not specs:
+            specs = [node]
 
         for spec in specs:
             id_nodes = [c for c in spec.children if c.type == "identifier"]
+            if not id_nodes:
+                # grouped spec → identifiers are inside an `identifier_list`
+                for sub in (c for c in spec.children if c.type == "identifier_list"):
+                    id_nodes.extend([i for i in sub.children if i.type == "identifier"])
+
             if not id_nodes:
                 continue
 
@@ -859,13 +872,26 @@ class GolangCodeParser(AbstractCodeParser):
         Extract every variable defined in a `var_declaration` (single-line or
         grouped) and register it as a ParsedSymbol with kind = VARIABLE.
         """
-        # 1) Collect all `var_spec` children (covers both `var Foo = …`
-        #    and the grouped form `var ( Foo = … ; Bar int )`)
-        specs = [c for c in node.children if c.type == "var_spec"] or [node]
+        # --- obtain every `var_spec` regardless of grouping -------------
+        specs = [c for c in node.children if c.type == "var_spec"]
+
+        # grouped form → specs are nested inside a `var_spec_list` node
+        if not specs:
+            for lst in (c for c in node.children if c.type == "var_spec_list"):
+                specs.extend([c for c in lst.children if c.type == "var_spec"])
+
+        # fallback – treat whole node as single spec when nothing found
+        if not specs:
+            specs = [node]
 
         for spec in specs:
             # 2) All identifiers belonging to this spec
             id_nodes = [c for c in spec.children if c.type == "identifier"]
+            if not id_nodes:
+                # grouped spec → identifiers are inside an `identifier_list`
+                for sub in (c for c in spec.children if c.type == "identifier_list"):
+                    id_nodes.extend([i for i in sub.children if i.type == "identifier"])
+
             if not id_nodes:
                 continue
 
