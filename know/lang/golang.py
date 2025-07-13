@@ -25,6 +25,16 @@ from know.helpers import compute_file_hash, compute_symbol_hash
 
 GO_LANGUAGE = Language(tsgo.language())
 
+_GO_PKG_SUFFIXES: tuple[str, ...] = (
+    "_test",              # test packages
+    # architectures
+    "_amd64", "_386", "_arm", "_arm64", "_ppc64", "_ppc64le",
+    "_mips", "_mipsle", "_mips64", "_mips64le", "_s390x", "_wasm",
+    # OSes
+    "_linux", "_windows", "_darwin", "_freebsd", "_openbsd",
+    "_netbsd", "_dragonfly", "_plan9", "_solaris",
+)
+
 _parser: Parser = None
 def _get_parser():
     global _parser
@@ -241,14 +251,22 @@ class GolangCodeParser(AbstractCodeParser):
                 self.module_path + ("/" + rel_dir if rel_dir else "")
             )
 
-            # Optional sanity check – warn if the declared identifier
-            # doesn’t match the directory name implied by go.mod.
             expected_pkg = (
                 rel_dir.split("/")[-1]
                 if rel_dir
                 else self.module_path.split("/")[-1]
             )
-            if pkg_ident and pkg_ident != expected_pkg and pkg_ident != "main":
+
+            def _matches_with_allowed_suffix(pkg: str, base: str) -> bool:
+                # exact match → OK
+                if pkg == base:
+                    return True
+                # base + "_" + recognised suffix → OK
+                if pkg.startswith(base + "_"):
+                    return pkg[len(base):] in _GO_PKG_SUFFIXES
+                return False
+
+            if pkg_ident and pkg_ident != "main" and not _matches_with_allowed_suffix(pkg_ident, expected_pkg):
                 logger.warning(
                     "Go package mismatch",
                     clause=pkg_ident,
