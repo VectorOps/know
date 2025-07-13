@@ -145,7 +145,7 @@ class PythonCodeParser(AbstractCodeParser):
             if assign_child is not None:
                 self._handle_assignment(assign_child)
             else:
-                self._handle_expression_statement(node)      # NEW – literal support
+                self._handle_expression_statement(node)
 
         elif node.type == "try_statement":
             self._handle_try_statement(node)
@@ -173,7 +173,7 @@ class PythonCodeParser(AbstractCodeParser):
                 path=self.parsed_file.path,
                 node_type=node.type,
                 line=node.start_point[0] + 1,
-                raw=node.text.decode("utf8", errors="replace"),   # NEW
+                raw=node.text.decode("utf8", errors="replace"),
             )
 
     def _clean_docstring(self, doc: str) -> str:
@@ -711,7 +711,7 @@ class PythonCodeParser(AbstractCodeParser):
                     for grand in blk.children:
                         self._process_node(grand)
 
-    def _handle_expression_statement(self, node) -> None:           # NEW
+    def _handle_expression_statement(self, node) -> None:
         """
         Register a top-level expression (usually a function call) as a
         SymbolKind.LITERAL.
@@ -867,6 +867,12 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                 deco_txt = deco if deco.lstrip().startswith("@") else f"@{deco}"
                 lines.append(f"{IND}{deco_txt}")
 
+        # ---------- LITERAL (early return) ----------   # NEW
+        if sym.kind == SymbolKind.LITERAL:
+            body_line = (sym.symbol_body or "").splitlines()[0].rstrip()
+            lines.append(f"{IND}{body_line}")
+            return "\n".join(lines)
+
         # ---------- header line ----------
         if sym.signature and sym.signature.raw:
             header = sym.signature.raw.rstrip()
@@ -904,11 +910,6 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         # (Variables / constants etc. – docstring only)
         elif not skip_docs and sym.docstring:
             _emit_docstring(sym.docstring, IND)
-
-        elif sym.kind == SymbolKind.LITERAL:              # NEW
-            body_line = (sym.symbol_body or "").splitlines()[0].rstrip()
-            lines.append(f"{IND}{body_line}")
-            return "\n".join(lines)
 
         return "\n".join(lines)
 
