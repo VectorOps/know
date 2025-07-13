@@ -160,6 +160,13 @@ class PythonCodeParser(AbstractCodeParser):
                 byte_offset=node.start_byte,
                 raw=node.text.decode("utf8", errors="replace"),
             )
+        if not skip_symbol_check and len(self.parsed_file.symbols) == symbols_before:
+            logger.warning(
+                "Parser handled node but produced no symbols",
+                path=self.parsed_file.path,
+                node_type=node.type,
+                line=node.start_point[0] + 1,
+            )
 
     def _clean_docstring(self, doc: str) -> str:
         return ('\n'.join((s.strip() for s in doc.split('\n')))).strip()
