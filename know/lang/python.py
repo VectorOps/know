@@ -144,6 +144,8 @@ class PythonCodeParser(AbstractCodeParser):
             assign_child = next((c for c in node.children if c.type == "assignment"), None)
             if assign_child is not None:
                 self._handle_assignment(assign_child)
+            else:
+                self._handle_expression_statement(node)      # NEW – literal support
 
         elif node.type == "try_statement":
             self._handle_try_statement(node)
@@ -375,7 +377,6 @@ class PythonCodeParser(AbstractCodeParser):
         if ret_node is not None:
             return_type = ret_node.text.decode("utf8").strip()
 
-        # ------------------------------------------------------------------ #
         return SymbolSignature(
             raw=raw_sig,
             parameters=parameters,
@@ -391,9 +392,7 @@ class PythonCodeParser(AbstractCodeParser):
         """Return True if the given identifier looks like a constant (ALL_CAPS)."""
         return bool(cls._CONST_RE.match(name))
 
-    # ---------------------------------------------------------------------
     # Visibility helpers
-    # ---------------------------------------------------------------------
     @staticmethod
     def _infer_visibility(name: str) -> Visibility:
         """
@@ -712,6 +711,41 @@ class PythonCodeParser(AbstractCodeParser):
                     for grand in blk.children:
                         self._process_node(grand)
 
+    def _handle_expression_statement(self, node) -> None:           # NEW
+        """
+        Register a top-level expression (usually a function call) as a
+        SymbolKind.LITERAL.
+        """
+        expr_bytes: bytes = node.text
+        expr: str = expr_bytes.decode("utf8").strip()
+        if not expr:                         # ignore blank / trivial nodes
+            return
+
+        # crude name heuristic: take token before first "(" or full expr
+        name_tok = expr.split("(", 1)[0].strip().split()[0]
+        name = name_tok or f"expr@{node.start_point[0]+1}"
+
+        self.parsed_file.symbols.append(
+            ParsedSymbol(
+                name=name,
+                fqn=self._join_fqn(self.package.virtual_path, name),
+                body=expr,
+                key=name,
+                hash=compute_symbol_hash(expr_bytes),
+                kind=SymbolKind.LITERAL,
+                start_line=node.start_point[0],
+                end_line=node.end_point[0],
+                start_byte=node.start_byte,
+                end_byte=node.end_byte,
+                visibility=Visibility.PUBLIC,
+                modifiers=[],
+                docstring=None,
+                signature=None,
+                comment=self._get_preceding_comment(node),
+                children=[],
+            )
+        )
+
     # Module-resolution helper                                           #
     def _locate_module_path(self, import_path: str) -> Optional[Path]:
         """
@@ -870,6 +904,11 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         # (Variables / constants etc. – docstring only)
         elif not skip_docs and sym.docstring:
             _emit_docstring(sym.docstring, IND)
+
+        elif sym.kind == SymbolKind.LITERAL:              # NEW
+            body_line = (sym.symbol_body or "").splitlines()[0].rstrip()
+            lines.append(f"{IND}{body_line}")
+            return "\n".join(lines)
 
         return "\n".join(lines)
 
