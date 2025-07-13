@@ -32,7 +32,7 @@ LIMIT_DEFAULT          = 20
 
 DESCRIPTIVE_MULTIPLIER = 4.0
 PRIVATE_PROTECTED_MULT = 0.1
-POLYDEF_THRESHOLD      = 6
+POLYDEF_THRESHOLD      = 5
 POLYDEF_MULTIPLIER     = 0.1
 ISOLATED_SELF_WEIGHT   = 0.3
 
@@ -75,8 +75,8 @@ class RepoMap(ProjectComponent):
         self._path_to_fid: Dict[str, str] = {}
 
         # caches for fast weight computations
-        self._defs: Dict[str, Set[str]]  = defaultdict(set)   # symbol → {file}
-        self._refs: Dict[str, Set[str]]  = defaultdict(set)   # symbol → {file}
+        self._defs: Dict[str, Set[str]]  = defaultdict(set)   # symbol -> {file}
+        self._refs: Dict[str, Set[str]]  = defaultdict(set)   # symbol -> {file}
         self._name_props: Dict[str, NameProps] = {}
 
     # ---------- public helpers ------------------------------------------
@@ -89,11 +89,25 @@ class RepoMap(ProjectComponent):
     # ---------- edge-weight helpers -------------------------------------
     @staticmethod
     def _calc_descriptiveness(name: str) -> float:
+        """
+        Descriptiveness grows with
+          • the number of “words” in the identifier, and
+          • the overall character length.
+        Both sub-scores are clamped to 1.0 and averaged, then rounded to 3 decimals.
+        """
         if not name:
             return 0.0
+
+        # ----- word-based score (unchanged) ------------------------------
         snake = re.sub(r'(?<!^)(?=[A-Z])', '_', name)
         words = [w for w in snake.split('_') if w]
-        return round(min(len(words) / 5.0, 1.0), 3)
+        word_score = min(len(words) / 5.0, 1.0)          # ≥5 words ⇒ cap at 1.0
+
+        # ----- length-based score ---------------------------------------
+        length_score = min(len(name) / 30.0, 1.0)        # ≥30 chars ⇒ cap at 1.0
+
+        # final descriptiveness
+        return round((word_score + length_score) / 2.0, 3)
 
     def _make_props(self, sym: SymbolMetadata) -> NameProps:
         vis = (
@@ -320,14 +334,17 @@ class RepoMapTool(BaseTool):
             known_syms = set(repomap._defs.keys()) | set(repomap._refs.keys())
             tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_\.]*", txt)
             for tok in tokens:
+                if tok.endswith('.'):
+                    tok = tok[:-1]
+                if not tok:
+                    continue
                 last = tok.rsplit(".", 1)[-1]
                 if tok in known_syms:
                     symbol_names_set.add(tok)
                 if last in known_syms:
                     symbol_names_set.add(last)
 
-        #print(symbol_names_set)
-        #print(file_paths_set)
+        print(file_paths_set, symbol_names_set)
 
         # convert back to the lists consumed below
         symbol_names = list(symbol_names_set) if symbol_names_set else None
