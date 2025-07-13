@@ -32,6 +32,7 @@ def _parse_cli() -> argparse.Namespace:
     return p.parse_args()
 
 
+# Main method
 def main() -> None:
     args = _parse_cli()
 

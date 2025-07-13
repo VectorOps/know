@@ -16,12 +16,6 @@ from know.tools.base import ToolRegistry
 from devtools import pformat
 
 
-import logging
-logging.basicConfig(
-    level=logging.DEBUG,
-)
-
-
 SYSTEM_PROMPT = """
 Please resolve the user's task by editing and testing the code files in your current code
 execution session. You are a deployed coding agent. The repo is already cloned

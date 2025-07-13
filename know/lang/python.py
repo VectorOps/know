@@ -233,10 +233,6 @@ class PythonCodeParser(AbstractCodeParser):
         return None
 
     # ---------------------------------------------------------------------
-    # Signature helpers
-    # ---------------------------------------------------------------------
-    @staticmethod
-    # ---------------------------------------------------------------------
     # Function-signature raw text helper
     # ---------------------------------------------------------------------
     @staticmethod
@@ -855,7 +851,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                 lines.append(f"{IND}{ln.rstrip()}")
 
         # ---------- decorators ----------
-        if sym.signature and getattr(sym.signature, "decorators", None):
+        if sym.signature and sym.signature.decorators:
             for deco in sym.signature.decorators:
                 # add leading '@' if `_build_*_signature` stored only the expression
                 deco_txt = deco if deco.lstrip().startswith("@") else f"@{deco}"

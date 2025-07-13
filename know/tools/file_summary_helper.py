@@ -11,7 +11,7 @@ import os
 
 class FileSummary(BaseModel):
     path: str
-    definitions: str
+    content: str
 
 # ──────────────────────────────────────────────────────────────
 #  internal helpers
@@ -50,7 +50,7 @@ def build_file_summary(
         abs_path = os.path.join(project.settings.project_path, rel_path)
         try:
             with open(abs_path, "r", encoding="utf-8") as f:
-                return FileSummary(path=rel_path, definitions=f.read())
+                return FileSummary(path=rel_path, content=f.read())
         except OSError as exc:
             logger.error("Unable to read file", path=abs_path, exc=exc)
             return None
@@ -79,7 +79,7 @@ def build_file_summary(
     top_level = [s for s in symbols if s.parent_ref is None]
     top_level.sort(key=lambda s: (s.start_line, s.start_col))
 
-    definitions_blocks = (
+    content_blocks = (
         [helper.get_symbol_summary(s, skip_docs=skip_docs) for s in top_level] if helper
         else [_symbol_to_text(s, skip_docs=skip_docs) for s in top_level]
     )
@@ -88,7 +88,7 @@ def build_file_summary(
     sections: list[str] = []
     if import_lines:
         sections.append("\n".join(import_lines))
-    if definitions_blocks:
-        sections.append("\n\n".join(definitions_blocks))
+    if content_blocks:
+        sections.append("\n\n".join(content_blocks))
 
-    return FileSummary(path=rel_path, definitions="\n\n".join(sections))
+    return FileSummary(path=rel_path, content="\n\n".join(sections))

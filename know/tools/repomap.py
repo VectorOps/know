@@ -304,11 +304,13 @@ class RepoMapTool(BaseTool):
         limit:        int   = LIMIT_DEFAULT,
         restart_prob: float = RESTART_PROB,
         include_summary: bool = True,
-        summary_mode: SummaryMode = SummaryMode.ShortSummary,
+        summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
         min_symbol_len: int = 3,
         token_limit_count: int | None = None,
         token_limit_model: str | None = None,
     ) -> list[RepoMapScore]:
+        if summary_mode is str:
+            summary_mode = SummaryMode(summary_mode)
 
         _t_start = time.perf_counter()
 

@@ -10,6 +10,7 @@ from know.tools.base import SummaryMode
 from know.project import Project
 from know.models import Visibility
 
+
 class SummarizeFilesTool(BaseTool):
     tool_name = "vectorops_summarize_files"
 
@@ -17,15 +18,17 @@ class SummarizeFilesTool(BaseTool):
         self,
         project: Project,
         paths: Sequence[str],
-        symbol_visibility: str | None = None,
-        summary_mode: SummaryMode = SummaryMode.ShortSummary,
+        summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
     ) -> List[FileSummary]:
+        if summary_mode is str:
+            summary_mode = SummaryMode(summary_mode)
+
         summaries: list[FileSummary] = []
         for rel_path in paths:
-            mode = summary_mode
-            fs = build_file_summary(project, rel_path, mode)
+            fs = build_file_summary(project, rel_path, summary_mode=SummaryMode(summary_mode))
             if fs:
                 summaries.append(fs)
+
         return self.to_python(summaries)
 
     def get_openai_schema(self) -> dict:
@@ -49,14 +52,6 @@ class SummarizeFilesTool(BaseTool):
                         "description": (
                             "Project-relative paths of the files to be "
                             "summarized."
-                        ),
-                    },
-                    "symbol_visibility": {
-                        "type": "string",
-                        "enum": visibility_enum,
-                        "description": (
-                            "Restrict by visibility modifier (`public`, `protected`, `private`) "
-                            "or use `all` to include every symbol. Defaults to `public`."
                         ),
                     },
                     "summary_mode": {

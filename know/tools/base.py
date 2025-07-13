@@ -47,7 +47,7 @@ class BaseTool(ABC):
         return obj
 
     # convenience instance wrapper
-    def to_python(self, obj: Any) -> Any:            # NEW
+    def to_python(self, obj: Any) -> Any:
         return self._convert_to_python(obj)
     # ------------------------------------------------------------------ NEW
 
