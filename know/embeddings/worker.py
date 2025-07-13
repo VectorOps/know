@@ -248,17 +248,23 @@ class EmbeddingWorker:
 
             # deliver successful results
             for it, vector in zip(batch, vectors):
-                if it.sync_fut is not None and not it.sync_fut.done():
-                    it.sync_fut.set_result(vector)
+                for fut in it.sync_futs:
+                    if not fut.done():
+                        fut.set_result(vector)
 
-                if it.async_fut is not None and not it.async_fut.done():
-                    loop = it.async_fut.get_loop()
-                    loop.call_soon_threadsafe(it.async_fut.set_result, vector)
+                for afut in it.async_futs:
+                    if not afut.done():
+                        loop = afut.get_loop()
+                        loop.call_soon_threadsafe(afut.set_result, vector)
 
-                if it.callback is not None:
+                for cb in it.callbacks:
                     try:
-                        it.callback(vector)
+                        cb(vector)
                     except Exception as exc:
                         logger.debug("Failed to call callback function", exc=exc)
+
+            with self._cv:
+                for it in batch:
+                    self._pending.pop(it.text, None)
 
             logger.debug("embedding queue length", len=self.get_queue_size())
