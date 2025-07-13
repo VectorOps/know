@@ -38,11 +38,15 @@ class ProjectComponent(ABC):
         return dict(Project._component_registry)
 
     @abstractmethod
-    def initialize(self) -> None:               # called once after registration
+    def initialize(self) -> None:
         ...
 
     @abstractmethod
     def refresh(self, scan_result: "ScanResult") -> None:
+        ...
+
+    @abstractmethod
+    def destroy(self) -> None:
         ...
 
 
@@ -124,6 +128,39 @@ class Project:
                 comp.refresh(scan_result)
             except Exception as exc:
                 logger.error("Component failed to refresh", name=name, exc=exc)
+
+    # ---------------------------------------------------------------------
+    # teardown helpers
+    # ---------------------------------------------------------------------
+    def destroy(self, *, timeout: float | None = None) -> None:
+        """
+        Release every resource held by this Project instance.
+
+        1. call `destroy()` on all registered components
+        2. stop/destroy the embedding worker (if any)
+        3. close the underlying data-repository
+        """
+        # (1) destroy components
+        for name, comp in list(self._components.items()):
+            try:
+                comp.destroy()
+            except Exception as exc:
+                logger.error("Component failed to destroy", name=name, exc=exc)
+        self._components.clear()
+
+        # (2) destroy embedding worker
+        if self.embeddings is not None:
+            try:
+                self.embeddings.destroy(timeout=timeout)
+            except Exception as exc:
+                logger.error("Failed to destroy EmbeddingWorker", exc=exc)
+            self.embeddings = None
+
+        # (3) close data repository
+        try:
+            self.data_repository.close()
+        except Exception as exc:
+            logger.error("Failed to close data repository", exc=exc)
 
 
 
