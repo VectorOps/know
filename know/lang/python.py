@@ -427,6 +427,7 @@ class PythonCodeParser(AbstractCodeParser):
         else is recorded as VARIABLE.
         """
         base_name = name.rsplit(".", 1)[-1]          # handle dotted attr targets
+        base_name = base_name.split("[", 1)[0]       # drop subscript part
         kind = SymbolKind.CONSTANT if self._is_constant_name(base_name) else SymbolKind.VARIABLE
         fqn = self._join_fqn(self.package.virtual_path, class_name, name)
         key = ".".join(filter(None, [class_name, name])) if class_name else name
@@ -464,13 +465,12 @@ class PythonCodeParser(AbstractCodeParser):
         target_node = node.child_by_field_name("left") or node.children[0]
 
         # accept both plain identifiers and dotted attribute targets
-        if target_node.type == "identifier":
+        if target_node.type in ("identifier", "attribute"):
             name = target_node.text.decode("utf8")
-        elif target_node.type == "attribute":
-            # keep full dotted path (e.g. "sys.real_prefix")
+        elif target_node.type in ("subscript", "subscription"):      # e.g.  os.env["X"] = …
             name = target_node.text.decode("utf8")
         else:
-            return      # unsupported assignment target – skip
+            return        # unsupported → ignore
 
         assign_symbol = self._create_assignment_symbol(
             name,
