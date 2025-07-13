@@ -18,10 +18,6 @@ def _parse_cli() -> argparse.Namespace:
                    choices=[m.value for m in SummaryMode],
                    default=SummaryMode.ShortSummary.value,
                    help="Detail level for summaries")
-    p.add_argument("--visibility",
-                   choices=["public", "protected", "private", "all"],
-                   default="public",
-                   help="Visibility filter passed to the tool")
     p.add_argument("--repo-backend",    choices=["memory", "duckdb"], default="duckdb")
     p.add_argument("--repo-connection", default=None)
     p.add_argument("--enable-embeddings", action="store_true")
@@ -56,7 +52,6 @@ def main() -> None:
     summaries: List[dict] = summarize_tool.execute(
         project,
         paths=args.files,
-        symbol_visibility=args.visibility,
         summary_mode=SummaryMode(args.summary_mode),
     )
 

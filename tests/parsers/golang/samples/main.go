@@ -7,6 +7,13 @@ import (
 
 const (
 	A = 10
+	B = 0.1
+)
+
+var j = 20
+var (
+	k = "123"
+	f = 0.1 // Hello
 )
 
 type S struct {
@@ -17,6 +24,12 @@ type S struct {
 
 func (s *S) m(a int) error {
 	return nil
+}
+
+type I interface {
+	m(a int) error
+	// comment
+	b(s str)
 }
 
 /*

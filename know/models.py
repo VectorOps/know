@@ -19,6 +19,7 @@ class SymbolKind(str, Enum):
     CLASS = "class"
     FUNCTION = "function"
     METHOD = "method"
+    METHOD_DEF = "method_def"
     PROPERTY = "property"
     CONSTANT = "constant"
     VARIABLE = "variable"

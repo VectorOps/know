@@ -38,10 +38,7 @@ class SearchSymbolsTool(BaseTool):
         offset: int | None = 0,
         summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
     ) -> List[SymbolSearchResult]:
-        # ------------------------------------------------------------
         # normalise string / enum inputs
-        # ------------------------------------------------------------
-        # ─ symbol_kind ───────────────────────────────────────────────
         if symbol_kind is None:
             kind: SymbolKind | None = None
         elif isinstance(symbol_kind, SymbolKind):
@@ -49,7 +46,7 @@ class SearchSymbolsTool(BaseTool):
         else:
             kind = SymbolKind(symbol_kind)
 
-        # ─ symbol_visibility ────────────────────────────────────────
+        # symbol_visibility
         if symbol_visibility is None:
             vis: Visibility | None = Visibility.PUBLIC
         elif isinstance(symbol_visibility, Visibility):
@@ -59,13 +56,11 @@ class SearchSymbolsTool(BaseTool):
         else:
             vis = Visibility(symbol_visibility)
 
-        # ─ summary_mode ─────────────────────────────────────────────
+        # summary_mode
         if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)
 
-        # ------------------------------------------------------------
         # transform free-text query → embedding vector (if requested)
-        # ------------------------------------------------------------
         embedding_vec = None
         if query:
             embedding_vec = project.compute_embedding(query)
@@ -103,9 +98,9 @@ class SearchSymbolsTool(BaseTool):
 
             sym_body = None
             if summary_mode != SummaryMode.Skip:
-                if summary_mode == SummaryMode.Full:          # full source
+                if summary_mode == SummaryMode.Full:
                     sym_body = s.symbol_body
-                elif helper is not None:                      # short / full summary
+                elif helper is not None:
                     skip_docs = summary_mode == SummaryMode.ShortSummary
                     sym_body  = helper.get_symbol_summary(s, skip_docs=skip_docs)
 

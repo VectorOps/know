@@ -367,9 +367,7 @@ class RepoMapTool(BaseTool):
         G = repomap.G
         sym_node = repomap.sym_node
 
-        # -----------------------------------------------------------------
         #  1. Personalisation / restart vector (a.k.a. «boosting»)
-        # -----------------------------------------------------------------
         if symbol_names or file_paths:
             seeds: Dict[str, float] = {}
 
@@ -394,9 +392,7 @@ class RepoMapTool(BaseTool):
         #for k in [f"{u} -> {v} ({d.get('name', '')}) ({d.get('weight')})" for u, v, d in G.edges(data=True)]:
         #    print(k)
 
-        # -----------------------------------------------------------------
         #  2. Run Random-Walk-with-Restart (= personalised PageRank)
-        # -----------------------------------------------------------------
         pr = nx.pagerank(
             G,
             alpha=(1.0 - restart_prob),

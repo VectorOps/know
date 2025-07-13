@@ -15,8 +15,8 @@ from know.models import (
     SymbolSignature,
     SymbolParameter,
     SymbolMetadata,
-    ImportEdge,            # NEW – needed for get_import_summary
-    SymbolRefType,        # <-- ADDED
+    ImportEdge,
+    SymbolRefType,
 )
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
@@ -48,9 +48,7 @@ class PythonCodeParser(AbstractCodeParser):
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
-    # ------------------------------------------------------------
     # Virtual-path / FQN helpers
-    # ------------------------------------------------------------
     @staticmethod
     def _rel_to_virtual_path(rel_path: str) -> str:
         """
@@ -78,10 +76,6 @@ class PythonCodeParser(AbstractCodeParser):
         with open(file_path, "rb") as file:
             source_bytes = file.read()
         self.source_bytes = source_bytes                # cache for comment lookup
-
-        # ------------------------------------------------------------------
-        # File hash
-        # ------------------------------------------------------------------
 
         # Parse the source code
         tree = self.parser.parse(source_bytes)
@@ -114,21 +108,15 @@ class PythonCodeParser(AbstractCodeParser):
         for node in root_node.children:
             self._process_node(node)
 
-        # --------------------------------------------
         # Collect outgoing symbol-references (calls)
-        # --------------------------------------------
         self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
 
-        # ------------------------------------------------------------------
         # Sync package-level imports with file-level imports
-        # ------------------------------------------------------------------
         self.package.imports = list(self.parsed_file.imports)
 
         return self.parsed_file
 
-    # ------------------------------------------------------------------
     # Generic node-dispatcher
-    # ------------------------------------------------------------------
     def _process_node(
         self,
         node,
@@ -173,6 +161,9 @@ class PythonCodeParser(AbstractCodeParser):
                 raw=node.text.decode("utf8", errors="replace"),
             )
 
+    def _clean_docstring(self, doc: str) -> str:
+        return ('\n'.join((s.strip() for s in doc.split('\n')))).strip()
+
     def _extract_docstring(self, node) -> Optional[str]:
         """
         Extract a Python docstring from the given Tree-sitter node if it is
@@ -185,7 +176,7 @@ class PythonCodeParser(AbstractCodeParser):
             body_node = next((c for c in node.children if c.type == "block"), None)
             if body_node is not None:
                 return self._extract_docstring(body_node)
-            # No block means no body → no docstring
+            # No block means no body - no docstring
             return None
 
         for child in node.children:
@@ -193,19 +184,17 @@ class PythonCodeParser(AbstractCodeParser):
             if child.type == "expression_statement":
                 if child.children and child.children[0].type == "string":
                     raw = child.children[0].text.decode("utf8")
-                    return raw
+                    return self._clean_docstring(raw)
             # Fallback when the string is a direct child
             if child.type == "string":
                 raw = child.text.decode("utf8")
-                return raw
+                return self._clean_docstring(raw)
             # Stop scanning once we hit a non-whitespace/comment node
             if child.type not in ("comment",):
                 break
         return None
 
-    # ---------------------------------------------------------------------
     # Comment helpers
-    # ---------------------------------------------------------------------
     def _get_preceding_comment(self, node) -> Optional[str]:
         """
         Return the contiguous block of `# …` line-comments that immediately
@@ -219,7 +208,7 @@ class PythonCodeParser(AbstractCodeParser):
                 break
             if sib.type == "comment":
                 raw = self.source_bytes[sib.start_byte : sib.end_byte].decode("utf8")
-                comments.append(raw.rstrip())
+                comments.append(raw.strip())
                 sib = sib.prev_sibling
                 continue
             # skip solitary newlines/indent tokens
@@ -232,9 +221,7 @@ class PythonCodeParser(AbstractCodeParser):
             return "\n".join(comments).strip() or None
         return None
 
-    # ---------------------------------------------------------------------
     # Function-signature raw text helper
-    # ---------------------------------------------------------------------
     @staticmethod
     def _extract_signature_raw(code: str) -> str:
         """
@@ -260,9 +247,7 @@ class PythonCodeParser(AbstractCodeParser):
                 return code[def_idx:i+1].rstrip()
         return code[def_idx:].rstrip()
 
-    # ---------------------------------------------------------------------
     # Class-signature raw text helper
-    # ---------------------------------------------------------------------
     @staticmethod
     def _extract_class_signature_raw(code: str) -> str:
         """Return the `class …` header (incl. base list) without the trailing colon."""
@@ -287,9 +272,7 @@ class PythonCodeParser(AbstractCodeParser):
         `node` may be either a `class_definition` or its surrounding
         `decorated_definition` wrapper.
         """
-        # ------------------------------------------------------------------ #
         # Locate the concrete `class_definition` node                        #
-        # ------------------------------------------------------------------ #
         cls_node = node
         if node.type == "decorated_definition":
             cls_node = next((c for c in node.children if c.type == "class_definition"), node)
@@ -297,9 +280,7 @@ class PythonCodeParser(AbstractCodeParser):
         code    = cls_node.text.decode("utf8")
         raw_sig = self._extract_class_signature_raw(code)
 
-        # ------------------------------------------------------------------ #
         # Decorators                                                         #
-        # ------------------------------------------------------------------ #
         decorators: list[str] = []
         if node.type == "decorated_definition":
             for ch in node.children:
@@ -326,15 +307,11 @@ class PythonCodeParser(AbstractCodeParser):
         # or its surrounding *decorated_definition* wrapper; keep a reference.
         wrapper = node
 
-        # ------------------------------------------------------------------ #
         # Raw text (full “def …(…)” line, incl. params & optional annotation) #
-        # ------------------------------------------------------------------ #
         code    = wrapper.text.decode("utf8")
         raw_sig = self._extract_signature_raw(code)
 
-        # ------------------------------------------------------------------ #
         # Decorators                                                         #
-        # ------------------------------------------------------------------ #
         decorators: list[str] = []
         if wrapper.type == "decorated_definition":
             for child in wrapper.children:
@@ -350,14 +327,12 @@ class PythonCodeParser(AbstractCodeParser):
                 node,
             )
 
-        # ------------------------------------------------------------------ #
         # Parameters                                                         #
-        # ------------------------------------------------------------------ #
         parameters: list[SymbolParameter] = []
         param_node = node.child_by_field_name("parameters")
         if param_node is not None:
             for ch in param_node.children:
-                # Basic identifiers  ───────────────────────────────────────
+                # Basic identifiers
                 if ch.type == "identifier":
                     parameters.append(
                         SymbolParameter(
@@ -367,7 +342,7 @@ class PythonCodeParser(AbstractCodeParser):
                             doc=None,
                         )
                     )
-                # Typed parameter      (`x: int`)  ─────────────────────────
+                # Typed parameter (`x: int`)
                 elif ch.type == "typed_parameter":
                     name_node = ch.child_by_field_name("name")
                     type_node = ch.child_by_field_name("type")
@@ -381,9 +356,7 @@ class PythonCodeParser(AbstractCodeParser):
                     )
                 # *args / **kwargs etc. can be added later; ignore for now.
 
-        # ------------------------------------------------------------------ #
         # Return-type annotation                                             #
-        # ------------------------------------------------------------------ #
         return_type: str | None = None
         ret_node = node.child_by_field_name("return_type")
         if ret_node is not None:
@@ -397,9 +370,7 @@ class PythonCodeParser(AbstractCodeParser):
             decorators=decorators,
         )
 
-    # ---------------------------------------------------------------------
     # Constant helpers
-    # ---------------------------------------------------------------------
     _CONST_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
     @classmethod
@@ -516,13 +487,11 @@ class PythonCodeParser(AbstractCodeParser):
         body_children = block.children if block is not None else node.children
 
         for child in body_children:
-            # ------------------------------------------------------------
             # Tree-sitter encloses every class-body element in a `statement`
             # node.  Decorated methods therefore appear as
             #   statement → decorated_definition → function_definition
             # Unwrap that extra layer so decorated (and other) members are
             # detected correctly.
-            # ------------------------------------------------------------
             nodes = child.children if child.type == "statement" else (child,)
 
             for node in nodes:
@@ -717,9 +686,7 @@ class PythonCodeParser(AbstractCodeParser):
         nesting is ignored.
         """
 
-        # ----------------------------------------------------------------------
         # visit every first-level block (try, except, else, finally)
-        # ----------------------------------------------------------------------
         for child in node.children:
             # plain `block`
             if child.type == "block":
@@ -732,9 +699,7 @@ class PythonCodeParser(AbstractCodeParser):
                     for grand in blk.children:
                         self._process_node(grand)
 
-    # ------------------------------------------------------------------ #
     # Module-resolution helper                                           #
-    # ------------------------------------------------------------------ #
     def _locate_module_path(self, import_path: str) -> Optional[Path]:
         """
         Return the *absolute* Path of the *deepest* package/module that matches
@@ -763,14 +728,14 @@ class PythonCodeParser(AbstractCodeParser):
             if any(seg in _VENV_DIRS for seg in base.parts):
                 continue
 
-            # --- 1) concrete module file (preferred) ------------------------
+            # 1) concrete module file (preferred)
             for suffix in _MODULE_SUFFIXES:
                 file_candidate = base.with_suffix(suffix)
                 if file_candidate.exists():
                     found = file_candidate
                     break  # no need to check package dir for this idx
             else:
-                # --- 2) package directory ----------------------------------
+                # 2) package directory
                 if base.is_dir() and (base / "__init__.py").exists():
                     found = base / "__init__.py"
 
@@ -786,9 +751,7 @@ class PythonCodeParser(AbstractCodeParser):
     def _is_local_import(self, import_path: str) -> bool:
         return self._locate_module_path(import_path) is not None
 
-    # ------------------------------------------------------------------
     # Outgoing symbol-reference (call) collector
-    # ------------------------------------------------------------------
     def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
         """
         Walk *root* recursively, record every call-expression as
@@ -805,7 +768,7 @@ class PythonCodeParser(AbstractCodeParser):
                     simple_name = full_name.split(".")[-1]           # keep only final identifier
                     raw = node.text.decode("utf8")
 
-                    # --- best-effort import-resolution -------------------
+                    # best-effort import-resolution
                     to_pkg_path: str | None = None
                     for imp in self.parsed_file.imports:
                         if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
@@ -876,13 +839,9 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         def _emit_docstring(ds: str, base_indent: str) -> None:
             if skip_docs:
                 return
-            ds_lines = ds.strip().splitlines()
-            if len(ds_lines) == 1:
-                lines.append(f'{base_indent}{ds_lines[0].strip()}')
-            else:
-                lines.append(f'{base_indent}' + ds_lines[0].strip())
-                for l in ds_lines[1:]:
-                    lines.append(f"{base_indent}{l.strip()}")
+            ds_lines = ds.splitlines()
+            for l in ds_lines:
+                lines.append(f"{base_indent}{l}")
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
             if not skip_docs and sym.docstring:
