@@ -16,6 +16,7 @@ from know.models import (
     SymbolMetadata,
     ImportEdge,
     SymbolRefType,
+    FileMetadata,
 )
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
@@ -1148,3 +1149,34 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}}}")
 
         return "\n".join(lines)
+
+    # ─────────────────────────────────────────────────────────────
+    #  new file-header helper
+    # ─────────────────────────────────────────────────────────────
+    def get_file_header(
+        self,
+        project: Project,
+        fm: FileMetadata,
+        skip_docs: bool = False,
+    ) -> Optional[str]:
+        """
+        Always emit the canonical `package <name>` line.
+        Package name is resolved via PackageMetadata when available
+        and falls back to the file’s directory name.
+        """
+        pkg_name: str | None = None
+
+        # try repository lookup first
+        pkg_id = getattr(fm, "package_id", None)
+        if pkg_id:
+            pkg_meta = project.data_repository.package.get_by_id(pkg_id)
+            if pkg_meta is not None:
+                pkg_name = getattr(pkg_meta, "name", None) or (
+                    pkg_meta.virtual_path.split("/")[-1] if getattr(pkg_meta, "virtual_path", None) else None
+                )
+
+        # fallback – derive from path
+        if not pkg_name:
+            pkg_name = os.path.dirname(fm.path).replace("\\", "/").split("/")[-1] or "main"
+
+        return f"package {pkg_name}"

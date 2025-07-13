@@ -17,6 +17,7 @@ from know.models import (
     SymbolMetadata,
     ImportEdge,
     SymbolRefType,
+    FileMetadata,
 )
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
@@ -924,6 +925,24 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             _emit_docstring(sym.docstring, IND)
 
         return "\n".join(lines)
+
+    # ─────────────────────────────────────────────────────────────
+    #  new file-header helper
+    # ─────────────────────────────────────────────────────────────
+    def get_file_header(
+        self,
+        project: Project,
+        fm: FileMetadata,
+        skip_docs: bool = False,
+    ) -> Optional[str]:
+        """
+        For Python emit the module-level docstring (first statement
+        in file) unless docs are suppressed.
+        """
+        if skip_docs:
+            return None
+        doc = getattr(fm, "docstring", None)
+        return doc.strip() if doc else None
 
     def get_import_summary(self, imp: ImportEdge) -> str:
         """

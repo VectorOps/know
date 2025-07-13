@@ -172,6 +172,21 @@ class AbstractLanguageHelper(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_file_header(
+        self,
+        project: Project,
+        file_meta: FileMetadata,
+        skip_docs: bool = False,
+    ) -> Optional[str]:
+        """
+        Return a one-liner to be placed at the very beginning of a file
+        summary (or ``None`` when nothing should be emitted).
+        • Go   → «package <name>»
+        • Py   → module docstring (when present and not skipped)
+        """
+        pass
+
 
 class CodeParserRegistry:
     """

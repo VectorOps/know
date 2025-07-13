@@ -66,6 +66,11 @@ def build_file_summary(
         logger.warning("File not found in repository – skipped.", path=rel_path)
         return None
 
+    # file header --------------------------------------------------------
+    header_line: Optional[str] = None
+    if helper:
+        header_line = helper.get_file_header(project, fm, skip_docs=skip_docs)
+
     # imports ------------------------------------------------------------
     import_edges = edge_repo.get_list_by_source_package_id(fm.package_id) if fm.package_id else []
     helper: AbstractLanguageHelper | None = CodeParserRegistry.get_helper(fm.language) if fm.language else None
@@ -86,6 +91,8 @@ def build_file_summary(
 
     # join sections ------------------------------------------------------
     sections: list[str] = []
+    if header_line:
+        sections.append(header_line)
     if import_lines:
         sections.append("\n".join(import_lines))
     if content_blocks:
