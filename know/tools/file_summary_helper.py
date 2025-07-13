@@ -68,12 +68,12 @@ def build_file_summary(
 
     # file header --------------------------------------------------------
     header_line: Optional[str] = None
+    helper: AbstractLanguageHelper | None = CodeParserRegistry.get_helper(fm.language) if fm.language else None
     if helper:
         header_line = helper.get_file_header(project, fm, skip_docs=skip_docs)
 
     # imports ------------------------------------------------------------
     import_edges = edge_repo.get_list_by_source_package_id(fm.package_id) if fm.package_id else []
-    helper: AbstractLanguageHelper | None = CodeParserRegistry.get_helper(fm.language) if fm.language else None
     import_lines = (
         [helper.get_import_summary(e) for e in import_edges] if helper
         else [_import_to_text(e) for e in import_edges]
