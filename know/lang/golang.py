@@ -1048,5 +1048,6 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
             lines.append(f"{IND}    ...")
+            lines.append(f"{IND}}}")             # ← NEW – close the stub body
 
         return "\n".join(lines)
