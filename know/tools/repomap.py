@@ -419,15 +419,15 @@ class RepoMapTool(BaseTool):
             summary = None
             summary_tokens = 0
 
-            if need_summary:
-                fs = build_file_summary(
-                    project,
-                    path,
-                    skip_docs=skip_docs,
-                )
-                summary = fs.definitions if fs else None
-                if summary and token_limit_count and token_limit_model:
-                    summary_tokens = _count_tokens(summary, token_limit_model)
+            effective_mode = SummaryMode.Skip if not need_summary else summary_mode
+            fs = build_file_summary(
+                project,
+                path,
+                effective_mode,
+            )
+            summary = fs.definitions if fs else None
+            if summary and token_limit_count and token_limit_model:
+                summary_tokens = _count_tokens(summary, token_limit_model)
 
             # -- enforce token budget ---------------------------------------
             if token_limit_count and token_limit_model:
