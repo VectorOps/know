@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from dataclasses import dataclass, field
+import time                                  # NEW
 
 from know.project import ScanResult            # NEW – moved there
 from know.helpers import compute_file_hash, generate_id, parse_gitignore
@@ -140,6 +141,7 @@ def scan_project_directory(project: Project) -> ScanResult:
           Any exception raised is caught and logged at ERROR (with stack-trace).
     Returns a ScanResult object describing added/updated/deleted files.
     """
+    start_time = time.perf_counter()          # NEW – measure duration
     result = ScanResult()
     root_path: str | None = project.settings.project_path
     if not root_path:
@@ -266,6 +268,10 @@ def scan_project_directory(project: Project) -> ScanResult:
 
     schedule_missing_embeddings(project)
     schedule_outdated_embeddings(project)
+
+    duration = time.perf_counter() - start_time          # NEW
+    logger.debug("scan_project_directory finished.",
+                 duration=f"{duration:.3f}s")            # NEW
 
     return result
 
