@@ -661,54 +661,65 @@ class GolangCodeParser(AbstractCodeParser):
         iface_node,
         parent_sym: ParsedSymbol,
     ) -> None:
-        # iterate over possible method_spec nodes
-        for m in iface_node.children:
-            print(m)
-            if m.type != "method_spec":
-                continue
+        """
+        Collect interface members (methods) and add them as children of *parent_sym*.
+        Supports both ‘method_spec’ (current tree-sitter-go) and ‘method_elem’
+        (older grammar), regardless of whether they are wrapped in a
+        ‘method_spec_list’ node.
+        """
+        def walk(node):
+            if node.type in ("method_spec", "method_elem"):
+                self._register_interface_method(node, parent_sym)
+            else:
+                for ch in node.children:
+                    walk(ch)
 
-            ident = next((c for c in m.children if c.type == "identifier"), None)
-            if ident is None:
-                continue
-            mname = ident.text.decode("utf8")
+        walk(iface_node)
 
-            param_node = next((c for c in m.children if c.type == "parameter_list"), None)
-            result_node = None
-            if param_node is not None:
-                nxt = param_node.next_sibling
-                while nxt and nxt.type == "comment":
-                    nxt = nxt.next_sibling
-                if nxt and nxt.type not in ("comment",):
-                    result_node = nxt
-            signature_obj = (
-                self._build_function_signature(param_node, result_node)
-                if param_node is not None
-                else None
-            )
+    def _register_interface_method(self, m, parent_sym: ParsedSymbol) -> None:
+        ident = next((c for c in m.children if c.type in ("identifier", "field_identifier")), None)
+        if ident is None:
+            return
+        mname = ident.text.decode("utf8")
 
-            start_b, end_b = m.start_byte, m.end_byte
-            body_bytes = self.source_bytes[start_b:end_b]
-            body_str = body_bytes.decode("utf8", errors="replace")
+        param_node  = next((c for c in m.children if c.type == "parameter_list"), None)
+        result_node = None
+        if param_node is not None:
+            nxt = param_node.next_sibling
+            while nxt and nxt.type == "comment":
+                nxt = nxt.next_sibling
+            if nxt and nxt.type not in ("comment",):
+                result_node = nxt
 
-            child = ParsedSymbol(
-                name=mname,
-                fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
-                body=body_str,
-                key=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
-                hash=compute_symbol_hash(body_bytes),
-                kind=SymbolKind.METHOD,
-                start_line=m.start_point[0] + 1,
-                end_line=m.end_point[0] + 1,
-                start_byte=start_b,
-                end_byte=end_b,
-                visibility=Visibility.PUBLIC if mname[0].isupper() else Visibility.PRIVATE,
-                modifiers=[],
-                docstring=self._extract_preceding_comment(m),
-                signature=signature_obj,
-                comment=None,
-                children=[],
-            )
-            parent_sym.children.append(child)
+        signature_obj = (
+            self._build_function_signature(param_node, result_node)
+            if param_node is not None
+            else None
+        )
+
+        start_b, end_b = m.start_byte, m.end_byte
+        body_bytes = self.source_bytes[start_b:end_b]
+        body_str   = body_bytes.decode("utf8", errors="replace")
+
+        child = ParsedSymbol(
+            name=mname,
+            fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
+            body=body_str,
+            key=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
+            hash=compute_symbol_hash(body_bytes),
+            kind=SymbolKind.METHOD,
+            start_line=m.start_point[0] + 1,
+            end_line=m.end_point[0] + 1,
+            start_byte=start_b,
+            end_byte=end_b,
+            visibility=Visibility.PUBLIC if mname[0].isupper() else Visibility.PRIVATE,
+            modifiers=[],
+            docstring=self._extract_preceding_comment(m),
+            signature=signature_obj,
+            comment=None,
+            children=[],
+        )
+        parent_sym.children.append(child)
 
     def _handle_type_declaration(self, node):
         """
