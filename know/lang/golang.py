@@ -1020,9 +1020,10 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             if sym.signature and sym.signature.raw:
                 sig = sym.signature.raw.strip()
             header = f"func {sym.name}{sig}"
-            if not header.endswith("{{"):
+            if not header.endswith("{"):
                 header += " {"
-        elif sym.kind == SymbolKind.CLASS:          # struct
+            lines.append(f"{IND}{header}")
+        elif sym.kind == SymbolKind.CLASS:
             header = f"type {sym.name} struct {{"
             lines.append(f"{IND}{header}")
             in_body = [c for c in getattr(sym, "children", []) if c.kind != SymbolKind.METHOD]
