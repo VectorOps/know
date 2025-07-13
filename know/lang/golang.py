@@ -1045,8 +1045,8 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         elif sym.kind == SymbolKind.CLASS:
             header = f"type {sym.name} struct {{"
             lines.append(f"{IND}{header}")
-            in_body = [c for c in getattr(sym, "children", []) if c.kind != SymbolKind.METHOD]
-            methods = [c for c in getattr(sym, "children", []) if c.kind == SymbolKind.METHOD]
+            in_body = [c for c in sym.children if c.kind != SymbolKind.METHOD]
+            methods = [c for c in sym.children if c.kind == SymbolKind.METHOD]
             for child in in_body:
                 lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
             lines.append(f"{IND}}}")
@@ -1062,9 +1062,14 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}}}")
             return "\n".join(lines)
         else:
-            # constants / vars etc. – first line of body
-            header = (getattr(sym, "symbol_body", "") or "").splitlines()[0].rstrip()
-            lines.append(f"{IND}{header}")
+            body_line = (sym.symbol_body or "").splitlines()[0].rstrip()
+
+            if sym.kind == SymbolKind.CONSTANT and not body_line.startswith("const"):
+                body_line = f"const {body_line}"
+            elif sym.kind == SymbolKind.VARIABLE and not body_line.startswith("var"):
+                body_line = f"var {body_line}"
+
+            lines.append(f"{IND}{body_line}")
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
             lines.append(f"{IND}    ...")
