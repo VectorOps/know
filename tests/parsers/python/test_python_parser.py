@@ -69,8 +69,7 @@ def test_python_parser_on_simple_file():
     # Top-level symbols
     # ------------------------------------------------------------------ #
     # Expected symbols: CONST, fn, _foo, decorated, double_decorated, Test, Foobar, async_fn, ellipsis_fn
-    # at least the nine symbols we explicitly test for
-    assert len(parsed_file.symbols) >= 9
+    assert len(parsed_file.symbols) == 9
     top_level = {sym.name: sym for sym in parsed_file.symbols}
 
     # Constant
