@@ -18,7 +18,7 @@ def test_python_project_scan_populates_repositories():
     repo_meta = project.get_repo()
 
     # ── files ────────────────────────────────────────────────────────────
-    files = repo_store.file.get_list_by_repo_id(repo_meta.id)
+    files = repo_store.file.get_list(FileFilter(repo_id=repo_meta.id))
     assert len(files) == 4
 
     # ── packages ─────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ def test_python_project_scan_populates_repositories():
 
     # ── symbols (spot-check method.go) ───────────────────────────────────
     simple_meta = next(f for f in files if f.path == "m/method.go")
-    symbols = repo_store.symbol.get_list_by_package_id(simple_meta.package_id)
+    symbols = repo_store.symbol.get_list(SymbolFilter(package_id=simple_meta.package_id))
     symbol_names = {s.name for s in symbols}
 
     assert {"foobar"}.issubset(symbol_names)
