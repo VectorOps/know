@@ -4,6 +4,12 @@ import pytest
 from know.project import Project, ProjectCache
 from know.settings import ProjectSettings
 from know.scanner import ParsingState, upsert_parsed_file, scan_project_directory
+from know.data import (
+    PackageFilter,
+    FileFilter,
+    SymbolFilter,
+    ImportFilter,
+)
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
 from know.models import RepoMetadata
@@ -88,18 +94,18 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     repo_meta  = project.get_repo()
 
     # expect exactly two packages / files (one per source file)
-    packages = rs.package.get_list_by_repo_id(repo_meta.id)
+    packages = rs.package.get_list(PackageFilter(repo_id=repo_meta.id))
     assert len(packages) == 2
     pkg_id_mod1 = next(p.id for p in packages if p.physical_path == "mod.py" or p.virtual_path.endswith("mod"))
     pkg_id_mod2 = next(p.id for p in packages if p.physical_path == "mod2.py" or p.virtual_path.endswith("mod2"))
 
-    files = rs.file.get_list_by_repo_id(repo_meta.id)
+    files = rs.file.get_list(FileFilter(repo_id=repo_meta.id))
     assert len(files) == 2
     file_id = next(f.id for f in files if f.path == "mod.py")
     file_id_mod2 = next(f.id for f in files if f.path == "mod2.py")
 
     # symbols: CONST + foo
-    symbols = rs.symbol.get_list_by_file_id(file_id)
+    symbols = rs.symbol.get_list(SymbolFilter(file_id=file_id))
     names   = {s.name for s in symbols}
     assert names == {"CONST", "foo"}
 
@@ -109,7 +115,7 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     foo_sig_before = foo_before.signature.raw if foo_before.signature else None
 
     # import-edge created for 'import os'
-    edges = rs.importedge.get_list_by_source_package_id(pkg_id_mod1)
+    edges = rs.importedge.get_list(ImportFilter(source_package_id=pkg_id_mod1))
     assert len(edges) == 1
 
     # ── 2) second version  → UPDATE / DELETE paths ─────────────────────────
@@ -120,11 +126,11 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     upsert_parsed_file(project, state, parsed_v2)
 
     # packages / files unchanged (update, not duplicate)
-    assert len(rs.package.get_list_by_repo_id(repo_meta.id)) == 2
-    assert len(rs.file.get_list_by_repo_id(repo_meta.id))    == 2
+    assert len(rs.package.get_list(PackageFilter(repo_id=repo_meta.id))) == 2
+    assert len(rs.file.get_list(FileFilter(repo_id=repo_meta.id)))    == 2
 
     # symbols: only foo remains, id should be SAME, hash should be different
-    symbols_after = rs.symbol.get_list_by_file_id(file_id)
+    symbols_after = rs.symbol.get_list(SymbolFilter(file_id=file_id))
     assert {s.name for s in symbols_after} == {"foo"}
 
     foo_after = symbols_after[0]
@@ -133,14 +139,14 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     assert foo_after.signature.raw != foo_sig_before
 
     # import-edges: removed
-    assert rs.importedge.get_list_by_source_package_id(pkg_id_mod1) == []
+    assert rs.importedge.get_list(ImportFilter(source_package_id=pkg_id_mod1)) == []
 
     # ── 3) delete second file and rescan  ─────────────────────────────────
     module2_fp.unlink()
     scan_project_directory(project)
 
     # Only mod.py-related metadata should remain
-    assert len(rs.file.get_list_by_repo_id(repo_meta.id)) == 1
-    assert len(rs.package.get_list_by_repo_id(repo_meta.id)) == 1
+    assert len(rs.file.get_list(FileFilter(repo_id=repo_meta.id))) == 1
+    assert len(rs.package.get_list(PackageFilter(repo_id=repo_meta.id))) == 1
     # Confirm mod2 file metadata truly deleted
     assert rs.file.get_by_id(file_id_mod2) is None
