@@ -23,6 +23,7 @@ from know.data import (
     SymbolFilter,
     include_direct_descendants,
 )
+from know.data import SymbolRefFilter
 from dataclasses import dataclass, field
 import math
 import numpy as np
@@ -315,6 +316,15 @@ class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
     def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
         with self._lock:
             return [r for r in self._items.values() if r.repo_id == repo_id]
+
+    def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
+        with self._lock:
+            return [
+                r for r in self._items.values()
+                if (not flt.file_id    or r.file_id    == flt.file_id)
+                and (not flt.package_id or r.package_id == flt.package_id)
+                and (not flt.repo_id    or r.repo_id    == flt.repo_id)
+            ]
 
     # NEW ---------------------------------------------------------------
     def delete_by_file_id(self, file_id: str) -> int:

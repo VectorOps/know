@@ -33,6 +33,7 @@ from know.data import (
     SymbolFilter,
     ImportFilter,
 )
+from know.data import SymbolRefFilter
 
 T = TypeVar("T")
 
@@ -442,6 +443,26 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
     def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
         rows = _row_to_dict(self.cursor().execute(
             "SELECT * FROM symbol_refs WHERE repo_id = ?", [repo_id]))
+        return [SymbolRef(**r) for r in rows]
+
+    def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
+        """
+        Return all SymbolRef rows that satisfy *flt*.
+        Supports filtering by file_id, package_id and/or repo_id.
+        """
+        where, params = [], []
+        if flt.file_id:
+            where.append("file_id = ?")
+            params.append(flt.file_id)
+        if flt.package_id:
+            where.append("package_id = ?")
+            params.append(flt.package_id)
+        if flt.repo_id:
+            where.append("repo_id = ?")
+            params.append(flt.repo_id)
+
+        sql = f"SELECT * FROM {self.table}" + (" WHERE " + " AND ".join(where) if where else "")
+        rows = _row_to_dict(self.cursor().execute(sql, params))
         return [SymbolRef(**r) for r in rows]
 
     # NEW ---------------------------------------------------------------
