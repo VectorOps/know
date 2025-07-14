@@ -269,6 +269,8 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
 
+from know.data import ImportFilter
+
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.edges, tables.lock)
@@ -288,7 +290,6 @@ class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractI
             return [edge for edge in self._items.values() if edge.repo_id == repo_id]
 
     def get_list(self, flt: ImportFilter) -> list[ImportEdge]:      # NEW
-        from know.data import ImportFilter
         with self._lock:
             return [
                 edge for edge in self._items.values()
