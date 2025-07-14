@@ -12,7 +12,7 @@ from know.models import (
 )
 from typing import Dict, Any
 import uuid
-from know.data import SymbolSearchQuery
+from know.data import SymbolSearchQuery, PackageFilter, FileFilter, SymbolFilter, ImportFilter
 
 
 def make_id() -> str:
@@ -58,16 +58,16 @@ def test_package_metadata_repository(data_repo):
 
     assert pkg_repo.get_by_virtual_path("pkg/used").id == used_id
     assert pkg_repo.get_by_physical_path("pkg/used.go").id == used_id
-    assert {p.id for p in pkg_repo.get_list_by_repo_id(rid)} == {orphan_id, used_id}
+    assert {p.id for p in pkg_repo.get_list(PackageFilter(repo_id=rid))} == {orphan_id, used_id}
     # delete_orphaned should remove only the orphan package
     assert pkg_repo.delete_orphaned() == 1
     assert pkg_repo.get_by_id(orphan_id) is None
     assert pkg_repo.get_by_id(used_id) is not None
-    assert [p.id for p in pkg_repo.get_list_by_repo_id(rid)] == [used_id]
+    assert [p.id for p in pkg_repo.get_list(PackageFilter(repo_id=rid))] == [used_id]
     # update / delete
     assert pkg_repo.update(used_id, {"name": "renamed"}).name == "renamed"
     assert pkg_repo.delete(used_id) is True
-    assert pkg_repo.get_list_by_repo_id(rid) == []
+    assert pkg_repo.get_list(PackageFilter(repo_id=rid)) == []
 
 
 def test_file_metadata_repository(data_repo):
@@ -77,8 +77,8 @@ def test_file_metadata_repository(data_repo):
 
     file_repo.create(obj)
     assert file_repo.get_by_path("src/file.py") == obj
-    assert file_repo.get_list_by_repo_id(rid) == [obj]
-    assert file_repo.get_list_by_package_id(pid) == [obj]
+    assert file_repo.get_list(FileFilter(repo_id=rid)) == [obj]
+    assert file_repo.get_list(FileFilter(package_id=pid)) == [obj]
     assert file_repo.update(fid, {"path": "src/other.py"}).path == "src/other.py"
     assert file_repo.delete(fid) is True
 
@@ -112,7 +112,7 @@ def test_symbol_metadata_repository(data_repo):
 
     # read back (by id and by file_id) and ensure signature persisted
     assert sym_repo.get_by_id(sid).signature == signature
-    assert sym_repo.get_list_by_file_id(fid)[0].signature == signature
+    assert sym_repo.get_list(SymbolFilter(file_id=fid))[0].signature == signature
 
     # update signature
     new_sig = SymbolSignature(raw="def sym()")
@@ -127,11 +127,11 @@ def test_import_edge_repository(data_repo):
     rid, eid, fid, from_pid = make_id(), make_id(), make_id(), make_id()
     edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, from_file_id=fid, to_package_path="pkg/other", raw="import pkg.other", external=False))
 
-    assert edge_repo.get_list_by_source_package_id(from_pid)[0].id == eid
-    assert edge_repo.get_list_by_repo_id(rid)[0].id == eid
+    assert edge_repo.get_list(ImportFilter(source_package_id=from_pid))[0].id == eid
+    assert edge_repo.get_list(ImportFilter(repo_id=rid))[0].id == eid
     assert edge_repo.update(eid, {"alias": "aliaspkg"}).alias == "aliaspkg"
     assert edge_repo.delete(eid) is True
-    assert edge_repo.get_list_by_repo_id(rid) == []
+    assert edge_repo.get_list(ImportFilter(repo_id=rid)) == []
 
 
 def test_symbol_search(data_repo):
