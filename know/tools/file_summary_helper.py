@@ -8,6 +8,7 @@ from know.project import Project
 from know.models import ImportEdge, Visibility, SymbolMetadata
 from know.tools.base import SummaryMode
 import os
+from know.data import ImportFilter, SymbolFilter
 
 class FileSummary(BaseModel):
     path: str
@@ -73,14 +74,16 @@ def build_file_summary(
         header_line = helper.get_file_header(project, fm, skip_docs=skip_docs)
 
     # imports ------------------------------------------------------------
-    import_edges = edge_repo.get_list_by_source_file_id(fm.id)
+-    import_edges = edge_repo.get_list_by_source_file_id(fm.id)
++    import_edges = edge_repo.get_list(ImportFilter(source_file_id=fm.id))
     import_lines = (
         [helper.get_import_summary(e) for e in import_edges] if helper
         else [_import_to_text(e) for e in import_edges]
     )
 
     # symbols ------------------------------------------------------------
-    symbols = symbol_repo.get_list_by_file_id(fm.id)
+-    symbols = symbol_repo.get_list_by_file_id(fm.id)
++    symbols = symbol_repo.get_list(SymbolFilter(file_id=fm.id))
     top_level = [s for s in symbols if s.parent_ref is None]
     top_level.sort(key=lambda s: (s.start_line, s.start_col))
 
