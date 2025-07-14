@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from know.project import Project
 from know.models import ProgrammingLanguage
+from know.data import FileFilter
 from .base import BaseTool
 
 
@@ -26,7 +27,7 @@ class ListFilesTool(BaseTool):
         """
         Return all project files whose *path* matches at least one of the
         supplied glob *patterns* (fnmatch-style).
-        If *patterns* is None / empty → return every file.
+        If *patterns* is None / empty → return an empty list.
 
         Parameters
         ----------
@@ -41,7 +42,7 @@ class ListFilesTool(BaseTool):
         """
         repo_id = project.get_repo().id
         file_repo = project.data_repository.file
-        all_files = file_repo.get_list_by_repo_id(repo_id)
+        all_files = file_repo.get_list(FileFilter(repo_id=repo_id))
 
         pats = list(patterns) if patterns else []
         if not pats:
