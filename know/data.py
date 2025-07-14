@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
 from know.models import (
     RepoMetadata,
@@ -43,6 +43,12 @@ class AbstractRepoMetadataRepository(ABC):
         """Get a repo by its root path."""
         pass
 
+
+@dataclass
+class PackageFilter:
+    repo_id: Optional[str] = None
+
+
 class AbstractPackageMetadataRepository(ABC):
     @abstractmethod
     def get_by_id(self, package_id: str) -> Optional[PackageMetadata]:
@@ -53,7 +59,7 @@ class AbstractPackageMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
+    def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
         pass
 
     @abstractmethod
@@ -64,6 +70,10 @@ class AbstractPackageMetadataRepository(ABC):
     @abstractmethod
     def get_by_virtual_path(self, root_path: str) -> Optional[RepoMetadata]:
         """Get a repo by its root path."""
+        pass
+
+    @abstractmethod
+    def delete_orphaned(self) -> int:
         pass
 
     @abstractmethod
@@ -78,11 +88,12 @@ class AbstractPackageMetadataRepository(ABC):
     def delete(self, package_id: str) -> bool:
         pass
 
-    @abstractmethod
-    def delete_orphaned(
-        self,
-    ) -> int:
-        pass
+
+@dataclass
+class FileFilter:
+    repo_id: Optional[str] = None
+    package_id: Optional[str] = None
+
 
 class AbstractFileMetadataRepository(ABC):
     @abstractmethod
@@ -111,17 +122,18 @@ class AbstractFileMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
-        """Return **all** FileMetadata instances that belong to *repo_id*."""
-        pass
-
-    @abstractmethod
-    def get_list_by_package_id(self, package_id: str) -> list[FileMetadata]:
-        """Return **all** FileMetadata instances that belong to *package_id*."""
+    def get_list(self, flt: FileFilter) -> list[FileMetadata]:
         pass
 
 
 # Symbols
+@dataclass
+class SymbolFilter:
+    parent_ids: Optional[List[str]] = None
+    file_id: Optional[str] = None
+    package_id: Optional[str] = None
+
+
 @dataclass
 class SymbolSearchQuery:
     # Filter by symbol name
@@ -151,7 +163,10 @@ class AbstractSymbolMetadataRepository(ABC):
     def get_by_id(self, symbol_id: str) -> Optional[SymbolMetadata]:
         pass
 
-    # bulk-delete ---------------------------------------------------
+    @abstractmethod
+    def get_list_by_ids(self, item_ids: list[str]) -> list[SymbolMetadata]:
+        pass
+
     @abstractmethod
     def delete_by_file_id(self, file_id: str) -> int:
         """
@@ -161,19 +176,7 @@ class AbstractSymbolMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
-        pass
-
-    @abstractmethod
-    def get_list_by_parent_ids(self, parent_ids: list[str]) -> list[SymbolMetadata]:
-        pass
-
-    @abstractmethod
-    def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
-        pass
-
-    @abstractmethod
-    def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
+    def get_list(self, flt: SymbolFilter) -> list[SymbolMetadata]:
         pass
 
     @abstractmethod
@@ -192,6 +195,14 @@ class AbstractSymbolMetadataRepository(ABC):
     def delete(self, symbol_id: str) -> bool:
         pass
 
+
+@dataclass
+class ImportFilter:
+    source_package_id: Optional[str] = None
+    source_file_id: Optional[str] = None
+    repo_id: Optional[str] = None
+
+
 class AbstractImportEdgeRepository(ABC):
     @abstractmethod
     def get_by_id(self, edge_id: str) -> Optional[ImportEdge]:
@@ -202,15 +213,7 @@ class AbstractImportEdgeRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_source_file_id(self, package_id: str) -> list[ImportEdge]:
-        pass
-
-    @abstractmethod
-    def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
-        pass
-
-    @abstractmethod
-    def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
+    def get_list(self, flt: ImportFilter) -> list[ImportEdge]:
         pass
 
     @abstractmethod
@@ -225,6 +228,14 @@ class AbstractImportEdgeRepository(ABC):
     def delete(self, edge_id: str) -> bool:
         pass
 
+
+@dataclass
+class SymbolRefFilter:
+    file_id: Optional[str] = None
+    package_id: Optional[str] = None
+    repo_id: Optional[str] = None
+
+
 class AbstractSymbolRefRepository(ABC):
     @abstractmethod
     def get_by_id(self, ref_id: str) -> Optional[SymbolRef]:
@@ -235,15 +246,7 @@ class AbstractSymbolRefRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
-        pass
-
-    @abstractmethod
-    def get_list_by_package_id(self, package_id: str) -> list[SymbolRef]:
-        pass
-
-    @abstractmethod
-    def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
+    def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
         pass
 
     @abstractmethod
@@ -325,7 +328,7 @@ def include_direct_descendants(
 
     parent_ids = [s.id for s in symbols if s.id]
     if parent_ids:
-        children = repo.get_list_by_parent_ids(parent_ids)
+        children = repo.get_list(SymbolFilter(parent_ids=parent_ids))
         seen_ids = {s.id for s in symbols}
         for c in children:
             if c.id not in seen_ids:
