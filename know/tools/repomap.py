@@ -19,6 +19,7 @@ from know.project import Project, ScanResult, ProjectComponent
 from know.models import SymbolMetadata, Visibility
 from know.tools.base import BaseTool
 from know.tools.file_summary_helper import build_file_summary
+from know.data import FileFilter, SymbolFilter, SymbolRefFilter
 
 
 # ---------------------------------------------------------------------
@@ -202,18 +203,18 @@ class RepoMap(ProjectComponent):
         self._name_props.clear()
         self._path_to_fid.clear()
 
-        for fm in file_repo.get_list_by_repo_id(repo_id):
+        for fm in file_repo.get_list(FileFilter(repo_id=repo_id)):
             path, fid = fm.path, fm.id
             self._path_to_fid[path] = fid
 
             # defs
-            for sym in symbol_repo.get_list_by_file_id(fid):
+            for sym in symbol_repo.get_list(SymbolFilter(file_id=fid)):
                 if sym.name:
                     self._defs[sym.name].add(path)
                     self._name_props[sym.name] = self._make_props(sym)
 
             # refs
-            for ref in symbolref_repo.get_list_by_file_id(fid):
+            for ref in symbolref_repo.get_list(SymbolRefFilter(file_id=fid)):
                 if ref.name:
                     self._refs[ref.name].add(path)
 
@@ -259,12 +260,12 @@ class RepoMap(ProjectComponent):
                 refs.discard(path)
 
             # rebuild caches for this path
-            for sym in symbol_repo.get_list_by_file_id(fid):
+            for sym in symbol_repo.get_list(SymbolFilter(file_id=fid)):
                 if sym.name:
                     self._defs[sym.name].add(path)
                     self._name_props[sym.name] = self._make_props(sym)
 
-            for ref in symbolref_repo.get_list_by_file_id(fid):
+            for ref in symbolref_repo.get_list(SymbolRefFilter(file_id=fid)):
                 if ref.name:
                     self._refs[ref.name].add(path)
 
