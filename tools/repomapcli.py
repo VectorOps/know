@@ -10,6 +10,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from know.settings import ProjectSettings, EmbeddingSettings
 from know.project import init_project
 from know.tools.base import ToolRegistry
+from know.data import FileFilter
 from know.logger import logger
 
 import logging
@@ -116,7 +117,9 @@ def main() -> None:
                 elif cmd == "/files":
                     repo_id = project.get_repo().id
                     paths = sorted(
-                        f.path for f in project.data_repository.file.get_list_by_repo_id(repo_id)
+                        f.path for f in project.data_repository.file.get_list(
+                            FileFilter(repo_id=repo_id)
+                        )
                     )
                     for p in paths: print(p)
                     print(f"{len(paths)} file(s)")
