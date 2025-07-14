@@ -238,7 +238,8 @@ def scan_project_directory(project: Project) -> ScanResult:
     repo_id     = project.get_repo().id
 
     # All FileMetadata currently stored for this repo
-    existing_files = file_repo.get_list_by_repo_id(repo_id)
+    from know.data import FileFilter
+    existing_files = file_repo.get_list(FileFilter(repo_id=repo_id))
 
     for fm in existing_files:
         if fm.path not in processed_paths:
@@ -252,6 +253,7 @@ def scan_project_directory(project: Project) -> ScanResult:
     # ------------------------------------------------------------------
     #  Remove PackageMetadata entries that lost all their files
     # ------------------------------------------------------------------
+    from know.data import PackageFilter
     package_repo = project.data_repository.package
     removed_pkgs = package_repo.delete_orphaned()
     if removed_pkgs:
@@ -461,6 +463,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     to the most specific class / interface (incl. Go struct) in the
     same package, based on FQN prefix matching.
     """
+    from know.data import SymbolFilter
     symbol_repo = project.data_repository.symbol
     repo_id = project.get_repo().id
 
