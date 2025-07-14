@@ -30,6 +30,7 @@ from know.data import (
     SymbolSearchQuery,
     PackageFilter,              # ← NEW
     include_direct_descendants,
+    SymbolFilter,
 )
 
 T = TypeVar("T")
@@ -153,11 +154,6 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         rows = _row_to_dict(self.cursor().execute("SELECT * FROM packages WHERE virtual_path = ?", [path]))
         return PackageMetadata(**rows[0]) if rows else None
 
-    def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
-        rows = _row_to_dict(self.cursor().execute(
-            "SELECT * FROM packages WHERE repo_id = ?", [repo_id]))
-        return [PackageMetadata(**r) for r in rows]
-
     def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
         """
         Return all PackageMetadata rows matching *flt*.
@@ -229,18 +225,6 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         syms = super().get_list_by_ids(symbol_ids)
-        SymbolMetadata.resolve_symbol_hierarchy(syms)
-        return syms
-
-    def get_list_by_file_id(self, file_id: str) -> list[SymbolMetadata]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM symbols WHERE file_id = ?", [file_id]))
-        syms = [self.model(**self._deserialize_row(r)) for r in rows]
-        SymbolMetadata.resolve_symbol_hierarchy(syms)
-        return syms
-
-    def get_list_by_package_id(self, package_id: str) -> list[SymbolMetadata]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM symbols WHERE package_id = ?", [package_id]))
-        syms = [self.model(**self._deserialize_row(r)) for r in rows]
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
 
@@ -404,6 +388,34 @@ LIMIT ? OFFSET ?
             "DELETE FROM symbols WHERE file_id = ? RETURNING id", [file_id]
         ).fetchall()
         return len(rows)
+
+    def get_list(self, flt: SymbolFilter) -> list[SymbolMetadata]:
+        """
+        Generic selector that supersedes the old specialised helpers.
+        Supports filtering by ids, parent_ids, file_id and/or package_id.
+        """
+        where, params = [], []
+
+        if flt.ids:
+            where.append(f"id IN ({', '.join('?' for _ in flt.ids)})")
+            params.extend(flt.ids)
+        if flt.parent_ids:
+            where.append(
+                f"parent_symbol_id IN ({', '.join('?' for _ in flt.parent_ids)})"
+            )
+            params.extend(flt.parent_ids)
+        if flt.file_id:
+            where.append("file_id = ?")
+            params.append(flt.file_id)
+        if flt.package_id:
+            where.append("package_id = ?")
+            params.append(flt.package_id)
+
+        sql = "SELECT * FROM symbols" + (" WHERE " + " AND ".join(where) if where else "")
+        rows = _row_to_dict(self.cursor().execute(sql, params))
+        syms = [self.model(**self._deserialize_row(r)) for r in rows]
+        SymbolMetadata.resolve_symbol_hierarchy(syms)
+        return syms
 
 
 class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeRepository):
