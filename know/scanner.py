@@ -18,7 +18,7 @@ from know.models import (
     SymbolRef,
     Vector,
 )
-from know.data import SymbolSearchQuery
+from know.data import SymbolSearchQuery, SymbolFilter
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.project import Project, ProjectCache
 
@@ -369,7 +369,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     symbol_repo = repo_store.symbol
 
     # Retrieve all existing symbols for this file once
-    existing_symbols = symbol_repo.get_list_by_file_id(file_meta.id)
+    existing_symbols = symbol_repo.get_list(SymbolFilter(file_id=file_meta.id))
     existing_by_key: dict[str, SymbolMetadata] = {
         sym.symbol_key: sym for sym in existing_symbols if sym.symbol_key
     }
@@ -497,7 +497,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
         if pkg_id is None:
             continue
         candidates = [
-            s for s in symbol_repo.get_list_by_package_id(pkg_id)
+            s for s in symbol_repo.get_list(SymbolFilter(package_id=pkg_id))
             if s.kind in parent_kinds and s.fqn
         ]
         if not candidates:
