@@ -28,9 +28,10 @@ from know.data import (
     AbstractSymbolRefRepository,
     AbstractDataRepository,
     SymbolSearchQuery,
-    PackageFilter,              # ← NEW
+    PackageFilter,
     include_direct_descendants,
     SymbolFilter,
+    ImportFilter,
 )
 
 T = TypeVar("T")
@@ -223,11 +224,6 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
     RRF_CODE_WEIGHT: float = 0.7
     RRF_FTS_WEIGHT:  float = 0.3
 
-    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
-        syms = super().get_list_by_ids(symbol_ids)
-        SymbolMetadata.resolve_symbol_hierarchy(syms)
-        return syms
-
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
         # ---- FROM / JOIN clause to filter by repo_id via files table ----
         base_where, base_params = ["f.repo_id = ?"], [repo_id]
@@ -362,27 +358,6 @@ LIMIT ? OFFSET ?
         syms = include_direct_descendants(self, syms)
         return syms
 
-    # ---------- new API implementation ----------
-    def get_list_by_parent_ids(self, parent_ids: list[str]) -> list[SymbolMetadata]:
-        """
-        Return all symbols whose ``parent_symbol_id`` is contained in *parent_ids*.
-        """
-        if not parent_ids:
-            return []
-        placeholders = ", ".join("?" for _ in parent_ids)
-        rows = _row_to_dict(
-            self.cursor().execute(
-                f"SELECT * FROM symbols WHERE parent_symbol_id IN ({placeholders})",
-                parent_ids,
-            )
-        )
-        syms = [self.model(**self._deserialize_row(r)) for r in rows]
-
-        syms = include_direct_descendants(self, syms)
-
-        return syms
-
-    # NEW -----------------------------------------------------------
     def delete_by_file_id(self, file_id: str) -> int:
         rows = self.cursor().execute(
             "DELETE FROM symbols WHERE file_id = ? RETURNING id", [file_id]
@@ -396,9 +371,6 @@ LIMIT ? OFFSET ?
         """
         where, params = [], []
 
-        if flt.ids:
-            where.append(f"id IN ({', '.join('?' for _ in flt.ids)})")
-            params.extend(flt.ids)
         if flt.parent_ids:
             where.append(
                 f"parent_symbol_id IN ({', '.join('?' for _ in flt.parent_ids)})"
@@ -433,6 +405,23 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
     def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
         rows = _row_to_dict(self.cursor().execute(
             "SELECT * FROM import_edges WHERE repo_id = ?", [repo_id]))
+        return [ImportEdge(**r) for r in rows]
+
+    # generic selector
+    def get_list(self, flt: ImportFilter) -> list[ImportEdge]:      # NEW
+        where, params = [], []
+        if flt.source_package_id:
+            where.append("from_package_id = ?")
+            params.append(flt.source_package_id)
+        if flt.source_file_id:
+            where.append("from_file_id = ?")
+            params.append(flt.source_file_id)
+        if flt.repo_id:
+            where.append("repo_id = ?")
+            params.append(flt.repo_id)
+
+        sql = f"SELECT * FROM {self.table}" + (" WHERE " + " AND ".join(where) if where else "")
+        rows = _row_to_dict(self.cursor().execute(sql, params))
         return [ImportEdge(**r) for r in rows]
 
 
