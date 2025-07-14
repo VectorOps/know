@@ -21,7 +21,8 @@ def test_project_scan_populates_repositories():
 
     # ── files ────────────────────────────────────────────────────────────
     expected_files = [p for p in SAMPLES_DIR.glob("*.py")]
-    files = repo_store.file.get_list_by_repo_id(repo_meta.id)
+-    files = repo_store.file.get_list_by_repo_id(repo_meta.id)
++    files = repo_store.file.get_list(FileFilter(repo_id=repo_meta.id))
     assert len(files) == len(expected_files)
 
     # ── packages ─────────────────────────────────────────────────────────
