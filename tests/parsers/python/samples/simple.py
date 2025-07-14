@@ -56,7 +56,7 @@ class Test:
 
     def method(self):
         """
-        Multiline
+        Multilino
         """
         pass
 

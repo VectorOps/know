@@ -274,15 +274,15 @@ class GolangCodeParser(AbstractCodeParser):
                     path=self.rel_path,
                 )
 
-            # --- keep recognised suffixes ( _test , _amd64 … ) --------------
+            # keep recognised suffixes ( _test , _amd64 … )
             suffix: str = ""
             if pkg_ident and self._matches_with_allowed_suffix(pkg_ident, expected_pkg):
-                suffix = pkg_ident[len(expected_pkg):]        # leading “_” included
+                suffix = pkg_ident[len(expected_pkg):]
 
             full_path_with_suffix = f"{full_path}{suffix}" if suffix else full_path
             return full_path_with_suffix or pkg_ident or self._rel_to_virtual_path(self.rel_path)
 
-        # ── no go.mod ───────────────────────────────────────────────────
+        # no go.mod
         rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
 
         expected_pkg = rel_dir.split("/")[-1] if rel_dir else None
