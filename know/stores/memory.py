@@ -262,7 +262,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         with self._lock:
             syms = [
                 s for s in self._items.values()
-                and (not flt.parent_ids or s.parent_symbol_id in flt.parent_ids)
+                if (not flt.parent_ids or s.parent_symbol_id in flt.parent_ids)
                 and (not flt.file_id    or s.file_id == flt.file_id)
                 and (not flt.package_id or s.package_id == flt.package_id)
             ]
@@ -288,6 +288,7 @@ class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractI
             return [edge for edge in self._items.values() if edge.repo_id == repo_id]
 
     def get_list(self, flt: ImportFilter) -> list[ImportEdge]:      # NEW
+        from know.data import ImportFilter
         with self._lock:
             return [
                 edge for edge in self._items.values()
