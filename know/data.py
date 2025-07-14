@@ -202,19 +202,15 @@ class AbstractImportEdgeRepository(ABC):
         pass
 
     @abstractmethod
+    def get_list_by_source_file_id(self, package_id: str) -> list[ImportEdge]:
+        pass
+
+    @abstractmethod
     def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
         pass
 
     @abstractmethod
     def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
-        pass
-
-    # NEW ------------------------------------------------------------------
-    @abstractmethod
-    def get_list_by_file_id(self, file_id: str) -> list[ImportEdge]:
-        """
-        Return **all** ImportEdge objects whose ``from_file_id`` equals *file_id*.
-        """
         pass
 
     @abstractmethod

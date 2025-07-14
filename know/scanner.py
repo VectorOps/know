@@ -297,12 +297,24 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         pkg_meta = PackageMetadata(id=generate_id(), **pkg_data)
         pkg_meta = pkg_repo.create(pkg_meta)
 
-<<<<<<< SEARCH
+    # ── File ────────────────────────────────────────────────────────────────
+    file_repo = repo_store.file
+    file_meta = file_repo.get_by_path(parsed_file.path)
+
+    file_data = parsed_file.to_dict()
+    file_data.update({"package_id": pkg_meta.id, "repo_id": project.get_repo().id})
+
+    if file_meta:
+        file_repo.update(file_meta.id, file_data)
+    else:
+        file_meta = FileMetadata(id=generate_id(), **file_data)
+        file_meta = file_repo.create(file_meta)
+
     # ── Import edges (package-level) ─────────────────────────────────────────
     import_repo = repo_store.importedge
 
-    # Existing edges from this package
-    existing_edges = import_repo.get_list_by_source_package_id(pkg_meta.id)
+    # Existing edges from this file and package
+    existing_edges = import_repo.get_list_by_source_file_id(file_meta.id)
     existing_by_key: dict[tuple[str | None, str | None, bool], ImportEdge] = {
         (e.to_package_path, e.alias, e.dot): e for e in existing_edges
     }
@@ -322,7 +334,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     new_keys: set[tuple[str | None, str | None, bool]] = set()
     pending_edges = []
 
-    for imp in parsed_file.package.imports:
+    for imp in parsed_file.imports:
         key = (imp.virtual_path, imp.alias, imp.dot)
         new_keys.add(key)
 
@@ -334,6 +346,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             {
                 "repo_id": project.get_repo().id,
                 "from_package_id": pkg_meta.id,
+                "from_file_id": file_meta.id,
                 "to_package_id": to_pkg_id,
             }
         )

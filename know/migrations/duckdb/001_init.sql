@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS import_edges (
     id TEXT PRIMARY KEY,
     repo_id TEXT,
     from_package_id TEXT,
+    from_file_id TEXT,
     to_package_path TEXT,
     to_package_id TEXT,
     alias TEXT,

@@ -175,7 +175,6 @@ class GolangCodeParser(AbstractCodeParser):
 
         if node.type == "import_declaration":
             self._handle_import_declaration(node)
-            skip_symbol_check = True
         elif node.type == "function_declaration":
             self._handle_function_declaration(node)
         elif node.type == "method_declaration":
@@ -226,6 +225,15 @@ class GolangCodeParser(AbstractCodeParser):
                     return ident.text.decode("utf8")
         return None
 
+    def _matches_with_allowed_suffix(self, pkg: str, base: str) -> bool:
+        # exact match - OK
+        if pkg == base:
+            return True
+        # base + "_" + recognised suffix - OK
+        if pkg.startswith(base + "_"):
+            return pkg[len(base):] in _GO_PKG_SUFFIXES
+        return False
+
     def _build_virtual_package_path(
         self, root_node
     ) -> str:
@@ -234,7 +242,7 @@ class GolangCodeParser(AbstractCodeParser):
 
         • If a go.mod is present, prepend its `module` path,
           then append the file’s directory (if any).
-        • Otherwise fall back to the old heuristics.
+        • Otherwise fall back to heuristics.
         """
         pkg_ident = self._extract_package_name(root_node)
 
@@ -258,16 +266,7 @@ class GolangCodeParser(AbstractCodeParser):
                 else self.module_path.split("/")[-1]
             )
 
-            def _matches_with_allowed_suffix(pkg: str, base: str) -> bool:
-                # exact match → OK
-                if pkg == base:
-                    return True
-                # base + "_" + recognised suffix → OK
-                if pkg.startswith(base + "_"):
-                    return pkg[len(base):] in _GO_PKG_SUFFIXES
-                return False
-
-            if pkg_ident and pkg_ident != "main" and not _matches_with_allowed_suffix(pkg_ident, expected_pkg):
+            if pkg_ident and pkg_ident != "main" and not self._matches_with_allowed_suffix(pkg_ident, expected_pkg):
                 logger.warning(
                     "Go package mismatch",
                     clause=pkg_ident,
@@ -277,7 +276,7 @@ class GolangCodeParser(AbstractCodeParser):
 
             # --- keep recognised suffixes ( _test , _amd64 … ) --------------
             suffix: str = ""
-            if pkg_ident and _matches_with_allowed_suffix(pkg_ident, expected_pkg):
+            if pkg_ident and self._matches_with_allowed_suffix(pkg_ident, expected_pkg):
                 suffix = pkg_ident[len(expected_pkg):]        # leading “_” included
 
             full_path_with_suffix = f"{full_path}{suffix}" if suffix else full_path
@@ -288,7 +287,7 @@ class GolangCodeParser(AbstractCodeParser):
 
         expected_pkg = rel_dir.split("/")[-1] if rel_dir else None
         suffix: str = ""
-        if pkg_ident and expected_pkg and _matches_with_allowed_suffix(pkg_ident, expected_pkg):
+        if pkg_ident and expected_pkg and self._matches_with_allowed_suffix(pkg_ident, expected_pkg):
             suffix = pkg_ident[len(expected_pkg):]
         if suffix:
             return f"{rel_dir}{suffix}" if rel_dir else pkg_ident

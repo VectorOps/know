@@ -26,6 +26,7 @@ class SymbolKind(str, Enum):
     COMPONENT = "component"
     INTERFACE = "interface"
     ENUM = "enum"
+    LITERAL = "literal"
 
 
 class Visibility(str, Enum):
@@ -197,6 +198,7 @@ class ImportEdge(BaseModel):
     id: Optional[str]
     repo_id: str # related repository
     from_package_id: str  # importing package
+    from_file_id: str # importing file
     to_package_path: str  # textual path like "fmt"; may not map to a package_id if external
     to_package_id: Optional[str] = None  # filled when the imported package exists in the same repo
     alias: Optional[str] = None  # import alias if any

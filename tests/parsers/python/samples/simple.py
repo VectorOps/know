@@ -37,6 +37,10 @@ def ellipsis_fn():
     ...
 
 
+# 123
+ellipsis_fn()
+
+
 # Async function
 async def async_fn(a, b):
     return a - b

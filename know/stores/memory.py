@@ -427,15 +427,15 @@ class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractI
         with self._lock:
             return [edge for edge in self._items.values() if edge.from_package_id == package_id]
 
+    def get_list_by_source_file_id(self, file_id: str) -> list[ImportEdge]:
+        with self._lock:
+            return [edge for edge in self._items.values() if edge.from_file_id == file_id]
+
     def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
         """Return all import-edges whose ``repo_id`` matches *repo_id*."""
         with self._lock:
             return [edge for edge in self._items.values() if edge.repo_id == repo_id]
 
-    # NEW ------------------------------------------------------------------
-    def get_list_by_file_id(self, file_id: str) -> list[ImportEdge]:
-        with self._lock:
-            return [edge for edge in self._items.values() if edge.from_file_id == file_id]
 
 class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
                                   AbstractSymbolRefRepository):

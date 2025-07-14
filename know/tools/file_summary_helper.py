@@ -73,7 +73,7 @@ def build_file_summary(
         header_line = helper.get_file_header(project, fm, skip_docs=skip_docs)
 
     # imports ------------------------------------------------------------
-    import_edges = edge_repo.get_list_by_source_package_id(fm.package_id) if fm.package_id else []
+    import_edges = edge_repo.get_list_by_source_file_id(fm.id)
     import_lines = (
         [helper.get_import_summary(e) for e in import_edges] if helper
         else [_import_to_text(e) for e in import_edges]

@@ -77,8 +77,11 @@
 ** [X] Add a destory() method to embedding worker
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
-* [ ] Strip spaces from multi-line commends, but recover when generating summaries
-* [ ] Instead of having multiple flags for summary/full/none, add enum to tools
+* [X] Strip spaces from multi-line commends, but recover when generating summaries
+* [X] Instead of having multiple flags for summary/full/none, add enum to tools
 * [X] If embedding model for the vector does not match current embedding model - either update OR skip
 * [X] Find a way to de-dupe embedding queue to avoid calculating vectors multiple times
 * [ ] Search to support exclude. For example - tests
+* [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
+* [ ] Move file summary helper out of tools
+* [ ] Better lookup with filters methods in data layer

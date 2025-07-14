@@ -128,7 +128,6 @@ class PythonCodeParser(AbstractCodeParser):
 
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
             self._handle_import_statement(node)
-            skip_symbol_check = True
 
         elif node.type in ("function_definition", "async_function_definition"):
             self._handle_function_definition(node)
@@ -926,24 +925,6 @@ class PythonLanguageHelper(AbstractLanguageHelper):
 
         return "\n".join(lines)
 
-    # ─────────────────────────────────────────────────────────────
-    #  new file-header helper
-    # ─────────────────────────────────────────────────────────────
-    def get_file_header(
-        self,
-        project: Project,
-        fm: FileMetadata,
-        skip_docs: bool = False,
-    ) -> Optional[str]:
-        """
-        For Python emit the module-level docstring (first statement
-        in file) unless docs are suppressed.
-        """
-        if skip_docs:
-            return None
-        doc = getattr(fm, "docstring", None)
-        return doc.strip() if doc else None
-
     def get_import_summary(self, imp: ImportEdge) -> str:
         """
         Return a concise, human-readable textual representation of *imp*.
@@ -965,3 +946,18 @@ class PythonLanguageHelper(AbstractLanguageHelper):
 
         # plain absolute import
         return f"import {path}{alias}".strip()
+
+    def get_file_header(
+        self,
+        project: Project,
+        fm: FileMetadata,
+        skip_docs: bool = False,
+    ) -> Optional[str]:
+        """
+        For Python emit the module-level docstring (first statement
+        in file) unless docs are suppressed.
+        """
+        if skip_docs:
+            return None
+        doc = getattr(fm, "docstring", None)
+        return doc.strip() if doc else None
