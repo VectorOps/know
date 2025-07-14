@@ -18,6 +18,9 @@ from know.embeddings.cache import (
 )
 
 
+CYCLE_WAIT_TIMEOUT = 1.0 / 1000.0
+
+
 @dataclass
 class _QueueItem:
     text: str
@@ -60,7 +63,7 @@ class EmbeddingWorker:
         cache_backend: str | None = None,
         cache_path: str | None = None,
         batch_size: int = 1,
-        batch_wait_ms: float = 5,
+        batch_wait_ms: float = 50,
         calc_kwargs: any = None,
     ):
         self._calc_type = calc_type
@@ -207,6 +210,7 @@ class EmbeddingWorker:
 
                 # collect extra items up to batch_size, waiting briefly
                 batch: list[_QueueItem] = [first_item]
+
                 deadline = time.monotonic() + self._batch_wait
                 while len(batch) < self._batch_size:
                     timeout = deadline - time.monotonic()

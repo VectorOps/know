@@ -60,12 +60,10 @@ def _row_to_dict(rel) -> list[dict[str, Any]]:
                 row[k] = None
     return records
 
-# ---------------------------------------------------------------------------
 # binary-compression helpers
-# ---------------------------------------------------------------------------
 _UNCOMPRESSED_PREFIX = b"\x00"           # 1-byte marker → raw payload follows
 _COMPRESSED_PREFIX   = b"\x01"           # 1-byte marker → zlib-compressed payload
-_MIN_COMPRESS_LEN    = 100               # threshold in *bytes*
+_MIN_COMPRESS_LEN    = 50                # threshold in *bytes*
 
 def _compress_blob(data: bytes) -> bytes:
     """Return data prefixed & (optionally) zlib-compressed for storage."""
@@ -93,7 +91,6 @@ class _DuckDBBaseRepo(Generic[T]):
     _json_fields: set[str] = set()                    # columns stored as JSON
     _json_parsers: dict[str, Callable[[Any], Any]] = {}   # field → decode-fn
     _compress_fields: set[str] = set()     # column names that store (possibly)
-                                           # compressed byte blobs
 
     def cursor(self):
         cur = self.conn.cursor()
@@ -124,9 +121,7 @@ class _DuckDBBaseRepo(Generic[T]):
         row = self._apply_decompression(row)
         return row
 
-    # ------------------------------------------------------------------
     # binary compression handling
-    # ------------------------------------------------------------------
     def _apply_compression(self, data: dict[str, Any]) -> dict[str, Any]:
         """Mutate *data*: encode+compress fields listed in `_compress_fields`."""
         for fld in self._compress_fields:

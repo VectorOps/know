@@ -86,3 +86,5 @@
 * [ ] Move file summary helper out of tools
 * [ ] Better lookup with filters methods in data layer, similar to symbol search instead of dedicated methods.
 * [ ] Figure out lockup in filelist tool
+* [X] Compress long symbol bodies
+* [ ] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
