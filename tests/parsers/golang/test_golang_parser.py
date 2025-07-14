@@ -10,9 +10,7 @@ from know.models import ProgrammingLanguage, SymbolKind
 from know.models import SymbolRefType          # NEW
 
 
-# --------------------------------------------------------------------------- #
-# Helpers                                                                     #
-# --------------------------------------------------------------------------- #
+# Helpers
 def _make_dummy_project(root_dir: Path):
     """
     Build a real Project instance backed by the in-memory repository so the
@@ -25,13 +23,12 @@ def _make_dummy_project(root_dir: Path):
     return init_project(settings, refresh=False)
 
 
-# --------------------------------------------------------------------------- #
-# Tests                                                                       #
-# --------------------------------------------------------------------------- #
+# Tests
 def test_golang_parser_on_sample_file():
     """
-    Parse the sample `main.go` file and assert the most important artefacts
-    (imports, symbols, doc-comments…) are extracted correctly.
+    Parse the sample `main.go` file and ensure that all imports,
+    constants, variables, structs, interfaces, methods, functions,
+    doc-comments and symbol-references are extracted correctly.
     """
     samples_dir = Path(__file__).parent / "samples"
     project     = _make_dummy_project(samples_dir)
@@ -40,15 +37,10 @@ def test_golang_parser_on_sample_file():
     parser      = GolangCodeParser(project, "main.go")
     parsed_file = parser.parse(cache)
 
-    # ------------------------------------------------------------------ #
-    # Basic assertions                                                    #
-    # ------------------------------------------------------------------ #
+    # Basic assertions
     assert parsed_file.path == "main.go"
     assert parsed_file.language == ProgrammingLanguage.GO
 
-    # ------------------------------------------------------------------ #
-    # Imports                                                             #
-    # ------------------------------------------------------------------ #
     # main.go contains exactly two imports:
     #   k "example.com/m"   → inside the project
     #   "fmt"               → standard-library (external)
@@ -70,9 +62,7 @@ def test_golang_parser_on_sample_file():
     assert fmt_imp.external is True
     assert fmt_imp.physical_path is None
 
-    # ------------------------------------------------------------------ #
-    # Top-level symbols                                                   #
-    # ------------------------------------------------------------------ #
+    # Top-level symbols
     symbols = {sym.name: sym for sym in parsed_file.symbols}
 
     # Constant
@@ -102,16 +92,23 @@ def test_golang_parser_on_sample_file():
     assert "Just a comment" in symbols["dummy"].docstring
 
     # Ensure we saw exactly the expected set of top-level symbols
-    expected = {"A", "S", "m", "main", "dummy"}
+    expected = {
+        "A",         # constant
+        "B",         # constant (new)
+        "j", "k", "f",   # variables (new)
+        "S",         # struct
+        "I",         # interface (new)
+        "m",         # method attached to S
+        "dummy",     # function
+        "main",      # function
+    }
     assert set(symbols.keys()) == expected
 
     # Child symbols of struct S should all be properties
     for child in struct_s.children:
         assert child.kind == SymbolKind.PROPERTY
 
-    # ------------------------------------------------------------------ #
-    # Symbol references                                                  #
-    # ------------------------------------------------------------------ #
+    # Symbol references
     refs = parsed_file.symbol_refs
     assert len(refs) >= 3                       # at least S, m(), foobar()
 
