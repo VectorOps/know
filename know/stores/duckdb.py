@@ -5,6 +5,7 @@ import duckdb
 import json
 import pandas as pd   # new – required for .df() conversion
 import math          # needed for math.isnan
+import zlib
 from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime, timezone
@@ -59,6 +60,31 @@ def _row_to_dict(rel) -> list[dict[str, Any]]:
                 row[k] = None
     return records
 
+# ---------------------------------------------------------------------------
+# binary-compression helpers
+# ---------------------------------------------------------------------------
+_UNCOMPRESSED_PREFIX = b"\x00"           # 1-byte marker → raw payload follows
+_COMPRESSED_PREFIX   = b"\x01"           # 1-byte marker → zlib-compressed payload
+_MIN_COMPRESS_LEN    = 100               # threshold in *bytes*
+
+def _compress_blob(data: bytes) -> bytes:
+    """Return data prefixed & (optionally) zlib-compressed for storage."""
+    if len(data) <= _MIN_COMPRESS_LEN:
+        return _UNCOMPRESSED_PREFIX + data
+    return _COMPRESSED_PREFIX + zlib.compress(data)
+
+def _decompress_blob(blob: bytes) -> bytes:
+    """Undo `_compress_blob`."""
+    if not blob:
+        return blob
+    prefix, payload = blob[:1], blob[1:]
+    if prefix == _COMPRESSED_PREFIX:
+        return zlib.decompress(payload)
+    if prefix == _UNCOMPRESSED_PREFIX:
+        return payload
+    # legacy / unknown prefix → return as-is
+    return blob
+
 # generic base repository
 class _DuckDBBaseRepo(Generic[T]):
     table: str
@@ -66,6 +92,8 @@ class _DuckDBBaseRepo(Generic[T]):
 
     _json_fields: set[str] = set()                    # columns stored as JSON
     _json_parsers: dict[str, Callable[[Any], Any]] = {}   # field → decode-fn
+    _compress_fields: set[str] = set()     # column names that store (possibly)
+                                           # compressed byte blobs
 
     def cursor(self):
         cur = self.conn.cursor()
@@ -93,6 +121,32 @@ class _DuckDBBaseRepo(Generic[T]):
                 parsed = json.loads(row[fld])
                 parser = self._json_parsers.get(fld)
                 row[fld] = parser(parsed) if parser else parsed
+        row = self._apply_decompression(row)
+        return row
+
+    # ------------------------------------------------------------------
+    # binary compression handling
+    # ------------------------------------------------------------------
+    def _apply_compression(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Mutate *data*: encode+compress fields listed in `_compress_fields`."""
+        for fld in self._compress_fields:
+            if fld in data and data[fld] is not None:
+                raw = data[fld]
+                if isinstance(raw, str):
+                    raw = raw.encode("utf-8")
+                data[fld] = _compress_blob(bytes(raw))
+        return data
+
+    def _apply_decompression(self, row: dict[str, Any]) -> dict[str, Any]:
+        """Decode+decompress fields when reading from DB."""
+        for fld in self._compress_fields:
+            if fld in row and row[fld] is not None:
+                blob = bytes(row[fld])
+                text = _decompress_blob(blob)
+                try:
+                    row[fld] = text.decode("utf-8")
+                except Exception:
+                    row[fld] = text      # leave as bytes if not UTF-8
         return row
 
     # CRUD
@@ -108,7 +162,9 @@ class _DuckDBBaseRepo(Generic[T]):
         return [self.model(**self._deserialize_row(r)) for r in rows]
 
     def create(self, item: T) -> T:
-        data = self._serialize_json(item.model_dump(exclude_none=True))
+        data = item.model_dump(exclude_none=True)
+        data = self._apply_compression(data)
+        data = self._serialize_json(data)
         cols = ", ".join(data.keys())
         placeholders = ", ".join("?" for _ in data)
         self.cursor().execute(f"INSERT INTO {self.table} ({cols}) VALUES ({placeholders})", list(data.values()))
@@ -117,7 +173,8 @@ class _DuckDBBaseRepo(Generic[T]):
     def update(self, item_id: str, data: Dict[str, Any]) -> Optional[T]:
         if not data:
             return self.get_by_id(item_id)
-        data = self._serialize_json(data.copy())
+        data = self._apply_compression(data.copy())
+        data = self._serialize_json(data)
         set_clause = ", ".join(f"{k}=?" for k in data)
         params = list(data.values()) + [item_id]
         self.cursor().execute(f"UPDATE {self.table} SET {set_clause} WHERE id = ?", params)
@@ -220,6 +277,7 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         "signature": lambda v: SymbolSignature(**v) if v is not None else None,
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
+    _compress_fields = {"symbol_body"}     # column name in the `symbols` table
 
     RRF_K: int = 60          # tuning-parameter k (see RRF paper)
     RRF_CODE_WEIGHT: float = 0.7
