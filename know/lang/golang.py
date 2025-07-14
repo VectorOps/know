@@ -275,10 +275,24 @@ class GolangCodeParser(AbstractCodeParser):
                     path=self.rel_path,
                 )
 
-            return full_path or pkg_ident or self._rel_to_virtual_path(self.rel_path)
+            # --- keep recognised suffixes ( _test , _amd64 … ) --------------
+            suffix: str = ""
+            if pkg_ident and _matches_with_allowed_suffix(pkg_ident, expected_pkg):
+                suffix = pkg_ident[len(expected_pkg):]        # leading “_” included
+
+            full_path_with_suffix = f"{full_path}{suffix}" if suffix else full_path
+            return full_path_with_suffix or pkg_ident or self._rel_to_virtual_path(self.rel_path)
 
         # ── no go.mod ───────────────────────────────────────────────────
         rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
+
+        expected_pkg = rel_dir.split("/")[-1] if rel_dir else None
+        suffix: str = ""
+        if pkg_ident and expected_pkg and _matches_with_allowed_suffix(pkg_ident, expected_pkg):
+            suffix = pkg_ident[len(expected_pkg):]
+        if suffix:
+            return f"{rel_dir}{suffix}" if rel_dir else pkg_ident
+
         return rel_dir or "."
 
     # ---------------------------------------------------------------------  
@@ -1044,9 +1058,6 @@ class GolangCodeParser(AbstractCodeParser):
 
 
 class GolangLanguageHelper(AbstractLanguageHelper):
-    # ------------------------------------------------------------------  
-    # Public helpers required by AbstractCodeParser
-    # ------------------------------------------------------------------
     def get_import_summary(self, imp: ImportEdge) -> str:
         """
         Return a concise, human-readable textual representation of a Go
@@ -1093,12 +1104,12 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         IND   = " " * indent
         lines: list[str] = []
 
-        # ---------- preceding comment / doc ----------
+        # preceding comment / doc
         if not skip_docs and sym.docstring:
             for ln in sym.docstring.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
 
-        # ---------- header line ----------
+        # header line
         header: str
         if sym.kind == SymbolKind.METHOD_DEF:
             sig = "()"
@@ -1150,9 +1161,6 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
         return "\n".join(lines)
 
-    # ─────────────────────────────────────────────────────────────
-    #  new file-header helper
-    # ─────────────────────────────────────────────────────────────
     def get_file_header(
         self,
         project: Project,
@@ -1167,13 +1175,11 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         pkg_name: str | None = None
 
         # try repository lookup first
-        pkg_id = getattr(fm, "package_id", None)
+        pkg_id = fm.package_id
         if pkg_id:
             pkg_meta = project.data_repository.package.get_by_id(pkg_id)
             if pkg_meta is not None:
-                pkg_name = getattr(pkg_meta, "name", None) or (
-                    pkg_meta.virtual_path.split("/")[-1] if getattr(pkg_meta, "virtual_path", None) else None
-                )
+                pkg_name = pkg_meta.name
 
         # fallback – derive from path
         if not pkg_name:
