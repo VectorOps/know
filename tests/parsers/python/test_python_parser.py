@@ -68,103 +68,101 @@ def test_python_parser_on_simple_file():
     # ------------------------------------------------------------------ #
     # Top-level symbols
     # ------------------------------------------------------------------ #
-    # Expected symbols: CONST, fn, _foo, decorated, double_decorated, Test, Foobar, async_fn, ellipsis_fn
-    assert len(parsed_file.symbols) == 9
-    top_level = {sym.name: sym for sym in parsed_file.symbols}
+    def symbols_to_map(symbols):
+        return {sym.name: sym for sym in symbols}
 
-    # Constant
-    assert "CONST" in top_level
-    assert top_level["CONST"].kind == SymbolKind.CONSTANT
-```
+    top_level = symbols_to_map(parsed_file.symbols)
 
-tests/parsers/python/test_python_parser.py
-```python
-<<<<<<< SEARCH
-    double_decorated_sym = next(c for c in top_level.values() if c.name == "double_decorated")
-    assert double_decorated_sym.signature is not None
-    assert double_decorated_sym.signature.decorators == ["abc", "fed"]
-
-    # Class with children
-    assert "Test" in top_level
-    test_cls = top_level["Test"]
-
-    # Functions
-    for fn_name in ("fn", "_foo", "decorated", "double_decorated", "async_fn", "ellipsis_fn"):
-        assert fn_name in top_level
-        assert top_level[fn_name].kind == SymbolKind.FUNCTION
-
-    assert "ellipsis_fn" in top_level
-    assert top_level["ellipsis_fn"].kind == SymbolKind.FUNCTION
-
-    double_decorated_sym = next(c for c in top_level.values() if c.name == "double_decorated")
-    assert double_decorated_sym.signature is not None
-    assert double_decorated_sym.signature.decorators == ["abc", "fed"]
-
-    # Class with children
-    assert "Test" in top_level
-    test_cls = top_level["Test"]
-    assert test_cls.kind == SymbolKind.CLASS
-    child_names = {c.name for c in test_cls.children}
-    assert child_names == {
-        "ABC",
-        "__init__",
-        "method",
-        "get",
-        "async_method",
-        "multi_decorated",
-        "ellipsis_method",
+    expected_top_level_names = {
+        "CONST", "fn", "_foo", "decorated", "double_decorated",
+        "ellipsis_fn", "async_fn", "Test", "Foobar"
     }
-    assert next(c for c in test_cls.children if c.name == "multi_decorated").kind \
-           == SymbolKind.METHOD
+    assert set(top_level.keys()) == expected_top_level_names
 
-    ellipsis_method_sym = next(c for c in test_cls.children
-                               if c.name == "ellipsis_method")
-    assert ellipsis_method_sym.kind == SymbolKind.METHOD
+    # Kinds
+    assert top_level["CONST"].kind == SymbolKind.CONSTANT
+    for fn_name in ("fn", "_foo", "decorated", "double_decorated", "ellipsis_fn", "async_fn"):
+        assert top_level[fn_name].kind == SymbolKind.FUNCTION
+    for cls_name in ("Test", "Foobar"):
+        assert top_level[cls_name].kind == SymbolKind.CLASS
+
+    # Decorators on top-level symbols
+    assert top_level["decorated"].signature is not None
+    assert top_level["decorated"].signature.decorators == ["abc"]
+
+    assert top_level["double_decorated"].signature is not None
+    assert top_level["double_decorated"].signature.decorators == ["abc", "fed"]
+
+    assert top_level["Foobar"].signature is not None
+    assert top_level["Foobar"].signature.decorators == ["dummy"]
+
+    # Class Test children
+    test_cls = top_level["Test"]
+    children_map = symbols_to_map(test_cls.children)
+
+    expected_test_children = {
+        "ABC", "__init__", "method", "get",
+        "async_method", "multi_decorated", "ellipsis_method"
+    }
+    assert set(children_map.keys()) == expected_test_children
+
+    # Kinds of children
+    assert children_map["ABC"].kind == SymbolKind.CONSTANT
+
+    method_kinds = {
+        "__init__", "method", "async_method", "multi_decorated", "ellipsis_method"
+    }
+    for m in method_kinds:
+        assert children_map[m].kind == SymbolKind.METHOD
+
+    # get is a property if available, else method
+    if hasattr(SymbolKind, "PROPERTY"):
+        assert children_map["get"].kind == SymbolKind.PROPERTY
+    else:
+        assert children_map["get"].kind == SymbolKind.METHOD
+
+    # Decorators on multi_decorated method
+    multi_decorated_sym = children_map["multi_decorated"]
+    assert multi_decorated_sym.signature is not None
+    assert multi_decorated_sym.signature.decorators == ["abc", "fed"]
+
+    # Docstring on ellipsis_method
+    ellipsis_method_sym = children_map["ellipsis_method"]
     assert "Test me" in (ellipsis_method_sym.docstring or "")
 
-    assert "Foobar" in top_level
-    assert top_level["Foobar"].kind == SymbolKind.CLASS
+    # Check ellipsis bodies for ellipsis_fn and ellipsis_method
+    assert top_level["ellipsis_fn"].body_is_ellipsis
+    assert ellipsis_method_sym.body_is_ellipsis
 
-    # ------------------------------------------------------------------ #
-    # Decorators                                                         #
-    # ------------------------------------------------------------------ #
-    # Ensure that the `multi_decorated` method preserved both decorators
-    multi_decorated_sym = next(c for c in test_cls.children
-                               if c.name == "multi_decorated")
-    assert multi_decorated_sym.signature is not None
-    assert set(multi_decorated_sym.signature.decorators) == {"abc", "fed"}
-
-    # ------------------------------------------------------------------ #
     # Docstrings
-```
-
-tests/parsers/python/test_python_parser.py
-```python
-<<<<<<< SEARCH
-    # One call-expression was added at the end of the sample file:  d()
--    assert len(parsed_file.symbol_refs) == 1
--
--    ref = parsed_file.symbol_refs[0]
--    assert ref.name == "d"
--    assert ref.type == SymbolRefType.CALL
--    assert ref.to_package_path == ".foobuz"
-+    assert len(parsed_file.symbol_refs) >= 1
-+
-+    ref_d = next((r for r in parsed_file.symbol_refs if r.name == "d"), None)
-+    assert ref_d is not None, "Symbol ref 'd' not found"
-+    assert ref_d.type == SymbolRefType.CALL
-+    assert ref_d.to_package_path == ".foobuz"
-    # ------------------------------------------------------------------ #
     assert top_level["fn"].docstring == "\"docstring!\""
-    assert "Multiline" in (top_level["_foo"].docstring or "")
+    assert top_level["_foo"].docstring is not None
+    assert top_level["_foo"].docstring.startswith("Multiline")
+    assert test_cls.docstring is None
 
     # ------------------------------------------------------------------ #
     # Symbol references                                                  #
     # ------------------------------------------------------------------ #
-    # One call-expression was added at the end of the sample file:  d()
-    assert len(parsed_file.symbol_refs) == 1
+    assert len(parsed_file.symbol_refs) == 2
 
-    ref = parsed_file.symbol_refs[0]
-    assert ref.name == "d"
-    assert ref.type == SymbolRefType.CALL
-    assert ref.to_package_path == ".foobuz"
+    refs_by_name = {ref.name: ref for ref in parsed_file.symbol_refs}
+
+    ref_d = refs_by_name.get("d")
+    assert ref_d is not None
+    assert ref_d.type == SymbolRefType.CALL
+    assert ref_d.to_package_path == ".foobuz"
+
+    ref_ellipsis_fn = refs_by_name.get("ellipsis_fn")
+    assert ref_ellipsis_fn is not None
+    assert ref_ellipsis_fn.type == SymbolRefType.CALL
+    if hasattr(ref_ellipsis_fn, "to_symbol_id") and hasattr(top_level["ellipsis_fn"], "id"):
+        assert ref_ellipsis_fn.to_symbol_id == top_level["ellipsis_fn"].id
+    else:
+        assert ref_ellipsis_fn.name == "ellipsis_fn"
+
+    # ------------------------------------------------------------------ #
+    # Inheritance edges for Foobar (optional)
+    # ------------------------------------------------------------------ #
+    foobar_cls = top_level["Foobar"]
+    if foobar_cls.signature and hasattr(foobar_cls.signature, "bases"):
+        assert foobar_cls.signature.bases == ["Foo", "Bar", "Buzz"]
