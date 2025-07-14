@@ -34,10 +34,7 @@ from know.data import (
 
 T = TypeVar("T")
 
-# ---------------------------------------------------------------------------
 # helpers
-# ---------------------------------------------------------------------------
-
 def _row_to_dict(rel) -> list[dict[str, Any]]:
     """
     Convert a DuckDB relation to List[Dict] via a pandas DataFrame.
@@ -59,10 +56,7 @@ def _row_to_dict(rel) -> list[dict[str, Any]]:
                 row[k] = None
     return records
 
-# ---------------------------------------------------------------------------
 # generic base repository
-# ---------------------------------------------------------------------------
-
 class _DuckDBBaseRepo(Generic[T]):
     table: str
     model: Type[T]
@@ -98,7 +92,7 @@ class _DuckDBBaseRepo(Generic[T]):
                 row[fld] = parser(parsed) if parser else parsed
         return row
 
-    # ---------- CRUD ----------
+    # CRUD
     def get_by_id(self, item_id: str) -> Optional[T]:
         rows = _row_to_dict(self.cursor().execute(f"SELECT * FROM {self.table} WHERE id = ?", [item_id]))
         return self.model(**self._deserialize_row(rows[0])) if rows else None
@@ -164,9 +158,6 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
             "SELECT * FROM packages WHERE repo_id = ?", [repo_id]))
         return [PackageMetadata(**r) for r in rows]
 
-    # ------------------------------------------------------------------
-    # AbstractPackageMetadataRepository implementation
-    # ------------------------------------------------------------------
     def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
         """
         Return all PackageMetadata rows matching *flt*.
@@ -192,6 +183,8 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         return len(orphan_ids)
 
 
+from know.data import FileFilter      # already present – keep / ensure
+
 class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadataRepository):
     table = "files"
     model = FileMetadata
@@ -200,12 +193,24 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
         rows = _row_to_dict(self.cursor().execute("SELECT * FROM files WHERE path = ?", [path]))
         return FileMetadata(**rows[0]) if rows else None
 
-    def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM files WHERE repo_id = ?", [repo_id]))
-        return [FileMetadata(**r) for r in rows]
+    def get_list(self, flt: FileFilter) -> list[FileMetadata]:
+        """
+        Return all FileMetadata rows that satisfy *flt*.
+        Supports filtering by repo_id and/or package_id.
+        """
+        where, params = [], []
+        if flt.repo_id:
+            where.append("repo_id = ?")
+            params.append(flt.repo_id)
+        if flt.package_id:
+            where.append("package_id = ?")
+            params.append(flt.package_id)
 
-    def get_list_by_package_id(self, package_id: str) -> list[FileMetadata]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM files WHERE package_id = ?", [package_id]))
+        sql = "SELECT * FROM files"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+
+        rows = _row_to_dict(self.cursor().execute(sql, params))
         return [FileMetadata(**r) for r in rows]
 
 

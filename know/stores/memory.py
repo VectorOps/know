@@ -169,10 +169,10 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                     removed += 1
             return removed
 
-class InMemoryFileMetadataRepository(
-    InMemoryBaseRepository[FileMetadata],
-    AbstractFileMetadataRepository,
-):
+from know.data import FileFilter      # already present – keep / ensure
+
+class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata],
+                                     AbstractFileMetadataRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.files, tables.lock)
 
@@ -184,15 +184,17 @@ class InMemoryFileMetadataRepository(
                     return file
         return None
 
-    def get_list_by_repo_id(self, repo_id: str) -> list[FileMetadata]:
-        """Return all files whose ``repo_id`` matches *repo_id*."""
+    def get_list(self, flt: FileFilter) -> list[FileMetadata]:
+        """
+        Return all FileMetadata objects that satisfy *flt*.
+        Supports filtering by repo_id and/or package_id.
+        """
         with self._lock:
-            return [f for f in self._items.values() if f.repo_id == repo_id]
-
-    def get_list_by_package_id(self, package_id: str) -> list[FileMetadata]:
-        """Return all files whose ``package_id`` matches *package_id*."""
-        with self._lock:
-            return [f for f in self._items.values() if f.package_id == package_id]
+            return [
+                f for f in self._items.values()
+                if (not flt.repo_id   or f.repo_id   == flt.repo_id)
+                and (not flt.package_id or f.package_id == flt.package_id)
+            ]
 
 class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
     RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
