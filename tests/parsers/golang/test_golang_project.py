@@ -6,6 +6,7 @@ from know.settings import ProjectSettings
 from know.project import init_project
 from know.parsers import CodeParserRegistry
 from know.lang.python import PythonCodeParser
+from know.data import FileFilter, SymbolFilter
 
 
 SAMPLES_DIR = Path(__file__).parent / "samples"

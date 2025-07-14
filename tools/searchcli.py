@@ -13,8 +13,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from know.settings import ProjectSettings, EmbeddingSettings
 from know.project import init_project
 from know.tools.base import ToolRegistry
-from know.tools.symbolsearch import IncludeBody   # enum
-from know.logger import logger   # optional (use same logger as chatcli)
+from know.logger import logger
 
 import logging
 logging.basicConfig(
@@ -53,11 +52,6 @@ def _parse_cli() -> argparse.Namespace:
     p.add_argument(
         "--repo-connection",
         default=os.getenv("REPO_CONNECTION"),
-    )
-    p.add_argument(
-        "--include-body", choices=[e.value for e in IncludeBody],
-        default=IncludeBody.SUMMARY.value,
-        help="Controls presence of code in the response."
     )
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--offset", type=int, default=0)
@@ -121,7 +115,6 @@ def main() -> None:
                     query=query,
                     limit=args.limit,
                     offset=args.offset,
-                    include_body=IncludeBody(args.include_body),
                 )
                 _print_results(results)
             except Exception as exc:        # noqa: BLE001

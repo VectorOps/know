@@ -8,7 +8,7 @@ from know.data import (
     PackageFilter,
     FileFilter,
     SymbolFilter,
-    ImportFilter,
+    ImportEdgeFilter,
 )
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
@@ -115,7 +115,7 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     foo_sig_before = foo_before.signature.raw if foo_before.signature else None
 
     # import-edge created for 'import os'
-    edges = rs.importedge.get_list(ImportFilter(source_package_id=pkg_id_mod1))
+    edges = rs.importedge.get_list(ImportEdgeFilter(source_package_id=pkg_id_mod1))
     assert len(edges) == 1
 
     # ── 2) second version  → UPDATE / DELETE paths ─────────────────────────
@@ -139,7 +139,7 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     assert foo_after.signature.raw != foo_sig_before
 
     # import-edges: removed
-    assert rs.importedge.get_list(ImportFilter(source_package_id=pkg_id_mod1)) == []
+    assert rs.importedge.get_list(ImportEdgeFilter(source_package_id=pkg_id_mod1)) == []
 
     # ── 3) delete second file and rescan  ─────────────────────────────────
     module2_fp.unlink()

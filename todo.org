@@ -12,11 +12,11 @@
 * [ ] Language support
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
-** [ ] C
-** [ ] JavaScript
 ** [ ] TypeScript
-** [ ] Java
 ** [ ] C#
+** [ ] C
+** [ ] Java
+** [ ] JavaScript
 ** [ ] PHP
 ** [ ] Rust
 ** [ ] Zig
@@ -84,4 +84,5 @@
 * [ ] Search to support exclude. For example - tests
 * [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
 * [ ] Move file summary helper out of tools
-* [ ] Better lookup with filters methods in data layer
+* [ ] Better lookup with filters methods in data layer, similar to symbol search instead of dedicated methods.
+* [ ] Figure out lockup in filelist tool

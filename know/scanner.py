@@ -18,7 +18,7 @@ from know.models import (
     SymbolRef,
     Vector,
 )
-from know.data import SymbolSearchQuery, SymbolFilter
+from know.data import SymbolSearchQuery, SymbolFilter, ImportEdgeFilter
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.project import Project, ProjectCache
 
@@ -316,7 +316,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     import_repo = repo_store.importedge
 
     # Existing edges from this file and package
-    existing_edges = import_repo.get_list_by_source_file_id(file_meta.id)
+    existing_edges = import_repo.get_list(ImportEdgeFilter(source_file_id=file_meta.id))
     existing_by_key: dict[tuple[str | None, str | None, bool], ImportEdge] = {
         (e.to_package_path, e.alias, e.dot): e for e in existing_edges
     }
@@ -463,7 +463,6 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     to the most specific class / interface (incl. Go struct) in the
     same package, based on FQN prefix matching.
     """
-    from know.data import SymbolFilter
     symbol_repo = project.data_repository.symbol
     repo_id = project.get_repo().id
 

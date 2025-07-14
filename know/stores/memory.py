@@ -21,6 +21,7 @@ from know.data import (
     PackageFilter,
     FileFilter,
     SymbolFilter,
+    ImportEdgeFilter,
     include_direct_descendants,
 )
 from know.data import SymbolRefFilter
@@ -136,11 +137,6 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                     return pkg
         return None
 
-    def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
-        """Return all packages that belong to *repo_id*."""
-        with self._lock:
-            return [pkg for pkg in self._items.values() if pkg.repo_id == repo_id]
-
     def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
         """
         Return all PackageMetadata objects that satisfy *flt*.
@@ -250,7 +246,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             self._index_remove(item_id)
         return ok
 
-    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:  # NEW
+    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         syms = super().get_list_by_ids(symbol_ids)
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
@@ -270,27 +266,155 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         SymbolMetadata.resolve_symbol_hierarchy(syms)
         return syms
 
-from know.data import ImportFilter
+    @staticmethod
+    def _tokenize(text: str) -> list[str]:
+        """Lower-case word tokenisation used by BM25 search."""
+        return re.findall(r"\w+", text.lower())
+
+    def _bm25_ranks(
+        self,
+        docs: list[tuple[SymbolMetadata, list[str]]],
+        query_tokens: list[str],
+    ) -> dict[str, int]:
+        """
+        Return {symbol_id -> rank (1-based)} for *docs* against *query_tokens*
+        using BM25 (same formula as DuckDB’s match_bm25).
+        Symbols with score 0 are omitted.
+        """
+        N = len(docs)
+        if N == 0 or not query_tokens:
+            return {}
+
+        avg_dl = sum(len(toks) for _, toks in docs) / N
+        # idf per query token
+        idf: dict[str, float] = {}
+        for tok in query_tokens:
+            n_q = sum(1 for _, toks in docs if tok in toks)
+            idf[tok] = math.log((N - n_q + 0.5) / (n_q + 0.5) + 1)
+
+        scored: list[tuple[str, float]] = []
+        for sym, toks in docs:
+            dl  = len(toks)
+            tfc = {t: toks.count(t) for t in query_tokens if t in toks}
+            score = 0.0
+            for t, tf in tfc.items():
+                denom  = tf + self.BM25_K1 * (1 - self.BM25_B + self.BM25_B * dl / avg_dl)
+                score += idf[t] * tf * (self.BM25_K1 + 1) / denom
+            if score > 0:
+                scored.append((sym.id, score))
+
+        scored.sort(key=lambda p: p[1], reverse=True)            # best first
+        return {sid: rank + 1 for rank, (sid, _) in enumerate(scored)}
+
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
+        with self._lock:
+            # candidate set: repo + scalar filters
+            candidates: list[SymbolMetadata] = [
+                s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
+            ]
+
+            # scalar filters
+            if query.symbol_fqn:
+                needle_fqn = query.symbol_fqn.lower()
+                candidates = [s for s in candidates if (s.fqn or "").lower() == needle_fqn]
+
+            if query.symbol_name:
+                needle = query.symbol_name.lower()
+                candidates = [s for s in candidates if needle in (s.name or "").lower()]
+
+            if query.symbol_kind:
+                candidates = [s for s in candidates if s.kind == query.symbol_kind]
+
+            if query.symbol_visibility:
+                candidates = [s for s in candidates if s.visibility == query.symbol_visibility]
+
+            if query.top_level_only:
+                candidates = [s for s in candidates if s.parent_symbol_id is None]
+
+            has_fts       = bool(query.doc_needle)
+            has_embedding = bool(query.embedding_query)
+
+            # unified ranking  (RRF over optional FTS / embedding signals)
+            fts_rank : dict[str, int] = {}
+            code_rank: dict[str, int] = {}
+
+            # FTS ranks
+            if has_fts:
+                q_tokens = self._tokenize(query.doc_needle)
+                docs = [
+                    (
+                        s,
+                        self._tokenize(
+                            f"{s.name or ''} {s.fqn or ''} {s.docstring or ''} {s.comment or ''}"
+                        ),
+                    )
+                    for s in candidates
+                ]
+                fts_rank = self._bm25_ranks(docs, q_tokens)
+
+            # embedding ranks
+            if has_embedding:
+                qvec = self._norm(query.embedding_query)  # shape (dim,)
+                id_candidates = {c.id for c in candidates}
+                sims: list[tuple[SymbolMetadata, float]] = []
+                for sid in id_candidates:
+                    vec = self._embeddings.get(sid)
+                    if vec is None:
+                        continue
+                    sim = float(np.dot(qvec, vec))  # cosine (both normalised)
+                    if sim < self.EMBEDDING_SIM_THRESHOLD:
+                        continue
+                    sims.append((self._items[sid], sim))
+                sims.sort(key=lambda p: p[1], reverse=True)               # best first
+                sims = sims[: self.EMBEDDING_TOP_K]
+                code_rank = {s.id: i + 1 for i, (s, _) in enumerate(sims)}
+
+            # fuse with Reciprocal-Rank Fusion
+            fused_score: dict[str, float] = {}
+            for s in candidates:
+                score = 0.0
+                if s.id in code_rank:
+                    score += 1.0 / (self.RRF_K + code_rank[s.id])
+                if s.id in fts_rank:
+                    score += 1.0 / (self.RRF_K + fts_rank[s.id])
+                fused_score[s.id] = score
+
+            if has_fts or has_embedding:
+                ranked_candidates = [
+                    s for s in candidates
+                    if s.id in code_rank or s.id in fts_rank
+                ]
+                ranked_candidates.sort(
+                    key=lambda s: (-fused_score.get(s.id, 0.0), s.name or "")
+                )
+                candidates = ranked_candidates
+            else:
+                candidates.sort(key=lambda s: s.name or "")
+
+            results = candidates
+
+            offset = query.offset or 0
+            limit  = query.limit  or 20
+            results = results[offset: offset + limit]
+
+        results = include_direct_descendants(self, results)
+
+        return results
+
+    def delete_by_file_id(self, file_id: str) -> int:
+        with self._lock:
+            to_delete = [sid for sid, sym in self._items.items() if sym.file_id == file_id]
+            for sid in to_delete:
+                self._items.pop(sid, None)
+                self._index_remove(sid)
+        return len(to_delete)
+
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.edges, tables.lock)
 
-    def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
-        """Return all import-edges whose *from_package_id* equals *package_id*."""
-        with self._lock:
-            return [edge for edge in self._items.values() if edge.from_package_id == package_id]
-
-    def get_list_by_source_file_id(self, file_id: str) -> list[ImportEdge]:
-        with self._lock:
-            return [edge for edge in self._items.values() if edge.from_file_id == file_id]
-
-    def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
-        """Return all import-edges whose ``repo_id`` matches *repo_id*."""
-        with self._lock:
-            return [edge for edge in self._items.values() if edge.repo_id == repo_id]
-
-    def get_list(self, flt: ImportFilter) -> list[ImportEdge]:      # NEW
+    def get_list(self, flt: ImportEdgeFilter) -> list[ImportEdge]:
         with self._lock:
             return [
                 edge for edge in self._items.values()
@@ -304,18 +428,6 @@ class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
                                   AbstractSymbolRefRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.symbolrefs, tables.lock)
-
-    def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
-        with self._lock:
-            return [r for r in self._items.values() if r.file_id == file_id]
-
-    def get_list_by_package_id(self, package_id: str) -> list[SymbolRef]:
-        with self._lock:
-            return [r for r in self._items.values() if r.package_id == package_id]
-
-    def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
-        with self._lock:
-            return [r for r in self._items.values() if r.repo_id == repo_id]
 
     def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
         with self._lock:

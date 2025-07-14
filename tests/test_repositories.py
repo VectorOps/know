@@ -12,7 +12,7 @@ from know.models import (
 )
 from typing import Dict, Any
 import uuid
-from know.data import SymbolSearchQuery, PackageFilter, FileFilter, SymbolFilter, ImportFilter
+from know.data import SymbolSearchQuery, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter
 
 
 def make_id() -> str:
@@ -127,11 +127,11 @@ def test_import_edge_repository(data_repo):
     rid, eid, fid, from_pid = make_id(), make_id(), make_id(), make_id()
     edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, from_file_id=fid, to_package_path="pkg/other", raw="import pkg.other", external=False))
 
-    assert edge_repo.get_list(ImportFilter(source_package_id=from_pid))[0].id == eid
-    assert edge_repo.get_list(ImportFilter(repo_id=rid))[0].id == eid
+    assert edge_repo.get_list(ImportEdgeFilter(source_package_id=from_pid))[0].id == eid
+    assert edge_repo.get_list(ImportEdgeFilter(repo_id=rid))[0].id == eid
     assert edge_repo.update(eid, {"alias": "aliaspkg"}).alias == "aliaspkg"
     assert edge_repo.delete(eid) is True
-    assert edge_repo.get_list(ImportFilter(repo_id=rid)) == []
+    assert edge_repo.get_list(ImportEdgeFilter(repo_id=rid)) == []
 
 
 def test_symbol_search(data_repo):

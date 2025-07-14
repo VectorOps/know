@@ -197,7 +197,7 @@ class AbstractSymbolMetadataRepository(ABC):
 
 
 @dataclass
-class ImportFilter:
+class ImportEdgeFilter:
     source_package_id: Optional[str] = None
     source_file_id: Optional[str] = None
     repo_id: Optional[str] = None
@@ -213,7 +213,7 @@ class AbstractImportEdgeRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list(self, flt: ImportFilter) -> list[ImportEdge]:
+    def get_list(self, flt: ImportEdgeFilter) -> list[ImportEdge]:
         pass
 
     @abstractmethod

@@ -31,7 +31,7 @@ from know.data import (
     PackageFilter,
     include_direct_descendants,
     SymbolFilter,
-    ImportFilter,
+    ImportEdgeFilter,
 )
 from know.data import SymbolRefFilter
 
@@ -395,21 +395,7 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
     table = "import_edges"
     model = ImportEdge
 
-    def get_list_by_source_package_id(self, package_id: str) -> list[ImportEdge]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM import_edges WHERE from_package_id = ?", [package_id]))
-        return [ImportEdge(**r) for r in rows]
-
-    def get_list_by_source_file_id(self, file_id: str) -> list[ImportEdge]:
-        rows = _row_to_dict(self.cursor().execute(f"SELECT * FROM {self.table} WHERE from_file_id = ?", [file_id]))
-        return [ImportEdge(**r) for r in rows]
-
-    def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
-        rows = _row_to_dict(self.cursor().execute(
-            "SELECT * FROM import_edges WHERE repo_id = ?", [repo_id]))
-        return [ImportEdge(**r) for r in rows]
-
-    # generic selector
-    def get_list(self, flt: ImportFilter) -> list[ImportEdge]:      # NEW
+    def get_list(self, flt: ImportEdgeFilter) -> list[ImportEdge]:      # NEW
         where, params = [], []
         if flt.source_package_id:
             where.append("from_package_id = ?")
@@ -429,21 +415,6 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
 class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepository):
     table = "symbol_refs"
     model = SymbolRef
-
-    def get_list_by_file_id(self, file_id: str) -> list[SymbolRef]:
-        rows = _row_to_dict(self.cursor().execute(
-            "SELECT * FROM symbol_refs WHERE file_id = ?", [file_id]))
-        return [SymbolRef(**r) for r in rows]
-
-    def get_list_by_package_id(self, package_id: str) -> list[SymbolRef]:
-        rows = _row_to_dict(self.cursor().execute(
-            "SELECT * FROM symbol_refs WHERE package_id = ?", [package_id]))
-        return [SymbolRef(**r) for r in rows]
-
-    def get_list_by_repo_id(self, repo_id: str) -> list[SymbolRef]:
-        rows = _row_to_dict(self.cursor().execute(
-            "SELECT * FROM symbol_refs WHERE repo_id = ?", [repo_id]))
-        return [SymbolRef(**r) for r in rows]
 
     def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
         """
@@ -465,7 +436,6 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
         rows = _row_to_dict(self.cursor().execute(sql, params))
         return [SymbolRef(**r) for r in rows]
 
-    # NEW ---------------------------------------------------------------
     def delete_by_file_id(self, file_id: str) -> int:
         """
         Bulk-delete refs belonging to *file_id*.
