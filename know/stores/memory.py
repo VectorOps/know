@@ -20,6 +20,7 @@ from know.data import (
     SymbolSearchQuery,
     PackageFilter,
     FileFilter,
+    SymbolFilter,
     include_direct_descendants,
 )
 from dataclasses import dataclass, field
