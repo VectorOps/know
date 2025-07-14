@@ -395,6 +395,15 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
             "SELECT * FROM import_edges WHERE repo_id = ?", [repo_id]))
         return [ImportEdge(**r) for r in rows]
 
+    # NEW ------------------------------------------------------------------
+    def get_list_by_file_id(self, file_id: str) -> list[ImportEdge]:
+        rows = _row_to_dict(
+            self.cursor().execute(
+                f"SELECT * FROM {self.table} WHERE from_file_id = ?", [file_id]
+            )
+        )
+        return [ImportEdge(**r) for r in rows]
+
 class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepository):
     table = "symbol_refs"
     model = SymbolRef

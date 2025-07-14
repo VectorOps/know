@@ -209,6 +209,14 @@ class AbstractImportEdgeRepository(ABC):
     def get_list_by_repo_id(self, repo_id: str) -> list[ImportEdge]:
         pass
 
+    # NEW ------------------------------------------------------------------
+    @abstractmethod
+    def get_list_by_file_id(self, file_id: str) -> list[ImportEdge]:
+        """
+        Return **all** ImportEdge objects whose ``from_file_id`` equals *file_id*.
+        """
+        pass
+
     @abstractmethod
     def create(self, edge: ImportEdge) -> ImportEdge:
         pass

@@ -297,6 +297,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         pkg_meta = PackageMetadata(id=generate_id(), **pkg_data)
         pkg_meta = pkg_repo.create(pkg_meta)
 
+<<<<<<< SEARCH
     # ── Import edges (package-level) ─────────────────────────────────────────
     import_repo = repo_store.importedge
 
@@ -350,19 +351,6 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     for key, edge in existing_by_key.items():
         if key not in new_keys:
             import_repo.delete(edge.id)
-
-    # ── File ────────────────────────────────────────────────────────────────
-    file_repo = repo_store.file
-    file_meta = file_repo.get_by_path(parsed_file.path)
-
-    file_data = parsed_file.to_dict()
-    file_data.update({"package_id": pkg_meta.id, "repo_id": project.get_repo().id})
-
-    if file_meta:
-        file_repo.update(file_meta.id, file_data)
-    else:
-        file_meta = FileMetadata(id=generate_id(), **file_data)
-        file_meta = file_repo.create(file_meta)
 
     # ── Symbols (recursive) ─────────────────────────────────────────────────
     symbol_repo = repo_store.symbol
