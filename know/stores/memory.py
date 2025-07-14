@@ -18,6 +18,7 @@ from know.data import (
     AbstractSymbolRefRepository,
     AbstractDataRepository,
     SymbolSearchQuery,
+    PackageFilter,              # ← NEW
     include_direct_descendants,
 )
 from dataclasses import dataclass, field
@@ -136,6 +137,21 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
         """Return all packages that belong to *repo_id*."""
         with self._lock:
             return [pkg for pkg in self._items.values() if pkg.repo_id == repo_id]
+
+    # ------------------------------------------------------------------
+    # AbstractPackageMetadataRepository implementation
+    # ------------------------------------------------------------------
+    def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
+        """
+        Return all PackageMetadata objects that satisfy *flt*.
+        Currently only repo_id is supported.
+        """
+        with self._lock:
+            if flt.repo_id:
+                return [pkg for pkg in self._items.values()
+                        if pkg.repo_id == flt.repo_id]
+            # no filter → return every package
+            return list(self._items.values())
 
     def delete_orphaned(
         self,

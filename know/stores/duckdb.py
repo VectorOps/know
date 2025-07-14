@@ -28,6 +28,7 @@ from know.data import (
     AbstractSymbolRefRepository,
     AbstractDataRepository,
     SymbolSearchQuery,
+    PackageFilter,              # ← NEW
     include_direct_descendants,
 )
 
@@ -161,6 +162,24 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
     def get_list_by_repo_id(self, repo_id: str) -> list[PackageMetadata]:
         rows = _row_to_dict(self.cursor().execute(
             "SELECT * FROM packages WHERE repo_id = ?", [repo_id]))
+        return [PackageMetadata(**r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # AbstractPackageMetadataRepository implementation
+    # ------------------------------------------------------------------
+    def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
+        """
+        Return all PackageMetadata rows matching *flt*.
+        Currently supports filtering by repo_id only.
+        """
+        if flt.repo_id:
+            rows = _row_to_dict(
+                self.cursor().execute(
+                    "SELECT * FROM packages WHERE repo_id = ?", [flt.repo_id]
+                )
+            )
+        else:
+            rows = _row_to_dict(self.cursor().execute("SELECT * FROM packages"))
         return [PackageMetadata(**r) for r in rows]
 
     def delete_orphaned(self) -> int:
