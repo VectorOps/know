@@ -104,6 +104,7 @@ class ParsedSymbol(BaseModel):
             "docstring": self.docstring,
             "signature": self.signature,
             "comment": self.comment,
+            "exported": self.exported,
         }
 
 

@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS symbols (
     docstring TEXT,
     comment TEXT,
     summary TEXT,
+    exported BOOLEAN,
     signature JSON,
     score_lint DOUBLE,
     score_complexity INTEGER,

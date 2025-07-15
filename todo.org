@@ -16,7 +16,8 @@
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
 ** [ ] TypeScript
-
+*** [ ] Interfaces
+*** [ ] CommonJS exports and imports
 ** [ ] C#
 ** [ ] C
 ** [ ] Java
