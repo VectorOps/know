@@ -51,12 +51,13 @@ def test_typescript_parser_on_simple_file():
 
     top_level = _to_map(parsed_file.symbols)
 
-    expected_names = {"fn", "Test", "CONST"}
+    expected_names = {"fn", "Test", "CONST", "z"}      # <-- add "z"
     assert set(top_level.keys()) == expected_names
 
     assert top_level["fn"].kind   == SymbolKind.FUNCTION
     assert top_level["Test"].kind == SymbolKind.CLASS
     assert top_level["CONST"].kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE)
+    assert top_level["z"].kind == SymbolKind.VARIABLE  # <-- new assertion
 
     # class children (method + possible variable)
     test_cls_children = _to_map(top_level["Test"].children)

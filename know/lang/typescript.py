@@ -19,6 +19,8 @@ from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash, compute_symbol_hash
 from know.logger import logger
 
+# TODO: interface support
+
 # ---------------------------------------------------------------------- #
 TS_LANGUAGE = Language(tsts.language_typescript())
 _parser: Parser | None = None
@@ -219,6 +221,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "variable_statement":
                     self._handle_variable(child)
                     decl_handled = True
+                case "lexical_declaration":          # <-- NEW
+                    self._handle_lexical(child)
+                    decl_handled = True
         if not decl_handled:
             # likely a re-export such as `export { foo } from "./mod";`
             # or `export * from "./mod";` → treat as import edge
@@ -337,18 +342,15 @@ class TypeScriptCodeParser(AbstractCodeParser):
         body = next((c for c in node.children if c.type == "class_body"), None)
         if body:
             for ch in body.children:
+                print(ch)
                 if ch.type == "method_definition":
                     m = self._create_method_symbol(ch, class_name=name)
                     cls_sym.children.append(m)
-                elif ch.type == "variable_statement":
+                elif ch.type in ("variable_statement", "lexical_declaration", "public_field_declaration"):
                     v = self._create_variable_symbol(ch, class_name=name)
                     if v:
                         cls_sym.children.append(v)
-                elif ch.type == "public_field_definition":           # NEW
-                    v = self._create_variable_symbol(ch, class_name=name)
-                    if v:
-                        cls_sym.children.append(v)
-                else:                                                # NEW
+                else:
                     logger.warning(
                         "TS parser: unknown class body node",
                         path=self.rel_path,
@@ -383,8 +385,24 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
     def _create_variable_symbol(self, node, class_name: Optional[str] = None):
-        ident = next((c for c in node.children
-                      if c.type in ("identifier", "property_identifier")), None)
+        ident = next(
+            (
+                c
+                for c in node.children
+                if c.type in ("identifier", "property_identifier")
+            ),
+            None,
+        )
+        if ident is None:            # <-- added deep search
+            ident = next(
+                (
+                    gc
+                    for ch in node.children
+                    for gc in ch.children
+                    if gc.type in ("identifier", "property_identifier")
+                ),
+                None,
+            )
         if ident is None:
             return None
         name = ident.text.decode("utf8")
@@ -446,6 +464,16 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         )
         self._collect_require_calls(node)      # NEW
+
+    def _handle_lexical(self, node):
+        """
+        Handle `lexical_declaration` (let/const) statements exactly like
+        `variable_statement`.
+        """
+        sym = self._create_variable_symbol(node)
+        if sym:
+            self.parsed_file.symbols.append(sym)
+        self._collect_require_calls(node)
 
     # very shallow call-collector (copies logic from python)
     def _collect_symbol_refs(self, root):
