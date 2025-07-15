@@ -222,12 +222,59 @@ class TypeScriptCodeParser(AbstractCodeParser):
             # or `export * from "./mod";` → treat as import edge
             self._handle_import(node)
 
+    # ───────────────── signature helpers ────────────────────────────
+    def _build_signature(self, node, name: str, prefix: str = "") -> SymbolSignature:
+        """
+        Extract (very lightly) the parameter-list and the optional
+        return-type from a *function_declaration* / *method_definition* node.
+        """
+        # ---- parameters -------------------------------------------------
+        params_node   = node.child_by_field_name("parameters")
+        params_objs   : list[SymbolParameter] = []
+        params_raw    : list[str]             = []
+        if params_node:
+            for prm in params_node.children:
+                if prm.type == ",":
+                    continue                         # punctuation
+                # ① parameter name ------------------------------------------------
+                name_node = (prm.child_by_field_name("name")
+                             or (prm if prm.type == "identifier" else None))
+                if name_node is None:                # fallback – whole slice
+                    p_name = prm.text.decode("utf8")
+                else:
+                    p_name = name_node.text.decode("utf8")
+                # ② (optional) type annotation -----------------------------------
+                t_node   = (prm.child_by_field_name("type")
+                            or prm.child_by_field_name("type_annotation"))
+                if t_node:
+                    p_type = t_node.text.decode("utf8").lstrip(":").strip()
+                    params_raw.append(f"{p_name}: {p_type}")
+                else:
+                    p_type = None
+                    params_raw.append(p_name)
+                params_objs.append(SymbolParameter(name=p_name, type=p_type))
+        # ---- return type ------------------------------------------------
+        rt_node   = node.child_by_field_name("return_type")
+        return_ty = (rt_node.text.decode("utf8").lstrip(":").strip()
+                     if rt_node else None)
+
+        # ---- raw header -------------------------------------------------
+        header = f"{prefix}{name}({', '.join(params_raw)})"
+        if return_ty:
+            header += f": {return_ty}"
+
+        return SymbolSignature(
+            raw         = header,
+            parameters  = params_objs,
+            return_type = return_ty,
+        )
+
     def _handle_function(self, node):
         name_node = node.child_by_field_name("name")
         if name_node is None:
             return
         name = name_node.text.decode("utf8")
-        sig = SymbolSignature(raw=f"function {name}()", parameters=[], return_type=None)
+        sig = self._build_signature(node, name, prefix="function ")
         sym = ParsedSymbol(
             name=name,
             fqn=self._join_fqn(self.package.virtual_path, name),
@@ -301,7 +348,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _create_method_symbol(self, node, class_name: str):
         name_node = node.child_by_field_name("name")
         name = name_node.text.decode("utf8") if name_node else "anonymous"
-        sig = SymbolSignature(raw=f"{name}()", parameters=[], return_type=None)
+        sig = self._build_signature(node, name, prefix="")
         return ParsedSymbol(
             name=name,
             fqn=self._join_fqn(self.package.virtual_path, class_name, name),
@@ -424,9 +471,9 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
         IND = " " * indent
         if sym.signature:
             header = sym.signature.raw
-        elif sym.body:
+        elif sym.symbol_body:
             # fall back to first non-empty line of the symbol body
-            header = sym.body.splitlines()[0].strip()
+            header = sym.symbol_body.splitlines()[0].strip()
         else:
             header = sym.name
 
