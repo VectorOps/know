@@ -83,6 +83,7 @@ class ParsedSymbol(BaseModel):
     docstring: Optional[str] = None
     signature: Optional[SymbolSignature] = None
     comment: Optional[str] = None
+    exported: Optional[bool] = None
 
     children: List['ParsedSymbol'] = Field(default_factory=list)
 

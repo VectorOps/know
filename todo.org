@@ -9,10 +9,14 @@
 * [X] Create helper methods to return models from parser objects
 * [X] Fix _resolve_to_package_id to use data repository
 * [X] Figure out a way to call functions for language parsers after finishing parsing files
+* [ ] Get rid of symbol hashes for short (all?) symbols - just check the body.
+* [ ] Add a flag to mark symbols as exported instead of treating them as public
+* [ ] Add a inherits field to symbols
 * [ ] Language support
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
 ** [ ] TypeScript
+
 ** [ ] C#
 ** [ ] C
 ** [ ] Java
@@ -69,8 +73,8 @@
 - Implement ranking algorithm to find recommendations
 ** [X] Figure out incremental graph updates
 ** [X] Create a tool that takes in file paths, query, runs above algorithm
-* [ ] Add infra to maintain in-memory tools like RepoMap
-** [ ] Enable/Disable RepoMap configuration flag
+* [-] Add infra to maintain in-memory tools like RepoMap
+** [ ] Enable/Disable tools configuration flag
 * [ ] Create a simple web ui to navigate project database
 * [ ] Validate traversal logic to ensure we can not go outside of the project directory.
 * [X] Add a way to destroy the project. This should also shutdown/stop embedding worker.
@@ -84,7 +88,7 @@
 * [ ] Search to support exclude. For example - tests
 * [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
 * [ ] Move file summary helper out of tools
-* [ ] Better lookup with filters methods in data layer, similar to symbol search instead of dedicated methods.
+* [X] Better lookup with filters methods in data layer, similar to symbol search instead of dedicated methods.
 * [ ] Figure out lockup in filelist tool
 * [X] Compress long symbol bodies
 * [ ] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key

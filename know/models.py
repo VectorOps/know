@@ -150,6 +150,7 @@ class SymbolMetadata(BaseModel):
     docstring: Optional[str] = None
     signature: Optional[SymbolSignature] = None
     comment: Optional[str] = None
+    exported: Optional[bool] = None
 
     # Embedding
     embedding_code_vec: Optional[Vector] = None

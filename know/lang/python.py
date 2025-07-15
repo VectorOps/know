@@ -167,6 +167,26 @@ class PythonCodeParser(AbstractCodeParser):
                 byte_offset=node.start_byte,
                 raw=node.text.decode("utf8", errors="replace"),
             )
+
+        if len(self.parsed_file.symbols) == symbols_before \
+           and len(self.parsed_file.imports) == imports_before:
+            logger.warning(
+                "Parser handled node but produced no symbols or imports",
+                path=self.parsed_file.path,
+                node_type=node.type,
+                line=getattr(node, "start_point", (0,))[0] + 1,
+                raw=node.text.decode("utf8", errors="replace"),
+            )
+
+        if len(self.parsed_file.symbols) == symbols_before \
+           and len(self.parsed_file.imports) == imports_before:
+            logger.warning(
+                "Parser handled node but produced no symbols or imports",
+                path=self.parsed_file.path,
+                node_type=node.type,
+                line=getattr(node, "start_point", (0,))[0] + 1,
+                raw=node.text.decode("utf8", errors="replace"),
+            )
             skip_symbol_check = True
         if (
             not skip_symbol_check

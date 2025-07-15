@@ -23,6 +23,7 @@ dependencies = [
     "networkx>=3.5",
     "structlog>=25.4.0",
     "faker>=37.4.0",
+    "tree-sitter-typescript>=0.23.2",
 ]
 
 [tool.uv]
