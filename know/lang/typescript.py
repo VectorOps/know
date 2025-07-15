@@ -235,10 +235,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if params_node:
             # only *named* children – this automatically ignores punctuation
             for prm in params_node.named_children:
-                # ① parameter name ------------------------------------------------
+                # parameter name
                 name_node = prm.child_by_field_name("name")
                 if name_node is None:
-                    # typical TS node: required_parameter → contains an identifier child
+                    # typical TS node: required_parameter -> contains an identifier child
                     name_node = next(
                         (c for c in prm.named_children if c.type == "identifier"),
                         None,
@@ -268,13 +268,13 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return_ty = (rt_node.text.decode("utf8").lstrip(":").strip()
                      if rt_node else None)
 
-        # ---- raw header -------------------------------------------------
-        header = f"{prefix}{name}({', '.join(params_raw)})"
-        if return_ty:
-            header += f": {return_ty}"
+        # --- raw header taken verbatim from source -----------------
+        raw_header = node.text.decode("utf8")
+        # keep only the declaration header part (before the body “{”)
+        raw_header = raw_header.split("{", 1)[0].strip()
 
         return SymbolSignature(
-            raw         = header,
+            raw         = raw_header,
             parameters  = params_objs,
             return_type = return_ty,
         )
