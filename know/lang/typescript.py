@@ -105,8 +105,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
         symbols_before = len(self.parsed_file.symbols)
         imports_before = len(self.parsed_file.imports)
 
-        if node.type in ("import_statement", "export_statement"):
+        if node.type == "import_statement":
             self._handle_import(node)
+        elif node.type == "export_statement":
+            self._handle_export(node)          # NEW
         elif node.type == "function_declaration":
             self._handle_function(node)
         elif node.type == "class_declaration":
@@ -118,7 +120,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         elif node.type == "expression_statement":
             self._handle_expression(node)
         else:
-            # unhandled – emit debug message to keep parity with python parser
             logger.debug(
                 "TS parser: unhandled node",
                 type=node.type,
@@ -173,7 +174,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         # ── alias / default / namespace import (if any) ────────────────
         alias = None
-        name_node = node.child_by_field_name("name")            # default import
+        name_node = node.child_by_field_name("name")
         if name_node is None:
             ns_node = next((c for c in node.children
                             if c.type == "namespace_import"), None)
@@ -194,6 +195,32 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 raw=raw,
             )
         )
+
+    def _handle_export(self, node):
+        """
+        Handle `export …` statements.
+
+        • If the export re-exports a module (has only a string literal),
+          delegate to `_handle_import` so an ImportEdge is still created.
+        • If the export wraps a declaration, forward that declaration to
+          the regular symbol handlers so the symbols are materialised.
+        """
+        decl_handled = False
+        for child in node.children:
+            match child.type:
+                case "function_declaration":
+                    self._handle_function(child)
+                    decl_handled = True
+                case "class_declaration":
+                    self._handle_class(child)
+                    decl_handled = True
+                case "variable_statement":
+                    self._handle_variable(child)
+                    decl_handled = True
+        if not decl_handled:
+            # likely a re-export such as `export { foo } from "./mod";`
+            # or `export * from "./mod";` → treat as import edge
+            self._handle_import(node)
 
     def _handle_function(self, node):
         name_node = node.child_by_field_name("name")
