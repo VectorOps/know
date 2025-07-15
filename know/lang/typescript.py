@@ -310,7 +310,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if name_node is None:
             return
         name = name_node.text.decode("utf8")
-        sig = SymbolSignature(raw=f"class {name}", parameters=[], return_type=None)
+        # take full node text and truncate at the opening brace → drop the body
+        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
         cls_sym = ParsedSymbol(
             name=name,
             fqn=self._join_fqn(self.package.virtual_path, name),
