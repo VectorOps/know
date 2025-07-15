@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Iterable
 class ProgrammingLanguage(str, Enum):
     PYTHON = "python"
     GO = "go"
+    TYPESCRIPT = "typescript"
     # Extend as needed.
 
 
