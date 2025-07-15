@@ -233,9 +233,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         params_objs   : list[SymbolParameter] = []
         params_raw    : list[str]             = []
         if params_node:
-            for prm in params_node.children:
-                if prm.type == ",":
-                    continue                         # punctuation
+            # only *named* children – this automatically ignores punctuation
+            for prm in params_node.named_children:
                 # ① parameter name ------------------------------------------------
                 name_node = (prm.child_by_field_name("name")
                              or (prm if prm.type == "identifier" else None))
