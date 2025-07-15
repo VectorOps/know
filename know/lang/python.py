@@ -3,7 +3,7 @@ import ast
 import re
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 from tree_sitter import Parser, Language
 import tree_sitter_python as tspython
 from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef
@@ -117,15 +117,218 @@ class PythonCodeParser(AbstractCodeParser):
 
         return self.parsed_file
 
-    # Generic node-dispatcher
+    # --- new helpers ----------------------------------------------------
+    def _create_import_symbol(self,
+                              node,
+                              import_path: str | None,
+                              alias: str | None) -> ParsedSymbol:
+        """Return a ParsedSymbol for a single `import …` statement."""
+        line_no  = node.start_point[0] + 1
+        key      = f"import@{line_no}"
+        body     = node.text.decode("utf8").rstrip()
+        name     = alias or import_path            # may be None – that is OK
+        return ParsedSymbol(
+            name=name,
+            fqn=self._join_fqn(self.package.virtual_path, name) if name else None,
+            body=body,
+            key=key,
+            hash=compute_symbol_hash(body.encode()),
+            kind=SymbolKind.IMPORT,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=Visibility.PUBLIC,
+            modifiers=[],
+            docstring=None,
+            signature=None,
+            comment=self._get_preceding_comment(node),
+            children=[],
+        )
+
+    def _create_comment_symbol(self, node) -> ParsedSymbol:
+        """Return a ParsedSymbol for a top-level `# …` comment."""
+        line_no = node.start_point[0] + 1
+        txt     = node.text.decode("utf8").rstrip()
+        return ParsedSymbol(
+            name=None,
+            fqn=None,
+            body=txt,
+            key=f"comment@{line_no}",
+            hash=compute_symbol_hash(node.text),
+            kind=SymbolKind.COMMENT,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=Visibility.PUBLIC,
+            modifiers=[],
+            docstring=None,
+            signature=None,
+            comment=None,
+            children=[],
+        )
+
+    def _create_literal_symbol(self, node) -> ParsedSymbol:
+        """Fallback symbol for any un-handled top-level node."""
+        line_no = node.start_point[0] + 1
+        body    = node.text.decode("utf8").rstrip()
+        return ParsedSymbol(
+            name=None,
+            fqn=None,
+            body=body,
+            key=f"literal@{line_no}_{compute_symbol_hash(node.text)[:6]}",
+            hash=compute_symbol_hash(node.text),
+            kind=SymbolKind.LITERAL,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=Visibility.PUBLIC,
+            modifiers=[],
+            docstring=None,
+            signature=None,
+            comment=self._get_preceding_comment(node),
+            children=[],
+        )
+
+    def _handle_try_statement(self, node):
+        parent_sym = ParsedSymbol(
+            name=None,
+            fqn=None,
+            body=node.text.decode("utf8"),
+            key=f"try@{node.start_point[0]+1}",
+            hash=compute_symbol_hash(node.text),
+            kind=SymbolKind.TRYCTCH,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=Visibility.PUBLIC,
+            modifiers=[],
+            docstring=None,
+            signature=None,
+            comment=self._get_preceding_comment(node),
+            children=[],
+        )
+
+        def _build_block_symbol(block_node, block_name: str) -> ParsedSymbol:
+            return ParsedSymbol(
+                name=block_name,
+                fqn=None,
+                body=block_node.text.decode("utf8"),
+                key=f"{block_name}@{block_node.start_point[0]+1}",
+                hash=compute_symbol_hash(block_node.text),
+                kind=SymbolKind.LITERAL,
+                start_line=block_node.start_point[0],
+                end_line=block_node.end_point[0],
+                start_byte=block_node.start_byte,
+                end_byte=block_node.end_byte,
+                visibility=Visibility.PUBLIC,
+                modifiers=[],
+                docstring=None,
+                signature=None,
+                comment=None,
+                children=[],
+            )
+
+        for child in node.children:
+            if child.type == "block":                         # try-body
+                parent_sym.children.append(_build_block_symbol(child, "try"))
+            elif child.type == "except_clause":
+                blk = next((c for c in child.children if c.type == "block"), None)
+                if blk is not None:
+                    parent_sym.children.append(_build_block_symbol(blk, "except"))
+            elif child.type == "else_clause":
+                blk = next((c for c in child.children if c.type == "block"), None)
+                if blk is not None:
+                    parent_sym.children.append(_build_block_symbol(blk, "else"))
+            elif child.type == "finally_clause":
+                blk = next((c for c in child.children if c.type == "block"), None)
+                if blk is not None:
+                    parent_sym.children.append(_build_block_symbol(blk, "finally"))
+
+        self.parsed_file.symbols.append(parent_sym)
+
+    def _handle_import_statement(self, node):
+        """
+        Handle `import` / `from … import …` statements and populate alias & dot flags.
+
+        alias:
+            - For `import pkg as alias`      → "alias"
+            - For `from pkg import name as a`→ "a"
+            - Otherwise                     → None
+
+        dot:
+            - True  when the statement is a relative import (leading dots)
+            - False otherwise
+        """
+        raw_stmt = node.text.decode("utf8")
+
+        # Defaults
+        import_path: str | None = None
+        alias: str | None = None
+        dot: bool = False
+
+        if node.type == "import_statement":
+            first_item = next((c for c in node.children
+                               if c.type in ("aliased_import", "dotted_name")), None)
+            if first_item is not None:
+                if first_item.type == "aliased_import":
+                    name_node   = first_item.child_by_field_name("name")
+                    alias_node  = first_item.child_by_field_name("alias")
+                    import_path = name_node.text.decode("utf8") if name_node else None
+                    alias       = alias_node.text.decode("utf8") if alias_node else None
+                elif first_item.type == "dotted_name":
+                    import_path = first_item.text.decode("utf8")
+
+        elif node.type == "import_from_statement":
+            rel_node = next((c for c in node.children if c.type == "relative_import"), None)
+            mod_node = next((c for c in node.children if c.type == "dotted_name"), None)
+
+            rel_txt  = rel_node.text.decode("utf8") if rel_node else ""
+            mod_txt  = mod_node.text.decode("utf8") if mod_node else ""
+            import_path = f"{rel_txt}{mod_txt}" if (rel_txt or mod_txt) else None
+            dot = bool(rel_node)
+
+            aliased = next((c for c in node.children if c.type == "aliased_import"), None)
+            if aliased is not None:
+                alias_node = aliased.child_by_field_name("alias")
+                if alias_node is not None:
+                    alias = alias_node.text.decode("utf8")
+
+        else:
+            import_path = raw_stmt  # fallback for unexpected node kinds
+
+        # Determine locality (strip leading dots for filesystem check)
+        is_local = self._is_local_import(import_path.lstrip(".") if import_path else "")
+
+        resolved_path: Optional[str] = None
+        if is_local:
+            # strip leading dots (relative-import syntax) before lookup
+            resolved_path = self._resolve_local_import_path(
+                import_path.lstrip(".") if import_path else ""
+            )
+
+        import_edge = ParsedImportEdge(
+            physical_path=resolved_path,
+            virtual_path=import_path or raw_stmt,
+            alias=alias,
+            dot=dot,
+            external=not is_local,
+            raw=raw_stmt,
+        )
+        self.parsed_file.imports.append(import_edge)
+
+        # NEW – add symbol for the import itself
+        self.parsed_file.symbols.append(
+            self._create_import_symbol(node, import_path, alias)
+        )
+
     def _process_node(
         self,
         node,
     ) -> None:
-        symbols_before = len(self.parsed_file.symbols)
-        imports_before = len(self.parsed_file.imports)
-        skip_symbol_check = False
-
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
             self._handle_import_statement(node)
 
@@ -155,6 +358,7 @@ class PythonCodeParser(AbstractCodeParser):
             return
 
         elif node.type == "comment":
+            self.parsed_file.symbols.append(self._create_comment_symbol(node))
             return
 
         # Unknown / unhandled → debug-log (mirrors previous behaviour)
@@ -167,39 +371,8 @@ class PythonCodeParser(AbstractCodeParser):
                 byte_offset=node.start_byte,
                 raw=node.text.decode("utf8", errors="replace"),
             )
-
-        if len(self.parsed_file.symbols) == symbols_before \
-           and len(self.parsed_file.imports) == imports_before:
-            logger.warning(
-                "Parser handled node but produced no symbols or imports",
-                path=self.parsed_file.path,
-                node_type=node.type,
-                line=getattr(node, "start_point", (0,))[0] + 1,
-                raw=node.text.decode("utf8", errors="replace"),
-            )
-
-        if len(self.parsed_file.symbols) == symbols_before \
-           and len(self.parsed_file.imports) == imports_before:
-            logger.warning(
-                "Parser handled node but produced no symbols or imports",
-                path=self.parsed_file.path,
-                node_type=node.type,
-                line=getattr(node, "start_point", (0,))[0] + 1,
-                raw=node.text.decode("utf8", errors="replace"),
-            )
-            skip_symbol_check = True
-        if (
-            not skip_symbol_check
-            and len(self.parsed_file.symbols) == symbols_before
-            and len(self.parsed_file.imports) == imports_before
-        ):
-            logger.warning(
-                "Parser handled node but produced no symbols or imports",
-                path=self.parsed_file.path,
-                node_type=node.type,
-                line=node.start_point[0] + 1,
-                raw=node.text.decode("utf8", errors="replace"),
-            )
+            self.parsed_file.symbols.append(self._create_literal_symbol(node))
+            return
 
     def _clean_docstring(self, doc: str) -> str:
         return ('\n'.join((s.strip() for s in doc.split('\n')))).strip()
@@ -585,251 +758,6 @@ class PythonCodeParser(AbstractCodeParser):
             children=[]
         )
 
-    def _handle_import_statement(self, node):
-        """
-        Handle `import` / `from … import …` statements and populate alias & dot flags.
-
-        alias:
-            - For `import pkg as alias`      → "alias"
-            - For `from pkg import name as a`→ "a"
-            - Otherwise                     → None
-
-        dot:
-            - True  when the statement is a relative import (leading dots)
-            - False otherwise
-        """
-        raw_stmt = node.text.decode("utf8")
-
-        # Defaults
-        import_path: str | None = None
-        alias: str | None = None
-        dot: bool = False
-
-        # Parse import statement
-        import_path: str | None = None
-        alias: str | None = None
-        dot: bool = False
-
-        if node.type == "import_statement":
-            first_item = next((c for c in node.children
-                               if c.type in ("aliased_import", "dotted_name")), None)
-            if first_item is not None:
-                if first_item.type == "aliased_import":
-                    name_node   = first_item.child_by_field_name("name")
-                    alias_node  = first_item.child_by_field_name("alias")
-                    import_path = name_node.text.decode("utf8") if name_node else None
-                    alias       = alias_node.text.decode("utf8") if alias_node else None
-                elif first_item.type == "dotted_name":
-                    import_path = first_item.text.decode("utf8")
-
-        elif node.type == "import_from_statement":
-            rel_node = next((c for c in node.children if c.type == "relative_import"), None)
-            mod_node = next((c for c in node.children if c.type == "dotted_name"), None)
-
-            rel_txt  = rel_node.text.decode("utf8") if rel_node else ""
-            mod_txt  = mod_node.text.decode("utf8") if mod_node else ""
-            import_path = f"{rel_txt}{mod_txt}" if (rel_txt or mod_txt) else None
-            dot = bool(rel_node)
-
-            aliased = next((c for c in node.children if c.type == "aliased_import"), None)
-            if aliased is not None:
-                alias_node = aliased.child_by_field_name("alias")
-                if alias_node is not None:
-                    alias = alias_node.text.decode("utf8")
-
-        else:
-            import_path = raw_stmt  # fallback for unexpected node kinds
-
-        # Determine locality (strip leading dots for filesystem check)
-        is_local = self._is_local_import(import_path.lstrip(".") if import_path else "")
-
-        resolved_path: Optional[str] = None
-        if is_local:
-            # strip leading dots (relative-import syntax) before lookup
-            resolved_path = self._resolve_local_import_path(
-                import_path.lstrip(".") if import_path else ""
-            )
-
-        import_edge = ParsedImportEdge(
-            physical_path=resolved_path,
-            virtual_path=import_path or raw_stmt,
-            alias=alias,
-            dot=dot,
-            external=not is_local,
-            raw=raw_stmt,
-        )
-        self.parsed_file.imports.append(import_edge)
-
-    def _handle_function_definition(self, node):
-        """
-        Handle top-level function definitions.
-
-        The function name is decoded once and reused to minimise repeated
-        byte-to-str conversions, slightly improving performance for large files.
-        """
-        # Utility: determine decorated wrapper
-        wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
-
-        func_name_node = node.child_by_field_name("name")
-        if func_name_node is None:
-            # Malformed node – skip to remain resilient to parser errors.
-            return
-        func_name = func_name_node.text.decode("utf8")
-
-        symbol = ParsedSymbol(
-            name=func_name,
-            fqn=self._join_fqn(self.package.virtual_path, func_name),
-            body=wrapper.text.decode("utf8"),
-            key=func_name,
-            hash=compute_symbol_hash(wrapper.text),
-            kind=SymbolKind.FUNCTION,
-            start_line=wrapper.start_point[0],
-            end_line=wrapper.end_point[0],
-            start_byte=wrapper.start_byte,
-            end_byte=wrapper.end_byte,
-            visibility=self._infer_visibility(func_name),
-            modifiers=[],
-            docstring=self._extract_docstring(node),
-            signature=self._build_function_signature(wrapper),
-            comment=self._get_preceding_comment(node),
-            children=[],
-        )
-        self.parsed_file.symbols.append(symbol)
-
-    def _handle_decorated_definition(
-        self,
-        node,
-        class_symbol: Optional[ParsedSymbol] = None,
-    ):
-        """
-        Handle a `decorated_definition` wrapper.
-        Unwrap the enclosed `function_definition` or `class_definition`
-        while keeping the outer node’s text (so decorators are preserved
-        in `body` and available to `_build_function_signature`).
-        """
-        # Find the real definition wrapped by the decorators
-        inner = next(
-            (c for c in node.children if c.type in ("function_definition", "async_function_definition", "class_definition")),
-            None,
-        )
-        if inner is None:  # corrupt / unexpected – skip
-            return
-
-        if inner.type in ("function_definition", "async_function_definition"):
-            self._handle_function_definition(inner)
-        elif inner.type == "class_definition":
-            self._handle_class_definition(inner)
-
-    def _handle_try_statement(
-        self,
-        node,
-    ):
-        """
-        Extract symbols that occur one level deep inside a *top-level* try-statement.
-        Child `block`s of the try/except/else/finally clauses are inspected; deeper
-        nesting is ignored.
-        """
-
-        # visit every first-level block (try, except, else, finally)
-        for child in node.children:
-            # plain `block`
-            if child.type == "block":
-                for grand in child.children:
-                    self._process_node(grand)
-            # except_clause → grab its inner block
-            elif child.type == "except_clause":
-                blk = next((c for c in child.children if c.type == "block"), None)
-                if blk is not None:
-                    for grand in blk.children:
-                        self._process_node(grand)
-
-    def _handle_expression_statement(self, node) -> None:
-        """
-        Register a top-level expression (usually a function call) as a
-        SymbolKind.LITERAL.
-        """
-        expr_bytes: bytes = node.text
-        expr: str = expr_bytes.decode("utf8").strip()
-        if not expr:                         # ignore blank / trivial nodes
-            return
-
-        # crude name heuristic: take token before first "(" or full expr
-        name_tok = expr.split("(", 1)[0].strip().split()[0]
-        name = name_tok or f"expr@{node.start_point[0]+1}"
-
-        self.parsed_file.symbols.append(
-            ParsedSymbol(
-                name=name,
-                fqn=self._join_fqn(self.package.virtual_path, name),
-                body=expr,
-                key=name,
-                hash=compute_symbol_hash(expr_bytes),
-                kind=SymbolKind.LITERAL,
-                start_line=node.start_point[0],
-                end_line=node.end_point[0],
-                start_byte=node.start_byte,
-                end_byte=node.end_byte,
-                visibility=Visibility.PUBLIC,
-                modifiers=[],
-                docstring=None,
-                signature=None,
-                comment=self._get_preceding_comment(node),
-                children=[],
-            )
-        )
-
-    # Module-resolution helper                                           #
-    def _locate_module_path(self, import_path: str) -> Optional[Path]:
-        """
-        Return the *absolute* Path of the *deepest* package/module that matches
-        ``import_path`` inside the given project.
-
-        Resolution preference:
-        1. Concrete module file  (…/foo.py, …/foo.so, …)
-        2. Package directory’s   ``__init__.py`` (…/foo/__init__.py)
-
-        The scan continues through the whole dotted path, keeping the last
-        match instead of returning on the first one, so that
-        ``from pkg.sub import x`` resolves to ``pkg/sub.py`` (or
-        ``pkg/sub/__init__.py``) rather than just ``pkg``.
-        """
-        if not import_path:
-            return None
-
-        project_root = Path(self.project.settings.project_path).resolve()
-        parts = import_path.split(".")
-        found: Optional[Path] = None  # remember the most-specific hit
-
-        for idx in range(1, len(parts) + 1):
-            base = project_root.joinpath(*parts[:idx])
-
-            # Skip anything located inside a virtual-env folder
-            if any(seg in _VENV_DIRS for seg in base.parts):
-                continue
-
-            # 1) concrete module file (preferred)
-            for suffix in _MODULE_SUFFIXES:
-                file_candidate = base.with_suffix(suffix)
-                if file_candidate.exists():
-                    found = file_candidate
-                    break  # no need to check package dir for this idx
-            else:
-                # 2) package directory
-                if base.is_dir() and (base / "__init__.py").exists():
-                    found = base / "__init__.py"
-
-        return found
-
-    def _resolve_local_import_path(self, import_path: str) -> Optional[str]:
-        path_obj = self._locate_module_path(import_path)
-        if path_obj is None:
-            return None
-        project_root = Path(self.project.settings.project_path).resolve()
-        return path_obj.relative_to(project_root).as_posix()
-
-    def _is_local_import(self, import_path: str) -> bool:
-        return self._locate_module_path(import_path) is not None
-
     # Outgoing symbol-reference (call) collector
     def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
         """
@@ -934,6 +862,12 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}    ...")
 
         elif sym.kind == SymbolKind.CLASS:
+            if not skip_docs and sym.docstring:
+                _emit_docstring(sym.docstring, IND + "    ")
+            for child in sym.children:
+                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
+
+        elif sym.kind == SymbolKind.TRYCTCH:
             if not skip_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             for child in sym.children:
