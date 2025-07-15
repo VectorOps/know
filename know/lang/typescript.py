@@ -421,9 +421,28 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
     def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0,
                            skip_docs: bool = False) -> str:
-        IND = " " * indent
+        IND    = " " * indent
         header = sym.signature.raw if sym.signature else sym.name
-        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD, SymbolKind.CLASS) and not header.endswith("{"):
+
+        # ----- symbol specific formatting -------------------------------- #
+        if sym.kind == SymbolKind.CLASS:
+            # open-brace line
+            if not header.endswith("{"):
+                header += " {"
+            lines = [IND + header]
+
+            # recurse over children (methods / fields)
+            for ch in sym.children or []:
+                lines.append(self.get_symbol_summary(ch,
+                                                     indent=indent + 2,
+                                                     skip_docs=skip_docs))
+
+            # closing brace
+            lines.append(IND + "}")
+            return "\n".join(lines)
+
+        # non-class symbols – keep terse one-liner
+        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD) and not header.endswith("{"):
             header += " { ... }"
         return IND + header
 
