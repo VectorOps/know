@@ -117,119 +117,104 @@ class PythonCodeParser(AbstractCodeParser):
 
         return self.parsed_file
 
-    # --- new helpers ----------------------------------------------------
-    def _create_import_symbol(self,
-                              node,
-                              import_path: str | None,
-                              alias: str | None) -> ParsedSymbol:
-        """Return a ParsedSymbol for a single `import …` statement."""
-        line_no  = node.start_point[0] + 1
-        key      = f"import@{line_no}"
-        body     = node.text.decode("utf8").rstrip()
-        name     = alias or import_path            # may be None – that is OK
+    # ------------------------------------------------------------------  
+    #  generic symbol-builder  
+    # ------------------------------------------------------------------
+    def _make_symbol(
+        self,
+        node,
+        *,
+        kind: SymbolKind,
+        name: str | None = None,
+        fqn: str | None = None,
+        key: str | None = None,
+        body: str | None = None,
+        visibility: Visibility | None = None,
+        modifiers: list[Modifier] | None = None,
+        signature: SymbolSignature | None = None,
+        docstring: str | None = None,
+        comment: str | None = None,
+        children: list[ParsedSymbol] | None = None,
+        exported: bool | None = None,
+    ) -> ParsedSymbol:
+        """
+        Build a ParsedSymbol and pre-populate all generic fields that can be
+        derived directly from *node*.  Callers may override any value via the
+        keyword arguments.
+        """
+        body = body if body is not None else node.text.decode("utf8")
+        # fall back to heuristics only when not explicitly provided
+        visibility = visibility if visibility is not None else (
+            self._infer_visibility(name) if name else Visibility.PUBLIC
+        )
         return ParsedSymbol(
             name=name,
-            fqn=self._join_fqn(self.package.virtual_path, name) if name else None,
+            fqn=fqn,
             body=body,
-            key=key,
+            key=key or (name or f"literal@{node.start_point[0]+1}"),
             hash=compute_symbol_hash(body.encode()),
-            kind=SymbolKind.IMPORT,
+            kind=kind,
             start_line=node.start_point[0],
             end_line=node.end_point[0],
             start_byte=node.start_byte,
             end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
-            modifiers=[],
-            docstring=None,
-            signature=None,
+            visibility=visibility,
+            modifiers=modifiers or [],
+            docstring=docstring,
+            signature=signature,
+            comment=comment,
+            children=children or [],
+            exported=exported,
+        )
+
+    def _create_import_symbol(self, node, import_path: str | None, alias: str | None) -> ParsedSymbol:
+        line_no = node.start_point[0] + 1
+        body    = node.text.decode("utf8").rstrip()
+        name    = alias or import_path
+        return self._make_symbol(
+            node,
+            kind=SymbolKind.IMPORT,
+            name=name,
+            fqn=self._join_fqn(self.package.virtual_path, name) if name else None,
+            key=f"import@{line_no}",
+            body=body,
             comment=self._get_preceding_comment(node),
-            children=[],
         )
 
     def _create_comment_symbol(self, node) -> ParsedSymbol:
-        """Return a ParsedSymbol for a top-level `# …` comment."""
         line_no = node.start_point[0] + 1
         txt     = node.text.decode("utf8").rstrip()
-        return ParsedSymbol(
-            name=None,
-            fqn=None,
+        return self._make_symbol(
+            node,
+            kind=SymbolKind.COMMENT,
             body=txt,
             key=f"comment@{line_no}",
-            hash=compute_symbol_hash(node.text),
-            kind=SymbolKind.COMMENT,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
-            modifiers=[],
-            docstring=None,
-            signature=None,
-            comment=None,
-            children=[],
         )
 
+    #  generic “literal” helper – used everywhere a fallback symbol is needed
     def _create_literal_symbol(self, node) -> ParsedSymbol:
-        """Fallback symbol for any un-handled top-level node."""
         line_no = node.start_point[0] + 1
-        body    = node.text.decode("utf8").rstrip()
-        return ParsedSymbol(
-            name=None,
-            fqn=None,
-            body=body,
-            key=f"literal@{line_no}_{compute_symbol_hash(node.text)[:6]}",
-            hash=compute_symbol_hash(node.text),
+        return self._make_symbol(
+            node,
             kind=SymbolKind.LITERAL,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
-            modifiers=[],
-            docstring=None,
-            signature=None,
+            key=f"literal@{line_no}_{compute_symbol_hash(node.text)[:6]}",
             comment=self._get_preceding_comment(node),
-            children=[],
         )
 
     def _handle_try_statement(self, node):
-        parent_sym = ParsedSymbol(
-            name=None,
-            fqn=None,
-            body=node.text.decode("utf8"),
-            key=f"try@{node.start_point[0]+1}",
-            hash=compute_symbol_hash(node.text),
+        parent_sym = self._make_symbol(
+            node,
             kind=SymbolKind.TRYCTCH,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
-            modifiers=[],
-            docstring=None,
-            signature=None,
+            key=f"try@{node.start_point[0]+1}",
             comment=self._get_preceding_comment(node),
-            children=[],
         )
 
         def _build_block_symbol(block_node, block_name: str) -> ParsedSymbol:
-            return ParsedSymbol(
-                name=block_name,
-                fqn=None,
-                body=block_node.text.decode("utf8"),
-                key=f"{block_name}@{block_node.start_point[0]+1}",
-                hash=compute_symbol_hash(block_node.text),
+            return self._make_symbol(
+                block_node,
                 kind=SymbolKind.LITERAL,
-                start_line=block_node.start_point[0],
-                end_line=block_node.end_point[0],
-                start_byte=block_node.start_byte,
-                end_byte=block_node.end_byte,
-                visibility=Visibility.PUBLIC,
-                modifiers=[],
-                docstring=None,
-                signature=None,
-                comment=None,
-                children=[],
+                name=block_name,
+                key=f"{block_name}@{block_node.start_point[0]+1}",
             )
 
         for child in node.children:
@@ -625,23 +610,14 @@ class PythonCodeParser(AbstractCodeParser):
         fqn = self._join_fqn(self.package.virtual_path, class_name, name)
         key = ".".join(filter(None, [class_name, name])) if class_name else name
         wrapper = node.parent if node.parent and node.parent.type == "expression_statement" else node
-        return ParsedSymbol(
+        return self._make_symbol(
+            node,
+            kind=kind,
             name=name,
             fqn=fqn,
-            body=node.text.decode("utf8"),
             key=key,
-            hash=compute_symbol_hash(node.text),
-            kind=kind,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
             visibility=self._infer_visibility(name),
-            modifiers=[],
-            docstring=None,
-            signature=None,
             comment=self._get_preceding_comment(wrapper),
-            children=[],
         )
 
     def _handle_assignment(
@@ -680,23 +656,14 @@ class PythonCodeParser(AbstractCodeParser):
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Handle class definitions
         class_name = node.child_by_field_name('name').text.decode('utf8')
-        symbol = ParsedSymbol(
+        symbol = self._make_symbol(
+            wrapper,
+            kind=SymbolKind.CLASS,
             name=class_name,
             fqn=self._join_fqn(self.package.virtual_path, class_name),
-            body=wrapper.text.decode('utf8'),
-            key=class_name,
-            hash=compute_symbol_hash(wrapper.text),
-            kind=SymbolKind.CLASS,
-            start_line=wrapper.start_point[0],
-            end_line=wrapper.end_point[0],
-            start_byte=wrapper.start_byte,
-            end_byte=wrapper.end_byte,
-            visibility=self._infer_visibility(class_name),
-            modifiers=[],
+            comment=self._get_preceding_comment(node),
             docstring=self._extract_docstring(node),
             signature=self._build_class_signature(wrapper),
-            comment=self._get_preceding_comment(node),
-            children=[]
         )
         # Traverse class body to find methods and properties
         # Tree-sitter puts all class statements inside the single “block” child.
@@ -739,23 +706,17 @@ class PythonCodeParser(AbstractCodeParser):
         # Create a symbol for a function or method
         method_name = node.child_by_field_name('name').text.decode('utf8')
         key = f"{class_name}.{method_name}" if class_name else method_name
-        return ParsedSymbol(
+        return self._make_symbol(
+            wrapper,
+            kind=SymbolKind.METHOD,
             name=method_name,
             fqn=self._join_fqn(self.package.virtual_path, class_name, method_name),
-            body=wrapper.text.decode('utf8'),
             key=key,
-            hash=compute_symbol_hash(wrapper.text),
-            kind=SymbolKind.METHOD,
-            start_line=wrapper.start_point[0],
-            end_line=wrapper.end_point[0],
-            start_byte=wrapper.start_byte,
-            end_byte=wrapper.end_byte,
             visibility=self._infer_visibility(method_name),
             modifiers=[Modifier.ASYNC] if node.type == "async_function_definition" else [],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
-            children=[]
         )
 
     # Outgoing symbol-reference (call) collector
