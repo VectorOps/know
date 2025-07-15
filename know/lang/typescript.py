@@ -236,13 +236,23 @@ class TypeScriptCodeParser(AbstractCodeParser):
             # only *named* children – this automatically ignores punctuation
             for prm in params_node.named_children:
                 # ① parameter name ------------------------------------------------
-                name_node = (prm.child_by_field_name("name")
-                             or (prm if prm.type == "identifier" else None))
-                if name_node is None:                # fallback – whole slice
-                    p_name = prm.text.decode("utf8")
-                else:
-                    p_name = name_node.text.decode("utf8")
-                # ② (optional) type annotation -----------------------------------
+                name_node = prm.child_by_field_name("name")
+                if name_node is None:
+                    # typical TS node: required_parameter → contains an identifier child
+                    name_node = next(
+                        (c for c in prm.named_children if c.type == "identifier"),
+                        None,
+                    )
+                if name_node is None and prm.type == "identifier":
+                    name_node = prm
+
+                # last-chance fallback – entire slice
+                p_name = (
+                    name_node.text.decode("utf8")
+                    if name_node is not None
+                    else prm.text.decode("utf8")
+                )
+                # (optional) type annotation
                 t_node   = (prm.child_by_field_name("type")
                             or prm.child_by_field_name("type_annotation"))
                 if t_node:
@@ -252,6 +262,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     p_type = None
                     params_raw.append(p_name)
                 params_objs.append(SymbolParameter(name=p_name, type=p_type))
+
         # ---- return type ------------------------------------------------
         rt_node   = node.child_by_field_name("return_type")
         return_ty = (rt_node.text.decode("utf8").lstrip(":").strip()
