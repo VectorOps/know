@@ -119,6 +119,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._handle_variable(node)
         elif node.type == "expression_statement":
             self._handle_expression(node)
+        elif node.type == "lexical_declaration":
+            self._handle_lexical(node)
         else:
             logger.debug(
                 "TS parser: unhandled node",
