@@ -221,8 +221,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "variable_statement":
                     self._handle_variable(child)
                     decl_handled = True
-                case "lexical_declaration":          # <-- NEW
+                case "lexical_declaration":
                     self._handle_lexical(child)
+                    decl_handled = True
+                case "export_clause":
+                    self._handle_export_clause(child)
                     decl_handled = True
         if not decl_handled:
             # likely a re-export such as `export { foo } from "./mod";`
@@ -342,7 +345,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         body = next((c for c in node.children if c.type == "class_body"), None)
         if body:
             for ch in body.children:
-                print(ch)
                 if ch.type == "method_definition":
                     m = self._create_method_symbol(ch, class_name=name)
                     cls_sym.children.append(m)
@@ -393,16 +395,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             ),
             None,
         )
-        if ident is None:            # <-- added deep search
-            ident = next(
-                (
-                    gc
-                    for ch in node.children
-                    for gc in ch.children
-                    if gc.type in ("identifier", "property_identifier")
-                ),
-                None,
-            )
         if ident is None:
             return None
         name = ident.text.decode("utf8")
