@@ -301,7 +301,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _create_method_symbol(self, node, class_name: str):
         name_node = node.child_by_field_name("name")
         name = name_node.text.decode("utf8") if name_node else "anonymous"
-        sig = SymbolSignature(raw=f"method {name}()", parameters=[], return_type=None)
+        sig = SymbolSignature(raw=f"{name}()", parameters=[], return_type=None)
         return ParsedSymbol(
             name=name,
             fqn=self._join_fqn(self.package.virtual_path, class_name, name),
