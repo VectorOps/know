@@ -102,6 +102,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     # ------------ generic dispatcher ----------------------------------- #
     def _process_node(self, node) -> None:
+        symbols_before = len(self.parsed_file.symbols)
+        imports_before = len(self.parsed_file.imports)
+
         if node.type in ("import_statement", "export_statement"):
             self._handle_import(node)
         elif node.type == "function_declaration":
@@ -121,6 +124,17 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 type=node.type,
                 path=self.rel_path,
                 line=node.start_point[0] + 1,
+            )
+
+        # Emit warning when the handler produced neither symbols nor imports
+        if (len(self.parsed_file.symbols) == symbols_before and
+                len(self.parsed_file.imports) == imports_before):
+            logger.warning(
+                "TS parser handled node but produced no symbols or imports",
+                path=self.rel_path,
+                node_type=node.type,
+                line=node.start_point[0] + 1,
+                raw=node.text.decode("utf8", errors="replace"),
             )
 
     # -------------- handlers (MINIMAL) --------------------------------- #
