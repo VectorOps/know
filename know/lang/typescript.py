@@ -421,8 +421,14 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
     def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0,
                            skip_docs: bool = False) -> str:
-        IND    = " " * indent
-        header = sym.signature.raw if sym.signature else sym.name
+        IND = " " * indent
+        if sym.signature:
+            header = sym.signature.raw
+        elif sym.body:
+            # fall back to first non-empty line of the symbol body
+            header = sym.body.splitlines()[0].strip()
+        else:
+            header = sym.name
 
         # ----- symbol specific formatting -------------------------------- #
         if sym.kind == SymbolKind.CLASS:
