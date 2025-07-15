@@ -283,6 +283,18 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     v = self._create_variable_symbol(ch, class_name=name)
                     if v:
                         cls_sym.children.append(v)
+                elif ch.type == "public_field_definition":           # NEW
+                    v = self._create_variable_symbol(ch, class_name=name)
+                    if v:
+                        cls_sym.children.append(v)
+                else:                                                # NEW
+                    logger.warning(
+                        "TS parser: unknown class body node",
+                        path=self.rel_path,
+                        class_name=name,
+                        node_type=ch.type,
+                        line=ch.start_point[0] + 1,
+                    )
         self.parsed_file.symbols.append(cls_sym)
 
     # helpers reused by class + top level
@@ -310,7 +322,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
     def _create_variable_symbol(self, node, class_name: Optional[str] = None):
-        ident = next((c for c in node.children if c.type == "identifier"), None)
+        ident = next((c for c in node.children
+                      if c.type in ("identifier", "property_identifier")), None)
         if ident is None:
             return None
         name = ident.text.decode("utf8")
