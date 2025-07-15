@@ -227,10 +227,56 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "export_clause":
                     self._handle_export_clause(child)
                     decl_handled = True
+
         if not decl_handled:
             # likely a re-export such as `export { foo } from "./mod";`
             # or `export * from "./mod";` → treat as import edge
             self._handle_import(node)
+
+    def _handle_export_clause(self, node):
+        """
+        Handle `export { … }` clauses (named exports without a module
+        specifier).  Nothing needs to be added to *symbols* or *imports*
+        – the underlying declarations have already been processed earlier
+        in the file – we just mark the identifiers so that the surrounding
+        `_handle_export()` call knows the clause has been handled.
+        """
+        print(node)
+        for spec in (c for c in node.named_children
+                     if c.type == "export_specifier"):
+            ident = (spec.child_by_field_name("name")
+                     or next((c for c in spec.named_children
+                              if c.type == "identifier"), None))
+            if ident is None:
+                continue
+            logger.debug(
+                "TS parser: export clause identifier",
+                path=self.rel_path,
+                name=ident.text.decode("utf8"),
+            )
+        # add a lightweight symbol representing this export clause
+        raw = node.text.decode("utf8")
+        self.parsed_file.symbols.append(
+            ParsedSymbol(
+                name=f"export@{node.start_point[0]+1}",
+                fqn=self._join_fqn(self.package.virtual_path,
+                                   f"export@{node.start_point[0]+1}"),
+                body=raw,
+                key=f"export@{node.start_point[0]+1}",
+                hash=compute_symbol_hash(node.text),
+                kind=SymbolKind.LITERAL,
+                start_line=node.start_point[0],
+                end_line=node.end_point[0],
+                start_byte=node.start_byte,
+                end_byte=node.end_byte,
+                visibility=Visibility.PUBLIC,
+                modifiers=[],
+                docstring=None,
+                signature=None,
+                comment=None,
+                children=[],
+            )
+        )
 
     # ───────────────── signature helpers ────────────────────────────
     def _build_signature(self, node, name: str, prefix: str = "") -> SymbolSignature:
@@ -386,15 +432,26 @@ class TypeScriptCodeParser(AbstractCodeParser):
             children=[],
         )
 
+    @staticmethod
+    def _find_first_identifier(node):
+        if node.type in ("identifier", "property_identifier"):
+            return node
+        for ch in node.children:
+            ident = TypeScriptCodeParser._find_first_identifier(ch)
+            if ident is not None:
+                return ident
+        return None
+
     def _create_variable_symbol(self, node, class_name: Optional[str] = None):
+        # 1st-level search (as before)
         ident = next(
-            (
-                c
-                for c in node.children
-                if c.type in ("identifier", "property_identifier")
-            ),
+            (c for c in node.children
+             if c.type in ("identifier", "property_identifier")),
             None,
         )
+        # deep fallback – walk the subtree until we hit the first identifier
+        if ident is None:
+            ident = self._find_first_identifier(node)
         if ident is None:
             return None
         name = ident.text.decode("utf8")
