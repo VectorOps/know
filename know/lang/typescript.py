@@ -20,7 +20,7 @@ from know.helpers import compute_file_hash, compute_symbol_hash
 from know.logger import logger
 
 # ---------------------------------------------------------------------- #
-TS_LANGUAGE = Language(tsts.language())
+TS_LANGUAGE = Language(tsts.language_typescript())
 _parser: Parser | None = None
 def _get_parser() -> Parser:
     global _parser
@@ -138,17 +138,62 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
 
     # -------------- handlers (MINIMAL) --------------------------------- #
+    _RESOLVE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx")
+
+    def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
+        # local   →  starts with '.'  (./foo, ../bar/baz)
+        if module.startswith("."):
+            base_dir  = os.path.dirname(self.rel_path)
+            rel_candidate = os.path.normpath(os.path.join(base_dir, module))
+            # if no suffix, try to add the usual ones until a file exists
+            if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
+                for suf in self._RESOLVE_SUFFIXES:
+                    cand = f"{rel_candidate}{suf}"
+                    if os.path.exists(
+                        os.path.join(self.project.settings.project_path, cand)
+                    ):
+                        rel_candidate = cand
+                        break
+            physical = rel_candidate
+            virtual  = self._rel_to_virtual_path(rel_candidate)
+            return physical, virtual, False        # local
+        # external package (npm, built-in, etc.)
+        return None, module, True
+
     def _handle_import(self, node):
         raw = node.text.decode("utf8")
-        imp = ParsedImportEdge(
-            physical_path=None,
-            virtual_path=raw,  # leave as raw for now
-            alias=None,
-            dot=False,
-            external=True,
-            raw=raw,
+
+        # ── find module specifier ───────────────────────────────────────
+        spec_node = next((c for c in node.children if c.type == "string"), None)
+        if spec_node is None:
+            return                      # defensive – malformed import
+        module = spec_node.text.decode("utf8").strip("\"'")
+
+        physical, virtual, external = self._resolve_module(module)
+
+        # ── alias / default / namespace import (if any) ────────────────
+        alias = None
+        name_node = node.child_by_field_name("name")            # default import
+        if name_node is None:
+            ns_node = next((c for c in node.children
+                            if c.type == "namespace_import"), None)
+            if ns_node is not None:
+                alias_ident = ns_node.child_by_field_name("name")
+                if alias_ident:
+                    alias = alias_ident.text.decode("utf8")
+        else:
+            alias = name_node.text.decode("utf8")
+
+        self.parsed_file.imports.append(
+            ParsedImportEdge(
+                physical_path=physical,
+                virtual_path=virtual,
+                alias=alias,
+                dot=False,
+                external=external,
+                raw=raw,
+            )
         )
-        self.parsed_file.imports.append(imp)
 
     def _handle_function(self, node):
         name_node = node.child_by_field_name("name")
@@ -272,6 +317,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         sym = self._create_variable_symbol(node)
         if sym:
             self.parsed_file.symbols.append(sym)
+        self._collect_require_calls(node)      # NEW
 
     def _handle_expression(self, node):
         expr = node.text.decode("utf8").strip()
@@ -298,10 +344,34 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 children=[],
             )
         )
+        self._collect_require_calls(node)      # NEW
 
     # very shallow call-collector (copies logic from python)
     def _collect_symbol_refs(self, root):
         return []  # TODO – later
+
+    def _collect_require_calls(self, node):
+        if node.type == "call_expression":
+            fn = node.child_by_field_name("function")
+            if fn and fn.type == "identifier" and fn.text == b"require":
+                arg_node = next(
+                    (c for c in node.child_by_field_name("arguments").children
+                     if c.type == "string"), None)
+                if arg_node:
+                    module = arg_node.text.decode("utf8").strip("\"'")
+                    phys, virt, ext = self._resolve_module(module)
+                    self.parsed_file.imports.append(
+                        ParsedImportEdge(
+                            physical_path=phys,
+                            virtual_path=virt,
+                            alias=None,
+                            dot=False,
+                            external=ext,
+                            raw=node.text.decode("utf8"),
+                        )
+                    )
+        for ch in node.children:
+            self._collect_require_calls(ch)
 
 # ---------------------------------------------------------------------- #
 class TypeScriptLanguageHelper(AbstractLanguageHelper):

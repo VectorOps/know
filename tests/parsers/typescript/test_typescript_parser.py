@@ -40,6 +40,11 @@ def test_typescript_parser_on_simple_file():
     assert len(parsed_file.imports) == 1
     assert parsed_file.imports[0].raw.startswith("import React")
 
+    # verify import resolution
+    imp = parsed_file.imports[0]
+    assert imp.external is True
+    assert imp.virtual_path == "react"
+
     # top-level symbols
     def _to_map(symbols):
         return {s.name: s for s in symbols}
