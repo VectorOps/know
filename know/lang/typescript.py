@@ -111,6 +111,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._handle_import(node)
         elif node.type == "export_statement":
             self._handle_export(node)
+        elif node.type == "comment":
+            self._handle_comment(node)
         elif node.type == "function_declaration":
             self._handle_function(node)
         elif node.type == "class_declaration":
@@ -201,6 +203,18 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         )
 
+        # NEW – also register an IMPORT symbol
+        sym_name = alias or virtual          # use alias when present, else module path
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.IMPORT,
+                name=sym_name,
+                fqn=self._join_fqn(self.package.virtual_path, sym_name),
+                visibility=Visibility.PUBLIC,
+            )
+        )
+
     def _handle_export(self, node):
         """
         Handle `export …` statements.
@@ -259,8 +273,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._make_symbol(
                 node,
                 kind=SymbolKind.LITERAL,
-                fqn=self._join_fqn(self.package.virtual_path,
-                                   f"export@{node.start_point[0]+1}"),
                 visibility=Visibility.PUBLIC,
             )
         )
@@ -444,8 +456,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._make_symbol(
                 node,
                 kind=SymbolKind.COMMENT,
-                name=name,
-                fqn=self._join_fqn(self.package.virtual_path, name),
                 body=comment_body,
                 visibility=Visibility.PUBLIC,
             )
@@ -510,6 +520,16 @@ class TypeScriptCodeParser(AbstractCodeParser):
                             dot=False,
                             external=ext,
                             raw=node.text.decode("utf8"),
+                        )
+                    )
+                    # NEW – symbol for this require() import
+                    self.parsed_file.symbols.append(
+                        self._make_symbol(
+                            node,
+                            kind=SymbolKind.IMPORT,
+                            name=virt,
+                            fqn=self._join_fqn(self.package.virtual_path, virt),
+                            visibility=Visibility.PUBLIC,
                         )
                     )
         for ch in node.children:
