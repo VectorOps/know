@@ -574,6 +574,21 @@ class PythonCodeParser(AbstractCodeParser):
     # Constant helpers
     _CONST_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
+    # ------------------------------------------------------------------
+    #  helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _is_async_function(node) -> bool:
+        """
+        Return True when *node* represents an async function / method,
+        regardless of whether it is wrapped in a `decorated_definition`.
+        """
+        if node.type == "async_function_definition":
+            return True
+        if node.type == "decorated_definition":
+            return any(c.type == "async_function_definition" for c in node.children)
+        return False
+
     def _is_constant_name(self, name: str) -> bool:
         """Return True if the given identifier looks like a constant (ALL_CAPS)."""
         return bool(self._CONST_RE.match(name))
