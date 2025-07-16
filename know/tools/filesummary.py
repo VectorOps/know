@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Sequence, List
 from .base import BaseTool
 
-from know.tools.file_summary_helper import FileSummary, build_file_summary
+from know.file_summary import FileSummary, build_file_summary
 from know.tools.base import SummaryMode
 
 from know.project import Project

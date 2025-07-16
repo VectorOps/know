@@ -33,6 +33,7 @@ def test_project_scan_populates_repositories():
     simple_meta = next(f for f in files if f.path == "simple.py")
     symbols = repo_store.symbol.get_list(SymbolFilter(file_id=simple_meta.id))
     symbol_names = {s.name for s in symbols}
+    print(symbol_names)
 
     assert {"CONST", "fn", "Test"}.issubset(symbol_names)
     # every recorded symbol must reference its file

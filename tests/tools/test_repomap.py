@@ -35,8 +35,7 @@ def _create_symbol(repo_id: str, file_id: str, pkg_id: str, name="func"):
         file_id=file_id,
         package_id=pkg_id,
         name=name,
-        symbol_key=name,
-        symbol_body="",
+        body="",
         kind=SymbolKind.FUNCTION,
     )
 

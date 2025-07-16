@@ -79,7 +79,7 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
         ids_by_theme[theme].append(sid)
         sym_repo.create(SymbolMetadata(
             id=sid, name=f"{theme}{i}", repo_id=rid, file_id=fid,
-            symbol_body=body, docstring=docstring,
+            body=body, docstring=docstring,
             embedding_doc_vec=vec,
             embedding_code_vec=vec,
             kind="function"

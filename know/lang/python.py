@@ -899,10 +899,6 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         • for functions / methods the body is replaced with an indented “...”
         • for classes the method recurses over *sym.children*, indenting each child
         """
-        # completely ignore stand-alone comment symbols when comments are disabled
-        if not include_comments and sym.kind == SymbolKind.COMMENT:
-            return ""
-
         IND = " " * indent
         lines: list[str] = []
 

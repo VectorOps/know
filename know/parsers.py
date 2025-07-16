@@ -66,12 +66,10 @@ class ParsedSymbolRef(BaseModel):
 
 
 class ParsedSymbol(BaseModel):
-    name: str # local name
-    fqn: str # fully qualified name
-    body: str # full symbol body
-    key: str # virtual path within a file
-    hash: str # sha256 hash of the symbol
-    kind: SymbolKind # type of the symbol
+    name: Optional[str] = None
+    fqn: Optional[str] = None
+    body: str
+    kind: SymbolKind
 
     start_line: int
     end_line: int
@@ -91,9 +89,7 @@ class ParsedSymbol(BaseModel):
         return {
             "name": self.name,
             "fqn": self.fqn,
-            "symbol_key": self.key,
-            "symbol_hash": self.hash,
-            "symbol_body": self.body,
+            "body": self.body,
             "kind": self.kind,
             "start_line": self.start_line,
             "end_line": self.end_line,
@@ -159,7 +155,12 @@ class AbstractLanguageHelper(ABC):
     Abstract base language helper class
     """
     @abstractmethod
-    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0, skip_docs: bool = False) -> str:
+    def get_symbol_summary(self,
+                           sym: SymbolMetadata,
+                           indent: int = 0,
+                           include_comments: bool = False,
+                           include_docs: bool = False,
+                           ) -> str:
         """
         Generate symbol summary (comment, definition and a docstring if available) as a string
         with correct identation. For functions and methods, function body is replaced
@@ -171,21 +172,6 @@ class AbstractLanguageHelper(ABC):
     def get_import_summary(self, imp: ImportEdge) -> str:
         """
         Generate import edge summary
-        """
-        pass
-
-    @abstractmethod
-    def get_file_header(
-        self,
-        project: Project,
-        file_meta: FileMetadata,
-        skip_docs: bool = False,
-    ) -> Optional[str]:
-        """
-        Return a one-liner to be placed at the very beginning of a file
-        summary (or ``None`` when nothing should be emitted).
-        • Go   → «package <name>»
-        • Py   → module docstring (when present and not skipped)
         """
         pass
 

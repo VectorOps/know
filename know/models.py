@@ -12,7 +12,6 @@ class ProgrammingLanguage(str, Enum):
     PYTHON = "python"
     GO = "go"
     TYPESCRIPT = "typescript"
-    # Extend as needed.
 
 
 class SymbolKind(str, Enum):
@@ -28,6 +27,9 @@ class SymbolKind(str, Enum):
     INTERFACE = "interface"
     ENUM = "enum"
     LITERAL = "literal"
+    IMPORT = "import"
+    TRYCATCH = "try_catch"
+    COMMENT = "comment"
 
 
 class Visibility(str, Enum):
@@ -130,11 +132,9 @@ class SymbolMetadata(BaseModel):
     repo_id: str
     file_id: Optional[str] = None
     package_id: Optional[str] = None
-    name: str
+    name: Optional[str] = None
     fqn: Optional[str] = None
-    symbol_key: Optional[str] = None
-    symbol_hash: Optional[str] = None
-    symbol_body: str
+    body: str
     kind: Optional[SymbolKind] = None
     parent_symbol_id: Optional[str] = None
 
@@ -155,8 +155,6 @@ class SymbolMetadata(BaseModel):
     # Embedding
     embedding_code_vec: Optional[Vector] = None
     embedding_model: Optional[str] = None
-
-    summary: Optional[str] = None
 
     # Quality scores
     score_lint: Optional[float] = None

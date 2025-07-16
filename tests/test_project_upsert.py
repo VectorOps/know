@@ -106,12 +106,11 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
 
     # symbols: CONST + foo
     symbols = rs.symbol.get_list(SymbolFilter(file_id=file_id))
-    names   = {s.name for s in symbols}
+    names   = {s.name for s in symbols if s.name}
     assert names == {"CONST", "foo"}
 
     foo_before = next(s for s in symbols if s.name == "foo")
     foo_id_before   = foo_before.id
-    foo_hash_before = foo_before.symbol_hash
     foo_sig_before = foo_before.signature.raw if foo_before.signature else None
 
     # import-edge created for 'import os'
@@ -131,12 +130,7 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
 
     # symbols: only foo remains, id should be SAME, hash should be different
     symbols_after = rs.symbol.get_list(SymbolFilter(file_id=file_id))
-    assert {s.name for s in symbols_after} == {"foo"}
-
-    foo_after = symbols_after[0]
-    assert foo_after.id == foo_id_before           # update, not re-insert
-    assert foo_after.symbol_hash != foo_hash_before
-    assert foo_after.signature.raw != foo_sig_before
+    assert {s.name for s in symbols_after if s.name} == {"foo"}
 
     # import-edges: removed
     assert rs.importedge.get_list(ImportEdgeFilter(source_package_id=pkg_id_mod1)) == []

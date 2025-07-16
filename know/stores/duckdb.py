@@ -272,7 +272,7 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         "signature": lambda v: SymbolSignature(**v) if v is not None else None,
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
-    _compress_fields = {"symbol_body"}     # column name in the `symbols` table
+    _compress_fields = {"body"}
 
     RRF_K: int = 60          # tuning-parameter k (see RRF paper)
     RRF_CODE_WEIGHT: float = 0.7

@@ -105,7 +105,7 @@ def test_symbol_metadata_repository(data_repo):
             name="sym",
             file_id=fid,
             repo_id=rid,
-            symbol_body="def sym(a: int) -> str\n\treturn 'a'",
+            body="def sym(a: int) -> str\n\treturn 'a'",
             signature=signature,
         )
     )
@@ -146,19 +146,19 @@ def test_symbol_search(data_repo):
     # ---------- seed three symbols ----------
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="Alpha", repo_id=rid, file_id=fid,
-        symbol_body='def Alpha(): pass',
+        body='def Alpha(): pass',
         kind="function", visibility="public",
         docstring="Compute foo and bar."
     ))
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="Beta", repo_id=rid, file_id=fid,
-        symbol_body='class Beta(): pass',
+        body='class Beta(): pass',
         kind="class", visibility="private",
         docstring="Baz qux docs."
     ))
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="Gamma", repo_id=rid, file_id=fid,
-        symbol_body='Gamma = 10',
+        body='Gamma = 10',
         kind="variable", visibility="public",
         docstring="Alpha-numeric helper."
     ))
@@ -200,15 +200,15 @@ def test_symbol_embedding_search(data_repo):
     # seed three symbols with simple, orthogonal 3-d vectors
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="VecA", repo_id=rid, file_id=fid,
-        symbol_body="def VecA(): pass", embedding_code_vec=[1.0, 0.0, 0.0] + [0] * 1021
+        body="def VecA(): pass", embedding_code_vec=[1.0, 0.0, 0.0] + [0] * 1021
     ))
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="VecB", repo_id=rid, file_id=fid,
-        symbol_body="def VecB(): pass", embedding_code_vec=[0.0, 1.0, 0.0] + [0] * 1021
+        body="def VecB(): pass", embedding_code_vec=[0.0, 1.0, 0.0] + [0] * 1021
     ))
     sym_repo.create(SymbolMetadata(
         id=make_id(), name="VecC", repo_id=rid, file_id=fid,
-        symbol_body="def VecC(): pass", embedding_code_vec=[0.0, 0.0, 1.0] + [0] * 1021
+        body="def VecC(): pass", embedding_code_vec=[0.0, 0.0, 1.0] + [0] * 1021
     ))
 
     # query vector identical to VecA  ->  VecA must rank first

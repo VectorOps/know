@@ -18,7 +18,7 @@ from know.tools.base import SummaryMode
 from know.project import Project, ScanResult, ProjectComponent
 from know.models import SymbolMetadata, Visibility
 from know.tools.base import BaseTool
-from know.tools.file_summary_helper import build_file_summary
+from know.file_summary import build_file_summary
 from know.data import FileFilter, SymbolFilter, SymbolRefFilter
 
 

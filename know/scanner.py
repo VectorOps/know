@@ -229,9 +229,7 @@ def scan_project_directory(project: Project) -> ScanResult:
         except Exception as exc:
             logger.error("Failed to parse file", path=rel_path, exc=exc)
 
-    # ------------------------------------------------------------------
     #  Remove stale metadata for files that have disappeared from disk
-    # ------------------------------------------------------------------
     file_repo   = project.data_repository.file
     symbol_repo   = project.data_repository.symbol
     symbolref_repo = project.data_repository.symbolref
@@ -250,9 +248,7 @@ def scan_project_directory(project: Project) -> ScanResult:
             file_repo.delete(fm.id)
             result.files_deleted.append(fm.path)
 
-    # ------------------------------------------------------------------
     #  Remove PackageMetadata entries that lost all their files
-    # ------------------------------------------------------------------
     from know.data import PackageFilter
     package_repo = project.data_repository.package
     removed_pkgs = package_repo.delete_orphaned()
@@ -367,18 +363,14 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         if key not in new_keys:
             import_repo.delete(edge.id)
 
-    # ── Symbols (re-create) ─────────────────────────────────────────────────
+    # Symbols (re-create)
     symbol_repo = repo_store.symbol
 
-    # collect existing symbols (we need their embeddings before wiping them)
+    # collect existing symbols
     existing_symbols = symbol_repo.get_list(SymbolFilter(file_id=file_meta.id))
-    # map   body → SymbolMetadata   (body is the canonical content comparison key)
     _old_by_body: dict[str, SymbolMetadata] = {s.body: s for s in existing_symbols}
 
-    # always remove previous symbols of this file – simplifies handling of moves / deletions
-    symbol_repo.delete_by_file_id(file_meta.id)
-
-    emb_calc = project.embeddings                              # may be None
+    emb_calc = project.embeddings
 
     def _insert_symbol(psym: ParsedSymbol,
                        parent_id: str | None = None) -> str:
@@ -412,17 +404,23 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         if schedule_emb:
             schedule_symbol_embedding(
                 symbol_repo,
-                emb_calc,                       # type: ignore[arg-type]
-                sym_id=sm.id,                   # type: ignore[arg-type]
+                emb_calc,
+                sym_id=sm.id,
                 body=psym.body,
                 sync=project.settings.sync_embeddings,
             )
 
         # recurse into children
         for child in psym.children:
-            _insert_symbol(child, sm.id)        # type: ignore[arg-type]
+            _insert_symbol(child, sm.id)
 
-        return sm.id                            # noqa: R504  (returned for completeness)
+        return sm.id
+
+    # TODO: delete by array of ids after inserting
+    symbol_repo.delete_by_file_id(file_meta.id)
+
+    for sym in parsed_file.symbols:
+        _insert_symbol(sym)
 
     # ── Symbol References ───────────────────────────────────────────────────
     symbolref_repo = repo_store.symbolref

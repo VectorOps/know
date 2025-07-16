@@ -7,9 +7,7 @@ from know.project import init_project, ProjectCache
 from know.lang.python import PythonCodeParser
 from know.models import ProgrammingLanguage, SymbolKind, Modifier, SymbolRefType
 
-# --------------------------------------------------------------------------- #
 # Helpers
-# --------------------------------------------------------------------------- #
 def _make_dummy_project(root_dir: Path):
     """
     Build a real Project instance backed by the in-memory repository so the
@@ -22,9 +20,7 @@ def _make_dummy_project(root_dir: Path):
     return init_project(settings, refresh=False)
 
 
-# --------------------------------------------------------------------------- #
 # Tests
-# --------------------------------------------------------------------------- #
 def test_python_parser_on_simple_file():
     """
     Parse the sample `simple.py` file and assert that the most important
@@ -37,21 +33,15 @@ def test_python_parser_on_simple_file():
     parser       = PythonCodeParser(project, "simple.py")
     parsed_file  = parser.parse(cache)
 
-    # ------------------------------------------------------------------ #
     # Basic assertions
-    # ------------------------------------------------------------------ #
     assert parsed_file.path == "simple.py"
     assert parsed_file.language == ProgrammingLanguage.PYTHON
 
-    # ------------------------------------------------------------------ #
     # Imports
-    # ------------------------------------------------------------------ #
     # simple.py has three import statements
     assert len(parsed_file.imports) == 3
 
-    # ------------------------------------------------------------------ #
     # Local-package (relative) import                                    #
-    # ------------------------------------------------------------------ #
     # Ensure that the relative import  `from .foobuz import abc`
     # is recognised as *local* (external == False) and that its path is
     # preserved.
@@ -65,9 +55,7 @@ def test_python_parser_on_simple_file():
     assert rel_import.physical_path == "foobuz.py"
     assert rel_import.virtual_path == ".foobuz"
 
-    # ------------------------------------------------------------------ #
     # Top-level symbols
-    # ------------------------------------------------------------------ #
     def symbols_to_map(symbols):
         # ignore literals and any symbol that has no name (e.g. comments)
         return {sym.name: sym for sym in symbols
@@ -152,16 +140,12 @@ def test_python_parser_on_simple_file():
     else:
         assert ref_ellipsis_fn.name == "ellipsis_fn"
 
-    # ------------------------------------------------------------------ #
     # Inheritance edges for Foobar (optional)
-    # ------------------------------------------------------------------ #
     foobar_cls = top_level["Foobar"]
     if foobar_cls.signature and hasattr(foobar_cls.signature, "bases"):
         assert foobar_cls.signature.bases == ["Foo", "Bar", "Buzz"]
 
-    # ------------------------------------------------------------------ #
     # Comment symbols                                                    #
-    # ------------------------------------------------------------------ #
     comment_syms = [s for s in parsed_file.symbols if s.kind == SymbolKind.COMMENT]
     assert any("Comment" in (s.body or "") for s in comment_syms), \
         "Expected comment symbol '# Comment' not found"

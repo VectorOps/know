@@ -42,6 +42,7 @@ ellipsis_fn()
 
 
 # Async function
+@tss
 async def async_fn(a, b):
     return a - b
 
