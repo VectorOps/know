@@ -423,29 +423,32 @@ class PythonCodeParser(AbstractCodeParser):
 
     # Function-signature raw text helper
     @staticmethod
-    def _extract_signature_raw(code: str) -> str:
+    def _extract_signature_raw(node) -> str:
         """
-        Return the full `def …` signature, including parameters and optional
-        return-annotation, but *without* the trailing colon.
-
-        Works even when type annotations contain colons (e.g. ``c: str``) by
-        only stopping at a colon whose parenthesis-depth is zero.
+        Build the raw header of a function / method directly from the
+        Tree-sitter node.  Accepts a *function_definition*,
+        *async_function_definition* or a *decorated_definition* wrapper and
+        returns the full line INCLUDING the trailing colon.
         """
-        def_idx: int = code.find("def ")
-        if def_idx == -1:
-            return code            # fallback – shouldn’t happen
+        # unwrap decorated_definition -> underlying function node
+        if node.type == "decorated_definition":
+            node = next(
+                (c for c in node.children
+                 if c.type in ("function_definition", "async_function_definition")),
+                node,
+            )
 
-        depth = 0
-        for i in range(def_idx, len(code)):
-            ch = code[i]
-            if ch == "(":
-                depth += 1
-            elif ch == ")":
-                depth -= 1
-            elif ch == ":" and depth == 0:
-                # reached the colon that terminates the signature
-                return code[def_idx:i+1].rstrip()
-        return code[def_idx:].rstrip()
+        async_prefix = "async " if node.type == "async_function_definition" else ""
+
+        name_node     = node.child_by_field_name("name")
+        params_node   = node.child_by_field_name("parameters")
+        return_node   = node.child_by_field_name("return_type")
+
+        name   = name_node.text.decode("utf8") if name_node else "<anonymous>"
+        params = params_node.text.decode("utf8") if params_node else "()"
+        retann = f" -> {return_node.text.decode('utf8').strip()}" if return_node else ""
+
+        return f"{async_prefix}def {name}{params}{retann}:"
 
     # Class-signature raw text helper
     @staticmethod
@@ -508,8 +511,7 @@ class PythonCodeParser(AbstractCodeParser):
         wrapper = node
 
         # Raw text (full “def …(…)” line, incl. params & optional annotation) #
-        code    = wrapper.text.decode("utf8")
-        raw_sig = self._extract_signature_raw(code)
+        raw_sig = self._extract_signature_raw(wrapper)
 
         # Decorators                                                         #
         decorators: list[str] = []
@@ -883,7 +885,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
 
         # early return literal
         if sym.kind == SymbolKind.LITERAL:
-            for ln in sym.symbol_body.splitlines():
+            for ln in sym.body.splitlines():
                 lines.append(f"{IND}{ln}")
             return "\n".join(lines)
 
@@ -896,7 +898,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             elif sym.kind == SymbolKind.CLASS:
                 header = f"class {sym.name}:"
             else:
-                header = (sym.symbol_body or "").splitlines()[0].rstrip()
+                header = (sym.body or "").splitlines()[0].rstrip()
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD, SymbolKind.CLASS) and not header.endswith(":"):
             header += ":"
