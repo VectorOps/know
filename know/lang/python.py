@@ -22,7 +22,7 @@ from know.models import (
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
 from know.logger import logger
-from know.helpers import compute_file_hash, compute_symbol_hash
+from know.helpers import compute_file_hash
 from devtools import pprint
 
 
@@ -123,11 +123,9 @@ class PythonCodeParser(AbstractCodeParser):
     def _make_symbol(
         self,
         node,
-        *,
         kind: SymbolKind,
         name: str | None = None,
         fqn: str | None = None,
-        key: str | None = None,
         body: str | None = None,
         visibility: Visibility | None = None,
         modifiers: list[Modifier] | None = None,
@@ -142,7 +140,7 @@ class PythonCodeParser(AbstractCodeParser):
         derived directly from *node*.  Callers may override any value via the
         keyword arguments.
         """
-        body = body if body is not None else node.text.decode("utf8")
+        body = body if body is not None else node.text.decode("utf8").strip()
         # fall back to heuristics only when not explicitly provided
         visibility = visibility if visibility is not None else (
             self._infer_visibility(name) if name else Visibility.PUBLIC
@@ -151,8 +149,6 @@ class PythonCodeParser(AbstractCodeParser):
             name=name,
             fqn=fqn,
             body=body,
-            key=key or (name or f"literal@{node.start_point[0]+1}"),
-            hash=compute_symbol_hash(body.encode()),
             kind=kind,
             start_line=node.start_point[0],
             end_line=node.end_point[0],
@@ -168,45 +164,29 @@ class PythonCodeParser(AbstractCodeParser):
         )
 
     def _create_import_symbol(self, node, import_path: str | None, alias: str | None) -> ParsedSymbol:
-        line_no = node.start_point[0] + 1
-        body    = node.text.decode("utf8").rstrip()
-        name    = alias or import_path
         return self._make_symbol(
             node,
             kind=SymbolKind.IMPORT,
-            name=name,
-            fqn=self._join_fqn(self.package.virtual_path, name) if name else None,
-            key=f"import@{line_no}",
-            body=body,
             comment=self._get_preceding_comment(node),
         )
 
     def _create_comment_symbol(self, node) -> ParsedSymbol:
-        line_no = node.start_point[0] + 1
-        txt     = node.text.decode("utf8").rstrip()
         return self._make_symbol(
             node,
             kind=SymbolKind.COMMENT,
-            body=txt,
-            key=f"comment@{line_no}",
         )
 
     #  generic “literal” helper – used everywhere a fallback symbol is needed
     def _create_literal_symbol(self, node) -> ParsedSymbol:
-        line_no = node.start_point[0] + 1
         return self._make_symbol(
             node,
             kind=SymbolKind.LITERAL,
-            key=f"literal@{line_no}_{compute_symbol_hash(node.text)[:6]}",
-            comment=self._get_preceding_comment(node),
         )
 
     def _handle_try_statement(self, node):
         parent_sym = self._make_symbol(
             node,
-            kind=SymbolKind.TRYCTCH,
-            key=f"try@{node.start_point[0]+1}",
-            comment=self._get_preceding_comment(node),
+            kind=SymbolKind.TRYCATCH,
         )
 
         def _build_block_symbol(block_node, block_name: str) -> ParsedSymbol:
@@ -214,11 +194,10 @@ class PythonCodeParser(AbstractCodeParser):
                 block_node,
                 kind=SymbolKind.LITERAL,
                 name=block_name,
-                key=f"{block_name}@{block_node.start_point[0]+1}",
             )
 
         for child in node.children:
-            if child.type == "block":                         # try-body
+            if child.type == "block":
                 parent_sym.children.append(_build_block_symbol(child, "try"))
             elif child.type == "except_clause":
                 blk = next((c for c in child.children if c.type == "block"), None)
@@ -240,9 +219,9 @@ class PythonCodeParser(AbstractCodeParser):
         Handle `import` / `from … import …` statements and populate alias & dot flags.
 
         alias:
-            - For `import pkg as alias`      → "alias"
-            - For `from pkg import name as a`→ "a"
-            - Otherwise                     → None
+            - For `import pkg as alias`       - "alias"
+            - For `from pkg import name as a` - "a"
+            - Otherwise                       - None
 
         dot:
             - True  when the statement is a relative import (leading dots)
@@ -305,7 +284,6 @@ class PythonCodeParser(AbstractCodeParser):
         )
         self.parsed_file.imports.append(import_edge)
 
-        # NEW – add symbol for the import itself
         self.parsed_file.symbols.append(
             self._create_import_symbol(node, import_path, alias)
         )
@@ -348,6 +326,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         # Unknown / unhandled → debug-log (mirrors previous behaviour)
         else:
+            self.parsed_file.symbols.append(self._create_literal_symbol(node))
             logger.debug(
                 "Unknown node",
                 path=self.parsed_file.path,
@@ -356,7 +335,6 @@ class PythonCodeParser(AbstractCodeParser):
                 byte_offset=node.start_byte,
                 raw=node.text.decode("utf8", errors="replace"),
             )
-            self.parsed_file.symbols.append(self._create_literal_symbol(node))
             return
 
     def _clean_docstring(self, doc: str) -> str:
@@ -570,14 +548,12 @@ class PythonCodeParser(AbstractCodeParser):
     # Constant helpers
     _CONST_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
-    @classmethod
-    def _is_constant_name(cls, name: str) -> bool:
+    def _is_constant_name(self, name: str) -> bool:
         """Return True if the given identifier looks like a constant (ALL_CAPS)."""
-        return bool(cls._CONST_RE.match(name))
+        return bool(self._CONST_RE.match(name))
 
     # Visibility helpers
-    @staticmethod
-    def _infer_visibility(name: str) -> Visibility:
+    def _infer_visibility(self, name: str) -> Visibility:
         """
         Infer symbol visibility from its leading underscores.
 
@@ -604,18 +580,16 @@ class PythonCodeParser(AbstractCodeParser):
         Constant-like ALL_CAPS identifiers are marked as CONSTANT, everything
         else is recorded as VARIABLE.
         """
-        base_name = name.rsplit(".", 1)[-1]          # handle dotted attr targets
-        base_name = base_name.split("[", 1)[0]       # drop subscript part
+        base_name = name.rsplit(".", 1)[-1]
+        base_name = base_name.split("[", 1)[0]
         kind = SymbolKind.CONSTANT if self._is_constant_name(base_name) else SymbolKind.VARIABLE
         fqn = self._join_fqn(self.package.virtual_path, class_name, name)
-        key = ".".join(filter(None, [class_name, name])) if class_name else name
         wrapper = node.parent if node.parent and node.parent.type == "expression_statement" else node
         return self._make_symbol(
             node,
             kind=kind,
             name=name,
             fqn=fqn,
-            key=key,
             visibility=self._infer_visibility(name),
             comment=self._get_preceding_comment(wrapper),
         )
@@ -636,7 +610,7 @@ class PythonCodeParser(AbstractCodeParser):
         # accept both plain identifiers and dotted attribute targets
         if target_node.type in ("identifier", "attribute"):
             name = target_node.text.decode("utf8")
-        elif target_node.type in ("subscript", "subscription"):      # e.g.  os.env["X"] = …
+        elif target_node.type in ("subscript", "subscription"):
             name = target_node.text.decode("utf8")
         else:
             return        # unsupported → ignore
@@ -650,6 +624,29 @@ class PythonCodeParser(AbstractCodeParser):
             class_symbol.children.append(assign_symbol)
         else:
             self.parsed_file.symbols.append(assign_symbol)
+
+    def _handle_function_definition(self, node):
+        # pick decorated wrapper when present
+        wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
+
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return                       # malformed → skip
+
+        func_name = name_node.text.decode("utf8")
+
+        symbol = self._make_symbol(
+            wrapper,
+            kind=SymbolKind.FUNCTION,
+            name=func_name,
+            fqn=self._join_fqn(self.package.virtual_path, func_name),
+            body=wrapper.text.decode("utf8"),
+            modifiers=[Modifier.ASYNC] if node.type == "async_function_definition" else [],
+            docstring=self._extract_docstring(node),
+            signature=self._build_function_signature(wrapper),
+            comment=self._get_preceding_comment(node),
+        )
+        self.parsed_file.symbols.append(symbol)
 
     def _handle_class_definition(self, node):
         # Utility: determine decorated wrapper
@@ -705,19 +702,69 @@ class PythonCodeParser(AbstractCodeParser):
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
         method_name = node.child_by_field_name('name').text.decode('utf8')
-        key = f"{class_name}.{method_name}" if class_name else method_name
         return self._make_symbol(
             wrapper,
             kind=SymbolKind.METHOD,
             name=method_name,
             fqn=self._join_fqn(self.package.virtual_path, class_name, method_name),
-            key=key,
             visibility=self._infer_visibility(method_name),
             modifiers=[Modifier.ASYNC] if node.type == "async_function_definition" else [],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
         )
+
+    # Module-resolution helper                                           #
+    def _locate_module_path(self, import_path: str) -> Optional[Path]:
+        """
+        Return the *absolute* Path of the *deepest* package/module that matches
+        ``import_path`` inside the given project.
+
+        Resolution preference:
+        1. Concrete module file  (…/foo.py, …/foo.so, …)
+        2. Package directory’s   ``__init__.py`` (…/foo/__init__.py)
+
+        The scan continues through the whole dotted path, keeping the last
+        match instead of returning on the first one, so that
+        ``from pkg.sub import x`` resolves to ``pkg/sub.py`` (or
+        ``pkg/sub/__init__.py``) rather than just ``pkg``.
+        """
+        if not import_path:
+            return None
+
+        project_root = Path(self.project.settings.project_path).resolve()
+        parts = import_path.split(".")
+        found: Optional[Path] = None  # remember the most-specific hit
+
+        for idx in range(1, len(parts) + 1):
+            base = project_root.joinpath(*parts[:idx])
+
+            # Skip anything located inside a virtual-env folder
+            if any(seg in _VENV_DIRS for seg in base.parts):
+                continue
+
+            # 1) concrete module file (preferred)
+            for suffix in _MODULE_SUFFIXES:
+                file_candidate = base.with_suffix(suffix)
+                if file_candidate.exists():
+                    found = file_candidate
+                    break  # no need to check package dir for this idx
+            else:
+                # 2) package directory
+                if base.is_dir() and (base / "__init__.py").exists():
+                    found = base / "__init__.py"
+
+        return found
+
+    def _resolve_local_import_path(self, import_path: str) -> Optional[str]:
+        path_obj = self._locate_module_path(import_path)
+        if path_obj is None:
+            return None
+        project_root = Path(self.project.settings.project_path).resolve()
+        return path_obj.relative_to(project_root).as_posix()
+
+    def _is_local_import(self, import_path: str) -> bool:
+        return self._locate_module_path(import_path) is not None
 
     # Outgoing symbol-reference (call) collector
     def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
@@ -763,7 +810,7 @@ class PythonCodeParser(AbstractCodeParser):
 
 
 class PythonLanguageHelper(AbstractLanguageHelper):
-    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0, skip_docs: bool = False) -> str:
+    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0, include_comments: bool = False, include_docs: bool = False) -> str:
         """
         Return a human-readable summary for *sym*.
 
@@ -777,21 +824,19 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         lines: list[str] = []
 
         # preceding comment
-        if not skip_docs and sym.comment:
+        if include_comments and sym.comment:
             for ln in sym.comment.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
 
         # decorators
         if sym.signature and sym.signature.decorators:
             for deco in sym.signature.decorators:
-                # add leading '@' if `_build_*_signature` stored only the expression
-                deco_txt = deco if deco.lstrip().startswith("@") else f"@{deco}"
-                lines.append(f"{IND}{deco_txt}")
+                lines.append(f"{IND}@{deco}")
 
         # early return literal
         if sym.kind == SymbolKind.LITERAL:
-            body_line = (sym.symbol_body or "").splitlines()[0].rstrip()
-            lines.append(f"{IND}{body_line}")
+            for ln in sym.symbol_body.splitlines():
+                lines.append(f"{IND}{ln}")
             return "\n".join(lines)
 
         # header line
@@ -811,31 +856,32 @@ class PythonLanguageHelper(AbstractLanguageHelper):
 
         # body / docstring
         def _emit_docstring(ds: str, base_indent: str) -> None:
-            if skip_docs:
+            if not include_docs:
                 return
+
             ds_lines = ds.splitlines()
             for l in ds_lines:
                 lines.append(f"{base_indent}{l}")
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
-            if not skip_docs and sym.docstring:
+            if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             lines.append(f"{IND}    ...")
 
         elif sym.kind == SymbolKind.CLASS:
-            if not skip_docs and sym.docstring:
+            if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             for child in sym.children:
                 lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
 
-        elif sym.kind == SymbolKind.TRYCTCH:
-            if not skip_docs and sym.docstring:
+        elif sym.kind == SymbolKind.TRYCATCH:
+            if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             for child in sym.children:
                 lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
 
         # (Variables / constants etc. – docstring only)
-        elif not skip_docs and sym.docstring:
+        elif include_docs and sym.docstring:
             _emit_docstring(sym.docstring, IND)
 
         return "\n".join(lines)
@@ -861,18 +907,3 @@ class PythonLanguageHelper(AbstractLanguageHelper):
 
         # plain absolute import
         return f"import {path}{alias}".strip()
-
-    def get_file_header(
-        self,
-        project: Project,
-        fm: FileMetadata,
-        skip_docs: bool = False,
-    ) -> Optional[str]:
-        """
-        For Python emit the module-level docstring (first statement
-        in file) unless docs are suppressed.
-        """
-        if skip_docs:
-            return None
-        doc = getattr(fm, "docstring", None)
-        return doc.strip() if doc else None
