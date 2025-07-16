@@ -461,12 +461,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # top-level method_definition is unusual; treat like function
         self._handle_function(node)
 
-    def _handle_variable(self, node):
-        sym = self._create_variable_symbol(node)
-        if sym:
-            self.parsed_file.symbols.append(sym)
-        self._collect_require_calls(node)      # NEW
-
     def _handle_comment(self, node):
         """
         Generate a ParsedSymbol of kind COMMENT instead of falling back to
@@ -517,14 +511,74 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
         self._collect_require_calls(node)
 
+    def _collect_arrow_function_declarators(
+        self, node, class_name: str | None = None
+    ) -> bool:
+        """
+        Inspect *node* (variable_statement / lexical_declaration /
+        public_field_declaration …) and emit ParsedSymbol entries for every
+        `identifier = (…) => { … }` arrow-function that is found.
+
+        Returns True when at least one arrow-function symbol was created.
+        """
+        made = False
+        for decl in (c for c in node.named_children
+                     if c.type == "variable_declarator"):
+            value = decl.child_by_field_name("value")
+            if value and value.type == "arrow_function":
+                name_node = decl.child_by_field_name("name")
+                if name_node is None:
+                    continue
+                name = name_node.text.decode("utf8")
+                sig  = self._build_signature(value, name, prefix="")
+
+                # ── keep surrounding modifiers (export / const / async …) ──
+                container = decl                 # start with the declarator
+                anc = decl.parent
+                while anc is not None:
+                    if anc.type in (
+                        "variable_statement",
+                        "lexical_declaration",
+                        "public_field_declaration",
+                        "public_field_definition",
+                        "export_statement",
+                    ):
+                        container = anc           # climb as long as we stay
+                        anc = anc.parent          # inside the same statement
+                    else:
+                        break
+                raw_body = container.text.decode("utf8")
+
+                self.parsed_file.symbols.append(
+                    self._make_symbol(
+                        value,
+                        kind=SymbolKind.FUNCTION,
+                        name=name,
+                        fqn=self._join_fqn(self.package.virtual_path,
+                                           class_name, name),
+                        signature=sig,
+                        body=raw_body,           # <── use full statement text
+                    )
+                )
+                made = True
+        return made
+
+    def _handle_variable(self, node):
+        if not self._collect_arrow_function_declarators(node):
+            sym = self._create_variable_symbol(node)
+            if sym:
+                self.parsed_file.symbols.append(sym)
+        self._collect_require_calls(node)
+
     def _handle_lexical(self, node):
         """
         Handle `lexical_declaration` (let/const) statements exactly like
         `variable_statement`.
         """
-        sym = self._create_variable_symbol(node)
-        if sym:
-            self.parsed_file.symbols.append(sym)
+        if not self._collect_arrow_function_declarators(node):
+            sym = self._create_variable_symbol(node)
+            if sym:
+                self.parsed_file.symbols.append(sym)
         self._collect_require_calls(node)
 
     def _create_literal_symbol(self, node) -> ParsedSymbol:
