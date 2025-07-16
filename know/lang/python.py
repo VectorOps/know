@@ -872,13 +872,13 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             for child in sym.children:
-                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
+                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
 
         elif sym.kind == SymbolKind.TRYCATCH:
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             for child in sym.children:
-                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
+                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
 
         # (Variables / constants etc. – docstring only)
         elif include_docs and sym.docstring:
