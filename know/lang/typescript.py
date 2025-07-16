@@ -33,6 +33,7 @@ def _get_parser() -> Parser:
 
 _MODULE_SUFFIXES = (".ts", ".tsx")
 
+
 class TypeScriptCodeParser(AbstractCodeParser):
     """
     VERY first-cut parser – intentionally incomplete.
@@ -105,12 +106,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
     # ------------ generic dispatcher ----------------------------------- #
     def _process_node(self, node) -> None:
         symbols_before = len(self.parsed_file.symbols)
-        imports_before = len(self.parsed_file.imports)
 
         if node.type == "import_statement":
             self._handle_import(node)
         elif node.type == "export_statement":
-            self._handle_export(node)          # NEW
+            self._handle_export(node)
         elif node.type == "function_declaration":
             self._handle_function(node)
         elif node.type == "class_declaration":
@@ -132,8 +132,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
 
         # Emit warning when the handler produced neither symbols nor imports
-        if (len(self.parsed_file.symbols) == symbols_before and
-                len(self.parsed_file.imports) == imports_before):
+        if len(self.parsed_file.symbols) == symbols_before:
             logger.warning(
                 "TS parser handled node but produced no symbols or imports",
                 path=self.rel_path,
@@ -458,6 +457,23 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if sym:
             self.parsed_file.symbols.append(sym)
         self._collect_require_calls(node)
+
+    # ------------------------------------------------------------------ #
+    def _create_literal_symbol(self, node) -> ParsedSymbol:
+        """
+        Fallback symbol for nodes that did not yield a real symbol.
+        Produces a SymbolKind.LITERAL with a best-effort name.
+        """
+        txt  = node.text.decode("utf8", errors="replace").strip()
+        name = (txt.split()[0] if txt else f"literal@{node.start_point[0]+1}")[:40]
+        return self._make_symbol(
+            node,
+            kind=SymbolKind.LITERAL,
+            name=name,
+            fqn=self._join_fqn(self.package.virtual_path if self.package else None,
+                               name),
+            visibility=Visibility.PUBLIC,
+        )
 
     # very shallow call-collector (copies logic from python)
     def _collect_symbol_refs(self, root):
