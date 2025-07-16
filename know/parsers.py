@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any, Type
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from pydantic import BaseModel, Field
 from know.models import (
     ProgrammingLanguage,
@@ -127,7 +127,7 @@ class ParsedFile(BaseModel):
 
 
 # Abstract base parser class
-class AbstractCodeParser(ABC):
+class AbstractCodeParser:
     """
     Abstract base class for code parsers.
     """
@@ -149,8 +149,48 @@ class AbstractCodeParser(ABC):
         """
         pass
 
+     # Helpers
+    def _make_symbol(
+        self,
+        node,
+        kind: SymbolKind,
+        name: str | None = None,
+        fqn: str | None = None,
+        body: str | None = None,
+        visibility: Visibility | None = None,
+        modifiers: list[Modifier] | None = None,
+        signature: SymbolSignature | None = None,
+        docstring: str | None = None,
+        comment: str | None = None,
+        children: list[ParsedSymbol] | None = None,
+        exported: bool | None = None,
+    ) -> ParsedSymbol:
+        """
+        Build a ParsedSymbol and pre-populate all generic fields that can be
+        derived directly from *node*.  Callers may override any value via the
+        keyword arguments.
+        """
+        body = body if body is not None else node.text.decode("utf8").strip()
+        return ParsedSymbol(
+            name=name,
+            fqn=fqn,
+            body=body,
+            kind=kind,
+            start_line=node.start_point[0],
+            end_line=node.end_point[0],
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            visibility=visibility,
+            modifiers=modifiers or [],
+            docstring=docstring,
+            signature=signature,
+            comment=comment,
+            children=children or [],
+            exported=exported,
+        )
 
-class AbstractLanguageHelper(ABC):
+
+class AbstractLanguageHelper:
     """
     Abstract base language helper class
     """

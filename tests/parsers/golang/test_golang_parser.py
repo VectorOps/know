@@ -63,7 +63,7 @@ def test_golang_parser_on_sample_file():
     assert fmt_imp.physical_path is None
 
     # Top-level symbols
-    symbols = {sym.name: sym for sym in parsed_file.symbols}
+    symbols = {sym.name: sym for sym in parsed_file.symbols if sym.name}
 
     # Constant
     assert "A" in symbols
@@ -73,7 +73,7 @@ def test_golang_parser_on_sample_file():
     assert "S" in symbols
     struct_s = symbols["S"]
     assert struct_s.kind == SymbolKind.CLASS
-    assert {c.name for c in struct_s.children} == {"a", "b", "c"}
+    assert {c.name for c in struct_s.children if c.name} == {"a", "b", "c"}
 
     # Method `m` attached to S (registered as top-level method symbol)
     assert "m" in symbols

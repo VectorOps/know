@@ -1004,7 +1004,7 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             return "\n".join(lines)
 
         # preceding comment / doc
-        if not include_comments and sym.docstring:
+        if include_comments and sym.docstring:
             for ln in sym.docstring.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
 
@@ -1059,7 +1059,7 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             if not body_lines:
                 body_lines = [""]
 
-            # adjust FIRST line for const/var helpers
+            # adjust first line for const/var helpers
             first = body_lines[0].rstrip()
             if sym.kind == SymbolKind.CONSTANT and not first.startswith("const"):
                 first = f"const {first}"
