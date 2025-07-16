@@ -107,6 +107,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _process_node(self, node) -> None:
         symbols_before = len(self.parsed_file.symbols)
 
+        print(node, node.text.decode("utf8"))
+
         if node.type == "import_statement":
             self._handle_import(node)
         elif node.type == "export_statement":
@@ -272,13 +274,13 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 path=self.rel_path,
                 name=ident.text.decode("utf8"),
             )
-        # add a lightweight symbol representing this export clause
+
         self.parsed_file.symbols.append(
             self._make_symbol(
                 node,
                 kind=SymbolKind.LITERAL,
                 visibility=Visibility.PUBLIC,
-                exported=True,      # NEW – mark clause symbol as exported
+                exported=True,
             )
         )
 
@@ -429,6 +431,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return None
 
     def _create_variable_symbol(self, node, class_name: Optional[str] = None):
+        # recognise `field = (…) => { … }` inside classes
+        if self._collect_arrow_function_declarators(node, class_name):
+            return None
+
         # 1st-level search (as before)
         ident = next(
             (c for c in node.children
@@ -461,24 +467,42 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self.parsed_file.symbols.append(sym)
         self._collect_require_calls(node)      # NEW
 
-    # NEW – explicit comment handler
     def _handle_comment(self, node):
         """
         Generate a ParsedSymbol of kind COMMENT instead of falling back to
         LITERAL.  Keeps the raw comment text in `body`.
         """
-        comment_body = node.text.decode("utf8", errors="replace").rstrip()
-        name = f"comment@{node.start_point[0] + 1}"
         self.parsed_file.symbols.append(
             self._make_symbol(
                 node,
                 kind=SymbolKind.COMMENT,
-                body=comment_body,
                 visibility=Visibility.PUBLIC,
             )
         )
 
     def _handle_expression(self, node):
+        # detect assignment of an arrow function
+        assign = next((c for c in node.named_children
+                       if c.type == "assignment_expression"), None)
+        if assign:
+            right = assign.child_by_field_name("right")
+            if right and right.type == "arrow_function":
+                left = assign.child_by_field_name("left")
+                if left:
+                    name = left.text.decode("utf8").split(".")[-1]
+                    sig  = self._build_signature(right, name, prefix="")
+                    self.parsed_file.symbols.append(
+                        self._make_symbol(
+                            right,
+                            kind=SymbolKind.FUNCTION,
+                            name=name,
+                            fqn=self._join_fqn(self.package.virtual_path,
+                                               name),
+                            signature=sig,
+                        )
+                    )
+                    return
+        # ─── fall-back (existing behaviour) ───────────────────────────
         expr = node.text.decode("utf8").strip()
         if not expr:
             return
@@ -491,7 +515,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 visibility=Visibility.PUBLIC,
             )
         )
-        self._collect_require_calls(node)      # NEW
+        self._collect_require_calls(node)
 
     def _handle_lexical(self, node):
         """
@@ -558,14 +582,18 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
     Minimal summary helper – mirrors formatting strategy used for python.
     """
 
-    def get_symbol_summary(self, sym: SymbolMetadata, indent: int = 0,
-                           skip_docs: bool = False) -> str:
+    def get_symbol_summary(self,
+                           sym: SymbolMetadata,
+                           indent: int = 0,
+                           include_comments: bool = False,
+                           include_docs: bool = False,
+                           ) -> str:
         IND = " " * indent
         if sym.signature:
             header = sym.signature.raw
-        elif sym.symbol_body:
+        elif sym.body:
             # fall back to first non-empty line of the symbol body
-            header = sym.symbol_body.splitlines()[0].strip()
+            header = '\n'.join([f'{IND}{ln.strip()}' for ln in sym.body.splitlines()])
         else:
             header = sym.name
 
@@ -580,7 +608,8 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             for ch in sym.children or []:
                 lines.append(self.get_symbol_summary(ch,
                                                      indent=indent + 2,
-                                                     skip_docs=skip_docs))
+                                                     include_comments=include_comments,
+                                                     include_docs=include_docs))
 
             # closing brace
             lines.append(IND + "}")
@@ -593,6 +622,3 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
     def get_import_summary(self, imp: ImportEdge) -> str:
         return imp.raw.strip() if imp.raw else f"import {imp.to_package_path}"
-
-    def get_file_header(self, project: Project, fm: FileMetadata, skip_docs: bool = False) -> Optional[str]:
-        return None
