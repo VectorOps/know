@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from typing import Union
 import pathspec
-from know.models import SymbolMetadata
+from know.models import SymbolMetadata, Visibility
 
 def compute_file_hash(abs_path: str) -> str:
     """Compute SHA256 hash of a file's contents."""
@@ -40,6 +40,17 @@ def get_symbol_key(symbol: SymbolMetadata) -> str:
         parts.append(parent.name)
         parent = parent.parent_ref
     return ".".join(reversed(parts))
+
+
+def infer_visibility(name: str | None) -> Visibility:
+    """
+    Very small heuristic used by parsers:
+    • identifier starting with an upper-case ASCII letter → PUBLIC  
+    • everything else (incl. empty / None)               → PRIVATE
+    """
+    if not name:
+        return Visibility.PRIVATE
+    return Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
 
 def parse_gitignore(root_path: str | Path) -> "pathspec.PathSpec":

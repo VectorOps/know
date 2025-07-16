@@ -21,7 +21,7 @@ from know.models import (
 from know.project import Project, ProjectCache
 from know.parsers import CodeParserRegistry
 from know.logger import logger
-from know.helpers import compute_file_hash, compute_symbol_hash
+from know.helpers import compute_file_hash, infer_visibility
 
 
 GO_LANGUAGE = Language(tsgo.language())
@@ -518,20 +518,13 @@ class GolangCodeParser(AbstractCodeParser):
             return
 
         name: str = ident_node.text.decode("utf8")
-        start_byte: int = node.start_byte
-        end_byte: int = node.end_byte
-        start_line: int = node.start_point[0] + 1   # 0-based → 1-based
-        end_line: int = node.end_point[0] + 1
-
-        # full source for the symbol
-        body_bytes: bytes = self.source_bytes[start_byte:end_byte]
-        body_str: str = body_bytes.decode("utf8", errors="replace")
 
         # Extract Go doc-comment immediately above the declaration
         docstring = self._extract_preceding_comment(node)
 
         # --- build signature -------------------------------------------
         param_list_node = next((c for c in node.children if c.type == "parameter_list"), None)
+
         # locate a possible result node (anything after params but before block)
         result_node = None
         if param_list_node:
@@ -549,34 +542,12 @@ class GolangCodeParser(AbstractCodeParser):
 
         # fully-qualified name + key
         fqn: str = self._join_fqn(self.package.virtual_path, name)
-        key: str = fqn          # (keep identical – change here if another key scheme is preferred)
 
         # visibility: exported identifiers in Go start with a capital letter
         visibility = (
             Visibility.PUBLIC   # adjust if your enum uses another literal
             if name[0].isupper()
             else Visibility.PRIVATE
-        )
-
-        self.parsed_file.symbols.append(
-            ParsedSymbol(
-                name=name,
-                fqn=fqn,
-                body=body_str,
-                key=key,
-                hash=compute_symbol_hash(body_bytes),
-                kind=SymbolKind.FUNCTION,
-                start_line=start_line,
-                end_line=end_line,
-                start_byte=start_byte,
-                end_byte=end_byte,
-                visibility=visibility,
-                modifiers=[],            # not handled yet
-                docstring=docstring,
-                signature=signature_obj,
-                comment=None,
-                children=[],
-            )
         )
 
     def _handle_method_declaration(
@@ -622,36 +593,10 @@ class GolangCodeParser(AbstractCodeParser):
         )
 
         # --- misc. metadata ------------------------------------------------
-        start_byte, end_byte = node.start_byte, node.end_byte
-        start_line, end_line = node.start_point[0] + 1, node.end_point[0] + 1
-        body_bytes = self.source_bytes[start_byte:end_byte]
-        body_str = body_bytes.decode("utf8", errors="replace")
         docstring = self._extract_preceding_comment(node)
 
         fqn = self._join_fqn(self.package.virtual_path, receiver_type, name)
-        key = fqn
         visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
-
-        self.parsed_file.symbols.append(
-            ParsedSymbol(
-                name=name,
-                fqn=fqn,
-                body=body_str,
-                key=key,
-                hash=compute_symbol_hash(body_bytes),
-                kind=SymbolKind.METHOD,
-                start_line=start_line,
-                end_line=end_line,
-                start_byte=start_byte,
-                end_byte=end_byte,
-                visibility=visibility,
-                modifiers=[],
-                docstring=docstring,
-                signature=signature_obj,
-                comment=None,
-                children=[],
-            )
-        )
 
     # type declarations
     def _parse_struct_fields(
@@ -689,30 +634,16 @@ class GolangCodeParser(AbstractCodeParser):
                 type_text = self.source_bytes[type_node.start_byte:type_node.end_byte] \
                                 .decode("utf8", errors="replace").strip()
 
-            # shared byte / line span for this field declaration
-            start_b, end_b = fld.start_byte, fld.end_byte
-            body_bytes = self.source_bytes[start_b:end_b]
-            body_str = body_bytes.decode("utf8", errors="replace")
-
             for idn in id_nodes:
                 fname = idn.text.decode("utf8")
-                child = ParsedSymbol(
+                child = self.helper._make_symbol(
+                    fld,
+                    kind=SymbolKind.PROPERTY,
                     name=fname,
                     fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, fname),
-                    body=body_str,
-                    key=self._join_fqn(self.package.virtual_path, parent_sym.name, fname),
-                    hash=compute_symbol_hash(body_bytes),
-                    kind=SymbolKind.PROPERTY,
-                    start_line=fld.start_point[0] + 1,
-                    end_line=fld.end_point[0] + 1,
-                    start_byte=start_b,
-                    end_byte=end_b,
-                    visibility=Visibility.PUBLIC if fname[0].isupper() else Visibility.PRIVATE,
-                    modifiers=[],
                     docstring=self._extract_preceding_comment(fld),
-                    signature=None,
-                    comment=None,
-                    children=[],
+                    visibility=Visibility.PUBLIC if fname[0].isupper()
+                                                else Visibility.PRIVATE,
                 )
                 parent_sym.children.append(child)
 
@@ -761,23 +692,14 @@ class GolangCodeParser(AbstractCodeParser):
         body_bytes = self.source_bytes[start_b:end_b]
         body_str   = body_bytes.decode("utf8", errors="replace")
 
-        child = ParsedSymbol(
+        visibility = infer_visibility(mname)
+        child = self._make_symbol(
             name=mname,
             fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
-            body=body_str,
-            key=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
-            hash=compute_symbol_hash(body_bytes),
             kind=SymbolKind.METHOD_DEF,
-            start_line=m.start_point[0] + 1,
-            end_line=m.end_point[0] + 1,
-            start_byte=start_b,
-            end_byte=end_b,
-            visibility=Visibility.PUBLIC if mname[0].isupper() else Visibility.PRIVATE,
-            modifiers=[],
+            visibility=visibility,
             docstring=self._extract_preceding_comment(m),
             signature=signature_obj,
-            comment=None,
-            children=[],
         )
         parent_sym.children.append(child)
 
@@ -835,27 +757,17 @@ class GolangCodeParser(AbstractCodeParser):
             body_bytes = self.source_bytes[start_b:end_b]
             body_str = body_bytes.decode("utf8", errors="replace")
 
-            self.parsed_file.symbols.append(
-                ParsedSymbol(
-                    name=name,
-                    fqn=self._join_fqn(self.package.virtual_path, name),
-                    body=body_str,
-                    key=self._join_fqn(self.package.virtual_path, name),
-                    hash=compute_symbol_hash(body_bytes),
-                    kind=kind,
-                    start_line=spec.start_point[0] + 1,
-                    end_line=spec.end_point[0] + 1,
-                    start_byte=start_b,
-                    end_byte=end_b,
-                    visibility=Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE,
-                    modifiers=[],
-                    docstring=self._extract_preceding_comment(spec),
-                    signature=None,
-                    comment=None,
-                    children=[],
-                )
+            parent_sym = self.helper._make_symbol(
+                spec,
+                kind=kind,
+                name=name,
+                fqn=self._join_fqn(self.package.virtual_path, name),
+                docstring=self._extract_preceding_comment(spec),
+                visibility=Visibility.PUBLIC if name[0].isupper()
+                                            else Visibility.PRIVATE,
             )
-            parent_symbol = self.parsed_file.symbols[-1]
+            self.parsed_file.symbols.append(parent_sym)
+
             if type_node is not None:
                 if type_node.type == "struct_type":
                     self._parse_struct_fields(type_node, parent_symbol)
@@ -892,37 +804,22 @@ class GolangCodeParser(AbstractCodeParser):
             if not id_nodes:
                 continue
 
-            start_b, end_b = spec.start_byte, spec.end_byte
-            body_bytes = self.source_bytes[start_b:end_b]
-            body_str = body_bytes.decode("utf8", errors="replace")
             docstring = self._extract_preceding_comment(spec)
-            start_line, end_line = spec.start_point[0] + 1, spec.end_point[0] + 1
 
             for idn in id_nodes:
                 name = idn.text.decode("utf8")
                 fqn = self._join_fqn(self.package.virtual_path, name)
                 visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
-                self.parsed_file.symbols.append(
-                    ParsedSymbol(
-                        name=name,
-                        fqn=fqn,
-                        body=body_str,
-                        key=fqn,
-                        hash=compute_symbol_hash(body_bytes),
-                        kind=SymbolKind.CONSTANT,
-                        start_line=start_line,
-                        end_line=end_line,
-                        start_byte=start_b,
-                        end_byte=end_b,
-                        visibility=visibility,
-                        modifiers=[],
-                        docstring=docstring,
-                        signature=None,
-                        comment=None,
-                        children=[],
-                    )
+                sym = self.helper._make_symbol(
+                    spec,
+                    kind=SymbolKind.CONSTANT,   # or VARIABLE in var handler
+                    name=name,
+                    fqn=fqn,
+                    docstring=docstring,
+                    visibility=visibility,
                 )
+                self.parsed_file.symbols.append(sym)
 
     def _handle_var_declaration(
         self,
