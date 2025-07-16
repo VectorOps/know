@@ -68,9 +68,7 @@ class GolangCodeParser(AbstractCodeParser):
         """Join non-empty parts with a dot, skipping Nones / empty strings."""
         return ".".join([p for p in parts if p])
 
-    # ------------------------------------------------------------------ #
-    # go.mod handling                                                    #
-    # ------------------------------------------------------------------ #
+    # go.mod handling
     def _load_module_path(self, cache: ProjectCache) -> None:
         """
         Look up or cache the project's Go module path (first `module ...` in go.mod).
@@ -152,9 +150,7 @@ class GolangCodeParser(AbstractCodeParser):
         for node in root_node.children:
             self._process_node(node)
 
-        # --------------------------------------------
         # Collect outgoing symbol-references (calls & types)
-        # --------------------------------------------
         self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
 
         self.package.imports = list(self.parsed_file.imports)
@@ -167,21 +163,20 @@ class GolangCodeParser(AbstractCodeParser):
     ) -> None:
         # Always create (at least) one symbol for every top-level node
         symbols_before  = len(self.parsed_file.symbols)
-        imports_before  = len(self.parsed_file.imports)
 
         if node.type == "comment":
             # single-line or block comment
-            self._add_symbol_for_node(node, kind=SymbolKind.COMMENT, name="comment")
+            self.parsed_file.symbols.append(self._make_symbol(node, kind=SymbolKind.COMMENT))
 
         elif node.type == "package_clause":
             # treat the `package …` line as a MODULE symbol
-            self._add_symbol_for_node(node, kind=SymbolKind.MODULE, name="package")
+            self.parsed_file.symbols.append(self._make_symbol(node, kind=SymbolKind.MODULE))
 
         elif node.type == "import_declaration":
             # keep existing import handling
             self._handle_import_declaration(node)
             # additionally register a symbol that represents the import stanza
-            self._add_symbol_for_node(node, kind=SymbolKind.IMPORT, name="import")
+            self.parsed_file.symbols.append(self._make_symbol(node, kind=SymbolKind.IMPORT))
 
         elif node.type == "function_declaration":
             self._handle_function_declaration(node)
@@ -199,8 +194,6 @@ class GolangCodeParser(AbstractCodeParser):
             self._handle_var_declaration(node)
 
         else:
-            # unknown / unrecognised – create a literal symbol and warn
-            self._add_symbol_for_node(node, kind=SymbolKind.LITERAL, name=node.type)
             logger.warning(
                 "Unknown Go node – stored as literal symbol",
                 path=self.parsed_file.path,
@@ -209,17 +202,12 @@ class GolangCodeParser(AbstractCodeParser):
                 byte_offset=node.start_byte,
                 raw=node.text.decode("utf8", errors="replace"),
             )
+            self.parsed_file.symbols.append(self._make_symbol(node, kind=SymbolKind.LITERAL))
 
-        # ----------------------------------------------------------------
-        # warn if the node handler produced neither symbols nor imports
-        # (defensive programming – should not happen with the new logic)
-        # ----------------------------------------------------------------
-        if (
-            len(self.parsed_file.symbols) == symbols_before
-            and len(self.parsed_file.imports) == imports_before
-        ):
+        # warn if the node handler produced neither symbols
+        if len(self.parsed_file.symbols) == symbols_before:
             logger.warning(
-                "Parser handled node but produced no symbols or imports",
+                "Parser handled node but produced no symbols",
                 path=self.parsed_file.path,
                 node_type=node.type,
                 line=node.start_point[0] + 1,
@@ -555,15 +543,19 @@ class GolangCodeParser(AbstractCodeParser):
             else None
         )
 
-        # fully-qualified name + key
         fqn: str = self._join_fqn(self.package.virtual_path, name)
 
-        # visibility: exported identifiers in Go start with a capital letter
-        visibility = (
-            Visibility.PUBLIC   # adjust if your enum uses another literal
-            if name[0].isupper()
-            else Visibility.PRIVATE
+        sym = self._make_symbol(
+            node,
+            kind=SymbolKind.FUNCTION,
+            name=name,
+            fqn=fqn,
+            signature=signature_obj,
+            docstring=docstring,
+            visibility=infer_visibility(name),
         )
+        self.parsed_file.symbols.append(sym)
+
 
     def _handle_method_declaration(
         self,
@@ -612,6 +604,18 @@ class GolangCodeParser(AbstractCodeParser):
 
         fqn = self._join_fqn(self.package.virtual_path, receiver_type, name)
         visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
+
+        sym = self._make_symbol(
+            node,
+            kind=SymbolKind.METHOD,
+            name=name,
+            fqn=fqn,
+            signature=signature_obj,
+            docstring=docstring,
+            visibility=infer_visibility(name),
+        )
+        self.parsed_file.symbols.append(sym)
+
 
     # type declarations
     def _parse_struct_fields(
@@ -703,16 +707,12 @@ class GolangCodeParser(AbstractCodeParser):
             else None
         )
 
-        start_b, end_b = m.start_byte, m.end_byte
-        body_bytes = self.source_bytes[start_b:end_b]
-        body_str   = body_bytes.decode("utf8", errors="replace")
-
-        visibility = infer_visibility(mname)
         child = self._make_symbol(
+            m,
             name=mname,
             fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
             kind=SymbolKind.METHOD_DEF,
-            visibility=visibility,
+            visibility=infer_visibility(mname),
             docstring=self._extract_preceding_comment(m),
             signature=signature_obj,
         )
@@ -767,21 +767,15 @@ class GolangCodeParser(AbstractCodeParser):
                 elif type_node.type == "interface_type":
                     kind = SymbolKind.INTERFACE
 
-            # ---------- misc. metadata ----------------------------------
-            start_b, end_b = spec.start_byte, spec.end_byte
-            body_bytes = self.source_bytes[start_b:end_b]
-            body_str = body_bytes.decode("utf8", errors="replace")
-
-            parent_sym = self._make_symbol(
+            parent_symbol = self._make_symbol(
                 spec,
                 kind=kind,
                 name=name,
                 fqn=self._join_fqn(self.package.virtual_path, name),
                 docstring=self._extract_preceding_comment(spec),
-                visibility=Visibility.PUBLIC if name[0].isupper()
-                                            else Visibility.PRIVATE,
+                visibility=infer_visibility(name),
             )
-            self.parsed_file.symbols.append(parent_sym)
+            self.parsed_file.symbols.append(parent_symbol)
 
             if type_node is not None:
                 if type_node.type == "struct_type":
@@ -824,7 +818,6 @@ class GolangCodeParser(AbstractCodeParser):
             for idn in id_nodes:
                 name = idn.text.decode("utf8")
                 fqn = self._join_fqn(self.package.virtual_path, name)
-                visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
                 sym = self._make_symbol(
                     spec,
@@ -832,7 +825,7 @@ class GolangCodeParser(AbstractCodeParser):
                     name=name,
                     fqn=fqn,
                     docstring=docstring,
-                    visibility=visibility,
+                    visibility=infer_visibility(name),
                 )
                 self.parsed_file.symbols.append(sym)
 
@@ -868,39 +861,20 @@ class GolangCodeParser(AbstractCodeParser):
                 continue
 
             # 3) Common metadata for every identifier in this spec
-            start_b, end_b = spec.start_byte, spec.end_byte
-            body_bytes = self.source_bytes[start_b:end_b]
-            body_str = body_bytes.decode("utf8", errors="replace")
             docstring = self._extract_preceding_comment(spec)
-            start_line, end_line = spec.start_point[0] + 1, spec.end_point[0] + 1
 
             for idn in id_nodes:
                 name = idn.text.decode("utf8")
                 fqn = self._join_fqn(self.package.virtual_path, name)
-                visibility = (
-                    Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
-                )
 
-                self.parsed_file.symbols.append(
-                    ParsedSymbol(
-                        name=name,
-                        fqn=fqn,
-                        body=body_str,
-                        key=fqn,
-                        hash=compute_symbol_hash(body_bytes),
-                        kind=SymbolKind.VARIABLE,
-                        start_line=start_line,
-                        end_line=end_line,
-                        start_byte=start_b,
-                        end_byte=end_b,
-                        visibility=visibility,
-                        modifiers=[],
-                        docstring=docstring,
-                        signature=None,
-                        comment=None,
-                        children=[],
-                    )
-                )
+                sym = self._make_symbol(spec,
+                                        name=name,
+                                        fqn=fqn,
+                                        kind=SymbolKind.VARIABLE,
+                                        visibility=infer_visibility(name),
+                                        docstring=docstring,
+                                        )
+                self.parsed_file.symbols.append(sym)
 
     def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
         """
@@ -1003,7 +977,9 @@ class GolangLanguageHelper(AbstractLanguageHelper):
     def get_symbol_summary(self,
                            sym: SymbolMetadata,
                            indent: int = 0,
-                           skip_docs: bool = False) -> str:
+                           include_comments: bool = False,
+                           include_docs: bool = False,
+                           ) -> str:
         """
         Produce a human-readable summary for *sym* (Go flavour).
 
@@ -1015,8 +991,15 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         IND   = " " * indent
         lines: list[str] = []
 
+        # special-case: keep full multi-line import blocks
+        if sym.kind == SymbolKind.IMPORT:
+            body = sym.body or ""
+            for ln in body.splitlines():
+                lines.append(f"{IND}{ln.rstrip()}")
+            return "\n".join(lines)
+
         # preceding comment / doc
-        if not skip_docs and sym.docstring:
+        if not include_comments and sym.docstring:
             for ln in sym.docstring.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
 
@@ -1043,21 +1026,21 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             in_body = [c for c in sym.children if c.kind != SymbolKind.METHOD]
             methods = [c for c in sym.children if c.kind == SymbolKind.METHOD]
             for child in in_body:
-                lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
+                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
             lines.append(f"{IND}}}")
             for m in methods:
-                lines.append(self.get_symbol_summary(m, indent, skip_docs=skip_docs))
+                lines.append(self.get_symbol_summary(m, indent, include_comments=include_comments, include_docs=include_docs))
             return "\n".join(lines)
         elif sym.kind == SymbolKind.INTERFACE:
             header = f"type {sym.name} interface {{"
             lines.append(f"{IND}{header}")
             if sym.children:
                 for child in sym.children:
-                    lines.append(self.get_symbol_summary(child, indent + 4, skip_docs=skip_docs))
+                    lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
             lines.append(f"{IND}}}")
             return "\n".join(lines)
         else:
-            body_line = (sym.symbol_body or "").splitlines()[0].rstrip()
+            body_line = (sym.body or "").splitlines()[0].rstrip()
 
             if sym.kind == SymbolKind.CONSTANT and not body_line.startswith("const"):
                 body_line = f"const {body_line}"
@@ -1071,29 +1054,3 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}}}")
 
         return "\n".join(lines)
-
-    def get_file_header(
-        self,
-        project: Project,
-        fm: FileMetadata,
-        skip_docs: bool = False,
-    ) -> Optional[str]:
-        """
-        Always emit the canonical `package <name>` line.
-        Package name is resolved via PackageMetadata when available
-        and falls back to the file’s directory name.
-        """
-        pkg_name: str | None = None
-
-        # try repository lookup first
-        pkg_id = fm.package_id
-        if pkg_id:
-            pkg_meta = project.data_repository.package.get_by_id(pkg_id)
-            if pkg_meta is not None:
-                pkg_name = pkg_meta.name
-
-        # fallback – derive from path
-        if not pkg_name:
-            pkg_name = os.path.dirname(fm.path).replace("\\", "/").split("/")[-1] or "main"
-
-        return f"package {pkg_name}"
