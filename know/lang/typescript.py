@@ -531,37 +531,62 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     continue
                 name = name_node.text.decode("utf8")
                 sig  = self._build_signature(value, name, prefix="")
-
-                # ── keep surrounding modifiers (export / const / async …) ──
-                container = decl                 # start with the declarator
-                anc = decl.parent
-                while anc is not None:
-                    if anc.type in (
-                        "variable_statement",
-                        "lexical_declaration",
-                        "public_field_declaration",
-                        "public_field_definition",
-                        "export_statement",
-                    ):
-                        container = anc           # climb as long as we stay
-                        anc = anc.parent          # inside the same statement
-                    else:
-                        break
-                raw_body = container.text.decode("utf8")
-
+                # use the surrounding statement so the stored body
+                # always reproduces the complete top-level line
+                target_node = node if class_name is None else value
                 self.parsed_file.symbols.append(
                     self._make_symbol(
-                        value,
+                        target_node,
                         kind=SymbolKind.FUNCTION,
                         name=name,
                         fqn=self._join_fqn(self.package.virtual_path,
                                            class_name, name),
                         signature=sig,
-                        body=raw_body,           # <── use full statement text
                     )
                 )
                 made = True
         return made
+```
+
+know/lang/typescript.py
+```python
+<<<<<<< SEARCH
+    def _handle_expression(self, node):
+        # detect assignment of an arrow function
+        assign = next((c for c in node.named_children
+                       if c.type == "assignment_expression"), None)
+        if assign:
+            right = assign.child_by_field_name("right")
+            if right and right.type == "arrow_function":
+                left = assign.child_by_field_name("left")
+                if left:
+                    name = left.text.decode("utf8").split(".")[-1]
+                    sig  = self._build_signature(right, name, prefix="")
+                    self.parsed_file.symbols.append(
+                        self._make_symbol(
+                            right,
+                            kind=SymbolKind.FUNCTION,
+                            name=name,
+                            fqn=self._join_fqn(self.package.virtual_path,
+                                               name),
+                            signature=sig,
+                        )
+                    )
+                    return
+        # ─── fall-back (existing behaviour) ───────────────────────────
+        expr = node.text.decode("utf8").strip()
+        if not expr:
+            return
+        name = expr.split("(", 1)[0].strip()
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.LITERAL,
+                fqn=self._join_fqn(self.package.virtual_path, name),
+                visibility=Visibility.PUBLIC,
+            )
+        )
+        self._collect_require_calls(node)
 
     def _handle_variable(self, node):
         if not self._collect_arrow_function_declarators(node):
