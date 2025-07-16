@@ -131,6 +131,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 line=node.start_point[0] + 1,
             )
 
+            self.parsed_file.symbols.append(self._create_literal_symbol(node))
+
         # Emit warning when the handler produced neither symbols nor imports
         if len(self.parsed_file.symbols) == symbols_before:
             logger.warning(
@@ -240,7 +242,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         in the file – we just mark the identifiers so that the surrounding
         `_handle_export()` call knows the clause has been handled.
         """
-        print(node)
         for spec in (c for c in node.named_children
                      if c.type == "export_specifier"):
             ident = (spec.child_by_field_name("name")
@@ -258,7 +259,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._make_symbol(
                 node,
                 kind=SymbolKind.LITERAL,
-                name=f"export@{node.start_point[0]+1}",
                 fqn=self._join_fqn(self.package.virtual_path,
                                    f"export@{node.start_point[0]+1}"),
                 visibility=Visibility.PUBLIC,
@@ -379,6 +379,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
     # helpers reused by class + top level
     def _create_method_symbol(self, node, class_name: str):
         name_node = node.child_by_field_name("name")
+        # TODO: Anonymous?
         name = name_node.text.decode("utf8") if name_node else "anonymous"
         sig = self._build_signature(node, name, prefix="")
         return self._make_symbol(
@@ -389,12 +390,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
             signature=sig,
         )
 
-    @staticmethod
-    def _find_first_identifier(node):
+    def _find_first_identifier(self, node):
         if node.type in ("identifier", "property_identifier"):
             return node
         for ch in node.children:
-            ident = TypeScriptCodeParser._find_first_identifier(ch)
+            ident = self._find_first_identifier(ch)
             if ident is not None:
                 return ident
         return None
@@ -432,6 +432,25 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self.parsed_file.symbols.append(sym)
         self._collect_require_calls(node)      # NEW
 
+    # NEW – explicit comment handler
+    def _handle_comment(self, node):
+        """
+        Generate a ParsedSymbol of kind COMMENT instead of falling back to
+        LITERAL.  Keeps the raw comment text in `body`.
+        """
+        comment_body = node.text.decode("utf8", errors="replace").rstrip()
+        name = f"comment@{node.start_point[0] + 1}"
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.COMMENT,
+                name=name,
+                fqn=self._join_fqn(self.package.virtual_path, name),
+                body=comment_body,
+                visibility=Visibility.PUBLIC,
+            )
+        )
+
     def _handle_expression(self, node):
         expr = node.text.decode("utf8").strip()
         if not expr:
@@ -441,7 +460,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._make_symbol(
                 node,
                 kind=SymbolKind.LITERAL,
-                name=name or f"expr@{node.start_point[0]+1}",
                 fqn=self._join_fqn(self.package.virtual_path, name),
                 visibility=Visibility.PUBLIC,
             )
@@ -458,24 +476,19 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self.parsed_file.symbols.append(sym)
         self._collect_require_calls(node)
 
-    # ------------------------------------------------------------------ #
     def _create_literal_symbol(self, node) -> ParsedSymbol:
         """
         Fallback symbol for nodes that did not yield a real symbol.
         Produces a SymbolKind.LITERAL with a best-effort name.
         """
         txt  = node.text.decode("utf8", errors="replace").strip()
-        name = (txt.split()[0] if txt else f"literal@{node.start_point[0]+1}")[:40]
         return self._make_symbol(
             node,
             kind=SymbolKind.LITERAL,
-            name=name,
-            fqn=self._join_fqn(self.package.virtual_path if self.package else None,
-                               name),
             visibility=Visibility.PUBLIC,
         )
 
-    # very shallow call-collector (copies logic from python)
+    # very shallow call-collector
     def _collect_symbol_refs(self, root):
         return []  # TODO – later
 
