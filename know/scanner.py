@@ -367,67 +367,62 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         if key not in new_keys:
             import_repo.delete(edge.id)
 
-    # ── Symbols (recursive) ─────────────────────────────────────────────────
+    # ── Symbols (re-create) ─────────────────────────────────────────────────
     symbol_repo = repo_store.symbol
 
-    # Retrieve all existing symbols for this file once
+    # collect existing symbols (we need their embeddings before wiping them)
     existing_symbols = symbol_repo.get_list(SymbolFilter(file_id=file_meta.id))
-    existing_by_key: dict[str, SymbolMetadata] = {
-        sym.symbol_key: sym for sym in existing_symbols if sym.symbol_key
-    }
-    # Symbols that MIGHT need deletion (will be removed from this set when re-encountered)
-    obsolete_keys: set[str] = set(existing_by_key)
+    # map   body → SymbolMetadata   (body is the canonical content comparison key)
+    _old_by_body: dict[str, SymbolMetadata] = {s.body: s for s in existing_symbols}
 
-    def _upsert_symbol(sym: ParsedSymbol, parent_id: Optional[str] = None) -> str:
+    # always remove previous symbols of this file – simplifies handling of moves / deletions
+    symbol_repo.delete_by_file_id(file_meta.id)
+
+    emb_calc = project.embeddings                              # may be None
+
+    def _insert_symbol(psym: ParsedSymbol,
+                       parent_id: str | None = None) -> str:
         """
-        Persist a single ParsedSymbol and recurse through its children.
-        Returns the id of the upserted SymbolMetadata (needed for parenting).
+        Insert *psym* as SymbolMetadata (recursively handles its children).
+        When an old symbol with identical body exists, its embedding vector
+        (and model name) are copied instead of re-computing.
         """
-        nonlocal obsolete_keys
-        existing = existing_by_key.get(sym.key)
-
-        is_new_symbol = existing is None
-        code_changed = is_new_symbol or existing.symbol_hash != sym.hash
-
-        sm_kwargs = sym.to_dict()
-        sm_kwargs.update({
-            "file_id": file_meta.id,
+        # base attributes coming from the parser
+        sm_data: dict[str, Any] = psym.to_dict()
+        sm_data.update({
+            "id": generate_id(),
             "repo_id": project.get_repo().id,
+            "file_id": file_meta.id,
+            "package_id": pkg_meta.id,
             "parent_symbol_id": parent_id,
-            "package_id": pkg_meta.id,          # N
         })
 
-        emb_calc = project.embeddings
-
-        if existing:
-            symbol_repo.update(existing.id, sm_kwargs)
-            sym_id = existing.id
+        # reuse embedding if we had an identical symbol earlier
+        old = _old_by_body.get(psym.body)
+        if old and old.embedding_code_vec is not None:
+            sm_data["embedding_code_vec"] = old.embedding_code_vec
+            sm_data["embedding_model"]    = old.embedding_model
+            schedule_emb = False
         else:
-            sm = SymbolMetadata(id=generate_id(), **sm_kwargs)
-            symbol_repo.create(sm)
-            sym_id = sm.id  # type: ignore[attr-defined]
-            # cache the newly-created symbol for potential children look-ups
-            existing_by_key[sym.key] = sm  # type: ignore[assignment]
+            schedule_emb = emb_calc is not None
 
-        if code_changed and emb_calc:
+        sm = SymbolMetadata(**sm_data)
+        symbol_repo.create(sm)
+
+        if schedule_emb:
             schedule_symbol_embedding(
-                symbol_repo, emb_calc, sym_id, sym.body,
-                sync=project.settings.sync_embeddings,   # ← added
+                symbol_repo,
+                emb_calc,                       # type: ignore[arg-type]
+                sym_id=sm.id,                   # type: ignore[arg-type]
+                body=psym.body,
+                sync=project.settings.sync_embeddings,
             )
 
-        # ── this symbol exists in the latest parse → keep it
-        obsolete_keys.discard(sym.key)
+        # recurse into children
+        for child in psym.children:
+            _insert_symbol(child, sm.id)        # type: ignore[arg-type]
 
-        for child in sym.children:
-            _upsert_symbol(child, sym_id)
-
-        return sym_id
-
-    for top_level_symbol in parsed_file.symbols:
-        _upsert_symbol(top_level_symbol)
-
-    for key in obsolete_keys:
-        symbol_repo.delete(existing_by_key[key].id)
+        return sm.id                            # noqa: R504  (returned for completeness)
 
     # ── Symbol References ───────────────────────────────────────────────────
     symbolref_repo = repo_store.symbolref
