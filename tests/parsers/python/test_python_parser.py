@@ -69,7 +69,9 @@ def test_python_parser_on_simple_file():
     # Top-level symbols
     # ------------------------------------------------------------------ #
     def symbols_to_map(symbols):
-        return {sym.name: sym for sym in symbols if sym.kind != SymbolKind.LITERAL}
+        # ignore literals and any symbol that has no name (e.g. comments)
+        return {sym.name: sym for sym in symbols
+                if sym.kind != SymbolKind.LITERAL and sym.name}
 
     top_level = symbols_to_map(parsed_file.symbols)
 
@@ -156,3 +158,10 @@ def test_python_parser_on_simple_file():
     foobar_cls = top_level["Foobar"]
     if foobar_cls.signature and hasattr(foobar_cls.signature, "bases"):
         assert foobar_cls.signature.bases == ["Foo", "Bar", "Buzz"]
+
+    # ------------------------------------------------------------------ #
+    # Comment symbols                                                    #
+    # ------------------------------------------------------------------ #
+    comment_syms = [s for s in parsed_file.symbols if s.kind == SymbolKind.COMMENT]
+    assert any("Comment" in (s.body or "") for s in comment_syms), \
+        "Expected comment symbol '# Comment' not found"
