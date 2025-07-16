@@ -438,7 +438,8 @@ class PythonCodeParser(AbstractCodeParser):
                 node,
             )
 
-        async_prefix = "async " if node.type == "async_function_definition" else ""
+        # async prefix (tree-sitter bug aware)
+        async_prefix = "async " if PythonCodeParser._is_async_function(node) else ""
 
         name_node     = node.child_by_field_name("name")
         params_node   = node.child_by_field_name("parameters")
@@ -580,13 +581,26 @@ class PythonCodeParser(AbstractCodeParser):
     @staticmethod
     def _is_async_function(node) -> bool:
         """
-        Return True when *node* represents an async function / method,
-        regardless of whether it is wrapped in a `decorated_definition`.
+        Robust async detection.
+
+        Tree-sitter sometimes mis-labels async defs inside classes as a plain
+        `function_definition`.  Treat a node as *async* when:
+
+        • its type is `async_function_definition`, or
+        • its *text* starts with ``async `` (bug-work-around), or
+        • it is a `decorated_definition` that wraps an async definition
         """
         if node.type == "async_function_definition":
             return True
+
+        # bug-work-around: async method wrongly tagged as function_definition
+        if node.type == "function_definition" and node.text.startswith(b"async "):
+            return True
+
         if node.type == "decorated_definition":
-            return any(c.type == "async_function_definition" for c in node.children)
+            # recurse into wrapped child/children
+            return any(PythonCodeParser._is_async_function(c) for c in node.children)
+
         return False
 
     def _is_constant_name(self, name: str) -> bool:
@@ -682,7 +696,7 @@ class PythonCodeParser(AbstractCodeParser):
             name=func_name,
             fqn=self._join_fqn(self.package.virtual_path, func_name),
             body=wrapper.text.decode("utf8"),
-            modifiers=[Modifier.ASYNC] if node.type == "async_function_definition" else [],
+            modifiers=[Modifier.ASYNC] if self._is_async_function(wrapper) else [],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
@@ -743,13 +757,15 @@ class PythonCodeParser(AbstractCodeParser):
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
         method_name = node.child_by_field_name('name').text.decode('utf8')
+        if class_name == "Test":
+            print(node, node.type, method_name, class_name)
         return self._make_symbol(
             wrapper,
             kind=SymbolKind.METHOD,
             name=method_name,
             fqn=self._join_fqn(self.package.virtual_path, class_name, method_name),
             visibility=self._infer_visibility(method_name),
-            modifiers=[Modifier.ASYNC] if node.type == "async_function_definition" else [],
+            modifiers=[Modifier.ASYNC] if self._is_async_function(node) else [],
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
