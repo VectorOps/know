@@ -203,14 +203,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         )
 
-        # NEW – also register an IMPORT symbol
-        sym_name = alias or virtual          # use alias when present, else module path
         self.parsed_file.symbols.append(
             self._make_symbol(
                 node,
                 kind=SymbolKind.IMPORT,
-                name=sym_name,
-                fqn=self._join_fqn(self.package.virtual_path, sym_name),
                 visibility=Visibility.PUBLIC,
             )
         )
@@ -224,6 +220,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         • If the export wraps a declaration, forward that declaration to
           the regular symbol handlers so the symbols are materialised.
         """
+        symbols_before = len(self.parsed_file.symbols)
         decl_handled = False
         for child in node.children:
             match child.type:
@@ -247,6 +244,13 @@ class TypeScriptCodeParser(AbstractCodeParser):
             # likely a re-export such as `export { foo } from "./mod";`
             # or `export * from "./mod";` → treat as import edge
             self._handle_import(node)
+
+        # ── mark symbols originating from this `export …` as exported ──
+        if decl_handled:
+            export_body = node.text.decode("utf8", errors="replace").strip()
+            for sym in self.parsed_file.symbols[symbols_before:]:
+                sym.exported = True
+                sym.body = export_body        # ensure `export …` prefix is kept
 
     def _handle_export_clause(self, node):
         """
@@ -274,6 +278,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 node,
                 kind=SymbolKind.LITERAL,
                 visibility=Visibility.PUBLIC,
+                exported=True,      # NEW – mark clause symbol as exported
             )
         )
 
