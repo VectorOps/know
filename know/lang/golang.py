@@ -1023,6 +1023,8 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             if not header.endswith("{"):
                 header += " {"
             lines.append(f"{IND}{header}")
+            lines.append(f"{IND}    ...")
+            lines.append(f"{IND}}}")
         elif sym.kind == SymbolKind.FUNCTION:
             sig = "()"
             if sym.signature and sym.signature.raw:
@@ -1031,6 +1033,8 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             if not header.endswith("{"):
                 header += " {"
             lines.append(f"{IND}{header}")
+            lines.append(f"{IND}    ...")
+            lines.append(f"{IND}}}")
         elif sym.kind == SymbolKind.CLASS:
             header = f"type {sym.name} struct {{"
             lines.append(f"{IND}{header}")
@@ -1051,17 +1055,20 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}}}")
             return "\n".join(lines)
         else:
-            body_line = (sym.body or "").splitlines()[0].rstrip()
+            body_lines = (sym.body or "").splitlines()
+            if not body_lines:
+                body_lines = [""]
 
-            if sym.kind == SymbolKind.CONSTANT and not body_line.startswith("const"):
-                body_line = f"const {body_line}"
-            elif sym.kind == SymbolKind.VARIABLE and not body_line.startswith("var"):
-                body_line = f"var {body_line}"
+            # adjust FIRST line for const/var helpers
+            first = body_lines[0].rstrip()
+            if sym.kind == SymbolKind.CONSTANT and not first.startswith("const"):
+                first = f"const {first}"
+            elif sym.kind == SymbolKind.VARIABLE and not first.startswith("var"):
+                first = f"var {first}"
 
-            lines.append(f"{IND}{body_line}")
-
-        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
-            lines.append(f"{IND}    ...")
-            lines.append(f"{IND}}}")
+            # emit first + remaining lines
+            lines.append(f"{IND}{first}")
+            for ln in body_lines[1:]:
+                lines.append(f"{IND}{ln.rstrip()}")
 
         return "\n".join(lines)

@@ -117,52 +117,6 @@ class PythonCodeParser(AbstractCodeParser):
 
         return self.parsed_file
 
-    # ------------------------------------------------------------------  
-    #  generic symbol-builder  
-    # ------------------------------------------------------------------
-    def _make_symbol(
-        self,
-        node,
-        kind: SymbolKind,
-        name: str | None = None,
-        fqn: str | None = None,
-        body: str | None = None,
-        visibility: Visibility | None = None,
-        modifiers: list[Modifier] | None = None,
-        signature: SymbolSignature | None = None,
-        docstring: str | None = None,
-        comment: str | None = None,
-        children: list[ParsedSymbol] | None = None,
-        exported: bool | None = None,
-    ) -> ParsedSymbol:
-        """
-        Build a ParsedSymbol and pre-populate all generic fields that can be
-        derived directly from *node*.  Callers may override any value via the
-        keyword arguments.
-        """
-        body = body if body is not None else node.text.decode("utf8").strip()
-        # fall back to heuristics only when not explicitly provided
-        visibility = visibility if visibility is not None else (
-            self._infer_visibility(name) if name else Visibility.PUBLIC
-        )
-        return ParsedSymbol(
-            name=name,
-            fqn=fqn,
-            body=body,
-            kind=kind,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
-            visibility=visibility,
-            modifiers=modifiers or [],
-            docstring=docstring,
-            signature=signature,
-            comment=comment,
-            children=children or [],
-            exported=exported,
-        )
-
     def _create_import_symbol(self, node, import_path: str | None, alias: str | None) -> ParsedSymbol:
         return self._make_symbol(
             node,
@@ -316,6 +270,8 @@ class PythonCodeParser(AbstractCodeParser):
         self,
         node,
     ) -> None:
+        symbols_before  = len(self.parsed_file.symbols)
+
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
             self._handle_import_statement(node)
 
@@ -342,11 +298,10 @@ class PythonCodeParser(AbstractCodeParser):
             self._handle_try_statement(node)
 
         elif node.type == "pass_statement":
-            return
+            pass
 
         elif node.type == "comment":
             self.parsed_file.symbols.append(self._create_comment_symbol(node))
-            return
 
         # Unknown / unhandled → debug-log (mirrors previous behaviour)
         else:
@@ -359,7 +314,18 @@ class PythonCodeParser(AbstractCodeParser):
                 byte_offset=node.start_byte,
                 raw=node.text.decode("utf8", errors="replace"),
             )
-            return
+
+        if (
+            len(self.parsed_file.symbols) == symbols_before
+        ):
+            logger.warning(
+                "Parser handled node but produced no symbols",
+                path=self.parsed_file.path,
+                node_type=node.type,
+                line=node.start_point[0] + 1,
+                raw=node.text.decode("utf8", errors="replace"),
+            )
+
 
     def _clean_docstring(self, doc: str) -> str:
         return ('\n'.join((s.strip() for s in doc.split('\n')))).strip()
@@ -932,6 +898,18 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD, SymbolKind.CLASS) and not header.endswith(":"):
             header += ":"
         lines.append(f"{IND}{header}")
+
+        # For simple statements (constants, variables, etc.) include all
+        # remaining body lines so multi-line statements are not truncated.
+        if sym.kind not in (
+            SymbolKind.FUNCTION,
+            SymbolKind.METHOD,
+            SymbolKind.CLASS,
+            SymbolKind.TRYCATCH,
+            SymbolKind.LITERAL,      # already returned earlier
+        ):
+            for ln in (sym.body or "").splitlines()[1:]:
+                lines.append(f"{IND}{ln.rstrip()}")
 
         # body / docstring
         def _emit_docstring(ds: str, base_indent: str) -> None:
