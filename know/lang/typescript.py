@@ -16,7 +16,7 @@ from know.models import (
     SymbolRefType, FileMetadata
 )
 from know.project import Project, ProjectCache
-from know.helpers import compute_file_hash, compute_symbol_hash
+from know.helpers import compute_file_hash
 from know.logger import logger
 
 # TODO: interface support
@@ -255,26 +255,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 name=ident.text.decode("utf8"),
             )
         # add a lightweight symbol representing this export clause
-        raw = node.text.decode("utf8")
         self.parsed_file.symbols.append(
-            ParsedSymbol(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.LITERAL,
                 name=f"export@{node.start_point[0]+1}",
                 fqn=self._join_fqn(self.package.virtual_path,
                                    f"export@{node.start_point[0]+1}"),
-                body=raw,
-                key=f"export@{node.start_point[0]+1}",
-                hash=compute_symbol_hash(node.text),
-                kind=SymbolKind.LITERAL,
-                start_line=node.start_point[0],
-                end_line=node.end_point[0],
-                start_byte=node.start_byte,
-                end_byte=node.end_byte,
                 visibility=Visibility.PUBLIC,
-                modifiers=[],
-                docstring=None,
-                signature=None,
-                comment=None,
-                children=[],
             )
         )
 
@@ -341,23 +329,13 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return
         name = name_node.text.decode("utf8")
         sig = self._build_signature(node, name, prefix="function ")
-        sym = ParsedSymbol(
+        sym = self._make_symbol(
+            node,
+            kind=SymbolKind.FUNCTION,
             name=name,
             fqn=self._join_fqn(self.package.virtual_path, name),
-            body=node.text.decode("utf8"),
-            key=name,
-            hash=compute_symbol_hash(node.text),
-            kind=SymbolKind.FUNCTION,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
-            modifiers=[Modifier.ASYNC] if node.type == "async_function" else [],
-            docstring=None,
             signature=sig,
-            comment=None,
-            children=[],
+            modifiers=[Modifier.ASYNC] if node.type == "async_function" else [],
         )
         self.parsed_file.symbols.append(sym)
 
@@ -369,35 +347,18 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # take full node text and truncate at the opening brace → drop the body
         raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
-        cls_sym = ParsedSymbol(
-            name=name,
-            fqn=self._join_fqn(self.package.virtual_path, name),
-            body=node.text.decode("utf8"),
-            key=name,
-            hash=compute_symbol_hash(node.text),
-            kind=SymbolKind.CLASS,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
-            modifiers=[],
-            docstring=None,
-            signature=sig,
-            comment=None,
-            children=[],
-        )
         # scan class body for method_definition + variable_statement
+        children = []
         body = next((c for c in node.children if c.type == "class_body"), None)
         if body:
             for ch in body.children:
                 if ch.type == "method_definition":
                     m = self._create_method_symbol(ch, class_name=name)
-                    cls_sym.children.append(m)
+                    children.append(m)
                 elif ch.type in ("variable_statement", "lexical_declaration", "public_field_declaration"):
                     v = self._create_variable_symbol(ch, class_name=name)
                     if v:
-                        cls_sym.children.append(v)
+                        children.append(v)
                 else:
                     logger.warning(
                         "TS parser: unknown class body node",
@@ -406,6 +367,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         node_type=ch.type,
                         line=ch.start_point[0] + 1,
                     )
+        cls_sym = self._make_symbol(
+            node,
+            kind=SymbolKind.CLASS,
+            name=name,
+            fqn=self._join_fqn(self.package.virtual_path, name),
+            signature=sig,
+            children=children,
+        )
         self.parsed_file.symbols.append(cls_sym)
 
     # helpers reused by class + top level
@@ -413,23 +382,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name_node = node.child_by_field_name("name")
         name = name_node.text.decode("utf8") if name_node else "anonymous"
         sig = self._build_signature(node, name, prefix="")
-        return ParsedSymbol(
+        return self._make_symbol(
+            node,
+            kind=SymbolKind.METHOD,
             name=name,
             fqn=self._join_fqn(self.package.virtual_path, class_name, name),
-            body=node.text.decode("utf8"),
-            key=f"{class_name}.{name}",
-            hash=compute_symbol_hash(node.text),
-            kind=SymbolKind.METHOD,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
-            visibility=Visibility.PUBLIC,
-            modifiers=[],
-            docstring=None,
             signature=sig,
-            comment=None,
-            children=[],
         )
 
     @staticmethod
@@ -457,24 +415,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name = ident.text.decode("utf8")
         kind = SymbolKind.CONSTANT if name.isupper() else SymbolKind.VARIABLE
         fqn = self._join_fqn(self.package.virtual_path, class_name, name)
-        key = f"{class_name}.{name}" if class_name else name
-        return ParsedSymbol(
+        return self._make_symbol(
+            node,
+            kind=kind,
             name=name,
             fqn=fqn,
-            body=node.text.decode("utf8"),
-            key=key,
-            hash=compute_symbol_hash(node.text),
-            kind=kind,
-            start_line=node.start_point[0],
-            end_line=node.end_point[0],
-            start_byte=node.start_byte,
-            end_byte=node.end_byte,
             visibility=Visibility.PUBLIC,
-            modifiers=[],
-            docstring=None,
-            signature=None,
-            comment=None,
-            children=[],
         )
 
     def _handle_method(self, node):
@@ -493,23 +439,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return
         name = expr.split("(", 1)[0].strip()
         self.parsed_file.symbols.append(
-            ParsedSymbol(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.LITERAL,
                 name=name or f"expr@{node.start_point[0]+1}",
                 fqn=self._join_fqn(self.package.virtual_path, name),
-                body=expr,
-                key=name,
-                hash=compute_symbol_hash(node.text),
-                kind=SymbolKind.LITERAL,
-                start_line=node.start_point[0],
-                end_line=node.end_point[0],
-                start_byte=node.start_byte,
-                end_byte=node.end_byte,
                 visibility=Visibility.PUBLIC,
-                modifiers=[],
-                docstring=None,
-                signature=None,
-                comment=None,
-                children=[],
             )
         )
         self._collect_require_calls(node)      # NEW
