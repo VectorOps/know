@@ -757,8 +757,6 @@ class PythonCodeParser(AbstractCodeParser):
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
         method_name = node.child_by_field_name('name').text.decode('utf8')
-        if class_name == "Test":
-            print(node, node.type, method_name, class_name)
         return self._make_symbol(
             wrapper,
             kind=SymbolKind.METHOD,
@@ -901,6 +899,10 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         • for functions / methods the body is replaced with an indented “...”
         • for classes the method recurses over *sym.children*, indenting each child
         """
+        # completely ignore stand-alone comment symbols when comments are disabled
+        if not include_comments and sym.kind == SymbolKind.COMMENT:
+            return ""
+
         IND = " " * indent
         lines: list[str] = []
 
@@ -952,8 +954,23 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         elif sym.kind == SymbolKind.CLASS:
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
+
+            body_symbols_added = False
             for child in sym.children:
-                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+                if not include_comments and child.kind == SymbolKind.COMMENT:
+                    continue
+                child_summary = self.get_symbol_summary(
+                    child,
+                    indent + 4,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                )
+                if child_summary.strip():
+                    lines.append(child_summary)
+                    body_symbols_added = True
+
+            if not body_symbols_added:
+                lines.append(f"{IND}    ...")
 
         elif sym.kind == SymbolKind.TRYCATCH:
             if include_docs and sym.docstring:
