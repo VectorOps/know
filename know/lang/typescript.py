@@ -250,7 +250,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             export_body = node.text.decode("utf8", errors="replace").strip()
             for sym in self.parsed_file.symbols[symbols_before:]:
                 sym.exported = True
-                sym.body = export_body        # ensure `export …` prefix is kept
+                sym.body = export_body
 
     def _handle_export_clause(self, node):
         """
@@ -371,10 +371,22 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 if ch.type == "method_definition":
                     m = self._create_method_symbol(ch, class_name=name)
                     children.append(m)
-                elif ch.type in ("variable_statement", "lexical_declaration", "public_field_declaration"):
+
+                # variable / field declarations & definitions  ───────────
+                elif ch.type in (
+                    "variable_statement",
+                    "lexical_declaration",
+                    "public_field_declaration",
+                    "public_field_definition",   # NEW – support
+                ):
                     v = self._create_variable_symbol(ch, class_name=name)
                     if v:
                         children.append(v)
+
+                # ignore mundane punctuation nodes  ───────────────────────
+                elif ch.type in ("{", "}", ";"):     # NEW – suppress warnings
+                    continue
+
                 else:
                     logger.warning(
                         "TS parser: unknown class body node",
