@@ -125,6 +125,7 @@ class SymbolSignature(BaseModel):
     parameters: List[SymbolParameter] = Field(default_factory=list)
     return_type: Optional[str] = None
     decorators: List[str] = Field(default_factory=list)
+    receiver: str | None = None        # NEW – raw receiver, e.g. "t *Test"
 
 
 class SymbolMetadata(BaseModel):

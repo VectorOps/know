@@ -576,8 +576,9 @@ class GolangCodeParser(AbstractCodeParser):
         if not param_lists:                          # should never happen
             return
         recv_node = param_lists[0]
-        inner = self.source_bytes[recv_node.start_byte : recv_node.end_byte] \
-            .decode("utf8", errors="replace").strip()[1:-1].strip()           # drop ( )
+        receiver_raw = self.source_bytes[recv_node.start_byte:recv_node.end_byte] \
+                           .decode("utf8", errors="replace").strip()      # "(t *Test)"
+        inner = receiver_raw[1:-1].strip()           # drop ( )
         # take last token after blanks/commas, strip leading '*'
         recv_type_token = inner.replace(",", " ").split()[-1] if inner else ""
         while recv_type_token.startswith("*"):
@@ -596,8 +597,12 @@ class GolangCodeParser(AbstractCodeParser):
         signature_obj = (
             self._build_function_signature(param_node, result_node)
             if param_node is not None
-            else None
+            else SymbolSignature(raw="")
         )
+
+        # prepend "(recv) <Name>" to the raw signature and remember the receiver
+        signature_obj.raw = f"{receiver_raw} {name}{(' ' + signature_obj.raw) if signature_obj.raw else ''}".strip()
+        signature_obj.receiver = receiver_raw
 
         # --- misc. metadata ------------------------------------------------
         docstring = self._extract_preceding_comment(node)
@@ -1012,7 +1017,13 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             header = f"{sym.name}{sig}"
             lines.append(f"{IND}{header}")
             return "\n".join(lines)
-        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+        if sym.kind == SymbolKind.METHOD:
+            sig = sym.signature.raw.strip() if sym.signature and sym.signature.raw else "()"
+            header = f"func {sig}"
+            if not header.endswith("{"):
+                header += " {"
+            lines.append(f"{IND}{header}")
+        elif sym.kind == SymbolKind.FUNCTION:
             sig = "()"
             if sym.signature and sym.signature.raw:
                 sig = sym.signature.raw.strip()
