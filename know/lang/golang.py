@@ -165,31 +165,44 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         node,
     ) -> None:
-        # ignore comments / package lines right away
-        if node.type in ("comment", "package_clause"):
-            return
+        # Always create (at least) one symbol for every top-level node
+        symbols_before  = len(self.parsed_file.symbols)
+        imports_before  = len(self.parsed_file.imports)
 
-        symbols_before = len(self.parsed_file.symbols)
-        imports_before = len(self.parsed_file.imports)
-        skip_symbol_check = False
+        if node.type == "comment":
+            # single-line or block comment
+            self._add_symbol_for_node(node, kind=SymbolKind.COMMENT, name="comment")
 
-        if node.type == "import_declaration":
+        elif node.type == "package_clause":
+            # treat the `package …` line as a MODULE symbol
+            self._add_symbol_for_node(node, kind=SymbolKind.MODULE, name="package")
+
+        elif node.type == "import_declaration":
+            # keep existing import handling
             self._handle_import_declaration(node)
+            # additionally register a symbol that represents the import stanza
+            self._add_symbol_for_node(node, kind=SymbolKind.IMPORT, name="import")
+
         elif node.type == "function_declaration":
             self._handle_function_declaration(node)
+
         elif node.type == "method_declaration":
             self._handle_method_declaration(node)
+
         elif node.type == "type_declaration":
             self._handle_type_declaration(node)
+
         elif node.type == "const_declaration":
             self._handle_const_declaration(node)
+
         elif node.type == "var_declaration":
             self._handle_var_declaration(node)
-        else:
-            skip_symbol_check = True
 
-            logger.debug(
-                "Unknown Go node",
+        else:
+            # unknown / unrecognised – create a literal symbol and warn
+            self._add_symbol_for_node(node, kind=SymbolKind.LITERAL, name=node.type)
+            logger.warning(
+                "Unknown Go node – stored as literal symbol",
                 path=self.parsed_file.path,
                 type=node.type,
                 line=node.start_point[0] + 1,
@@ -197,10 +210,12 @@ class GolangCodeParser(AbstractCodeParser):
                 raw=node.text.decode("utf8", errors="replace"),
             )
 
-        # warn if the handler didn’t add any symbols
+        # ----------------------------------------------------------------
+        # warn if the node handler produced neither symbols nor imports
+        # (defensive programming – should not happen with the new logic)
+        # ----------------------------------------------------------------
         if (
-            not skip_symbol_check
-            and len(self.parsed_file.symbols) == symbols_before
+            len(self.parsed_file.symbols) == symbols_before
             and len(self.parsed_file.imports) == imports_before
         ):
             logger.warning(
@@ -636,7 +651,7 @@ class GolangCodeParser(AbstractCodeParser):
 
             for idn in id_nodes:
                 fname = idn.text.decode("utf8")
-                child = self.helper._make_symbol(
+                child = self._make_symbol(
                     fld,
                     kind=SymbolKind.PROPERTY,
                     name=fname,
@@ -757,7 +772,7 @@ class GolangCodeParser(AbstractCodeParser):
             body_bytes = self.source_bytes[start_b:end_b]
             body_str = body_bytes.decode("utf8", errors="replace")
 
-            parent_sym = self.helper._make_symbol(
+            parent_sym = self._make_symbol(
                 spec,
                 kind=kind,
                 name=name,
@@ -811,7 +826,7 @@ class GolangCodeParser(AbstractCodeParser):
                 fqn = self._join_fqn(self.package.virtual_path, name)
                 visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
-                sym = self.helper._make_symbol(
+                sym = self._make_symbol(
                     spec,
                     kind=SymbolKind.CONSTANT,   # or VARIABLE in var handler
                     name=name,
