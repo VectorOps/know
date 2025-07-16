@@ -183,6 +183,30 @@ class PythonCodeParser(AbstractCodeParser):
             kind=SymbolKind.LITERAL,
         )
 
+    def _handle_decorated_definition(
+        self,
+        node,
+        class_symbol: Optional[ParsedSymbol] = None,
+    ):
+        """
+        Handle a `decorated_definition` wrapper.
+        Unwrap the enclosed `function_definition` or `class_definition`
+        while keeping the outer node’s text (so decorators are preserved
+        in `body` and available to `_build_function_signature`).
+        """
+        # Find the real definition wrapped by the decorators
+        inner = next(
+            (c for c in node.children if c.type in ("function_definition", "async_function_definition", "class_definition")),
+            None,
+        )
+        if inner is None:  # corrupt / unexpected – skip
+            return
+
+        if inner.type in ("function_definition", "async_function_definition"):
+            self._handle_function_definition(inner)
+        elif inner.type == "class_definition":
+            self._handle_class_definition(inner)
+
     def _handle_try_statement(self, node):
         parent_sym = self._make_symbol(
             node,
@@ -713,6 +737,30 @@ class PythonCodeParser(AbstractCodeParser):
             signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
         )
+
+    def _handle_expression_statement(self, node) -> None:
+        """
+        Register a top-level expression (usually a function call) as a
+        SymbolKind.LITERAL.
+        """
+        expr: str = node.text.decode("utf8").strip()
+        if not expr:                       # ignore blank / trivial nodes
+            return
+
+        # crude name heuristic: token before first “(” or full expr
+        name_tok = expr.split("(", 1)[0].strip().split()[0]
+        name = name_tok or f"expr@{node.start_point[0]+1}"
+
+        sym = self._make_symbol(
+            node,
+            kind=SymbolKind.LITERAL,
+            name=name,
+            fqn=self._join_fqn(self.package.virtual_path, name),
+            body=expr,
+            visibility=Visibility.PUBLIC,
+            comment=self._get_preceding_comment(node),
+        )
+        self.parsed_file.symbols.append(sym)
 
     # Module-resolution helper                                           #
     def _locate_module_path(self, import_path: str) -> Optional[Path]:
