@@ -657,24 +657,77 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
     def _handle_expression(self, node):
-        self._collect_require_calls(node)
+        """
+        Enhanced expression‐statement handler.
 
-        arrow_nodes = self._extract_arrow_functions(node)
-        if arrow_nodes:
-            for ar in arrow_nodes:
-                self._handle_arrow_function(node, ar)
-            return
+        • Walk through *node.named_children* and explicitly handle the
+          sub-nodes we care about.
+        • For *assignment_expression* replicate the logic used by
+          *_handle_lexical*:
+              – arrow-function  ➜  _handle_arrow_function(…)
+              – require("…")    ➜  _handle_require_call(…)
+              – plain variable  ➜  _create_variable_symbol(…)
+        • Any unknown child type → emit a debug/warning message.
+        • Build an outer ASSIGNMENT symbol that owns the produced
+          *children* (mirrors the constant / variable strategy).
+        """
+        children: list[ParsedSymbol] = []
 
-        expr = node.text.decode("utf8").strip()
-        if expr:
+        for ch in node.named_children:
+            # ── assignment_expression ──────────────────────────────────
+            if ch.type == "assignment_expression":
+                rhs = ch.child_by_field_name("right")
+
+                # arrow function  (a = (...) => { … })
+                if rhs is not None and rhs.type == "arrow_function":
+                    sym = self._handle_arrow_function(ch, rhs)
+                    if sym:
+                        children.append(sym)
+                    continue
+
+                # require("…")
+                if rhs is not None and rhs.type == "call_expression":
+                    self._handle_require_call(ch, rhs)
+
+                # simple assignment – create variable / constant symbol
+                sym = self._create_variable_symbol(ch)
+                if sym:
+                    children.append(sym)
+                continue
+
+            # ── isolated call_expression (ex: require("…")) ────────────
+            if ch.type == "call_expression":
+                self._collect_require_calls(ch)
+                continue
+
+            # ── anything else – warn so we can extend support later ─────
+            logger.warning(
+                "TS parser: unhandled expression child",
+                path=self.rel_path,
+                node_type=ch.type,
+                line=ch.start_point[0] + 1,
+            )
+
+        # ── parent ASSIGNMENT symbol (only when we spawned children) ────
+        if children:
             self.parsed_file.symbols.append(
                 self._make_symbol(
                     node,
-                    kind=SymbolKind.LITERAL,
+                    kind=SymbolKind.ASSIGNMENT,
+                    visibility=Visibility.PUBLIC,
+                    signature=SymbolSignature(raw="=", lexical_type="assignment"),
+                    children=children,
+                )
+            )
+        else:
+            # fallback to previous simple behaviour
+            self.parsed_file.symbols.append(
+                self._make_symbol(
+                    node,
+                    kind=SymbolKind.ASSIGNMENT,
                     visibility=Visibility.PUBLIC,
                 )
             )
-        self._collect_require_calls(node)
 
     def _handle_arrow_function(
         self,
@@ -760,7 +813,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             kind=base_kind,
             visibility=Visibility.PUBLIC,
             signature=SymbolSignature(
-                lexical_type=lexical_kw,        # NEW
+                raw=lexical_kw,
+                lexical_type=lexical_kw,
             ),
             children=children,
         )
@@ -835,14 +889,14 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
         else:
             header = sym.name
 
-        # ----- symbol specific formatting -------------------------------- #
-        if sym.kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE):
-            # 1) no children  →  emit the declaration body verbatim
+        if sym.kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE, SymbolKind.ASSIGNMENT):
+            # no children
             if not sym.children:
                 body = (sym.body or "").strip()
                 # keep multi-line declarations properly indented
                 return "\n".join(f"{IND}{ln.strip()}" for ln in body.splitlines())
-            # 2) has children →  summarise each child, join with “, ”
+
+            # has children
             child_summaries = [
                 self.get_symbol_summary(ch,
                                         indent=0,
@@ -850,9 +904,13 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                                         include_docs=include_docs)
                 for ch in sym.children
             ]
-            return IND + ", ".join(child_summaries)
 
-        if sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE, SymbolKind.ENUM):
+            if header:
+                header += " "
+
+            return IND + header + ", ".join(child_summaries) + ";"
+
+        elif sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE, SymbolKind.ENUM):
             # open-brace line
             if not header.endswith("{"):
                 header += " {"
