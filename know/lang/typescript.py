@@ -475,40 +475,28 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
     def _handle_expression(self, node):
-        # detect assignment of an arrow function
-        assign = next((c for c in node.named_children
-                       if c.type == "assignment_expression"), None)
-        if assign:
-            right = assign.child_by_field_name("right")
-            if right and right.type == "arrow_function":
-                left = assign.child_by_field_name("left")
-                if left:
-                    name = left.text.decode("utf8").split(".")[-1]
-                    sig  = self._build_signature(right, name, prefix="")
-                    self.parsed_file.symbols.append(
-                        self._make_symbol(
-                            right,
-                            kind=SymbolKind.FUNCTION,
-                            name=name,
-                            fqn=self._join_fqn(self.package.virtual_path,
-                                               name),
-                            signature=sig,
-                        )
-                    )
-                    return
-        # ─── fall-back (existing behaviour) ───────────────────────────
-        expr = node.text.decode("utf8").strip()
-        if not expr:
+        """
+        Handle generic expression statements.
+        • First, try to extract arrow-function assignments via the shared
+          `_collect_arrow_function_declarators()` helper.
+        • If nothing was produced, fall back to emitting a LITERAL symbol.
+        • Always scan the subtree for `require()` calls.
+        """
+        if self._collect_arrow_function_declarators(node):
+            self._collect_require_calls(node)
             return
-        name = expr.split("(", 1)[0].strip()
-        self.parsed_file.symbols.append(
-            self._make_symbol(
-                node,
-                kind=SymbolKind.LITERAL,
-                fqn=self._join_fqn(self.package.virtual_path, name),
-                visibility=Visibility.PUBLIC,
+
+        expr = node.text.decode("utf8").strip()
+        if expr:
+            name = expr.split("(", 1)[0].strip()
+            self.parsed_file.symbols.append(
+                self._make_symbol(
+                    node,
+                    kind=SymbolKind.LITERAL,
+                    fqn=self._join_fqn(self.package.virtual_path, name),
+                    visibility=Visibility.PUBLIC,
+                )
             )
-        )
         self._collect_require_calls(node)
 
     def _collect_arrow_function_declarators(
@@ -521,6 +509,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             "public_field_definition",
             "field_definition",
             "public_field_declaration",
+            "assignment_expression",   # ← NEW: allow `foo = (a)=>{}` patterns
         }
         # Collect holders: node itself if it matches, plus direct children that match
         holders = []
