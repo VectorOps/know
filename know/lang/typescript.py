@@ -538,6 +538,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
             name = name_node.text.decode("utf8").split(".")[-1]
             sig = self._build_signature(value_node, name, prefix="")
 
+            # async support  ––––––––––––––––––––––––––––––––––––––––––––
+            is_async = value_node.text.lstrip().startswith(b"async")
+            mods: list[Modifier] = [Modifier.ASYNC] if is_async else []
+
             target_node = node if class_name is None else value_node
             self.parsed_file.symbols.append(
                 self._make_symbol(
@@ -546,6 +550,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     name=name,
                     fqn=self._join_fqn(self.package.virtual_path, class_name, name),
                     signature=sig,
+                    modifiers=mods,                   # NEW
                 )
             )
             made = True
