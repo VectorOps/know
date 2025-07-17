@@ -120,7 +120,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._handle_comment(node)
         elif node.type == "function_declaration":
             self._handle_function(node)
-        elif node.type == "class_declaration":
+        elif node.type in ("class_declaration", "abstract_class_declaration"):
             self._handle_class(node)
         elif node.type == "interface_declaration":
             self._handle_interface(node)
@@ -235,6 +235,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     self._handle_function(child)
                     decl_handled = True
                 case "class_declaration":
+                    self._handle_class(child)
+                    decl_handled = True
+                case "abstract_class_declaration":
                     self._handle_class(child)
                     decl_handled = True
                 case "interface_declaration":
@@ -388,12 +391,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name = name_node.text.decode("utf8")
         # take full node text and truncate at the opening brace → drop the body
         raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
--        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
-+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
-+
-+        mods: list[Modifier] = []
-+        if self._has_modifier(node, "abstract"):
-+            mods.append(Modifier.ABSTRACT)
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+
+        mods: list[Modifier] = []
+        if node.type == "abstract_class_declaration" \
+           or self._has_modifier(node, "abstract"):
+            mods.append(Modifier.ABSTRACT)
         # scan class body for method_definition + variable_statement
         children = []
         body = next((c for c in node.children if c.type == "class_body"), None)
@@ -426,17 +429,16 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         node_type=ch.type,
                         line=ch.start_point[0] + 1,
                     )
--        cls_sym = self._make_symbol(
-+        cls_sym = self._make_symbol(
+        cls_sym = self._make_symbol(
              node,
              kind=SymbolKind.CLASS,
              name=name,
              fqn=self._join_fqn(self.package.virtual_path, name),
              signature=sig,
              children=children,
-+            modifiers=mods,
-         )
-         self.parsed_file.symbols.append(cls_sym)
+             modifiers=mods,
+        )
+        self.parsed_file.symbols.append(cls_sym)
 
     # ------------------------------------------------------------------ #
     def _handle_interface(self, node):                       # NEW
@@ -625,11 +627,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             sig = self._build_signature(value_node, name, prefix="")
 
             # async support  ––––––––––––––––––––––––––––––––––––––––––––
--            is_async = value_node.text.lstrip().startswith(b"async")
--            mods: list[Modifier] = [Modifier.ASYNC] if is_async else []
-+            is_async = value_node.text.lstrip().startswith(b"async")
-+            mods: list[Modifier] = [Modifier.ASYNC] if is_async else []
-+            # (arrow functions cannot be abstract, so nothing to add)
+            is_async = value_node.text.lstrip().startswith(b"async")
+            mods: list[Modifier] = [Modifier.ASYNC] if is_async else []
 
             target_node = node if class_name is None else value_node
             self.parsed_file.symbols.append(
