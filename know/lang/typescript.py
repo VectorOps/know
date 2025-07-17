@@ -132,6 +132,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._handle_expression(node)
         elif node.type == "lexical_declaration":
             self._handle_lexical(node)
+        elif node.type == "type_alias_declaration":
+            self._handle_type_alias(node)
+        elif node.type == "enum_declaration":
+            self._handle_enum(node)
         else:
             logger.debug(
                 "TS parser: unhandled node",
@@ -578,13 +582,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         )
 
-    # --------------------------------------------------------------- #
-    def _handle_type_alias(self, node):                            # NEW
+    def _handle_type_alias(self, node):
         """
         Build a ParsedSymbol for a TypeScript `type Foo = …` alias.
         """
         name_node = node.child_by_field_name("name")
-        if name_node is None:                                      # defensive
+        if name_node is None:
             return
         name = name_node.text.decode("utf8")
 
@@ -595,10 +598,59 @@ class TypeScriptCodeParser(AbstractCodeParser):
         self.parsed_file.symbols.append(
             self._make_symbol(
                 node,
-                kind=SymbolKind.TYPE_ALIAS,                        # NEW
+                kind=SymbolKind.TYPE_ALIAS,
                 name=name,
                 fqn=self._join_fqn(self.package.virtual_path, name),
                 signature=sig,
+            )
+        )
+
+    # ------------------------------------------------------------------ #
+    def _handle_enum(self, node):
+        """
+        Build a ParsedSymbol for a TypeScript enum together with its members.
+        """
+        name_node = node.child_by_field_name("name")
+        if name_node is None:            # defensive – malformed enum
+            return
+        name = name_node.text.decode("utf8")
+
+        # drop the body – keep only the declaration header
+        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+
+        # --- enum members ---------------------------------------------
+        children: list[ParsedSymbol] = []
+        body = next((c for c in node.children if c.type == "enum_body"), None)
+        if body:
+            for member in body.named_children:
+                if member.type != "enum_member":
+                    continue
+                m_name_node = member.child_by_field_name("name") or \
+                              next((c for c in member.named_children
+                                    if c.type in ("identifier", "property_identifier")), None)
+                if not m_name_node:
+                    continue
+                m_name = m_name_node.text.decode("utf8")
+                children.append(
+                    self._make_symbol(
+                        member,
+                        kind=SymbolKind.CONSTANT,
+                        name=m_name,
+                        fqn=self._join_fqn(self.package.virtual_path, name, m_name),
+                        visibility=Visibility.PUBLIC,
+                    )
+                )
+
+        # --- enum symbol ----------------------------------------------
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.ENUM,
+                name=name,
+                fqn=self._join_fqn(self.package.virtual_path, name),
+                signature=sig,
+                children=children,
             )
         )
 
@@ -764,7 +816,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             header = sym.name
 
         # ----- symbol specific formatting -------------------------------- #
-        if sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE):  # CHANGED
+        if sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE, SymbolKind.ENUM):  # CHANGED
             # open-brace line
             if not header.endswith("{"):
                 header += " {"
