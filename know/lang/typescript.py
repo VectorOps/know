@@ -364,23 +364,22 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return
         name = name_node.text.decode("utf8")
         sig = self._build_signature(node, name, prefix="function ")
-+
-+        mods: list[Modifier] = []
-+        if self._has_modifier(node, "abstract"):
-+            mods.append(Modifier.ABSTRACT)
-+        if node.type == "async_function":
-+            mods.append(Modifier.ASYNC)
-+
+
+        mods: list[Modifier] = []
+        if self._has_modifier(node, "abstract"):
+            mods.append(Modifier.ABSTRACT)
+        if node.type == "async_function":
+            mods.append(Modifier.ASYNC)
+
         sym = self._make_symbol(
             node,
             kind=SymbolKind.FUNCTION,
             name=name,
             fqn=self._join_fqn(self.package.virtual_path, name),
             signature=sig,
--            modifiers=[Modifier.ASYNC] if node.type == "async_function" else [],
-+            modifiers=mods,
-         )
-         self.parsed_file.symbols.append(sym)
+            modifiers=mods,
+        )
+        self.parsed_file.symbols.append(sym)
 
     def _handle_class(self, node):
         name_node = node.child_by_field_name("name")
@@ -508,24 +507,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name_node = node.child_by_field_name("name")
         # TODO: Anonymous?
         name = name_node.text.decode("utf8") if name_node else "anonymous"
--        sig = self._build_signature(node, name, prefix="")
--        return self._make_symbol(
-+        sig = self._build_signature(node, name, prefix="")
-+
-+        mods: list[Modifier] = []
-+        if self._has_modifier(node, "abstract"):
-+            mods.append(Modifier.ABSTRACT)
-+        if node.type == "async_function" or node.text.lstrip().startswith(b"async"):
-+            mods.append(Modifier.ASYNC)
-+
-+        return self._make_symbol(
-             node,
-             kind=SymbolKind.METHOD,
-             name=name,
-             fqn=self._join_fqn(self.package.virtual_path, class_name, name),
-             signature=sig,
-+            modifiers=mods,
-         )
+        sig = self._build_signature(node, name, prefix="")
+        return self._make_symbol(
+            node,
+            kind=SymbolKind.METHOD,
+            name=name,
+            fqn=self._join_fqn(self.package.virtual_path, class_name, name),
+            signature=sig,
+        )
 
     def _find_first_identifier(self, node):
         if node.type in ("identifier", "property_identifier"):
