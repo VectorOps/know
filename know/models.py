@@ -26,7 +26,7 @@ class SymbolKind(str, Enum):
     COMPONENT = "component"
     INTERFACE = "interface"
     ENUM = "enum"
-    TYPE_ALIAS = "type_alias"        # NEW ─ support for TS “type” aliases
+    TYPE_ALIAS = "type_alias"
     LITERAL = "literal"
     IMPORT = "import"
     TRYCATCH = "try_catch"
@@ -127,6 +127,8 @@ class SymbolSignature(BaseModel):
     return_type: Optional[str] = None
     decorators: List[str] = Field(default_factory=list)
     receiver: str | None = None        # NEW – raw receiver, e.g. "t *Test"
+    # NEW → lexical keyword for “let / const / var / …” declarations
+    lexical_type: str | None = None
 
 
 class SymbolMetadata(BaseModel):

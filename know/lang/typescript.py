@@ -126,11 +126,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._handle_interface(node)
         elif node.type in ("method_definition", "abstract_method_signature"):
             self._handle_method(node)
-        elif node.type == "variable_statement":
-            self._handle_variable(node)
         elif node.type == "expression_statement":
             self._handle_expression(node)
-        elif node.type == "lexical_declaration":
+        elif node.type in ("lexical_declaration", "variable_declaration"):
             self._handle_lexical(node)
         elif node.type == "type_alias_declaration":
             self._handle_type_alias(node)
@@ -231,6 +229,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         • If the export wraps a declaration, forward that declaration to
           the regular symbol handlers so the symbols are materialised.
         """
+        # TODO: Pass exported flag to inner functions
         symbols_before = len(self.parsed_file.symbols)
         decl_handled = False
         for child in node.children:
@@ -247,10 +246,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "interface_declaration":
                     self._handle_interface(child)
                     decl_handled = True
-                case "variable_statement":
-                    self._handle_variable(child)
-                    decl_handled = True
-                case "lexical_declaration":
+                case "variable_statement" | "lexical_declaration":
                     self._handle_lexical(child)
                     decl_handled = True
                 case "export_clause":
@@ -392,20 +388,23 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name_node = node.child_by_field_name("name")
         if name_node is None:
             return
+
         name = name_node.text.decode("utf8")
         # take full node text and truncate at the opening brace → drop the body
         raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
         mods: list[Modifier] = []
-        if node.type == "abstract_class_declaration" \
-           or self._has_modifier(node, "abstract"):
+        if node.type == "abstract_class_declaration" or self._has_modifier(node, "abstract"):
             mods.append(Modifier.ABSTRACT)
+
         # scan class body for method_definition + variable_statement
         children = []
         body = next((c for c in node.children if c.type == "class_body"), None)
         if body:
             for ch in body.children:
+                print(ch, ch.text.decode('utf8'))
+
                 if ch.type in ("method_definition", "abstract_method_signature"):
                     m = self._create_method_symbol(ch, class_name=name)
                     children.append(m)
@@ -424,6 +423,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 # ignore mundane punctuation nodes  ───────────────────────
                 elif ch.type in ("{", "}", ";"):     # NEW – suppress warnings
                     continue
+
+                elif ch.type == "arrow_function":
+                    self._handle_arrow_function(ch, ch, class_name=name)
 
                 else:
                     logger.warning(
@@ -539,10 +541,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return None
 
     def _create_variable_symbol(self, node, class_name: Optional[str] = None):
-        # recognise `field = (…) => { … }` inside classes
-        if self._collect_arrow_function_declarators(node, class_name):
-            return None
-
         # 1st-level search (as before)
         ident = next(
             (c for c in node.children
@@ -554,6 +552,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             ident = self._find_first_identifier(node)
         if ident is None:
             return None
+
         name = ident.text.decode("utf8")
         kind = SymbolKind.CONSTANT if name.isupper() else SymbolKind.VARIABLE
         fqn = self._join_fqn(self.package.virtual_path, class_name, name)
@@ -658,8 +657,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
     def _handle_expression(self, node):
-        if self._collect_arrow_function_declarators(node):
-            self._collect_require_calls(node)
+        self._collect_require_calls(node)
+
+        arrow_nodes = self._extract_arrow_functions(node)
+        if arrow_nodes:
+            for ar in arrow_nodes:
+                self._handle_arrow_function(node, ar)
             return
 
         expr = node.text.decode("utf8").strip()
@@ -673,80 +676,95 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         self._collect_require_calls(node)
 
-    def _collect_arrow_function_declarators(
-        self, node, class_name: str | None = None
-    ) -> bool:
-        made = False
-        # Accept holder node types: variable_declarator, public_field_definition, field_definition, public_field_declaration
-        holder_types = {
-            "variable_declarator",
-            "public_field_definition",
-            "field_definition",
-            "public_field_declaration",
-            "assignment_expression",   # ← NEW: allow `foo = (a)=>{}` patterns
-        }
-        # Collect holders: node itself if it matches, plus direct children that match
-        holders = []
-        if node.type in holder_types:
-            holders.append(node)
-        holders.extend(c for c in node.named_children if c.type in holder_types)
+    def _handle_arrow_function(
+        self,
+        holder_node,                # node that “owns” the arrow (var decl / assignment / field …)
+        arrow_node,                 # the *arrow_function* child node
+        class_name: str | None = None,
+    ) -> ParsedSymbol:
+        """
+        Create a ParsedSymbol for one arrow-function found inside *holder_node*.
+        """
+        # --- determine the function name ---------------------------------
+        name_node = holder_node.child_by_field_name("name")  \
+                    or next((c for c in holder_node.children
+                             if c.type in ("identifier", "property_identifier")), None) \
+                    or self._find_first_identifier(holder_node)
+        if name_node is None:
+            return                                            # give up – anonymous
 
-        for holder in holders:
-            value_node = holder.child_by_field_name("value")
-            if not value_node or value_node.type != "arrow_function":
-                continue
+        name = name_node.text.decode("utf8").split(".")[-1]
 
-            name_node = holder.child_by_field_name("name")
-            if name_node is None:
-                # fallback: first child with type identifier or property_identifier
-                name_node = next(
-                    (c for c in holder.children if c.type in ("identifier", "property_identifier")),
-                    None,
-                )
-            if name_node is None:
-                # fallback: use _find_first_identifier
-                name_node = self._find_first_identifier(holder)
-            if name_node is None:
-                continue
+        # --- build signature --------------------------------------------
+        sig_base = self._build_signature(arrow_node, name, prefix="")
+        # include the *left-hand side* in the raw header for better context
+        raw_header = holder_node.text.decode("utf8").split("{", 1)[0].strip().rstrip(";")
+        sig = SymbolSignature(
+            raw         = raw_header,
+            parameters  = sig_base.parameters,
+            return_type = sig_base.return_type,
+        )
 
-            name = name_node.text.decode("utf8").split(".")[-1]
-            sig = self._build_signature(value_node, name, prefix="")
+        # async?
+        mods: list[Modifier] = []
+        if arrow_node.text.lstrip().startswith(b"async"):
+            mods.append(Modifier.ASYNC)
 
-            # async support  ––––––––––––––––––––––––––––––––––––––––––––
-            is_async = value_node.text.lstrip().startswith(b"async")
-            mods: list[Modifier] = [Modifier.ASYNC] if is_async else []
+        return self._make_symbol(
+            holder_node if class_name is None else arrow_node,
+            kind       = SymbolKind.FUNCTION,
+            name       = name,
+            fqn        = self._join_fqn(self.package.virtual_path, class_name, name),
+            signature  = sig,
+            modifiers  = mods,
+        )
 
-            target_node = node if class_name is None else value_node
-            self.parsed_file.symbols.append(
-                self._make_symbol(
-                    target_node,
-                    kind=SymbolKind.FUNCTION,
-                    name=name,
-                    fqn=self._join_fqn(self.package.virtual_path, class_name, name),
-                    signature=sig,
-                    modifiers=mods,                   # NEW
-                )
-            )
-            made = True
-        return made
-
-    def _handle_variable(self, node):
-        if not self._collect_arrow_function_declarators(node):
-            sym = self._create_variable_symbol(node)
-            if sym:
-                self.parsed_file.symbols.append(sym)
-        self._collect_require_calls(node)
+    def _extract_arrow_functions(self, node):
+        return [c for c in node.children if c.type == "arrow_function"]
 
     def _handle_lexical(self, node):
-        """
-        Handle `lexical_declaration` (let/const) statements exactly like
-        `variable_statement`.
-        """
-        if not self._collect_arrow_function_declarators(node):
-            sym = self._create_variable_symbol(node)
+        lexical_kw = node.text.decode("utf8").lstrip().split()[0]
+        is_const_decl = node.text.lstrip().startswith(b"const")
+        base_kind = SymbolKind.CONSTANT if is_const_decl else SymbolKind.VARIABLE
+
+        children: list[ParsedSymbol] = []
+
+        for ch in node.named_children:
+            if ch.type != "variable_declarator":
+                logger.warning(
+                    "TS parser: unhandled lexical child",
+                    path=self.rel_path,
+                    node_type=ch.type,
+                    line=ch.start_point[0] + 1,
+                )
+                continue
+
+            value_node = ch.child_by_field_name("value")
+
+            if value_node:
+                if value_node.type == "arrow_function":
+                    sym = self._handle_arrow_function(ch, value_node)
+                    if sym:
+                        children.append(sym)
+                    continue
+                elif value_node.type == "call_expression":
+                    self._handle_require_call(ch, value_node)
+
+            sym = self._create_variable_symbol(ch)
             if sym:
-                self.parsed_file.symbols.append(sym)
-        self._collect_require_calls(node)
+                children.append(sym)
+
+        # rule – outer symbol that owns the children
+        outer_sym = self._make_symbol(
+            node,
+            kind=base_kind,
+            visibility=Visibility.PUBLIC,
+            signature=SymbolSignature(
+                lexical_type=lexical_kw,        # NEW
+            ),
+            children=children,
+        )
+        self.parsed_file.symbols.append(outer_sym)
 
     def _create_literal_symbol(self, node) -> ParsedSymbol:
         """
@@ -784,18 +802,17 @@ class TypeScriptCodeParser(AbstractCodeParser):
                             raw=node.text.decode("utf8"),
                         )
                     )
-                    # NEW – symbol for this require() import
-                    self.parsed_file.symbols.append(
-                        self._make_symbol(
-                            node,
-                            kind=SymbolKind.IMPORT,
-                            name=virt,
-                            fqn=self._join_fqn(self.package.virtual_path, virt),
-                            visibility=Visibility.PUBLIC,
-                        )
+
+                    return self._make_symbol(
+                        node,
+                        kind=SymbolKind.IMPORT,
+                        name=virt,
+                        fqn=self._join_fqn(self.package.virtual_path, virt),
+                        visibility=Visibility.PUBLIC,
                     )
-        for ch in node.children:
-            self._collect_require_calls(ch)
+
+        return None
+
 
 # ---------------------------------------------------------------------- #
 class TypeScriptLanguageHelper(AbstractLanguageHelper):
@@ -819,7 +836,23 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             header = sym.name
 
         # ----- symbol specific formatting -------------------------------- #
-        if sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE, SymbolKind.ENUM):  # CHANGED
+        if sym.kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE):
+            # 1) no children  →  emit the declaration body verbatim
+            if not sym.children:
+                body = (sym.body or "").strip()
+                # keep multi-line declarations properly indented
+                return "\n".join(f"{IND}{ln.strip()}" for ln in body.splitlines())
+            # 2) has children →  summarise each child, join with “, ”
+            child_summaries = [
+                self.get_symbol_summary(ch,
+                                        indent=0,
+                                        include_comments=include_comments,
+                                        include_docs=include_docs)
+                for ch in sym.children
+            ]
+            return IND + ", ".join(child_summaries)
+
+        if sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE, SymbolKind.ENUM):
             # open-brace line
             if not header.endswith("{"):
                 header += " {"
