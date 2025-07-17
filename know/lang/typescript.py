@@ -935,7 +935,6 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                     include_comments=include_comments,
                     include_docs=include_docs,
                 )
-                # ── add comma for enum members ────────────────────────────────
                 if sym.kind == SymbolKind.ENUM:
                     child_summary = child_summary.rstrip() + ","
                 lines.append(child_summary)
@@ -946,7 +945,9 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
         # non-class symbols – keep terse one-liner
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD) and not header.endswith("{"):
-            header += " { ... }"
+            # abstract methods already terminate with “;” – do NOT add “{ ... }”
+            if not (sym.kind == SymbolKind.METHOD and Modifier.ABSTRACT in (sym.modifiers or [])):
+                header += " { ... }"
         return IND + header
 
     def get_import_summary(self, imp: ImportEdge) -> str:
