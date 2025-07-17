@@ -35,6 +35,37 @@ _MODULE_SUFFIXES = (".ts", ".tsx")
 
 
 class TypeScriptCodeParser(AbstractCodeParser):
+    # ------------- generic “statement” kinds we map to LITERAL ---------- #
+    _GENERIC_STATEMENT_NODES: set[str] = {
+        # module / namespace level
+        "namespace_declaration",
+        "module_declaration",
+        "internal_module",
+        "ambient_declaration",
+        "import_equals_declaration",
+        "declare_statement",
+
+        # decorators that can appear at top level
+        "decorator",
+
+        # control-flow statements that may legally occur at file scope
+        "for_statement",
+        "for_in_statement",
+        "for_of_statement",
+        "if_statement",
+        "while_statement",
+        "do_statement",
+        "switch_statement",
+        "break_statement",
+        "continue_statement",
+        "return_statement",
+        "throw_statement",
+        "try_statement",
+        "debugger_statement",
+        "labeled_statement",
+        "with_statement",
+    }
+
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
         self.project = project
@@ -134,6 +165,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._handle_type_alias(node)
         elif node.type == "enum_declaration":
             self._handle_enum(node)
+        elif node.type in self._GENERIC_STATEMENT_NODES:
+            self._handle_generic_statement(node)
         else:
             logger.debug(
                 "TS parser: unhandled node",
@@ -143,6 +176,13 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
 
             self.parsed_file.symbols.append(self._create_literal_symbol(node))
+
+    # ------------------------------------------------------------------ #
+    def _handle_generic_statement(self, node) -> None:
+        """Fallback handler for miscellaneous statements listed in
+        `_GENERIC_STATEMENT_NODES`.  Generates a SymbolKind.LITERAL without
+        emitting “unhandled node” debug / warning messages."""
+        self.parsed_file.symbols.append(self._create_literal_symbol(node))
 
         # Emit warning when the handler produced neither symbols nor imports
         if len(self.parsed_file.symbols) == symbols_before:
