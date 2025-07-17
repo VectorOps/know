@@ -56,7 +56,7 @@ def test_typescript_parser_on_simple_file():
     top_level = _to_map(parsed_file.symbols)
 
     expected_names = {
-        "fn", "Test", "CONST", "z",
+        "fn", "Test",
         "LabeledValue",       # interface
         "Base",               # abstract class
         "Point",              # type-alias
@@ -66,8 +66,6 @@ def test_typescript_parser_on_simple_file():
 
     assert top_level["fn"].kind   == SymbolKind.FUNCTION
     assert top_level["Test"].kind == SymbolKind.CLASS
-    assert top_level["CONST"].kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE)
-    assert top_level["z"].kind == SymbolKind.VARIABLE  # <-- new assertion
 
     # ------------------------------------------------------------------
     # check symbols that live inside compound declarations / assignments
@@ -83,6 +81,7 @@ def test_typescript_parser_on_simple_file():
     # variable & function names introduced by the sample that were
     # previously untested
     nested_expected = {
+        "CONST", "z",            # const / let declarations
         "j1", "f1",              # exported const + arrow-fn
         "a1", "b1", "c1",        # let-declaration
         "e2", "f",               # var-declaration
@@ -90,6 +89,11 @@ def test_typescript_parser_on_simple_file():
         "foo", "method", "value" # class members
     }
     assert nested_expected.issubset(flat_map.keys())
+
+    # additional sanity checks for the two moved symbols
+    assert flat_map["CONST"].kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE)
+    assert flat_map["z"].kind == SymbolKind.VARIABLE
+    assert flat_map["z"].exported is True
 
     # kind sanity-checks for a representative subset
     assert flat_map["j1"].kind == SymbolKind.VARIABLE
