@@ -38,9 +38,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
     # ------------- generic “statement” kinds we map to LITERAL ---------- #
     _GENERIC_STATEMENT_NODES: set[str] = {
         # module / namespace level
-        "namespace_declaration",
-        "module_declaration",
-        "internal_module",
         "ambient_declaration",
         "import_equals_declaration",
         "declare_statement",
@@ -66,6 +63,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
         "with_statement",
     }
 
+    _NAMESPACE_NODES = {"namespace_declaration",
+                        "module_declaration",
+                        "internal_module"}
+
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
         self.project = project
@@ -73,6 +74,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         self.source_bytes: bytes = b""
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
+        self._ns_stack: list[str] = []
 
     # ---- helpers (shortened vs python) -------------------------------- #
     @staticmethod
@@ -165,6 +167,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._handle_type_alias(node)
         elif node.type == "enum_declaration":
             self._handle_enum(node)
+        elif node.type in self._NAMESPACE_NODES:
+            self._handle_namespace(node)
+            return
         elif node.type in self._GENERIC_STATEMENT_NODES:
             self._handle_generic_statement(node)
         else:
@@ -176,6 +181,16 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
 
             self.parsed_file.symbols.append(self._create_literal_symbol(node))
+
+    def _prefix_symbol_fqn(self, sym: ParsedSymbol, prefix: str) -> None:
+        if sym.fqn:
+            # drop existing package-level prefix to avoid duplication
+            base = sym.fqn[len(self.package.virtual_path) + 1:] \
+                    if sym.fqn.startswith(self.package.virtual_path + ".") \
+                    else sym.fqn
+            sym.fqn = f"{prefix}.{base}"
+        for ch in sym.children:
+            self._prefix_symbol_fqn(ch, prefix)
 
     # ------------------------------------------------------------------ #
     def _handle_generic_statement(self, node) -> None:
@@ -312,9 +327,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
             decl_handled = True
 
-        if not decl_handled:
-            # likely a re-export such as `export { foo } from "./mod";`
-            # or `export * from "./mod";` → treat as import edge
+        if not decl_handled and not self._ns_stack:
             self._handle_import(node)
 
         if decl_handled:
@@ -935,6 +948,70 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         return None
 
+    def _handle_namespace(self, node, *, exported: bool = False):
+        name_node = node.child_by_field_name("name") or \
+                    next((c for c in node.named_children
+                            if c.type in ("identifier", "property_identifier")), None)
+        if name_node is None:
+            return
+        name = name_node.text.decode("utf8")
+
+        # body container
+        body = next((c for c in node.children if c.type == "statement_block"), None)
+
+        # walk children inside namespace
+        prev_cnt = len(self.parsed_file.symbols)
+        self._ns_stack.append(name)
+        if body:
+            for ch in body.named_children:
+                prev_cnt = len(self.parsed_file.symbols)
+                self._process_node(ch)
+
+                # warn when the child node produced no symbols/imports
+                if len(self.parsed_file.symbols) == prev_cnt:
+                    logger.warning(
+                        "TS parser: unhandled namespace child node",
+                        path=self.rel_path,
+                        namespace=".".join(self._ns_stack + [name]),
+                        node_type=ch.type,
+                        line=ch.start_point[0] + 1,
+                    )
+        self._ns_stack.pop()
+
+        # collect newly created symbols and fix their FQNs
+        children = self.parsed_file.symbols[prev_cnt:]
+        ns_prefix = self._join_fqn(self.package.virtual_path, *self._ns_stack, name)
+        for s in children:
+            self._prefix_symbol_fqn(s, ns_prefix)
+
+        # warn on symbols without a name
+        for s in children:
+            if not s.name:
+                logger.warning(
+                    "TS parser: unnamed symbol in namespace",
+                    path=self.rel_path,
+                    namespace=ns_prefix,
+                    kind=s.kind,
+                    line=s.start_line + 1,
+                )
+
+        # signature (header without body)
+        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+
+        # create namespace symbol
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.NAMESPACE,
+                name=name,
+                fqn=ns_prefix,
+                signature=sig,
+                children=children,
+                exported=exported,
+            )
+        )
+
 
 # ---------------------------------------------------------------------- #
 class TypeScriptLanguageHelper(AbstractLanguageHelper):
@@ -1017,6 +1094,22 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                 lines.append(child_summary)
 
             # closing brace
+            lines.append(IND + "}")
+            return "\n".join(lines)
+
+        elif sym.kind == SymbolKind.NAMESPACE:
+            if not header.endswith("{"):
+                header += " {"
+            lines = [IND + header]
+            for ch in sym.children or []:
+                lines.append(
+                    self.get_symbol_summary(
+                        ch,
+                        indent=indent + 2,
+                        include_comments=include_comments,
+                        include_docs=include_docs,
+                    )
+                )
             lines.append(IND + "}")
             return "\n".join(lines)
 
