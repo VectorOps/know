@@ -624,7 +624,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # --- enum members ---------------------------------------------
         children: list[ParsedSymbol] = []
 
-        body = next((c for c in node.children if c.type == "body"), None)
+        body = next((c for c in node.children if c.type == "enum_body"), None)
         if body is None:
             logger.warning(
                 "TS parser: enum has no body",
@@ -634,7 +634,23 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         else:
             for member in body.named_children:
-                if member.type != "enum_assignment":
+                # 1)  MEMBER WITH EXPLICIT VALUE  -> (enum_assignment …)
+                if member.type == "enum_assignment":
+                    m_name_node = (
+                        member.child_by_field_name("name")
+                        or next((c for c in member.named_children
+                                 if c.type in ("identifier", "property_identifier")), None)
+                    )
+                    if not m_name_node:
+                        continue
+                    m_name = m_name_node.text.decode("utf8")
+
+                # 2)  SIMPLE MEMBER WITHOUT VALUE -> bare identifier / property_identifier
+                elif member.type in ("property_identifier", "identifier"):
+                    m_name = member.text.decode("utf8")
+
+                # 3)  UNKNOWN NODE TYPE  -> log warning and skip
+                else:
                     logger.warning(
                         "TS parser: unknown enum member node",
                         path=self.rel_path,
@@ -644,13 +660,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     )
                     continue
 
-                m_name_node = member.child_by_field_name("name") or \
-                              next((c for c in member.named_children
-                                    if c.type in ("identifier", "property_identifier")), None)
-                if not m_name_node:
-                    continue
-
-                m_name = m_name_node.text.decode("utf8")
+                # build ParsedSymbol for the valid member (cases 1 & 2)
                 children.append(
                     self._make_symbol(
                         member,
