@@ -231,8 +231,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
         """
         # TODO: Pass exported flag to inner functions
         symbols_before = len(self.parsed_file.symbols)
-        decl_handled = False
+        decl_handled   = False
+
+        # detect:  export default …
+        default_seen = any(ch.type == "default" for ch in node.children)
+
         for child in node.children:
+            if child.type == "default":      # just the keyword token
+                continue
             match child.type:
                 case "function_declaration":
                     self._handle_function(child, exported=True)
@@ -252,6 +258,18 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "export_clause":
                     self._handle_export_clause(child)
                     decl_handled = True
+
+        # default-export without an inner declaration → treat as literal
+        if default_seen and not decl_handled:
+            self.parsed_file.symbols.append(
+                self._make_symbol(
+                    node,
+                    kind=SymbolKind.LITERAL,
+                    visibility=Visibility.PUBLIC,
+                    exported=True,          # mark as exported
+                )
+            )
+            decl_handled = True
 
         if not decl_handled:
             # likely a re-export such as `export { foo } from "./mod";`
@@ -710,7 +728,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         continue
 
                 elif rhs.type == "call_expression":
-                    self._handle_require_call(ch, rhs)
+                    self._collect_require_calls(ch)
 
                 # simple assignment – create variable / constant symbol
                 sym = self._create_variable_symbol(ch)
@@ -809,7 +827,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         children.append(sym)
                     continue
                 elif value_node.type == "call_expression":
-                    self._handle_require_call(ch, value_node)
+                    self._collect_require_calls(ch)
 
             sym = self._create_variable_symbol(ch, exported=exported)
             if sym:
@@ -844,76 +862,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _collect_symbol_refs(self, root):
         return []  # TODO – later
 
-    # ------------------------------------------------------------------ #
-    def _handle_require_call(self, holder_node, call_node) -> None:
-        """
-        Create a ParsedImportEdge (and a matching SymbolKind.IMPORT symbol)
-        for CommonJS-style         const foo = require("bar");
-                                   foo = require("bar");
-        Instances where the call is *not* assigned ( plain   require("bar") )
-        are already handled by _collect_require_calls – this function takes
-        care of the assignment / declarator cases.
-        """
-        # ── sanity check: make sure we are looking at  require("...") ────
-        if call_node.type != "call_expression":
-            return
-        fn_node = call_node.child_by_field_name("function")
-        if not (fn_node and fn_node.type == "identifier" and fn_node.text == b"require"):
-            return
-
-        # ── extract the module string literal ───────────────────────────
-        arg_node = next(
-            (c for c in call_node.child_by_field_name("arguments").children
-             if c.type == "string"), None
-        )
-        if arg_node is None:
-            return
-        module = arg_node.text.decode("utf8").strip("\"'")
-
-        phys_path, virt_path, is_external = self._resolve_module(module)
-
-        # ── try to discover the *alias* on the left-hand side ───────────
-        alias: str | None = None
-        if holder_node.type == "assignment_expression":
-            lhs = holder_node.child_by_field_name("left")
-            if lhs is not None:
-                if lhs.type in ("identifier", "property_identifier"):
-                    alias = lhs.text.decode("utf8")
-                else:                                      # deep search
-                    ident = self._find_first_identifier(lhs)
-                    if ident:
-                        alias = ident.text.decode("utf8")
-
-        elif holder_node.type == "variable_declarator":
-            name_node = holder_node.child_by_field_name("name") \
-                        or next((c for c in holder_node.children
-                                 if c.type in ("identifier", "property_identifier")), None)
-            if name_node:
-                alias = name_node.text.decode("utf8")
-
-        # ── register the import edge ────────────────────────────────────
-        self.parsed_file.imports.append(
-            ParsedImportEdge(
-                physical_path = phys_path,
-                virtual_path  = virt_path,
-                alias         = alias,
-                dot           = False,
-                external      = is_external,
-                raw           = holder_node.text.decode("utf8", errors="replace"),
-            )
-        )
-
-        # ── also materialise a symbol of kind IMPORT for consistency ───
-        self.parsed_file.symbols.append(
-            self._make_symbol(
-                holder_node,
-                kind        = SymbolKind.IMPORT,
-                name        = alias or virt_path,
-                fqn         = self._join_fqn(self.package.virtual_path, alias or virt_path),
-                visibility  = Visibility.PUBLIC,
-            )
-        )
-
     def _collect_require_calls(self, node):
         if node.type == "call_expression":
             fn = node.child_by_field_name("function")
@@ -923,6 +871,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                      if c.type == "string"), None)
                 if arg_node:
                     module = arg_node.text.decode("utf8").strip("\"'")
+
                     phys, virt, ext = self._resolve_module(module)
                     self.parsed_file.imports.append(
                         ParsedImportEdge(
