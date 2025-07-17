@@ -5,6 +5,7 @@ from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.typescript import TypeScriptCodeParser
 from know.models import ProgrammingLanguage, SymbolKind
+from devtools import pprint
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -32,6 +33,8 @@ def test_typescript_parser_on_simple_file():
     parser      = TypeScriptCodeParser(project, "simple.tsx")
     parsed_file = parser.parse(cache)
 
+    pprint(parsed_file)
+
     # basic assertions
     assert parsed_file.path == "simple.tsx"
     assert parsed_file.language == ProgrammingLanguage.TYPESCRIPT
@@ -47,17 +50,54 @@ def test_typescript_parser_on_simple_file():
 
     # top-level symbols
     def _to_map(symbols):
-        return {s.name: s for s in symbols}
+        # ignore symbols that have no name
+        return {s.name: s for s in symbols if s.name}
 
     top_level = _to_map(parsed_file.symbols)
 
-    expected_names = {"fn", "Test", "CONST", "z"}      # <-- add "z"
+    expected_names = {
+        "fn", "Test", "CONST", "z",
+        "LabeledValue",       # interface
+        "Base",               # abstract class
+        "Point",              # type-alias
+        "Direction",          # enum
+    }
     assert set(top_level.keys()) == expected_names
 
     assert top_level["fn"].kind   == SymbolKind.FUNCTION
     assert top_level["Test"].kind == SymbolKind.CLASS
     assert top_level["CONST"].kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE)
     assert top_level["z"].kind == SymbolKind.VARIABLE  # <-- new assertion
+
+    # ------------------------------------------------------------------
+    # check symbols that live inside compound declarations / assignments
+    # ------------------------------------------------------------------
+    def _flatten(sym_list):
+        for s in sym_list:
+            if s.name:
+                yield s
+            yield from _flatten(s.children)
+
+    flat_map = {s.name: s for s in _flatten(parsed_file.symbols)}
+
+    # variable & function names introduced by the sample that were
+    # previously untested
+    nested_expected = {
+        "j1", "f1",              # exported const + arrow-fn
+        "a1", "b1", "c1",        # let-declaration
+        "e2", "f",               # var-declaration
+        "a",                     # async arrow-fn
+        "foo", "method", "value" # class members
+    }
+    assert nested_expected.issubset(flat_map.keys())
+
+    # kind sanity-checks for a representative subset
+    assert flat_map["j1"].kind == SymbolKind.VARIABLE
+    assert flat_map["f1"].kind == SymbolKind.FUNCTION
+    assert flat_map["Point"].kind == SymbolKind.TYPE_ALIAS
+    assert flat_map["Direction"].kind == SymbolKind.ENUM
+    assert flat_map["LabeledValue"].kind == SymbolKind.INTERFACE
+    assert flat_map["Base"].kind == SymbolKind.CLASS
 
     # class children (method + possible variable)
     test_cls_children = _to_map(top_level["Test"].children)
