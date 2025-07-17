@@ -182,6 +182,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         """Fallback handler for miscellaneous statements listed in
         `_GENERIC_STATEMENT_NODES`.  Generates a SymbolKind.LITERAL without
         emitting “unhandled node” debug / warning messages."""
+        symbols_before = len(self.parsed_file.symbols)
         self.parsed_file.symbols.append(self._create_literal_symbol(node))
 
         # Emit warning when the handler produced neither symbols nor imports
