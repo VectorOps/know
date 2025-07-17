@@ -634,7 +634,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         else:
             for member in body.named_children:
-                # 1)  MEMBER WITH EXPLICIT VALUE  -> (enum_assignment …)
                 if member.type == "enum_assignment":
                     m_name_node = (
                         member.child_by_field_name("name")
@@ -645,11 +644,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         continue
                     m_name = m_name_node.text.decode("utf8")
 
-                # 2)  SIMPLE MEMBER WITHOUT VALUE -> bare identifier / property_identifier
                 elif member.type in ("property_identifier", "identifier"):
                     m_name = member.text.decode("utf8")
 
-                # 3)  UNKNOWN NODE TYPE  -> log warning and skip
                 else:
                     logger.warning(
                         "TS parser: unknown enum member node",
@@ -930,12 +927,18 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                 header += " {"
             lines = [IND + header]
 
-            # recurse over children (methods / fields)
+            # recurse over children
             for ch in sym.children or []:
-                lines.append(self.get_symbol_summary(ch,
-                                                     indent=indent + 2,
-                                                     include_comments=include_comments,
-                                                     include_docs=include_docs))
+                child_summary = self.get_symbol_summary(
+                    ch,
+                    indent=indent + 2,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                )
+                # ── add comma for enum members ────────────────────────────────
+                if sym.kind == SymbolKind.ENUM:
+                    child_summary = child_summary.rstrip() + ","
+                lines.append(child_summary)
 
             # closing brace
             lines.append(IND + "}")
