@@ -844,6 +844,76 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _collect_symbol_refs(self, root):
         return []  # TODO – later
 
+    # ------------------------------------------------------------------ #
+    def _handle_require_call(self, holder_node, call_node) -> None:
+        """
+        Create a ParsedImportEdge (and a matching SymbolKind.IMPORT symbol)
+        for CommonJS-style         const foo = require("bar");
+                                   foo = require("bar");
+        Instances where the call is *not* assigned ( plain   require("bar") )
+        are already handled by _collect_require_calls – this function takes
+        care of the assignment / declarator cases.
+        """
+        # ── sanity check: make sure we are looking at  require("...") ────
+        if call_node.type != "call_expression":
+            return
+        fn_node = call_node.child_by_field_name("function")
+        if not (fn_node and fn_node.type == "identifier" and fn_node.text == b"require"):
+            return
+
+        # ── extract the module string literal ───────────────────────────
+        arg_node = next(
+            (c for c in call_node.child_by_field_name("arguments").children
+             if c.type == "string"), None
+        )
+        if arg_node is None:
+            return
+        module = arg_node.text.decode("utf8").strip("\"'")
+
+        phys_path, virt_path, is_external = self._resolve_module(module)
+
+        # ── try to discover the *alias* on the left-hand side ───────────
+        alias: str | None = None
+        if holder_node.type == "assignment_expression":
+            lhs = holder_node.child_by_field_name("left")
+            if lhs is not None:
+                if lhs.type in ("identifier", "property_identifier"):
+                    alias = lhs.text.decode("utf8")
+                else:                                      # deep search
+                    ident = self._find_first_identifier(lhs)
+                    if ident:
+                        alias = ident.text.decode("utf8")
+
+        elif holder_node.type == "variable_declarator":
+            name_node = holder_node.child_by_field_name("name") \
+                        or next((c for c in holder_node.children
+                                 if c.type in ("identifier", "property_identifier")), None)
+            if name_node:
+                alias = name_node.text.decode("utf8")
+
+        # ── register the import edge ────────────────────────────────────
+        self.parsed_file.imports.append(
+            ParsedImportEdge(
+                physical_path = phys_path,
+                virtual_path  = virt_path,
+                alias         = alias,
+                dot           = False,
+                external      = is_external,
+                raw           = holder_node.text.decode("utf8", errors="replace"),
+            )
+        )
+
+        # ── also materialise a symbol of kind IMPORT for consistency ───
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                holder_node,
+                kind        = SymbolKind.IMPORT,
+                name        = alias or virt_path,
+                fqn         = self._join_fqn(self.package.virtual_path, alias or virt_path),
+                visibility  = Visibility.PUBLIC,
+            )
+        )
+
     def _collect_require_calls(self, node):
         if node.type == "call_expression":
             fn = node.child_by_field_name("function")
