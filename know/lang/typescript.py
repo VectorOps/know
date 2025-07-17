@@ -220,6 +220,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "class_declaration":
                     self._handle_class(child)
                     decl_handled = True
+                case "interface_declaration":                # NEW
+                    self._handle_interface(child)            # NEW
+                    decl_handled = True                      # NEW
                 case "variable_statement":
                     self._handle_variable(child)
                     decl_handled = True
@@ -403,6 +406,70 @@ class TypeScriptCodeParser(AbstractCodeParser):
             children=children,
         )
         self.parsed_file.symbols.append(cls_sym)
+
+    # ------------------------------------------------------------------ #
+    def _handle_interface(self, node):                       # NEW
+        """
+        Build a ParsedSymbol for a TypeScript interface and its members.
+        """
+        name_node = node.child_by_field_name("name")
+        if name_node is None:                                # defensive
+            return
+        name = name_node.text.decode("utf8")
+
+        # header without body
+        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+
+        # ---- interface members ----------------------------------------
+        children: list[ParsedSymbol] = []
+        body = next((c for c in node.children if c.type == "interface_body"), None)
+        if body:
+            for ch in body.named_children:
+                if ch.type == "method_signature":
+                    m_name_node = ch.child_by_field_name("name") or \
+                                   ch.child_by_field_name("property")
+                    if not m_name_node:
+                        continue
+                    m_name = m_name_node.text.decode("utf8")
+                    m_sig  = self._build_signature(ch, m_name, prefix="")
+                    children.append(
+                        self._make_symbol(
+                            ch,
+                            kind=SymbolKind.METHOD_DEF,
+                            name=m_name,
+                            fqn=self._join_fqn(self.package.virtual_path,
+                                               name, m_name),
+                            signature=m_sig,
+                        )
+                    )
+                elif ch.type == "property_signature":
+                    p_name_node = ch.child_by_field_name("name") or \
+                                   ch.child_by_field_name("property")
+                    if not p_name_node:
+                        continue
+                    p_name = p_name_node.text.decode("utf8")
+                    children.append(
+                        self._make_symbol(
+                            ch,
+                            kind=SymbolKind.PROPERTY,
+                            name=p_name,
+                            fqn=self._join_fqn(self.package.virtual_path,
+                                               name, p_name),
+                        )
+                    )
+
+        # ---- interface symbol ----------------------------------------
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.INTERFACE,
+                name=name,
+                fqn=self._join_fqn(self.package.virtual_path, name),
+                signature=sig,
+                children=children,
+            )
+        )
 
     # helpers reused by class + top level
     def _create_method_symbol(self, node, class_name: str):
@@ -633,7 +700,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             header = sym.name
 
         # ----- symbol specific formatting -------------------------------- #
-        if sym.kind == SymbolKind.CLASS:
+        if sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE):  # CHANGED
             # open-brace line
             if not header.endswith("{"):
                 header += " {"
