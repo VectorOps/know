@@ -514,79 +514,53 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _collect_arrow_function_declarators(
         self, node, class_name: str | None = None
     ) -> bool:
-        """
-        Inspect *node* (variable_statement / lexical_declaration /
-        public_field_declaration …) and emit ParsedSymbol entries for every
-        `identifier = (…) => { … }` arrow-function that is found.
-
-        Returns True when at least one arrow-function symbol was created.
-        """
         made = False
-        for decl in (c for c in node.named_children
-                     if c.type == "variable_declarator"):
-            value = decl.child_by_field_name("value")
-            if value and value.type == "arrow_function":
-                name_node = decl.child_by_field_name("name")
-                if name_node is None:
-                    continue
-                name = name_node.text.decode("utf8")
-                sig  = self._build_signature(value, name, prefix="")
-                # use the surrounding statement so the stored body
-                # always reproduces the complete top-level line
-                target_node = node if class_name is None else value
-                self.parsed_file.symbols.append(
-                    self._make_symbol(
-                        target_node,
-                        kind=SymbolKind.FUNCTION,
-                        name=name,
-                        fqn=self._join_fqn(self.package.virtual_path,
-                                           class_name, name),
-                        signature=sig,
-                    )
-                )
-                made = True
-        return made
-```
+        # Accept holder node types: variable_declarator, public_field_definition, field_definition, public_field_declaration
+        holder_types = {
+            "variable_declarator",
+            "public_field_definition",
+            "field_definition",
+            "public_field_declaration",
+        }
+        # Collect holders: node itself if it matches, plus direct children that match
+        holders = []
+        if node.type in holder_types:
+            holders.append(node)
+        holders.extend(c for c in node.named_children if c.type in holder_types)
 
-know/lang/typescript.py
-```python
-<<<<<<< SEARCH
-    def _handle_expression(self, node):
-        # detect assignment of an arrow function
-        assign = next((c for c in node.named_children
-                       if c.type == "assignment_expression"), None)
-        if assign:
-            right = assign.child_by_field_name("right")
-            if right and right.type == "arrow_function":
-                left = assign.child_by_field_name("left")
-                if left:
-                    name = left.text.decode("utf8").split(".")[-1]
-                    sig  = self._build_signature(right, name, prefix="")
-                    self.parsed_file.symbols.append(
-                        self._make_symbol(
-                            right,
-                            kind=SymbolKind.FUNCTION,
-                            name=name,
-                            fqn=self._join_fqn(self.package.virtual_path,
-                                               name),
-                            signature=sig,
-                        )
-                    )
-                    return
-        # ─── fall-back (existing behaviour) ───────────────────────────
-        expr = node.text.decode("utf8").strip()
-        if not expr:
-            return
-        name = expr.split("(", 1)[0].strip()
-        self.parsed_file.symbols.append(
-            self._make_symbol(
-                node,
-                kind=SymbolKind.LITERAL,
-                fqn=self._join_fqn(self.package.virtual_path, name),
-                visibility=Visibility.PUBLIC,
+        for holder in holders:
+            value_node = holder.child_by_field_name("value")
+            if not value_node or value_node.type != "arrow_function":
+                continue
+
+            name_node = holder.child_by_field_name("name")
+            if name_node is None:
+                # fallback: first child with type identifier or property_identifier
+                name_node = next(
+                    (c for c in holder.children if c.type in ("identifier", "property_identifier")),
+                    None,
+                )
+            if name_node is None:
+                # fallback: use _find_first_identifier
+                name_node = self._find_first_identifier(holder)
+            if name_node is None:
+                continue
+
+            name = name_node.text.decode("utf8").split(".")[-1]
+            sig = self._build_signature(value_node, name, prefix="")
+
+            target_node = node if class_name is None else value_node
+            self.parsed_file.symbols.append(
+                self._make_symbol(
+                    target_node,
+                    kind=SymbolKind.FUNCTION,
+                    name=name,
+                    fqn=self._join_fqn(self.package.virtual_path, class_name, name),
+                    signature=sig,
+                )
             )
-        )
-        self._collect_require_calls(node)
+            made = True
+        return made
 
     def _handle_variable(self, node):
         if not self._collect_arrow_function_declarators(node):
