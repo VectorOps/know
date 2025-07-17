@@ -414,8 +414,16 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     "variable_statement",
                     "lexical_declaration",
                     "public_field_declaration",
-                    "public_field_definition",   # NEW – support
+                    "public_field_definition",
                 ):
+                    value_node = ch.child_by_field_name("value")
+                    if value_node:
+                        if value_node.type == "arrow_function":
+                            sym = self._handle_arrow_function(ch, ch, class_name=name)
+                            if sym:
+                                children.append(sym)
+                            continue
+
                     v = self._create_variable_symbol(ch, class_name=name)
                     if v:
                         children.append(v)
@@ -423,9 +431,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 # ignore mundane punctuation nodes  ───────────────────────
                 elif ch.type in ("{", "}", ";"):     # NEW – suppress warnings
                     continue
-
-                elif ch.type == "arrow_function":
-                    self._handle_arrow_function(ch, ch, class_name=name)
 
                 else:
                     logger.warning(
@@ -768,9 +773,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             modifiers  = mods,
         )
 
-    def _extract_arrow_functions(self, node):
-        return [c for c in node.children if c.type == "arrow_function"]
-
     def _handle_lexical(self, node):
         lexical_kw = node.text.decode("utf8").lstrip().split()[0]
         is_const_decl = node.text.lstrip().startswith(b"const")
@@ -917,7 +919,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                         indent=indent,
                         include_comments=include_comments,
                         include_docs=include_docs,
-                    )
+                    ) + ";"
                 )
             return "\n".join(lines)
 
@@ -935,8 +937,14 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                     include_comments=include_comments,
                     include_docs=include_docs,
                 )
+
+                # add required separators
                 if sym.kind == SymbolKind.ENUM:
                     child_summary = child_summary.rstrip() + ","
+                elif ch.kind == SymbolKind.ASSIGNMENT:
+                    if not child_summary.rstrip().endswith(";"):
+                        child_summary = child_summary.rstrip() + ";"
+
                 lines.append(child_summary)
 
             # closing brace
@@ -945,9 +953,11 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
         # non-class symbols – keep terse one-liner
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD) and not header.endswith("{"):
-            # abstract methods already terminate with “;” – do NOT add “{ ... }”
-            if not (sym.kind == SymbolKind.METHOD and Modifier.ABSTRACT in (sym.modifiers or [])):
+            if sym.kind == SymbolKind.METHOD and Modifier.ABSTRACT in (sym.modifiers or []):
+                header += ";"
+            else:
                 header += " { ... }"
+
         return IND + header
 
     def get_import_summary(self, imp: ImportEdge) -> str:
