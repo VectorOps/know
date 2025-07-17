@@ -124,7 +124,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._handle_class(node)
         elif node.type == "interface_declaration":
             self._handle_interface(node)
-        elif node.type == "method_definition":
+        elif node.type in ("method_definition", "abstract_method_signature"):
             self._handle_method(node)
         elif node.type == "variable_statement":
             self._handle_variable(node)
@@ -402,7 +402,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         body = next((c for c in node.children if c.type == "class_body"), None)
         if body:
             for ch in body.children:
-                if ch.type == "method_definition":
+                if ch.type in ("method_definition", "abstract_method_signature"):
                     m = self._create_method_symbol(ch, class_name=name)
                     children.append(m)
 
@@ -510,12 +510,19 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # TODO: Anonymous?
         name = name_node.text.decode("utf8") if name_node else "anonymous"
         sig = self._build_signature(node, name, prefix="")
+
+        mods: list[Modifier] = []
+        if node.type == "abstract_method_signature" \
+           or self._has_modifier(node, "abstract"):
+            mods.append(Modifier.ABSTRACT)
+
         return self._make_symbol(
             node,
             kind=SymbolKind.METHOD,
             name=name,
             fqn=self._join_fqn(self.package.virtual_path, class_name, name),
             signature=sig,
+            modifiers=mods,        # pass modifiers
         )
 
     def _find_first_identifier(self, node):
