@@ -578,6 +578,30 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         )
 
+    # --------------------------------------------------------------- #
+    def _handle_type_alias(self, node):                            # NEW
+        """
+        Build a ParsedSymbol for a TypeScript `type Foo = …` alias.
+        """
+        name_node = node.child_by_field_name("name")
+        if name_node is None:                                      # defensive
+            return
+        name = name_node.text.decode("utf8")
+
+        # header up to the first “;” (or full slice if none)
+        raw_header = node.text.decode("utf8").split(";", 1)[0].strip()
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.TYPE_ALIAS,                        # NEW
+                name=name,
+                fqn=self._join_fqn(self.package.virtual_path, name),
+                signature=sig,
+            )
+        )
+
     def _handle_expression(self, node):
         if self._collect_arrow_function_declarators(node):
             self._collect_require_calls(node)

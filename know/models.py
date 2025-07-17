@@ -26,6 +26,7 @@ class SymbolKind(str, Enum):
     COMPONENT = "component"
     INTERFACE = "interface"
     ENUM = "enum"
+    TYPE_ALIAS = "type_alias"        # NEW ─ support for TS “type” aliases
     LITERAL = "literal"
     IMPORT = "import"
     TRYCATCH = "try_catch"
