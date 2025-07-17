@@ -591,8 +591,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return
         name = name_node.text.decode("utf8")
 
-        # header up to the first “;” (or full slice if none)
-        raw_header = node.text.decode("utf8").split(";", 1)[0].strip()
+        # take the full alias declaration text; drop a single trailing
+        # “;” token emitted by the parser when present
+        raw_header = node.text.decode("utf8").strip()
+        if raw_header.endswith(";"):
+            raw_header = raw_header[:-1].rstrip()
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
         self.parsed_file.symbols.append(
