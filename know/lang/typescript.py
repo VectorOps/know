@@ -35,18 +35,6 @@ _MODULE_SUFFIXES = (".ts", ".tsx")
 
 
 class TypeScriptCodeParser(AbstractCodeParser):
-    """
-    VERY first-cut parser – intentionally incomplete.
-    Follows the structure of PythonCodeParser but only covers the
-    most common node kinds:
-        • import_statement / export_statement
-        • function_declaration
-        • class_declaration  (+ method_definition)
-        • variable_statement
-        • expression_statement
-    The goal is to provide *something* the rest of the pipeline can consume.
-    """
-
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
         self.project = project
@@ -255,26 +243,35 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 sym.body = export_body
 
     def _handle_export_clause(self, node):
-        """
-        Handle `export { … }` clauses (named exports without a module
-        specifier).  Nothing needs to be added to *symbols* or *imports*
-        – the underlying declarations have already been processed earlier
-        in the file – we just mark the identifiers so that the surrounding
-        `_handle_export()` call knows the clause has been handled.
-        """
-        for spec in (c for c in node.named_children
-                     if c.type == "export_specifier"):
-            ident = (spec.child_by_field_name("name")
-                     or next((c for c in spec.named_children
-                              if c.type == "identifier"), None))
-            if ident is None:
-                continue
-            logger.debug(
-                "TS parser: export clause identifier",
-                path=self.rel_path,
-                name=ident.text.decode("utf8"),
-            )
+        # --- collect exported identifiers ---------------------------------
+        exported_names: set[str] = set()
+        for spec in (c for c in node.named_children if c.type == "export_specifier"):
+            # local/original identifier
+            name_node  = spec.child_by_field_name("name") \
+                        or next((c for c in spec.named_children
+                                 if c.type == "identifier"), None)
+            # identifier after “as” (alias), if any
+            alias_node = spec.child_by_field_name("alias")
 
+            if name_node:
+                exported_names.add(name_node.text.decode("utf8"))
+            if alias_node:
+                exported_names.add(alias_node.text.decode("utf8"))
+
+            if name_node or alias_node:
+                logger.debug(
+                    "TS parser: export clause identifier",
+                    path=self.rel_path,
+                    name=(alias_node or name_node).text.decode("utf8"),
+                )
+
+        # --- mark matching symbols as exported ----------------------------
+        if exported_names:
+            for sym in self.parsed_file.symbols:
+                if sym.name and sym.name in exported_names:
+                    sym.exported = True
+
+        # --- still produce a literal symbol representing the clause -------
         self.parsed_file.symbols.append(
             self._make_symbol(
                 node,
@@ -475,25 +472,16 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
     def _handle_expression(self, node):
-        """
-        Handle generic expression statements.
-        • First, try to extract arrow-function assignments via the shared
-          `_collect_arrow_function_declarators()` helper.
-        • If nothing was produced, fall back to emitting a LITERAL symbol.
-        • Always scan the subtree for `require()` calls.
-        """
         if self._collect_arrow_function_declarators(node):
             self._collect_require_calls(node)
             return
 
         expr = node.text.decode("utf8").strip()
         if expr:
-            name = expr.split("(", 1)[0].strip()
             self.parsed_file.symbols.append(
                 self._make_symbol(
                     node,
                     kind=SymbolKind.LITERAL,
-                    fqn=self._join_fqn(self.package.virtual_path, name),
                     visibility=Visibility.PUBLIC,
                 )
             )
