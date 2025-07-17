@@ -98,3 +98,4 @@
 * [ ] Figure out lockup in filelist tool
 * [X] Compress long symbol bodies
 * [ ] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
+* [ ] Only include mentioned symbols in repomap instead of file summary?

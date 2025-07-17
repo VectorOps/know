@@ -31,6 +31,7 @@ class SymbolKind(str, Enum):
     IMPORT = "import"
     TRYCATCH = "try_catch"
     COMMENT = "comment"
+    ASSIGNMENT = "assignment"
 
 
 class Visibility(str, Enum):
@@ -126,9 +127,8 @@ class SymbolSignature(BaseModel):
     parameters: List[SymbolParameter] = Field(default_factory=list)
     return_type: Optional[str] = None
     decorators: List[str] = Field(default_factory=list)
-    receiver: str | None = None        # NEW – raw receiver, e.g. "t *Test"
-    # NEW → lexical keyword for “let / const / var / …” declarations
-    lexical_type: str | None = None
+    receiver: Optional[str] = None
+    lexical_type: Optional[str] = None
 
 
 class SymbolMetadata(BaseModel):

@@ -290,8 +290,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
         def _mark_exported(sym):
             if sym.name and sym.name in exported_names:
                 sym.exported = True
-            for ch in sym.children:
-                _mark_exported(ch)
+
+            if sym.kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE, SymbolKind.ASSIGNMENT):
+                for ch in sym.children:
+                    _mark_exported(ch)
 
         if exported_names:
             for sym in self.parsed_file.symbols:
