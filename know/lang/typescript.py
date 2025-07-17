@@ -657,36 +657,22 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
     def _handle_expression(self, node):
-        """
-        Enhanced expression‐statement handler.
-
-        • Walk through *node.named_children* and explicitly handle the
-          sub-nodes we care about.
-        • For *assignment_expression* replicate the logic used by
-          *_handle_lexical*:
-              – arrow-function  ➜  _handle_arrow_function(…)
-              – require("…")    ➜  _handle_require_call(…)
-              – plain variable  ➜  _create_variable_symbol(…)
-        • Any unknown child type → emit a debug/warning message.
-        • Build an outer ASSIGNMENT symbol that owns the produced
-          *children* (mirrors the constant / variable strategy).
-        """
         children: list[ParsedSymbol] = []
 
         for ch in node.named_children:
-            # ── assignment_expression ──────────────────────────────────
+            # assignment_expression
             if ch.type == "assignment_expression":
                 rhs = ch.child_by_field_name("right")
 
                 # arrow function  (a = (...) => { … })
-                if rhs is not None and rhs.type == "arrow_function":
-                    sym = self._handle_arrow_function(ch, rhs)
-                    if sym:
-                        children.append(sym)
-                    continue
+                if rhs is not None:
+                    if rhs.type == "arrow_function":
+                        sym = self._handle_arrow_function(ch, rhs)
+                        if sym:
+                            children.append(sym)
+                        continue
 
-                # require("…")
-                if rhs is not None and rhs.type == "call_expression":
+                elif rhs.type == "call_expression":
                     self._handle_require_call(ch, rhs)
 
                 # simple assignment – create variable / constant symbol
@@ -695,39 +681,25 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     children.append(sym)
                 continue
 
-            # ── isolated call_expression (ex: require("…")) ────────────
-            if ch.type == "call_expression":
+            elif ch.type == "call_expression":
                 self._collect_require_calls(ch)
-                continue
 
-            # ── anything else – warn so we can extend support later ─────
-            logger.warning(
-                "TS parser: unhandled expression child",
-                path=self.rel_path,
-                node_type=ch.type,
-                line=ch.start_point[0] + 1,
-            )
+            else:
+                logger.warning(
+                    "TS parser: unhandled expression child",
+                    path=self.rel_path,
+                    node_type=ch.type,
+                    line=ch.start_point[0] + 1,
+                )
 
-        # ── parent ASSIGNMENT symbol (only when we spawned children) ────
-        if children:
-            self.parsed_file.symbols.append(
-                self._make_symbol(
-                    node,
-                    kind=SymbolKind.ASSIGNMENT,
-                    visibility=Visibility.PUBLIC,
-                    signature=SymbolSignature(raw="=", lexical_type="assignment"),
-                    children=children,
+        self.parsed_file.symbols.append(
+            self._make_symbol(
+                node,
+                kind=SymbolKind.ASSIGNMENT,
+                visibility=Visibility.PUBLIC,
+                children=children,
                 )
-            )
-        else:
-            # fallback to previous simple behaviour
-            self.parsed_file.symbols.append(
-                self._make_symbol(
-                    node,
-                    kind=SymbolKind.ASSIGNMENT,
-                    visibility=Visibility.PUBLIC,
-                )
-            )
+        )
 
     def _handle_arrow_function(
         self,
@@ -889,7 +861,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
         else:
             header = sym.name
 
-        if sym.kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE, SymbolKind.ASSIGNMENT):
+        if sym.kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE):
             # no children
             if not sym.children:
                 body = (sym.body or "").strip()
@@ -909,6 +881,26 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                 header += " "
 
             return IND + header + ", ".join(child_summaries) + ";"
+
+        elif sym.kind == SymbolKind.ASSIGNMENT:
+            # one-liner when the assignment has no nested symbols
+            if not sym.children:
+                body = (sym.body or "").strip()
+                return "\n".join(f"{IND}{ln.strip()}" for ln in body.splitlines())
+
+            # assignment that owns child symbols (e.g. arrow-functions)
+            header_line = (sym.body or "").splitlines()[0].strip()
+            lines = [f"{IND}{header_line}"]
+            for ch in sym.children:
+                lines.append(
+                    self.get_symbol_summary(
+                        ch,
+                        indent=indent + 2,
+                        include_comments=include_comments,
+                        include_docs=include_docs,
+                    )
+                )
+            return "\n".join(lines)
 
         elif sym.kind in (SymbolKind.CLASS, SymbolKind.INTERFACE, SymbolKind.ENUM):
             # open-brace line
