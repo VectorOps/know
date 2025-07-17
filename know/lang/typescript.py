@@ -623,16 +623,33 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         # --- enum members ---------------------------------------------
         children: list[ParsedSymbol] = []
-        body = next((c for c in node.children if c.type == "enum_body"), None)
-        if body:
+
+        body = next((c for c in node.children if c.type == "body"), None)
+        if body is None:
+            logger.warning(
+                "TS parser: enum has no body",
+                path=self.rel_path,
+                enum_name=name,
+                line=node.start_point[0] + 1,
+            )
+        else:
             for member in body.named_children:
-                if member.type != "enum_member":
+                if member.type != "enum_assignment":
+                    logger.warning(
+                        "TS parser: unknown enum member node",
+                        path=self.rel_path,
+                        enum_name=name,
+                        node_type=member.type,
+                        line=member.start_point[0] + 1,
+                    )
                     continue
+
                 m_name_node = member.child_by_field_name("name") or \
                               next((c for c in member.named_children
                                     if c.type in ("identifier", "property_identifier")), None)
                 if not m_name_node:
                     continue
+
                 m_name = m_name_node.text.decode("utf8")
                 children.append(
                     self._make_symbol(
@@ -842,10 +859,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
 # ---------------------------------------------------------------------- #
 class TypeScriptLanguageHelper(AbstractLanguageHelper):
-    """
-    Minimal summary helper – mirrors formatting strategy used for python.
-    """
-
     def get_symbol_summary(self,
                            sym: SymbolMetadata,
                            indent: int = 0,
@@ -889,13 +902,12 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                 return "\n".join(f"{IND}{ln.strip()}" for ln in body.splitlines())
 
             # assignment that owns child symbols (e.g. arrow-functions)
-            header_line = (sym.body or "").splitlines()[0].strip()
-            lines = [f"{IND}{header_line}"]
+            lines = []
             for ch in sym.children:
                 lines.append(
                     self.get_symbol_summary(
                         ch,
-                        indent=indent + 2,
+                        indent=indent,
                         include_comments=include_comments,
                         include_docs=include_docs,
                     )
