@@ -82,6 +82,17 @@ class TypeScriptCodeParser(AbstractCodeParser):
         parts = p.with_suffix("").parts
         return ".".join(parts)
 
+    # --- small util ----------------------------------------------------
+    @staticmethod
+    def _with_export_prefix(txt: str, exported: bool) -> str:
+        """
+        Ensure *txt* starts with the “export ” keyword when *exported* is True.
+        Leading whitespace is ignored; existing prefixes are not duplicated.
+        """
+        if exported and not txt.lstrip().startswith("export "):
+            return "export " + txt.lstrip()
+        return txt
+
     # --- FQN helper ----------------------------------------------------
     def _make_fqn(self,
                   name: str | None,
@@ -284,32 +295,33 @@ class TypeScriptCodeParser(AbstractCodeParser):
         decl_handled   = False
 
         # detect:  export default …
-        default_seen = any(ch.type == "default" for ch in node.children)
+        default_seen = False
 
         symbols: List[ParsedSymbol] = []
 
         for child in node.children:
             if child.type == "default":
+                default_seen = True
                 continue
 
             match child.type:
                 case "function_declaration":
-                    symbols.append(self._handle_function(child, parent=parent, exported=True))
+                    symbols.extend(self._handle_function(child, parent=parent, exported=True))
                     decl_handled = True
                 case "class_declaration":
-                    symbols.append(self._handle_class(child, parent=parent, exported=True))
+                    symbols.extend(self._handle_class(child, parent=parent, exported=True))
                     decl_handled = True
                 case "abstract_class_declaration":
-                    symbols.append(self._handle_class(child, parent=parent, exported=True))
+                    symbols.extend(self._handle_class(child, parent=parent, exported=True))
                     decl_handled = True
                 case "interface_declaration":
-                    symbols.append(self._handle_interface(child, parent=parent, exported=True))
+                    symbols.extend(self._handle_interface(child, parent=parent, exported=True))
                     decl_handled = True
                 case "variable_statement" | "lexical_declaration":
-                    symbols.append(self._handle_lexical(child, parent=parent, exported=True))
+                    symbols.extend(self._handle_lexical(child, parent=parent, exported=True))
                     decl_handled = True
                 case "export_clause":
-                    symbols.append(self._handle_export_clause(child, parent=parent))
+                    symbols.extend(self._handle_export_clause(child, parent=parent))
                     decl_handled = True
 
         # default-export without an inner declaration → treat as literal
@@ -445,6 +457,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if node.type == "async_function":
             mods.append(Modifier.ASYNC)
 
+        # add “export ” prefix when applicable  (body + signature)
+        sig.raw = self._with_export_prefix(sig.raw, exported)
+        body_txt = self._with_export_prefix(node.text.decode("utf8").strip(), exported)
+
         return [
             self._make_symbol(
                 node,
@@ -453,6 +469,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 fqn=self._make_fqn(name, parent),
                 signature=sig,
                 modifiers=mods,
+                body=body_txt,          # <-- new
                 exported=exported,
             )
         ]
@@ -465,6 +482,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name = name_node.text.decode("utf8")
         # take full node text and truncate at the opening brace → drop the body
         raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        raw_header = self._with_export_prefix(raw_header, exported)
+        body_txt   = self._with_export_prefix(node.text.decode("utf8").strip(), exported)
+
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
         mods: list[Modifier] = []
@@ -479,6 +499,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             signature=sig,
             modifiers=mods,
             children=[],
+            body=body_txt,           # <-- new
             exported=exported,
         )
 
@@ -538,6 +559,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         # header without body
         raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        raw_header = self._with_export_prefix(raw_header, exported)
+        body_txt   = self._with_export_prefix(node.text.decode("utf8").strip(), exported)
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
         children: list[ParsedSymbol] = []
@@ -583,6 +606,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 fqn=self._make_fqn(name, parent),
                 signature=sig,
                 children=children,
+                body=body_txt,           # <-- new
                 exported=exported,
             )
         ]
@@ -633,12 +657,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name = ident.text.decode("utf8")
         kind = SymbolKind.CONSTANT if name.isupper() else SymbolKind.VARIABLE
         fqn = self._make_fqn(name, parent)
+        body_txt = self._with_export_prefix(node.text.decode("utf8").strip(), exported)
         return self._make_symbol(
             node,
             kind=kind,
             name=name,
             fqn=fqn,
             visibility=Visibility.PUBLIC,
+            body=body_txt,           # <-- new
             exported=exported,
         )
 
@@ -655,7 +681,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_type_alias(self, node, parent=None):
+    def _handle_type_alias(self, node, parent=None, exported=False):
         """
         Build a ParsedSymbol for a TypeScript `type Foo = …` alias.
         """
@@ -671,6 +697,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if raw_header.endswith(";"):
             raw_header = raw_header[:-1].rstrip()
 
+        raw_header = self._with_export_prefix(raw_header, exported)
+        body_txt   = self._with_export_prefix(node.text.decode("utf8").strip(), exported)
+
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
         return [
@@ -680,6 +709,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 name=name,
                 fqn=self._make_fqn(name, parent),
                 signature=sig,
+                body=body_txt,           # <-- new
+                exported=exported,
             )
         ]
 
@@ -838,7 +869,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             holder_node if class_name is None else arrow_node,
             kind       = SymbolKind.FUNCTION,
             name       = name,
-            fqn        = self._join_fqn(self.package.virtual_path, class_name, name),
+            fqn        = self._make_fqn(name, parent),
             signature  = sig,
             modifiers  = mods,
             exported   = exported,
@@ -849,6 +880,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         is_const_decl = node.text.lstrip().startswith(b"const")
         base_kind = SymbolKind.CONSTANT if is_const_decl else SymbolKind.VARIABLE
 
+        body_txt = self._with_export_prefix(node.text.decode("utf8").strip(), exported)
+
         sym = self._make_symbol(
             node,
             kind=base_kind,
@@ -858,7 +891,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 lexical_type=lexical_kw,
             ),
             children=[],
+            body=body_txt,           # <-- new
+            exported=exported,
         )
+
+        children: list[ParsedSymbol] = []
 
         for ch in node.named_children:
             if ch.type != "variable_declarator":
@@ -884,6 +921,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             child = self._create_variable_symbol(ch, parent=parent, exported=exported)
             if child:
                 children.append(child)
+
+        sym.children.extend(children)
 
         return [
             sym
