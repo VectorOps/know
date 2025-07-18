@@ -142,6 +142,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             imports=[],
         )
 
+        symbols_before = len(self.parsed_file.symbols)
+
         # walk direct children only (top-level constructs)
         for child in root.children:
             nodes = self._process_node(child)
