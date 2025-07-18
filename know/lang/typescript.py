@@ -1112,27 +1112,27 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             else:
                 header += " { ... }"
 
-        return IND + header
+        if sym.kind == SymbolKind.EXPORT:
+            # one or more exported declarations
+            if sym.children:
+                lines = []
+                for ch in sym.children:
+                    child_summary = self.get_symbol_summary(
+                        ch,
+                        indent=indent,
+                        include_comments=include_comments,
+                        include_docs=include_docs,
+                    )
+                    # ensure ‘export ’ prefix on first line of each child summary
+                    first, *rest = child_summary.splitlines()
+                    lines.append(f"{IND}export {first.lstrip()}")
+                    for ln in rest:
+                        lines.append(f"{IND}{ln}")
+                return "\n".join(lines)
+            # fallback: bare export (e.g. `export * from "./foo"`)
+            header = sym.signature.raw if sym.signature else (sym.body or "export").strip()
+            return IND + header
 
-    elif sym.kind == SymbolKind.EXPORT:
-        # one or more exported declarations
-        if sym.children:
-            lines = []
-            for ch in sym.children:
-                child_summary = self.get_symbol_summary(
-                    ch,
-                    indent=indent,
-                    include_comments=include_comments,
-                    include_docs=include_docs,
-                )
-                # ensure ‘export ’ prefix on first line of each child summary
-                first, *rest = child_summary.splitlines()
-                lines.append(f"{IND}export {first.lstrip()}")
-                for ln in rest:
-                    lines.append(f"{IND}{ln}")
-            return "\n".join(lines)
-        # fallback: bare export (e.g. `export * from "./foo"`)
-        header = sym.signature.raw if sym.signature else (sym.body or "export").strip()
         return IND + header
 
     def get_import_summary(self, imp: ImportEdge) -> str:
