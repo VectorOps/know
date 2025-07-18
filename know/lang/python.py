@@ -3,7 +3,7 @@ import ast
 import re
 import logging
 from pathlib import Path
-from typing import Optional, cast
+from typing import Optional, cast, List
 from tree_sitter import Parser, Language
 import tree_sitter_python as tspython
 from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef
@@ -71,18 +71,14 @@ class PythonCodeParser(AbstractCodeParser):
         return ".".join([p for p in parts if p])
 
     def parse(self, cache: ProjectCache) -> ParsedFile:
-        # Read the file content as bytes
         file_path = os.path.join(self.project.settings.project_path, self.rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
-            source_bytes = file.read()
-        self.source_bytes = source_bytes                # cache for comment lookup
+            self.source_bytes = file.read()
 
-        # Parse the source code
-        tree = self.parser.parse(source_bytes)
+        tree = self.parser.parse(self.source_bytes)
         root_node = tree.root_node
 
-        # Create a new ParsedPackage instance
         self.package = ParsedPackage(
             language=ProgrammingLanguage.PYTHON,
             physical_path=self.rel_path,
@@ -99,15 +95,25 @@ class PythonCodeParser(AbstractCodeParser):
             path=self.rel_path,
             language=ProgrammingLanguage.PYTHON,
             docstring=file_docstring,
-            file_hash=compute_file_hash(file_path),
             last_updated=mtime,
             symbols=[],
             imports=[]
         )
 
         # Traverse the syntax tree and populate Parsed structures
-        for node in root_node.children:
-            self._process_node(node)
+        for child in root_node.children:
+            nodes = self._process_node(child)
+
+            if nodes:
+                self.parsed_file.symbols.extend(nodes)
+            else:
+                logger.warning(
+                    "Parser handled node but produced no symbols",
+                    path=self.parsed_file.path,
+                    node_type=child.type,
+                    line=child.start_point[0] + 1,
+                    raw=child.text.decode("utf8", errors="replace"),
+                )
 
         # Collect outgoing symbol-references (calls)
         self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
@@ -124,14 +130,16 @@ class PythonCodeParser(AbstractCodeParser):
             comment=self._get_preceding_comment(node),
         )
 
-    def _create_comment_symbol(self, node) -> ParsedSymbol:
-        return self._make_symbol(
-            node,
-            kind=SymbolKind.COMMENT,
-        )
+    def _handle_comment_symbol(self, node):
+        return [
+            self._make_symbol(
+                node,
+                kind=SymbolKind.COMMENT,
+            )
+        ]
 
     #  generic “literal” helper – used everywhere a fallback symbol is needed
-    def _create_literal_symbol(self, node) -> ParsedSymbol:
+    def _create_literal_symbol(self, node):
         return self._make_symbol(
             node,
             kind=SymbolKind.LITERAL,
@@ -140,28 +148,22 @@ class PythonCodeParser(AbstractCodeParser):
     def _handle_decorated_definition(
         self,
         node,
-        class_symbol: Optional[ParsedSymbol] = None,
+        parent=None,
     ):
-        """
-        Handle a `decorated_definition` wrapper.
-        Unwrap the enclosed `function_definition` or `class_definition`
-        while keeping the outer node’s text (so decorators are preserved
-        in `body` and available to `_build_function_signature`).
-        """
         # Find the real definition wrapped by the decorators
         inner = next(
             (c for c in node.children if c.type in ("function_definition", "async_function_definition", "class_definition")),
             None,
         )
-        if inner is None:  # corrupt / unexpected – skip
-            return
+        if inner is None:
+            return []
 
         if inner.type in ("function_definition", "async_function_definition"):
-            self._handle_function_definition(inner)
+            return self._handle_function_definition(inner, parent=parent)
         elif inner.type == "class_definition":
-            self._handle_class_definition(inner)
+            return self._handle_class_definition(inner, parent=parent)
 
-    def _handle_try_statement(self, node):
+    def _handle_try_statement(self, node, parent=None):
         parent_sym = self._make_symbol(
             node,
             kind=SymbolKind.TRYCATCH,
@@ -190,21 +192,11 @@ class PythonCodeParser(AbstractCodeParser):
                 if blk is not None:
                     parent_sym.children.append(_build_block_symbol(blk, "finally"))
 
-        self.parsed_file.symbols.append(parent_sym)
+        return [
+            parent_sym
+        ]
 
-    def _handle_import_statement(self, node):
-        """
-        Handle `import` / `from … import …` statements and populate alias & dot flags.
-
-        alias:
-            - For `import pkg as alias`       - "alias"
-            - For `from pkg import name as a` - "a"
-            - Otherwise                       - None
-
-        dot:
-            - True  when the statement is a relative import (leading dots)
-            - False otherwise
-        """
+    def _handle_import_statement(self, node, parent=None):
         raw_stmt = node.text.decode("utf8")
 
         # Defaults
@@ -262,70 +254,49 @@ class PythonCodeParser(AbstractCodeParser):
         )
         self.parsed_file.imports.append(import_edge)
 
-        self.parsed_file.symbols.append(
+        return [
             self._create_import_symbol(node, import_path, alias)
-        )
+        ]
 
     def _process_node(
         self,
         node,
-    ) -> None:
-        symbols_before  = len(self.parsed_file.symbols)
-
+        parent=None,
+    ) -> List[ParsedSymbol]:
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
-            self._handle_import_statement(node)
-
+            return self._handle_import_statement(node, parent=parent)
         elif node.type in ("function_definition", "async_function_definition"):
-            self._handle_function_definition(node)
-
+            return self._handle_function_definition(node, parent=parent)
         elif node.type == "class_definition":
-            self._handle_class_definition(node)
-
+            return self._handle_class_definition(node, parent=parent)
         elif node.type == "assignment":
-            self._handle_assignment(node)
-
+            return self._handle_assignment(node, parent=parent)
         elif node.type == "decorated_definition":
-            self._handle_decorated_definition(node)
-
+            return self._handle_decorated_definition(node, parent=parent)
         elif node.type == "expression_statement":
             assign_child = next((c for c in node.children if c.type == "assignment"), None)
             if assign_child is not None:
-                self._handle_assignment(assign_child)
+                return self._handle_assignment(assign_child, parent=parent)
             else:
-                self._handle_expression_statement(node)
-
+                return self._handle_expression_statement(node, parent=parent)
         elif node.type == "try_statement":
-            self._handle_try_statement(node)
-
+            return self._handle_try_statement(node, parent=parent)
         elif node.type == "pass_statement":
-            pass
-
+            return self._handle_literal_symbol(node, parent=parent)
         elif node.type == "comment":
-            self.parsed_file.symbols.append(self._create_comment_symbol(node))
+            return self._handle_comment_symbol(node, parent=parent)
 
         # Unknown / unhandled → debug-log (mirrors previous behaviour)
-        else:
-            self.parsed_file.symbols.append(self._create_literal_symbol(node))
-            logger.debug(
-                "Unknown node",
-                path=self.parsed_file.path,
-                type=node.type,
-                line=node.start_point[0] + 1,
-                byte_offset=node.start_byte,
-                raw=node.text.decode("utf8", errors="replace"),
-            )
+        logger.debug(
+            "Unknown node",
+            path=self.parsed_file.path,
+            type=node.type,
+            line=node.start_point[0] + 1,
+            byte_offset=node.start_byte,
+            raw=node.text.decode("utf8", errors="replace"),
+        )
 
-        if (
-            len(self.parsed_file.symbols) == symbols_before
-        ):
-            logger.warning(
-                "Parser handled node but produced no symbols",
-                path=self.parsed_file.path,
-                node_type=node.type,
-                line=node.start_point[0] + 1,
-                raw=node.text.decode("utf8", errors="replace"),
-            )
-
+        return self._handle_literal_symbol(node, parent=parent)
 
     def _clean_docstring(self, doc: str) -> str:
         return ('\n'.join((s.strip() for s in doc.split('\n')))).strip()
@@ -593,18 +564,14 @@ class PythonCodeParser(AbstractCodeParser):
         self,
         name: str,
         node,
-        class_name: Optional[str] = None,
+        parent: Optional[ParsedSymbol] = None,
     ) -> ParsedSymbol:
-        """
-        Create a ParsedSymbol instance for an assignment.
-
-        Constant-like ALL_CAPS identifiers are marked as CONSTANT, everything
-        else is recorded as VARIABLE.
-        """
         base_name = name.rsplit(".", 1)[-1]
         base_name = base_name.split("[", 1)[0]
         kind = SymbolKind.CONSTANT if self._is_constant_name(base_name) else SymbolKind.VARIABLE
-        fqn = self._join_fqn(self.package.virtual_path, class_name, name)
+        # Fully-qualified name: use parent’s FQN when available,
+        # otherwise fall back to <package-virtual-path>.<name>.
+        fqn = self._make_fqn(name, parent)
         wrapper = node.parent if node.parent and node.parent.type == "expression_statement" else node
         return self._make_symbol(
             node,
@@ -618,14 +585,8 @@ class PythonCodeParser(AbstractCodeParser):
     def _handle_assignment(
         self,
         node,
-        class_symbol: Optional[ParsedSymbol] = None,
+        parent=None,
     ):
-        """
-        Handle top-level or class-level assignments and create symbols.
-
-        Constant-like ALL_CAPS identifiers are marked as SymbolKind.CONSTANT,
-        everything else is SymbolKind.VARIABLE.
-        """
         target_node = node.child_by_field_name("left") or node.children[0]
 
         # accept both plain identifiers and dotted attribute targets
@@ -634,19 +595,19 @@ class PythonCodeParser(AbstractCodeParser):
         elif target_node.type in ("subscript", "subscription"):
             name = target_node.text.decode("utf8")
         else:
-            return        # unsupported → ignore
+            return []
 
         assign_symbol = self._create_assignment_symbol(
             name,
             node,
-            class_symbol.name if class_symbol else None,
+            parent=parent,
         )
-        if class_symbol:
-            class_symbol.children.append(assign_symbol)
-        else:
-            self.parsed_file.symbols.append(assign_symbol)
 
-    def _handle_function_definition(self, node):
+        return [
+            assign_symbol
+        ]
+
+    def _handle_function_definition(self, node, parent=None):
         # pick decorated wrapper when present
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
 
@@ -656,20 +617,21 @@ class PythonCodeParser(AbstractCodeParser):
 
         func_name = name_node.text.decode("utf8")
 
-        symbol = self._make_symbol(
-            wrapper,
-            kind=SymbolKind.FUNCTION,
-            name=func_name,
-            fqn=self._join_fqn(self.package.virtual_path, func_name),
-            body=wrapper.text.decode("utf8"),
-            modifiers=[Modifier.ASYNC] if self._is_async_function(wrapper) else [],
-            docstring=self._extract_docstring(node),
-            signature=self._build_function_signature(wrapper),
-            comment=self._get_preceding_comment(node),
-        )
-        self.parsed_file.symbols.append(symbol)
+        return [
+            self._make_symbol(
+                wrapper,
+                kind=SymbolKind.FUNCTION,
+                name=func_name,
+                fqn=self._join_fqn(self.package.virtual_path, func_name),
+                body=wrapper.text.decode("utf8"),
+                modifiers=[Modifier.ASYNC] if self._is_async_function(wrapper) else [],
+                docstring=self._extract_docstring(node),
+                signature=self._build_function_signature(wrapper),
+                comment=self._get_preceding_comment(node),
+            )
+        ]
 
-    def _handle_class_definition(self, node):
+    def _handle_class_definition(self, node, parent=None):
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Handle class definitions
@@ -683,6 +645,7 @@ class PythonCodeParser(AbstractCodeParser):
             docstring=self._extract_docstring(node),
             signature=self._build_class_signature(wrapper),
         )
+
         # Traverse class body to find methods and properties
         # Tree-sitter puts all class statements inside the single “block” child.
         block = next((c for c in node.children if c.type == "block"), None)
@@ -698,27 +661,29 @@ class PythonCodeParser(AbstractCodeParser):
 
             for node in nodes:
                 if node.type in ("function_definition", "async_function_definition"):
-                    method_symbol = self._create_function_symbol(node, class_name)
+                    method_symbol = self._create_function_symbol(node, class_name, parent=symbol)
                     symbol.children.append(method_symbol)
 
                 elif node.type == "decorated_definition":
                     inner = next((c for c in node.children
                                   if c.type in ("function_definition", "async_function_definition")), None)
                     if inner is not None:
-                        method_symbol = self._create_function_symbol(inner, class_name)
+                        method_symbol = self._create_function_symbol(inner, class_name, parent=symbol)
                         symbol.children.append(method_symbol)
 
                 elif node.type == "assignment":
-                    self._handle_assignment(node, symbol)
+                    symbol.children.extend(self._handle_assignment(node, parent=symbol))
 
                 elif node.type == "expression_statement":
                     assign_node = next((c for c in node.children if c.type == "assignment"), None)
                     if assign_node is not None:
-                        self._handle_assignment(assign_node, symbol)
+                        symbol.children.extend(self._handle_assignment(assign_node, parent=symbol))
 
-        self.parsed_file.symbols.append(symbol)
+        return [
+            symbol
+        ]
 
-    def _create_function_symbol(self, node, class_name: str) -> ParsedSymbol:
+    def _create_function_symbol(self, node, class_name: str, parent=None) -> ParsedSymbol:
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
@@ -735,29 +700,26 @@ class PythonCodeParser(AbstractCodeParser):
             comment=self._get_preceding_comment(node),
         )
 
-    def _handle_expression_statement(self, node) -> None:
-        """
-        Register a top-level expression (usually a function call) as a
-        SymbolKind.LITERAL.
-        """
+    def _handle_expression_statement(self, node, parent=None):
         expr: str = node.text.decode("utf8").strip()
-        if not expr:                       # ignore blank / trivial nodes
-            return
+        if not expr:
+            return []
 
         # crude name heuristic: token before first “(” or full expr
         name_tok = expr.split("(", 1)[0].strip().split()[0]
         name = name_tok or f"expr@{node.start_point[0]+1}"
 
-        sym = self._make_symbol(
-            node,
-            kind=SymbolKind.LITERAL,
-            name=name,
-            fqn=self._join_fqn(self.package.virtual_path, name),
-            body=expr,
-            visibility=Visibility.PUBLIC,
-            comment=self._get_preceding_comment(node),
-        )
-        self.parsed_file.symbols.append(sym)
+        return [
+            self._make_symbol(
+                node,
+                kind=SymbolKind.LITERAL,
+                name=name,
+                fqn=self._join_fqn(self.package.virtual_path, name),
+                body=expr,
+                visibility=Visibility.PUBLIC,
+                comment=self._get_preceding_comment(node),
+            )
+        ]
 
     # Module-resolution helper                                           #
     def _locate_module_path(self, import_path: str) -> Optional[Path]:
