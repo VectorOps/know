@@ -33,7 +33,7 @@ def test_typescript_parser_on_simple_file():
     parser      = TypeScriptCodeParser(project, "simple.tsx")
     parsed_file = parser.parse(cache)
 
-    pprint(parsed_file)
+    #pprint(parsed_file)
 
     # basic assertions
     assert parsed_file.path == "simple.tsx"

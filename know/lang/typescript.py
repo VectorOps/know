@@ -167,6 +167,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     # ------------ generic dispatcher ----------------------------------- #
     def _process_node(self, node, parent=None) -> List[ParsedSymbol]:
+        #print(node, node.text.decode("utf8"))
+
         if node.type == "import_statement":
             return self._handle_import(node, parent=parent)
         elif node.type == "export_statement":
@@ -773,8 +775,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         for ch in node.named_children:
             if ch.type in self._NAMESPACE_NODES:
-                self._handle_namespace(ch)
-                continue
+                # TODO: Check if there are any other nodes and warn if there are
+
+                return self._handle_namespace(ch)
 
             elif ch.type == "assignment_expression":
                 rhs = ch.child_by_field_name("right")
@@ -901,9 +904,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
             child = self._create_variable_symbol(ch, parent=parent, exported=exported)
             if child:
-                children.append(child)
-
-        sym.children.extend(children)
+                sym.children.append(child)
 
         return [
             sym
@@ -1000,6 +1001,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         line=ch.start_point[0] + 1,
                     )
 
+            # namespace exports are not module-level exports, drop the flag
+            for child in sym.children:
+                child.exported = False
         return [
             sym,
         ]
@@ -1018,7 +1022,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             header = sym.signature.raw
         elif sym.body:
             # fall back to first non-empty line of the symbol body
-            header = '\n'.join([f'{IND}{ln.strip()}' for ln in sym.body.splitlines()])
+            header = '\n'.join([f'{IND}{ln.rstrip()}' for ln in sym.body.splitlines()])
         else:
             header = sym.name
 

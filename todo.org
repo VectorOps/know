@@ -1,8 +1,8 @@
 #+title: Todo
 * [ ] Refactor symbols
-** [ ] Everything is a symbol
-** [ ] Update symbol upsert to work without key. If key is not set, then do matching by content.
-** [ ] Do insert/delete instead of update?
+** [X] Everything is a symbol
+** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
+** [X] Do insert/delete instead of update?
 ** [ ] Rename to Node
 * [X] Add public OpenAI API call definitions for existing tools
 * [X] Add language to symbol and use it find parser when generating a summary
@@ -14,15 +14,23 @@
 * [X] Create helper methods to return models from parser objects
 * [X] Fix _resolve_to_package_id to use data repository
 * [X] Figure out a way to call functions for language parsers after finishing parsing files
-* [ ] Get rid of symbol hashes for short (all?) symbols - just check the body.
-* [ ] Add a flag to mark symbols as exported instead of treating them as public
+* [X] Get rid of symbol hashes for short (all?) symbols - just check the body.
+* [X] Add a flag to mark symbols as exported instead of treating them as public
 * [ ] Add a inherits field to symbols
 * [ ] Language support
+** [-] Python
+*** [ ] Test module path resolution
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
-** [ ] TypeScript
-*** [ ] Interfaces
-*** [ ] CommonJS exports and imports
+*** [ ] Generics
+*** [ ] Test module path resolution
+** [-] TypeScript
+*** [X] Namespaces
+*** [ ] Modules
+*** [ ] Declare
+*** [ ] Generics
+*** [ ] Test module path resolution
+
 ** [ ] C#
 ** [ ] C
 ** [ ] Java

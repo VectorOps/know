@@ -29,9 +29,11 @@ class SymbolKind(str, Enum):
     TYPE_ALIAS = "type_alias"
     LITERAL = "literal"
     IMPORT = "import"
+    EXPORT = "export"
     TRYCATCH = "try_catch"
     COMMENT = "comment"
     ASSIGNMENT = "assignment"
+    NAMESPACE = "namespace"
 
 
 class Visibility(str, Enum):

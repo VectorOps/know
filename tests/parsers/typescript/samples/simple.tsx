@@ -57,6 +57,17 @@ const CONST = 42;
 let z = "foobar";
 export {z};
 
+namespace Validation {
+  export interface StringValidator {
+    isAcceptable(s: string): boolean;
+  }
+  const lettersRegexp = /^[A-Za-z]+$/;
+  const numberRegexp = /^[0-9]+$/;
+  const fn = () => {
+    alert("yes");
+  };
+}
+
 window.onload = () => {
     alert("yes");
 };
