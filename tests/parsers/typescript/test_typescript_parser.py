@@ -64,9 +64,6 @@ def test_typescript_parser_on_simple_file():
     }
     assert set(top_level.keys()) == expected_names
 
-    assert flat_map["fn"].kind   == SymbolKind.FUNCTION
-    assert flat_map["Test"].kind == SymbolKind.CLASS
-
     # ------------------------------------------------------------------
     # check symbols that live inside compound declarations / assignments
     # ------------------------------------------------------------------
@@ -77,6 +74,9 @@ def test_typescript_parser_on_simple_file():
             yield from _flatten(s.children)
 
     flat_map = {s.name: s for s in _flatten(parsed_file.symbols)}
+
+    assert flat_map["fn"].kind   == SymbolKind.FUNCTION
+    assert flat_map["Test"].kind == SymbolKind.CLASS
 
     # variable & function names introduced by the sample that were
     # previously untested
