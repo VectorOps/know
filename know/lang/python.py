@@ -636,7 +636,7 @@ class PythonCodeParser(AbstractCodeParser):
             wrapper,
             kind=SymbolKind.CLASS,
             name=class_name,
-            fqn=self._make_fqn(class_name),
+            fqn=self._make_fqn(class_name, parent),
             comment=self._get_preceding_comment(node),
             docstring=self._extract_docstring(node),
             signature=self._build_class_signature(wrapper),
@@ -679,7 +679,7 @@ class PythonCodeParser(AbstractCodeParser):
             symbol
         ]
 
-    def _create_function_symbol(self, node, class_name: str, parent=None) -> ParsedSymbol:
+    def _create_function_symbol(self, node, parent=None) -> ParsedSymbol:
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
@@ -710,7 +710,7 @@ class PythonCodeParser(AbstractCodeParser):
                 node,
                 kind=SymbolKind.LITERAL,
                 name=name,
-                fqn=self._join_fqn(self.package.virtual_path, name),
+                fqn=self._make_fqn(name, parent),
                 body=expr,
                 visibility=Visibility.PUBLIC,
                 comment=self._get_preceding_comment(node),

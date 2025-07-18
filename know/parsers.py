@@ -149,7 +149,23 @@ class AbstractCodeParser:
         """
         pass
 
-     # Helpers
+    # Helpers
+    def _make_fqn(self,
+                  name: str | None,
+                  parent: ParsedSymbol | None = None) -> str | None:
+        """
+        Build a fully–qualified name for *name*.
+
+        • when *parent* is given and already has a FQN → append to it;
+        • otherwise fall back to  <file-virtual-path>.<name>.
+        """
+        if name is None:
+            return None
+        if parent and parent.fqn:
+            return f"{parent.fqn}.{name}"
+        base = self.package.virtual_path if self.package else self._rel_to_virtual_path(self.rel_path)
+        return f"{base}.{name}" if base else name
+
     def _make_symbol(
         self,
         node,
