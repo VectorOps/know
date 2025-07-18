@@ -65,10 +65,6 @@ class PythonCodeParser(AbstractCodeParser):
             parts = p.with_suffix("").parts       # strip ".py"
         return ".".join(parts)
 
-    @staticmethod
-    def _join_fqn(*parts: Optional[str]) -> str:
-        """Join non-empty parts with a dot, skipping Nones / empty strings."""
-        return ".".join([p for p in parts if p])
 
     def parse(self, cache: ProjectCache) -> ParsedFile:
         file_path = os.path.join(self.project.settings.project_path, self.rel_path)
@@ -130,7 +126,7 @@ class PythonCodeParser(AbstractCodeParser):
             comment=self._get_preceding_comment(node),
         )
 
-    def _handle_comment_symbol(self, node):
+    def _handle_comment_symbol(self, node, parent=None):
         return [
             self._make_symbol(
                 node,
@@ -282,7 +278,7 @@ class PythonCodeParser(AbstractCodeParser):
         elif node.type == "try_statement":
             return self._handle_try_statement(node, parent=parent)
         elif node.type == "pass_statement":
-            return self._handle_literal_symbol(node, parent=parent)
+            return [self._create_literal_symbol(node, parent=parent)]
         elif node.type == "comment":
             return self._handle_comment_symbol(node, parent=parent)
 
@@ -296,7 +292,7 @@ class PythonCodeParser(AbstractCodeParser):
             raw=node.text.decode("utf8", errors="replace"),
         )
 
-        return self._handle_literal_symbol(node, parent=parent)
+        return [self._create_literal_symbol(node, parent=parent)]
 
     def _clean_docstring(self, doc: str) -> str:
         return ('\n'.join((s.strip() for s in doc.split('\n')))).strip()
@@ -613,7 +609,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         name_node = node.child_by_field_name("name")
         if name_node is None:
-            return                       # malformed → skip
+            return []
 
         func_name = name_node.text.decode("utf8")
 
@@ -622,7 +618,7 @@ class PythonCodeParser(AbstractCodeParser):
                 wrapper,
                 kind=SymbolKind.FUNCTION,
                 name=func_name,
-                fqn=self._join_fqn(self.package.virtual_path, func_name),
+                fqn=self._make_fqn(func_name),
                 body=wrapper.text.decode("utf8"),
                 modifiers=[Modifier.ASYNC] if self._is_async_function(wrapper) else [],
                 docstring=self._extract_docstring(node),
@@ -640,7 +636,7 @@ class PythonCodeParser(AbstractCodeParser):
             wrapper,
             kind=SymbolKind.CLASS,
             name=class_name,
-            fqn=self._join_fqn(self.package.virtual_path, class_name),
+            fqn=self._make_fqn(class_name),
             comment=self._get_preceding_comment(node),
             docstring=self._extract_docstring(node),
             signature=self._build_class_signature(wrapper),
@@ -661,14 +657,14 @@ class PythonCodeParser(AbstractCodeParser):
 
             for node in nodes:
                 if node.type in ("function_definition", "async_function_definition"):
-                    method_symbol = self._create_function_symbol(node, class_name, parent=symbol)
+                    method_symbol = self._create_function_symbol(node, parent=symbol)
                     symbol.children.append(method_symbol)
 
                 elif node.type == "decorated_definition":
                     inner = next((c for c in node.children
                                   if c.type in ("function_definition", "async_function_definition")), None)
                     if inner is not None:
-                        method_symbol = self._create_function_symbol(inner, class_name, parent=symbol)
+                        method_symbol = self._create_function_symbol(inner, parent=symbol)
                         symbol.children.append(method_symbol)
 
                 elif node.type == "assignment":
@@ -692,7 +688,7 @@ class PythonCodeParser(AbstractCodeParser):
             wrapper,
             kind=SymbolKind.METHOD,
             name=method_name,
-            fqn=self._join_fqn(self.package.virtual_path, class_name, method_name),
+            fqn=self._make_fqn(method_name, parent),
             visibility=self._infer_visibility(method_name),
             modifiers=[Modifier.ASYNC] if self._is_async_function(node) else [],
             docstring=self._extract_docstring(node),
