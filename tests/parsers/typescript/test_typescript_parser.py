@@ -33,7 +33,7 @@ def test_typescript_parser_on_simple_file():
     parser      = TypeScriptCodeParser(project, "simple.tsx")
     parsed_file = parser.parse(cache)
 
-    #pprint(parsed_file)
+    pprint(parsed_file)
 
     # basic assertions
     assert parsed_file.path == "simple.tsx"
@@ -56,16 +56,16 @@ def test_typescript_parser_on_simple_file():
     top_level = _to_map(parsed_file.symbols)
 
     expected_names = {
-        "fn", "Test",
         "LabeledValue",       # interface
         "Base",               # abstract class
         "Point",              # type-alias
         "Direction",          # enum
+        "Validation",         # namespace
     }
     assert set(top_level.keys()) == expected_names
 
-    assert top_level["fn"].kind   == SymbolKind.FUNCTION
-    assert top_level["Test"].kind == SymbolKind.CLASS
+    assert flat_map["fn"].kind   == SymbolKind.FUNCTION
+    assert flat_map["Test"].kind == SymbolKind.CLASS
 
     # ------------------------------------------------------------------
     # check symbols that live inside compound declarations / assignments
@@ -86,7 +86,8 @@ def test_typescript_parser_on_simple_file():
         "a1", "b1", "c1",        # let-declaration
         "e2", "f",               # var-declaration
         "a",                     # async arrow-fn
-        "foo", "method", "value" # class members
+        "foo", "method", "value",# class members
+        "fn", "Test",            # moved inside `export`
     }
     assert nested_expected.issubset(flat_map.keys())
 
@@ -104,6 +105,6 @@ def test_typescript_parser_on_simple_file():
     assert flat_map["Base"].kind == SymbolKind.CLASS
 
     # class children (method + possible variable)
-    test_cls_children = _to_map(top_level["Test"].children)
+    test_cls_children = _to_map(flat_map["Test"].children)
     assert "method" in test_cls_children
     assert test_cls_children["method"].kind == SymbolKind.METHOD
