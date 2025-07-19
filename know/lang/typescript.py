@@ -22,7 +22,7 @@ from know.logger import logger
 # TODO: interface support
 
 # ---------------------------------------------------------------------- #
-TS_LANGUAGE = Language(tsts.language_typescript())
+TS_LANGUAGE = Language(tsts.language_tsx())
 _parser: Parser | None = None
 def _get_parser() -> Parser:
     global _parser
