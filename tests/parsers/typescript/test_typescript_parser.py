@@ -33,8 +33,8 @@ def test_typescript_parser_on_simple_file():
     parser      = TypeScriptCodeParser(project, "simple.tsx")
     parsed_file = parser.parse(cache)
 
-    pprint(parsed_file)
-    raise
+    #pprint(parsed_file)
+    #raise
 
     # basic assertions
     assert parsed_file.path == "simple.tsx"
@@ -62,6 +62,9 @@ def test_typescript_parser_on_simple_file():
         "Point",              # type-alias
         "Direction",          # enum
         "Validation",         # namespace
+        "GenericIdentityFn",
+        "GenericNumber",
+        "identity"
     }
     assert set(top_level.keys()) == expected_names
 

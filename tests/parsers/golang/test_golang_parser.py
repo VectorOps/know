@@ -104,6 +104,8 @@ def test_golang_parser_on_sample_file():
         "m",         # method attached to S
         "dummy",     # function
         "main",      # function
+        "Number",
+        "SumIntsOrFloats",
     }
     assert set(symbols.keys()) == expected
 
