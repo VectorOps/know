@@ -868,6 +868,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                     indent + 4,
                     include_comments=include_comments,
                     include_docs=include_docs,
+                    child_stack=child_stack,
                 )
                 if child_summary.strip():
                     lines.append(child_summary)
@@ -887,7 +888,12 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                 if only_children and child not in only_children:
                     continue
 
-                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+                lines.append(self.get_symbol_summary(
+                    child,
+                    indent + 4,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                    child_stack=child_stack))
 
         # (Variables / constants etc. – docstring only)
         elif include_docs and sym.docstring:

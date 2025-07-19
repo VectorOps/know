@@ -1041,9 +1041,11 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                 self.get_symbol_summary(ch,
                                         indent=0,
                                         include_comments=include_comments,
-                                        include_docs=include_docs)
+                                        include_docs=include_docs,
+                                        child_stack=child_stack,
+                                        )
                 for ch in sym.children
-                if not only_children or ch.id in only_children
+                if not only_children or ch in only_children
             ]
 
             if header:
@@ -1060,7 +1062,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             # assignment that owns child symbols (e.g. arrow-functions)
             lines = []
             for ch in sym.children:
-                if only_children and ch.id not in only_children:
+                if only_children and ch not in only_children:
                     continue
 
                 lines.append(
@@ -1069,6 +1071,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                         indent=indent,
                         include_comments=include_comments,
                         include_docs=include_docs,
+                        child_stack=child_stack,
                     ) + ";"
                 )
             return "\n".join(lines)
@@ -1081,7 +1084,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
             # recurse over children
             for ch in sym.children or []:
-                if only_children and ch.id not in only_children:
+                if only_children and ch not in only_children:
                     continue
 
                 child_summary = self.get_symbol_summary(
@@ -1089,6 +1092,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                     indent=indent + 2,
                     include_comments=include_comments,
                     include_docs=include_docs,
+                    child_stack=child_stack,
                 )
 
                 # add required separators
@@ -1109,7 +1113,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
             lines = [IND + header]
             for ch in sym.children or []:
-                if only_children and ch.id not in only_children:
+                if only_children and ch not in only_children:
                     continue
 
                 lines.append(
@@ -1118,6 +1122,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                         indent=indent + 2,
                         include_comments=include_comments,
                         include_docs=include_docs,
+                        child_stack=child_stack,
                     )
                 )
             lines.append(IND + "}")
@@ -1135,7 +1140,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             if sym.children:
                 lines = []
                 for ch in sym.children:
-                    if only_children and ch.id not in only_children:
+                    if only_children and ch not in only_children:
                         continue
 
                     child_summary = self.get_symbol_summary(
@@ -1143,6 +1148,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                         indent=indent,
                         include_comments=include_comments,
                         include_docs=include_docs,
+                        child_stack=child_stack,
                     )
                     # ensure ‘export ’ prefix on first line of each child summary
                     first, *rest = child_summary.splitlines()

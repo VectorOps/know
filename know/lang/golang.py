@@ -1026,7 +1026,13 @@ class GolangLanguageHelper(AbstractLanguageHelper):
                 if only_children and child not in only_children:
                     continue
 
-                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+                lines.append(self.get_symbol_summary(
+                    child,
+                    indent + 4,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                    child_stack=child_stack,
+                ))
 
             lines.append(f"{IND}}}")
 
@@ -1034,7 +1040,13 @@ class GolangLanguageHelper(AbstractLanguageHelper):
                 if only_children and child not in only_children:
                     continue
 
-                lines.append(self.get_symbol_summary(child, indent, include_comments=include_comments, include_docs=include_docs))
+                lines.append(self.get_symbol_summary(
+                    child,
+                    indent,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                    child_stack=child_stack,
+                ))
             return "\n".join(lines)
         elif sym.kind == SymbolKind.INTERFACE:
             if sym.children:
@@ -1045,7 +1057,13 @@ class GolangLanguageHelper(AbstractLanguageHelper):
                     if only_children and child not in only_children:
                         continue
 
-                    lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+                    lines.append(self.get_symbol_summary(
+                        child,
+                        indent + 4,
+                        include_comments=include_comments,
+                        include_docs=include_docs,
+                        child_stack=child_stack,
+                    ))
 
                 lines.append(f"{IND}}}")
                 return "\n".join(lines)
