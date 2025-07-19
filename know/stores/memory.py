@@ -1,4 +1,4 @@
-import re      # for tokenisation
+import re      # for tokenisatio/
 import threading
 from typing import Optional, Dict, Any, List, TypeVar, Generic
 from know.models import (
@@ -23,6 +23,7 @@ from know.data import (
     SymbolFilter,
     ImportEdgeFilter,
     include_direct_descendants,
+    resolve_symbol_hierarchy,
 )
 from know.data import SymbolRefFilter
 from dataclasses import dataclass, field
@@ -195,6 +196,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
     RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
     RRF_CODE_WEIGHT: float = 0.7
     RRF_FTS_WEIGHT:  float = 0.3
+
     # minimum cosine similarity for an embedding to participate in ranking
     EMBEDDING_SIM_THRESHOLD: float = 0.4
     EMBEDDING_TOP_K: int = 1000   # how many neighbours to ask FAISS for
@@ -248,7 +250,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         syms = super().get_list_by_ids(symbol_ids)
-        SymbolMetadata.resolve_symbol_hierarchy(syms)
+        resolve_symbol_hierarchy(syms)
         return syms
 
     def get_list(self, flt: SymbolFilter) -> list[SymbolMetadata]:
@@ -260,10 +262,22 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             syms = [
                 s for s in self._items.values()
                 if (not flt.parent_ids or s.parent_symbol_id in flt.parent_ids)
+                and (not flt.repo_id    or s.repo_id == flt.repo_id)
                 and (not flt.file_id    or s.file_id == flt.file_id)
                 and (not flt.package_id or s.package_id == flt.package_id)
+                and (
+                    flt.has_embedding is None
+                    or (flt.has_embedding is True  and s.embedding_code_vec is not None)
+                    or (flt.has_embedding is False and s.embedding_code_vec is None)
+                )
             ]
-        SymbolMetadata.resolve_symbol_hierarchy(syms)
+        resolve_symbol_hierarchy(syms)
+        # Deterministic order before pagination
+        syms.sort(key=lambda s: s.name or "")
+        # ----- pagination -----
+        offset = flt.offset or 0
+        limit  = flt.limit  or len(syms)
+        syms   = syms[offset : offset + limit]
         return syms
 
     @staticmethod
@@ -354,7 +368,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
             # embedding ranks
             if has_embedding:
-                qvec = self._norm(query.embedding_query)  # shape (dim,)
+                qvec = self._norm(query.embedding_query)
                 id_candidates = {c.id for c in candidates}
                 sims: list[tuple[SymbolMetadata, float]] = []
                 for sid in id_candidates:
@@ -365,7 +379,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
                     if sim < self.EMBEDDING_SIM_THRESHOLD:
                         continue
                     sims.append((self._items[sid], sim))
-                sims.sort(key=lambda p: p[1], reverse=True)               # best first
+                sims.sort(key=lambda p: p[1], reverse=True)
                 sims = sims[: self.EMBEDDING_TOP_K]
                 code_rank = {s.id: i + 1 for i, (s, _) in enumerate(sims)}
 
@@ -374,9 +388,9 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             for s in candidates:
                 score = 0.0
                 if s.id in code_rank:
-                    score += 1.0 / (self.RRF_K + code_rank[s.id])
+                    score += self.RRF_CODE_WEIGHT / (self.RRF_K + code_rank[s.id])
                 if s.id in fts_rank:
-                    score += 1.0 / (self.RRF_K + fts_rank[s.id])
+                    score += self.RRF_FTS_WEIGHT / (self.RRF_K + fts_rank[s.id])
                 fused_score[s.id] = score
 
             if has_fts or has_embedding:
@@ -390,6 +404,9 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
                 candidates = ranked_candidates
             else:
                 candidates.sort(key=lambda s: s.name or "")
+
+            from devtools import pprint
+            pprint(candidates)
 
             results = candidates
 
