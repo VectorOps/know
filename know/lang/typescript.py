@@ -39,7 +39,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
     _GENERIC_STATEMENT_NODES: set[str] = {
         # module / namespace level
         "ambient_declaration",
-        "import_equals_declaration",
         "declare_statement",
 
         # decorators that can appear at top level
@@ -102,6 +101,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _process_node(self, node, parent=None) -> List[ParsedSymbol]:
         if node.type == "import_statement":
             return self._handle_import(node, parent=parent)
+        elif node.type == "import_equals_declaration":
+            return self._handle_import_equals(node, parent=parent)
         elif node.type == "export_statement":
             return self._handle_export(node, parent=parent)
         elif node.type == "comment":
@@ -150,6 +151,26 @@ class TypeScriptCodeParser(AbstractCodeParser):
         header = node.text.split(b"{", 1)[0]    # ignore body
         return (b" " + keyword.encode() + b" ") in header \
             or header.lstrip().startswith(keyword.encode() + b" ")
+
+    def _is_commonjs_export(self, lhs) -> tuple[bool, str | None]:
+        """
+        Return (True, <member-name|None>) when *lhs* points to a Common-JS
+        export (`module.exports …` or `exports.foo …`).
+        The member-name is returned for `exports.foo`; `None` means default.
+        """
+        node, prop_name = lhs, None
+        while node and node.type == "member_expression":
+            prop = node.child_by_field_name("property")
+            obj  = node.child_by_field_name("object")
+            if prop and prop.type in ("property_identifier", "identifier"):
+                prop_name = prop.text.decode("utf8")
+            if obj and obj.type == "identifier":
+                if obj.text == b"exports":
+                    return True, prop_name            # exports / exports.foo
+                if obj.text == b"module" and prop and prop.text == b"exports":
+                    return True, None                 # module.exports
+            node = obj
+        return False, None
 
     # ------------------------------------------------------------------ #
     def _handle_generic_statement(self, node, parent=None) -> None:
@@ -769,7 +790,32 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 return self._handle_namespace(ch)
 
             elif ch.type == "assignment_expression":
+                lhs = ch.child_by_field_name("left")
                 rhs = ch.child_by_field_name("right")
+
+                # CommonJS export?
+                is_exp, member = self._is_commonjs_export(lhs)
+                if is_exp:
+                    export_sym = self._make_symbol(
+                        ch,
+                        kind=SymbolKind.EXPORT,
+                        visibility=Visibility.PUBLIC,
+                        signature=SymbolSignature(raw="module.exports" if member is None else f"exports.{member}",
+                                                 lexical_type="export"),
+                        exported=True,
+                        children=[],
+                    )
+                    # recurse into RHS declaration if relevant
+                    if rhs and rhs.type in ("arrow_function", "function", "function_declaration",
+                                            "class_declaration", "abstract_class_declaration"):
+                        export_sym.children.extend(self._process_node(rhs, parent=export_sym))
+                    # mark already-known symbol exported
+                    if member:
+                        for s in self.parsed_file.symbols:
+                            if s.name == member:
+                                s.exported = True
+                    children.append(export_sym)
+                    continue
 
                 # arrow function  (a = (...) => { … })
                 if rhs is not None:
@@ -779,8 +825,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
                             children.append(sym)
                         continue
 
-                elif rhs.type == "call_expression":
-                    self._collect_require_calls(ch)
+                elif rhs and rhs.type == "call_expression":
+                    alias_node = lhs.child_by_field_name("identifier") or \
+                                 next((c for c in lhs.children if c.type == "identifier"), None)
+                    alias = alias_node.text.decode("utf8") if alias_node else None
+                    self._collect_require_calls(rhs, alias=alias)
 
                 # simple assignment – create variable / constant symbol
                 sym = self._create_variable_symbol(ch, parent=parent)
@@ -891,7 +940,17 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         sym.children.append(child)
                     continue
                 elif value_node.type == "call_expression":
-                    self._collect_require_calls(ch)
+                    alias = None
+                    ident = next(
+                        (c for c in ch.children
+                         if c.type in ("identifier", "property_identifier")),
+                        None,
+                    )
+                    if ident is None:
+                        ident = self._find_first_identifier(ch)
+                    if ident is not None:
+                        alias = ident.text.decode("utf8")
+                    self._collect_require_calls(value_node, alias=alias)
 
             child = self._create_variable_symbol(ch, parent=parent, exported=exported)
             if child:
@@ -913,37 +972,28 @@ class TypeScriptCodeParser(AbstractCodeParser):
             visibility=Visibility.PUBLIC,
         )
 
-    def _collect_require_calls(self, node):
-        if node.type == "call_expression":
-            fn = node.child_by_field_name("function")
-            if fn and fn.type == "identifier" and fn.text == b"require":
-                arg_node = next(
-                    (c for c in node.child_by_field_name("arguments").children
-                     if c.type == "string"), None)
-                if arg_node:
-                    module = arg_node.text.decode("utf8").strip("\"'")
+    def _collect_require_calls(self, node, alias: str | None = None):
+        if node.type != "call_expression":
+            return
+        fn = node.child_by_field_name("function")
+        if fn and fn.type == "identifier" and fn.text == b"require":
+            arg_node = next(
+                (c for c in node.child_by_field_name("arguments").children
+                 if c.type == "string"), None)
+            if arg_node:
+                module = arg_node.text.decode("utf8").strip("\"'")
 
-                    phys, virt, ext = self._resolve_module(module)
-                    self.parsed_file.imports.append(
-                        ParsedImportEdge(
-                            physical_path=phys,
-                            virtual_path=virt,
-                            alias=None,
-                            dot=False,
-                            external=ext,
-                            raw=node.text.decode("utf8"),
-                        )
+                phys, virt, ext = self._resolve_module(module)
+                self.parsed_file.imports.append(
+                    ParsedImportEdge(
+                        physical_path=phys,
+                        virtual_path=virt,
+                        alias=alias,
+                        dot=False,
+                        external=ext,
+                        raw=node.text.decode("utf8"),
                     )
-
-                    return self._make_symbol(
-                        node,
-                        kind=SymbolKind.IMPORT,
-                        name=virt,
-                        fqn=self._join_fqn(self.package.virtual_path, virt),
-                        visibility=Visibility.PUBLIC,
-                    )
-
-        return None
+                )
 
     def _handle_namespace(self, node, parent=None, exported: bool = False):
         name_node = node.child_by_field_name("name") or \
@@ -983,7 +1033,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     logger.warning(
                         "TS parser: unhandled namespace child node",
                         path=self.rel_path,
-                        namespace=".".join(self._ns_stack + [name]),
+                        namespace=name,
                         node_type=ch.type,
                         line=ch.start_point[0] + 1,
                     )
@@ -994,6 +1044,31 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return [
             sym,
         ]
+
+    def _handle_import_equals(self, node, parent=None):
+        alias_node = node.child_by_field_name("name")
+        req_node   = node.child_by_field_name("module")    # external_module_reference
+        str_node   = next((c for c in req_node.children if c.type == "string"), None) if req_node else None
+        if not (alias_node and str_node):
+            return []
+
+        alias  = alias_node.text.decode("utf8")
+        module = str_node.text.decode("utf8").strip("\"'")
+        phys, virt, ext = self._resolve_module(module)
+
+        self.parsed_file.imports.append(
+            ParsedImportEdge(
+                physical_path=phys,
+                virtual_path=virt,
+                alias=alias,
+                dot=False,
+                external=ext,
+                raw=node.text.decode("utf8"),
+            )
+        )
+        return [self._make_symbol(node,
+                                  kind=SymbolKind.IMPORT,
+                                  visibility=Visibility.PUBLIC)]
 
     def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
         """
