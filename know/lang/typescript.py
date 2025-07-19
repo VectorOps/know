@@ -806,14 +806,33 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         children=[],
                     )
                     # recurse into RHS declaration if relevant
-                    if rhs and rhs.type in ("arrow_function", "function", "function_declaration",
-                                            "class_declaration", "abstract_class_declaration"):
-                        export_sym.children.extend(self._process_node(rhs, parent=export_sym))
+                    if rhs:
+                        if rhs.type == "arrow_function":
+                            child = self._handle_arrow_function(
+                                ch,
+                                rhs,
+                                parent=export_sym,
+                                exported=True,
+                            )
+                            if child:
+                                export_sym.children.append(child)
+
+                        elif rhs.type in ("function", "function_declaration"):
+                            export_sym.children.extend(
+                                self._handle_function(rhs, parent=export_sym, exported=True)
+                            )
+
+                        elif rhs.type in ("class_declaration", "abstract_class_declaration"):
+                            export_sym.children.extend(
+                                self._handle_class(rhs, parent=export_sym, exported=True)
+                            )
+
                     # mark already-known symbol exported
                     if member:
                         for s in self.parsed_file.symbols:
                             if s.name == member:
                                 s.exported = True
+
                     children.append(export_sym)
                     continue
 
@@ -857,26 +876,52 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 )
         ]
 
+    # ──────────────────────────────────────────────────────────────────
+    def _resolve_arrow_function_name(self, holder_node) -> Optional[str]:
+        """
+        Best-effort extraction of an arrow-function name.
+        Order of precedence:
+        1.  child field ``name`` (when present);
+        2.  the left-hand side of an assignment / declarator;
+        3.  first identifier/property_identifier in *holder_node*’s subtree.
+        Returns ``None`` when no sensible name can be found.
+        """
+        # direct “name” field (e.g. variable_declarator name)
+        name_node = holder_node.child_by_field_name("name")
+        if name_node:
+            return name_node.text.decode("utf8").split(".")[-1]
+
+        # assignment / declarator – inspect the LHS
+        lhs_node = holder_node.child_by_field_name("left") \
+                   or holder_node.child_by_field_name("name")
+        if lhs_node:
+            lhs_txt = lhs_node.text.decode("utf8")
+            if lhs_txt:
+                return lhs_txt.split(".")[-1]
+
+        # fallback – first identifier in the whole subtree
+        ident_node = next((c for c in holder_node.children
+                           if c.type in ("identifier", "property_identifier")), None)
+        if ident_node is None:
+            ident_node = self._find_first_identifier(holder_node)
+
+        return (ident_node.text.decode("utf8").split(".")[-1]
+                if ident_node else None)
+
     def _handle_arrow_function(
         self,
         holder_node,
         arrow_node,
         parent=None,
-        class_name: str | None = None,
-        exported=False,
-    ) -> ParsedSymbol:
+        exported: bool = False,
+    ) -> Optional[ParsedSymbol]:
         """
         Create a ParsedSymbol for one arrow-function found inside *holder_node*.
         """
-        # determine the function name
-        name_node = holder_node.child_by_field_name("name")  \
-                    or next((c for c in holder_node.children
-                             if c.type in ("identifier", "property_identifier")), None) \
-                    or self._find_first_identifier(holder_node)
-        if name_node is None:
-            return                                            # give up – anonymous
-
-        name = name_node.text.decode("utf8").split(".")[-1]
+        # ---------- name resolution -----------------------------------
+        name = self._resolve_arrow_function_name(holder_node)
+        if not name:
+            return None
 
         # build signature
         sig_base = self._build_signature(arrow_node, name, prefix="")
@@ -896,7 +941,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             mods.append(Modifier.GENERIC)
 
         return self._make_symbol(
-            holder_node if class_name is None else arrow_node,
+            arrow_node,
             kind       = SymbolKind.FUNCTION,
             name       = name,
             fqn        = self._make_fqn(name, parent),
