@@ -68,44 +68,6 @@ class GolangCodeParser(AbstractCodeParser):
         """Join non-empty parts with a dot, skipping Nones / empty strings."""
         return ".".join([p for p in parts if p])
 
-    # go.mod handling
-    def _load_module_path(self, cache: ProjectCache) -> None:
-        """
-        Look up or cache the project's Go module path (first `module ...` in go.mod).
-        Uses project-wide cache for performance.
-        """
-        project_path = self.project.settings.project_path
-
-        cache_key = f"go.mod.module_path::{project_path}"
-        if cache is not None:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                self.module_path = cached
-                return cached
-
-        module_path = None
-        gomod = os.path.join(project_path, "go.mod")
-        if not os.path.isfile(gomod):
-            if cache is not None:
-                cache.set(cache_key, None)
-            return None
-        try:
-            with open(gomod, "r", encoding="utf8") as fh:
-                for ln in fh:
-                    ln = ln.strip()
-                    if ln.startswith("module"):
-                        parts = ln.split()
-                        if len(parts) >= 2:
-                            module_path = parts[1]
-                        break
-        except OSError:
-            pass
-        if cache is not None:
-            cache.set(cache_key, module_path)
-
-        self.module_path = module_path
-        return module_path
-
     def parse(self, cache: ProjectCache) -> ParsedFile:
         """
         Parse a Go source file, populating ParsedFile, ParsedSymbols, etc.
@@ -147,8 +109,19 @@ class GolangCodeParser(AbstractCodeParser):
         )
 
         # Visit all top-level nodes (imports, functions, types, vars, etc)
-        for node in root_node.children:
-            self._process_node(node)
+        for child in root_node.children:
+            nodes = self._process_node(child)
+
+            if nodes:
+                self.parsed_file.symbols.extend(nodes)
+            else:
+                logger.warning(
+                    "Parser handled node but produced no symbols",
+                    path=self.parsed_file.path,
+                    node_type=child.type,
+                    line=child.start_point[0] + 1,
+                    raw=child.text.decode("utf8", errors="replace"),
+                )
 
         # Collect outgoing symbol-references (calls & types)
         self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
@@ -160,59 +133,72 @@ class GolangCodeParser(AbstractCodeParser):
     def _process_node(
         self,
         node,
-    ) -> None:
-        # Always create (at least) one symbol for every top-level node
-        symbols_before  = len(self.parsed_file.symbols)
-
+    ) -> List[ParsedSymbol]:
         if node.type == "comment":
-            # single-line or block comment
-            self.parsed_file.symbols.append(self._make_symbol(node, kind=SymbolKind.COMMENT))
-
+            return [self._make_symbol(node, kind=SymbolKind.COMMENT)]
         elif node.type == "package_clause":
-            # treat the `package …` line as a MODULE symbol
-            self.parsed_file.symbols.append(self._make_symbol(node, kind=SymbolKind.MODULE))
-
+            return [self._make_symbol(node, kind=SymbolKind.MODULE)]
         elif node.type == "import_declaration":
-            # keep existing import handling
             self._handle_import_declaration(node)
-            # additionally register a symbol that represents the import stanza
-            self.parsed_file.symbols.append(self._make_symbol(node, kind=SymbolKind.IMPORT))
-
+            return [self._make_symbol(node, kind=SymbolKind.IMPORT)]
         elif node.type == "function_declaration":
-            self._handle_function_declaration(node)
-
+            return self._handle_function_declaration(node)
         elif node.type == "method_declaration":
-            self._handle_method_declaration(node)
-
+            return self._handle_method_declaration(node)
         elif node.type == "type_declaration":
-            self._handle_type_declaration(node)
-
+            return self._handle_type_declaration(node)
         elif node.type == "const_declaration":
-            self._handle_const_declaration(node)
-
+            return self._handle_const_declaration(node)
         elif node.type == "var_declaration":
-            self._handle_var_declaration(node)
+            return self._handle_var_declaration(node)
 
-        else:
-            logger.warning(
-                "Unknown Go node – stored as literal symbol",
-                path=self.parsed_file.path,
-                type=node.type,
-                line=node.start_point[0] + 1,
-                byte_offset=node.start_byte,
-                raw=node.text.decode("utf8", errors="replace"),
-            )
-            self.parsed_file.symbols.append(self._make_symbol(node, kind=SymbolKind.LITERAL))
+        logger.warning(
+            "Unknown Go node – stored as literal symbol",
+            path=self.parsed_file.path,
+            type=node.type,
+            line=node.start_point[0] + 1,
+            byte_offset=node.start_byte,
+            raw=node.text.decode("utf8", errors="replace"),
+        )
+        return [self._make_symbol(node, kind=SymbolKind.LITERAL)]
 
-        # warn if the node handler produced neither symbols
-        if len(self.parsed_file.symbols) == symbols_before:
-            logger.warning(
-                "Parser handled node but produced no symbols",
-                path=self.parsed_file.path,
-                node_type=node.type,
-                line=node.start_point[0] + 1,
-                raw=node.text.decode("utf8", errors="replace"),
-            )
+    # go.mod handling
+    def _load_module_path(self, cache: ProjectCache) -> None:
+        """
+        Look up or cache the project's Go module path (first `module ...` in go.mod).
+        Uses project-wide cache for performance.
+        """
+        project_path = self.project.settings.project_path
+
+        cache_key = f"go.mod.module_path::{project_path}"
+        if cache is not None:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                self.module_path = cached
+                return cached
+
+        module_path = None
+        gomod = os.path.join(project_path, "go.mod")
+        if not os.path.isfile(gomod):
+            if cache is not None:
+                cache.set(cache_key, None)
+            return None
+        try:
+            with open(gomod, "r", encoding="utf8") as fh:
+                for ln in fh:
+                    ln = ln.strip()
+                    if ln.startswith("module"):
+                        parts = ln.split()
+                        if len(parts) >= 2:
+                            module_path = parts[1]
+                        break
+        except OSError:
+            pass
+        if cache is not None:
+            cache.set(cache_key, module_path)
+
+        self.module_path = module_path
+        return module_path
 
     def _extract_package_name(self, root_node) -> Optional[str]:
         """
@@ -510,22 +496,15 @@ class GolangCodeParser(AbstractCodeParser):
     def _handle_function_declaration(
         self,
         node,
-    ) -> None:
-        """
-        Translate a `function_declaration` node into a ParsedSymbol
-        and append it to `parsed_file.symbols`.
-        """
-        # --- locate function identifier ------------------------------------
+    ) -> List[ParsedSymbol]:
         ident_node = next((c for c in node.children if c.type == "identifier"), None)
-        if ident_node is None:       # malformed ‒ ignore
-            return
+        if ident_node is None:
+            return []
 
         name: str = ident_node.text.decode("utf8")
 
-        # Extract Go doc-comment immediately above the declaration
         docstring = self._extract_preceding_comment(node)
 
-        # --- build signature -------------------------------------------
         param_list_node = next((c for c in node.children if c.type == "parameter_list"), None)
 
         # locate a possible result node (anything after params but before block)
@@ -545,44 +524,47 @@ class GolangCodeParser(AbstractCodeParser):
 
         fqn: str = self._join_fqn(self.package.virtual_path, name)
 
-        sym = self._make_symbol(
-            node,
-            kind=SymbolKind.FUNCTION,
-            name=name,
-            fqn=fqn,
-            signature=signature_obj,
-            docstring=docstring,
-            visibility=infer_visibility(name),
-        )
-        self.parsed_file.symbols.append(sym)
-
+        return [
+            self._make_symbol(
+                node,
+                kind=SymbolKind.FUNCTION,
+                name=name,
+                fqn=fqn,
+                signature=signature_obj,
+                docstring=docstring,
+                visibility=infer_visibility(name),
+            )
+        ]
 
     def _handle_method_declaration(
         self,
         node,
-    ) -> None:
-        # --- method identifier ---------------------------------------------
+    ) -> List[ParsedSymbol]:
         ident_node = next(
             (c for c in node.children if c.type in ("field_identifier", "identifier")),
             None,
         )
         if ident_node is None:
-            return                                  # malformed → skip
+            return []
+
         name: str = ident_node.text.decode("utf8")
 
-        # --- receiver ------------------------------------------------------
         # first parameter_list is the receiver, e.g.  (t *Test)  or  (*pkg.Type)
         param_lists = [c for c in node.children if c.type == "parameter_list"]
-        if not param_lists:                          # should never happen
-            return
+        if not param_lists:
+            return []
+
         recv_node = param_lists[0]
         receiver_raw = self.source_bytes[recv_node.start_byte:recv_node.end_byte] \
                            .decode("utf8", errors="replace").strip()      # "(t *Test)"
+
         inner = receiver_raw[1:-1].strip()           # drop ( )
+
         # take last token after blanks/commas, strip leading '*'
         recv_type_token = inner.replace(",", " ").split()[-1] if inner else ""
         while recv_type_token.startswith("*"):
             recv_type_token = recv_type_token[1:]
+
         receiver_type: str = recv_type_token or "receiver"
 
         # --- build signature ----------------------------------------------
@@ -594,6 +576,7 @@ class GolangCodeParser(AbstractCodeParser):
                 nxt = nxt.next_sibling
             if nxt and nxt.type != "block":
                 result_node = nxt
+
         signature_obj = (
             self._build_function_signature(param_node, result_node)
             if param_node is not None
@@ -610,23 +593,22 @@ class GolangCodeParser(AbstractCodeParser):
         fqn = self._join_fqn(self.package.virtual_path, receiver_type, name)
         visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
-        sym = self._make_symbol(
-            node,
-            kind=SymbolKind.METHOD,
-            name=name,
-            fqn=fqn,
-            signature=signature_obj,
-            docstring=docstring,
-            visibility=infer_visibility(name),
-        )
-        self.parsed_file.symbols.append(sym)
+        return [
+            self._make_symbol(
+                node,
+                kind=SymbolKind.METHOD,
+                name=name,
+                fqn=fqn,
+                signature=signature_obj,
+                docstring=docstring,
+                visibility=infer_visibility(name),
+            )
+        ]
 
-
-    # type declarations
     def _parse_struct_fields(
         self,
         struct_node,
-        parent_sym: ParsedSymbol,
+        parent=None,
     ) -> None:
         # locate field_declaration_list
         fld_list = next((c for c in struct_node.children if c.type == "field_declaration_list"), None)
@@ -664,34 +646,28 @@ class GolangCodeParser(AbstractCodeParser):
                     fld,
                     kind=SymbolKind.PROPERTY,
                     name=fname,
-                    fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, fname),
+                    fqn=self._join_fqn(self.package.virtual_path, parent.name, fname),
                     docstring=self._extract_preceding_comment(fld),
                     visibility=Visibility.PUBLIC if fname[0].isupper()
                                                 else Visibility.PRIVATE,
                 )
-                parent_sym.children.append(child)
+                parent.children.append(child)
 
     def _parse_interface_members(
         self,
         iface_node,
-        parent_sym: ParsedSymbol,
+        parent=None,
     ) -> None:
-        """
-        Collect interface members (methods) and add them as children of *parent_sym*.
-        Supports both ‘method_spec’ (current tree-sitter-go) and ‘method_elem’
-        (older grammar), regardless of whether they are wrapped in a
-        ‘method_spec_list’ node.
-        """
         def walk(node):
             if node.type in ("method_spec", "method_elem"):
-                self._register_interface_method(node, parent_sym)
+                self._register_interface_method(node, parent)
             else:
                 for ch in node.children:
                     walk(ch)
 
         walk(iface_node)
 
-    def _register_interface_method(self, m, parent_sym: ParsedSymbol) -> None:
+    def _register_interface_method(self, m, parent: ParsedSymbol) -> None:
         ident = next((c for c in m.children if c.type in ("identifier", "field_identifier")), None)
         if ident is None:
             return
@@ -715,15 +691,15 @@ class GolangCodeParser(AbstractCodeParser):
         child = self._make_symbol(
             m,
             name=mname,
-            fqn=self._join_fqn(self.package.virtual_path, parent_sym.name, mname),
+            fqn=self._join_fqn(self.package.virtual_path, parent.name, mname),
             kind=SymbolKind.METHOD_DEF,
             visibility=infer_visibility(mname),
             docstring=self._extract_preceding_comment(m),
             signature=signature_obj,
         )
-        parent_sym.children.append(child)
+        parent.children.append(child)
 
-    def _handle_type_declaration(self, node):
+    def _handle_type_declaration(self, node) -> List[ParsedSymbol]:
         """
         Extract every `type` definition (structs, interfaces, aliases …) from the
         supplied *type_declaration* node and register them as ParsedSymbol objects.
@@ -745,6 +721,8 @@ class GolangCodeParser(AbstractCodeParser):
         if not specs:
             specs = [node]
 
+        symbols = []
+
         for spec in specs:
             # ---------- identifier -------------------------------------
             ident = next(
@@ -753,6 +731,7 @@ class GolangCodeParser(AbstractCodeParser):
             )
             if ident is None:
                 continue
+
             name: str = ident.text.decode("utf8")
 
             # ---------- type node (struct / interface / …) --------------
@@ -772,7 +751,7 @@ class GolangCodeParser(AbstractCodeParser):
                 elif type_node.type == "interface_type":
                     kind = SymbolKind.INTERFACE
 
-            parent_symbol = self._make_symbol(
+            sym = self._make_symbol(
                 spec,
                 kind=kind,
                 name=name,
@@ -780,22 +759,21 @@ class GolangCodeParser(AbstractCodeParser):
                 docstring=self._extract_preceding_comment(spec),
                 visibility=infer_visibility(name),
             )
-            self.parsed_file.symbols.append(parent_symbol)
 
             if type_node is not None:
                 if type_node.type == "struct_type":
-                    self._parse_struct_fields(type_node, parent_symbol)
+                    self._parse_struct_fields(type_node, sym)
                 elif type_node.type == "interface_type":
-                    self._parse_interface_members(type_node, parent_symbol)
+                    self._parse_interface_members(type_node, sym)
+
+            symbols.append(sym)
+
+        return symbols
 
     def _handle_const_declaration(
         self,
         node,
-    ) -> None:
-        """
-        Extract every constant defined in a `const_declaration` (single-line or
-        grouped) and register it as a ParsedSymbol with kind = CONSTANT.
-        """
+    ) -> List[ParsedSymbol]:
         # --- obtain every `const_spec` regardless of grouping -------------
         specs = [c for c in node.children if c.type == "const_spec"]
 
@@ -807,6 +785,8 @@ class GolangCodeParser(AbstractCodeParser):
         # fallback – treat whole node as single spec when nothing found
         if not specs:
             specs = [node]
+
+        symbols = []
 
         for spec in specs:
             id_nodes = [c for c in spec.children if c.type == "identifier"]
@@ -832,16 +812,14 @@ class GolangCodeParser(AbstractCodeParser):
                     docstring=docstring,
                     visibility=infer_visibility(name),
                 )
-                self.parsed_file.symbols.append(sym)
+                symbols.append(sym)
+
+        return symbols
 
     def _handle_var_declaration(
         self,
         node,
-    ) -> None:
-        """
-        Extract every variable defined in a `var_declaration` (single-line or
-        grouped) and register it as a ParsedSymbol with kind = VARIABLE.
-        """
+    ) -> List[ParsedSymbol]:
         # --- obtain every `var_spec` regardless of grouping -------------
         specs = [c for c in node.children if c.type == "var_spec"]
 
@@ -853,6 +831,8 @@ class GolangCodeParser(AbstractCodeParser):
         # fallback – treat whole node as single spec when nothing found
         if not specs:
             specs = [node]
+
+        symbols = []
 
         for spec in specs:
             # 2) All identifiers belonging to this spec
@@ -879,7 +859,9 @@ class GolangCodeParser(AbstractCodeParser):
                                         visibility=infer_visibility(name),
                                         docstring=docstring,
                                         )
-                self.parsed_file.symbols.append(sym)
+                symbols.append(sym)
+
+        return symbols
 
     def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
         """

@@ -28,7 +28,6 @@ class BaseTool(ABC):
         """
         pass
 
-    # ------------------------------------------------------------------ NEW
     @staticmethod
     def _convert_to_python(obj: Any) -> Any:
         """
@@ -49,7 +48,6 @@ class BaseTool(ABC):
     # convenience instance wrapper
     def to_python(self, obj: Any) -> Any:
         return self._convert_to_python(obj)
-    # ------------------------------------------------------------------ NEW
 
 
 class ToolRegistry:

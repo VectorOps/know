@@ -17,24 +17,27 @@
 * [X] Get rid of symbol hashes for short (all?) symbols - just check the body.
 * [X] Add a flag to mark symbols as exported instead of treating them as public
 * [ ] Add a inherits field to symbols
+* [ ] Move parse() implementation to AbstractCodeparser. Allow to customize.
 * [ ] Language support
 ** [-] Python
 *** [ ] Test module path resolution
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
+*** [ ] Refactror node parser to return nodes like python and typescript parsers
 *** [ ] Generics
 *** [ ] Test module path resolution
 ** [-] TypeScript
+*** [ ] Reference parsing
 *** [X] Namespaces
 *** [ ] Modules
 *** [ ] Declare
 *** [ ] Generics
 *** [ ] Test module path resolution
-
+*** [ ] React TSX support
+** [ ] JavaScript
 ** [ ] C#
 ** [ ] C
 ** [ ] Java
-** [ ] JavaScript
 ** [ ] PHP
 ** [ ] Rust
 ** [ ] Zig

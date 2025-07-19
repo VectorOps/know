@@ -117,12 +117,7 @@ class PythonCodeParser(AbstractCodeParser):
         # Sync package-level imports with file-level imports
         self.package.imports = list(self.parsed_file.imports)
 
-        # ------------------------------------------------------------------
-        #  Flag exported symbols
-        #  Every top-level symbol whose visibility is NOT PRIVATE
-        #  (or visibility is None) is considered “exported”.
-        # ------------------------------------------------------------------
-        for sym in self.parsed_file.symbols:          # top-level only
+        for sym in self.parsed_file.symbols:
             sym.exported = (sym.visibility != Visibility.PRIVATE)
 
         return self.parsed_file
