@@ -4,7 +4,6 @@ from typing import Optional, List
 import logging
 
 from tree_sitter import Parser, Language
-from tree_sitter import QueryCursor          # after existing imports
 import tree_sitter_typescript as tsts  # pip install tree_sitter_typescript
 
 from know.parsers import (
@@ -67,6 +66,19 @@ class TypeScriptCodeParser(AbstractCodeParser):
     _NAMESPACE_NODES = {"namespace_declaration",
                         "module_declaration",
                         "internal_module"}
+
+    _RESOLVE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx")
+
+    _TS_REF_QUERY = TS_LANGUAGE.query(r"""
+    (call_expression
+        function: [(identifier) (member_expression)] @callee) @call
+    (new_expression
+        constructor: [(identifier) (member_expression)] @ctor) @new
+    [
+        (type_identifier)         ;; Foo, Bar.Baz, …
+        (generic_type)            ;; Foo<…>
+    ] @typeid
+    """)
 
     language = ProgrammingLanguage.TYPESCRIPT
 
@@ -145,45 +157,25 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _handle_generic_statement(self, node, parent=None) -> None:
         return [self._create_literal_symbol(node)]
 
-    # -------------- handlers (MINIMAL) --------------------------------- #
-    _RESOLVE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx")
-
-# ───────────────── tree-sitter queries for outgoing references ───────
-_TS_REF_QUERY = TS_LANGUAGE.query(r"""
-  ;; ❶ function / method calls ———————————————
-  (call_expression
-       function: [(identifier) (member_expression)] @callee) @call
-
-  ;; ❷ constructor (`new`) expressions ———————————
-  (new_expression
-       constructor: [(identifier) (member_expression)] @ctor) @new
-
-  ;; ❸ type references (identifiers inside a type context) ———
-  [
-    (type_identifier)         ;; Foo, Bar.Baz, …
-    (generic_type)            ;; Foo<…>
-  ] @typeid
-""")
-
-def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
-    # local   →  starts with '.'  (./foo, ../bar/baz)
-    if module.startswith("."):
-        base_dir  = os.path.dirname(self.rel_path)
-        rel_candidate = os.path.normpath(os.path.join(base_dir, module))
-        # if no suffix, try to add the usual ones until a file exists
-        if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
-            for suf in self._RESOLVE_SUFFIXES:
-                cand = f"{rel_candidate}{suf}"
-                if os.path.exists(
-                    os.path.join(self.project.settings.project_path, cand)
-                ):
-                    rel_candidate = cand
-                    break
-        physical = rel_candidate
-        virtual  = self._rel_to_virtual_path(rel_candidate)
-        return physical, virtual, False        # local
-    # external package (npm, built-in, etc.)
-    return None, module, True
+    def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
+        # local   →  starts with '.'  (./foo, ../bar/baz)
+        if module.startswith("."):
+            base_dir  = os.path.dirname(self.rel_path)
+            rel_candidate = os.path.normpath(os.path.join(base_dir, module))
+            # if no suffix, try to add the usual ones until a file exists
+            if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
+                for suf in self._RESOLVE_SUFFIXES:
+                    cand = f"{rel_candidate}{suf}"
+                    if os.path.exists(
+                        os.path.join(self.project.settings.project_path, cand)
+                    ):
+                        rel_candidate = cand
+                        break
+            physical = rel_candidate
+            virtual  = self._rel_to_virtual_path(rel_candidate)
+            return physical, virtual, False        # local
+        # external package (npm, built-in, etc.)
+        return None, module, True
 
     def _handle_import(self, node, parent=None):
         raw = node.text.decode("utf8")
@@ -831,7 +823,7 @@ def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
         """
         Create a ParsedSymbol for one arrow-function found inside *holder_node*.
         """
-        # --- determine the function name ---------------------------------
+        # determine the function name
         name_node = holder_node.child_by_field_name("name")  \
                     or next((c for c in holder_node.children
                              if c.type in ("identifier", "property_identifier")), None) \
@@ -841,7 +833,7 @@ def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
 
         name = name_node.text.decode("utf8").split(".")[-1]
 
-        # --- build signature --------------------------------------------
+        # build signature
         sig_base = self._build_signature(arrow_node, name, prefix="")
         # include the *left-hand side* in the raw header for better context
         raw_header = holder_node.text.decode("utf8").split("{", 1)[0].strip().rstrip(";")
@@ -926,39 +918,35 @@ def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
         )
 
     # very shallow call-collector
-    # ------------------------------------------------------------------
-    #  Outgoing symbol-reference collector
-    # ------------------------------------------------------------------
     def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
         """
         Extract outgoing references using a pre-compiled tree-sitter query.
 
         • call_expression   → SymbolRefType.CALL
-        • new_expression    → SymbolRefType.NEW
+        • new_expression    → SymbolRefType.TYPE
         • type identifiers  → SymbolRefType.TYPE
         """
         refs: list[ParsedSymbolRef] = []
-        cursor = QueryCursor()
 
-        for match in cursor.execute(_TS_REF_QUERY, root):
+        for match in self._TS_REF_QUERY.matches(root):
             # initialise
             node_call = node_ctor = node_type = None
             node_target = None
             ref_type = None
 
             # decode captures
-            for node, cap_idx in match.captures:
-                cap = _TS_REF_QUERY.capture_names[cap_idx]
+            for node, cap in match.captures:
                 if cap == "call":
-                    ref_type, node_call, node_target = SymbolRefType.CALL, node, None
+                    ref_type, node_call = SymbolRefType.CALL, node
                 elif cap == "callee":
                     node_target = node
                 elif cap == "new":
-                    ref_type, node_ctor, node_target = SymbolRefType.NEW, node, None
+                    ref_type, node_ctor = SymbolRefType.NEW, node        # NEW ↔ constructor
                 elif cap == "ctor":
                     node_target = node
                 elif cap == "typeid":
-                    ref_type, node_type, node_target = SymbolRefType.TYPE, node, node
+                    ref_type, node_type = SymbolRefType.TYPE, node
+                    node_target = node
 
             # ensure we have something to work with
             if node_target is None or ref_type is None:
@@ -966,9 +954,9 @@ def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
 
             full_name = node_target.text.decode("utf8")
             simple_name = full_name.split(".")[-1]
+            raw_node = node_call or node_ctor or node_type
             raw = self.source_bytes[
-                (node_call or node_ctor or node_type).start_byte :
-                (node_call or node_ctor or node_type).end_byte
+                raw_node.start_byte : raw_node.end_byte
             ].decode("utf8")
 
             # best-effort import resolution – re-use logic from _collect_require_calls
