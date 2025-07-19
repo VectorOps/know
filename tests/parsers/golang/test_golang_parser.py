@@ -7,7 +7,8 @@ from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.golang import GolangCodeParser
 from know.models import ProgrammingLanguage, SymbolKind
-from know.models import SymbolRefType          # NEW
+from know.models import SymbolRefType
+from devtools import pprint
 
 
 # Helpers
@@ -36,6 +37,8 @@ def test_golang_parser_on_sample_file():
 
     parser      = GolangCodeParser(project, "main.go")
     parsed_file = parser.parse(cache)
+
+    #pprint(parsed_file)
 
     # Basic assertions
     assert parsed_file.path == "main.go"

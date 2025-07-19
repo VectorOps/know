@@ -453,10 +453,13 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # keep only the declaration header part (before the body “{”)
         raw_header = raw_header.split("{", 1)[0].strip()
 
+        type_params = self._extract_type_parameters(node)
+
         return SymbolSignature(
             raw         = raw_header,
             parameters  = params_objs,
             return_type = return_ty,
+            type_parameters=type_params,
         )
 
     def _handle_function(self, node, parent=None, exported=False):
@@ -712,7 +715,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if raw_header.endswith(";"):
             raw_header = raw_header[:-1].rstrip()
 
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+        tp = self._extract_type_parameters(node)
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
+
+        mods: list[Modifier] = []
+        if tp is not None:
+            mods.append(Modifier.GENERIC)
 
         return [
             self._make_symbol(

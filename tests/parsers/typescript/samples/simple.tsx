@@ -71,3 +71,18 @@ namespace Validation {
 window.onload = () => {
     alert("yes");
 };
+
+function identity<Type>(arg: Type): Type {
+  return arg;
+}
+
+let myIdentity: <Type>(arg: Type) => Type = identity;
+
+interface GenericIdentityFn {
+  <Type>(arg: Type): Type;
+}
+
+class GenericNumber<NumType> {
+  zeroValue: NumType;
+  add: (x: NumType, y: NumType) => NumType;
+}
