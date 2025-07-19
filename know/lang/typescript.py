@@ -376,6 +376,32 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
+    # ---- generic-parameter helper ----------------------------------- #
+    def _extract_type_parameters(self, node) -> str | None:
+        """
+        Return the raw ``<…>`` generic parameter list for *node*,
+        or ``None`` when the declaration is not generic.
+        Works for the grammar nodes that expose a ``type_parameters``
+        / ``type_parameter_list`` child as well as a textual fallback.
+        """
+        tp_node = (
+            node.child_by_field_name("type_parameters")
+            or next(
+                (c for c in node.children
+                 if c.type in ("type_parameters", "type_parameter_list")), None
+            )
+        )
+        if tp_node:
+            return tp_node.text.decode("utf8").strip()
+
+        # ─ fallback: scan header slice for `<…>` between name and `(`/`{`
+        hdr = node.text.decode("utf8").split("{", 1)[0]
+        lt = hdr.find("<")
+        gt = hdr.find(">", lt + 1)
+        if 0 <= lt < gt:
+            return hdr[lt:gt + 1].strip()
+        return None
+
     # ───────────────── signature helpers ────────────────────────────
     def _build_signature(self, node, name: str, prefix: str = "") -> SymbolSignature:
         """
@@ -446,6 +472,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             mods.append(Modifier.ABSTRACT)
         if node.type == "async_function":
             mods.append(Modifier.ASYNC)
+        if sig.type_parameters:
+            mods.append(Modifier.GENERIC)
 
         return [
             self._make_symbol(
@@ -467,11 +495,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name = name_node.text.decode("utf8")
         # take full node text and truncate at the opening brace → drop the body
         raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+        tp = self._extract_type_parameters(node)
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
 
         mods: list[Modifier] = []
         if node.type == "abstract_class_declaration" or self._has_modifier(node, "abstract"):
             mods.append(Modifier.ABSTRACT)
+        if tp is not None:
+            mods.append(Modifier.GENERIC)
 
         sym = self._make_symbol(
             node,
@@ -540,7 +571,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         # header without body
         raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+        tp = self._extract_type_parameters(node)
+        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
+
+        mods: list[Modifier] = []
+        if tp is not None:
+            mods.append(Modifier.GENERIC)
 
         children: list[ParsedSymbol] = []
         body = next((c for c in node.children if c.type == "interface_body"), None)
@@ -584,6 +620,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 name=name,
                 fqn=self._make_fqn(name, parent),
                 signature=sig,
+                modifiers=mods,
                 children=children,
                 exported=exported,
             )
@@ -600,6 +637,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if node.type == "abstract_method_signature" \
            or self._has_modifier(node, "abstract"):
             mods.append(Modifier.ABSTRACT)
+        if sig.type_parameters:
+            mods.append(Modifier.GENERIC)
 
         return self._make_symbol(
             node,
@@ -682,6 +721,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 name=name,
                 fqn=self._make_fqn(name, parent),
                 signature=sig,
+                modifiers=mods,
             )
         ]
 
@@ -836,6 +876,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         mods: list[Modifier] = []
         if arrow_node.text.lstrip().startswith(b"async"):
             mods.append(Modifier.ASYNC)
+        if sig_base.type_parameters:
+            mods.append(Modifier.GENERIC)
 
         return self._make_symbol(
             holder_node if class_name is None else arrow_node,
