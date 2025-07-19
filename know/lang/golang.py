@@ -519,6 +519,22 @@ class GolangCodeParser(AbstractCodeParser):
             else None
         )
 
+        # ---- generics -------------------------------------------------
+        type_param_node = next(
+            (c for c in node.children if c.type == "type_parameter_list"),
+            None,
+        )
+        if type_param_node is not None:
+            type_param_raw = self.source_bytes[
+                type_param_node.start_byte:type_param_node.end_byte
+            ].decode("utf8", errors="replace").strip()
+
+            # Pre-pend the generic type-parameter list to the raw signature
+            if signature_obj.raw:
+                signature_obj.raw = f"{type_param_raw} {signature_obj.raw}".strip()
+            else:
+                signature_obj.raw = type_param_raw
+
         fqn = self._make_fqn(name)
 
         return [
@@ -565,6 +581,12 @@ class GolangCodeParser(AbstractCodeParser):
 
         receiver_type: str = recv_type_token or "receiver"
 
+        # locate optional generic type-parameter list, e.g. [T any]
+        type_param_node = next(
+            (c for c in node.children if c.type == "type_parameter_list"),
+            None,
+        )
+
         # --- build signature ----------------------------------------------
         param_node = param_lists[1] if len(param_lists) >= 2 else None
         result_node = None
@@ -584,6 +606,19 @@ class GolangCodeParser(AbstractCodeParser):
         # prepend "(recv) <Name>" to the raw signature and remember the receiver
         signature_obj.raw = f"{receiver_raw} {name}{(' ' + signature_obj.raw) if signature_obj.raw else ''}".strip()
         signature_obj.receiver = receiver_raw
+
+        # ---- generics -------------------------------------------------
+        if type_param_node is not None:
+            type_param_raw = self.source_bytes[
+                type_param_node.start_byte:type_param_node.end_byte
+            ].decode("utf8", errors="replace").strip()
+
+            old_raw  = signature_obj.raw
+            prefix   = f"{receiver_raw} {name}"
+            tail     = old_raw[len(prefix):].lstrip()
+            signature_obj.raw = (
+                f"{prefix}{type_param_raw}{(' ' + tail) if tail else ''}"
+            ).strip()
 
         # --- misc. metadata ------------------------------------------------
         docstring = self._extract_preceding_comment(node)
