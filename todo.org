@@ -16,8 +16,9 @@
 * [X] Figure out a way to call functions for language parsers after finishing parsing files
 * [X] Get rid of symbol hashes for short (all?) symbols - just check the body.
 * [X] Add a flag to mark symbols as exported instead of treating them as public
+* [ ] Summary mode where parent symbols are also included
 * [ ] Add a inherits field to symbols
-* [ ] Move parse() implementation to AbstractCodeparser. Allow to customize.
+* [X] Move parse() implementation to AbstractCodeparser. Allow to customize.
 * [ ] Language support
 ** [-] Python
 *** [ ] Test module path resolution
@@ -30,6 +31,7 @@
 *** [ ] Reference parsing
 *** [X] Generics
 *** [X] Namespaces
+*** [ ] CommonJS imports and exports
 *** [ ] Modules
 *** [ ] Declare
 *** [ ] Test module path resolution
@@ -104,7 +106,7 @@
 * [X] Find a way to de-dupe embedding queue to avoid calculating vectors multiple times
 * [ ] Search to support exclude. For example - tests
 * [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
-* [ ] Move file summary helper out of tools
+* [X] Move file summary helper out of tools
 * [X] Better lookup with filters methods in data layer, similar to symbol search instead of dedicated methods.
 * [ ] Figure out lockup in filelist tool
 * [X] Compress long symbol bodies
