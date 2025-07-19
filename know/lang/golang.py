@@ -525,9 +525,14 @@ class GolangCodeParser(AbstractCodeParser):
             None,
         )
         if type_param_node is not None:
+            if signature_obj is None:
+                signature_obj = SymbolSignature(raw="")
+            
             type_param_raw = self.source_bytes[
                 type_param_node.start_byte:type_param_node.end_byte
             ].decode("utf8", errors="replace").strip()
+
+            signature_obj.type_parameters = type_param_raw
 
             # Pre-pend the generic type-parameter list to the raw signature
             if signature_obj.raw:
@@ -612,6 +617,8 @@ class GolangCodeParser(AbstractCodeParser):
             type_param_raw = self.source_bytes[
                 type_param_node.start_byte:type_param_node.end_byte
             ].decode("utf8", errors="replace").strip()
+
+            signature_obj.type_parameters = type_param_raw
 
             old_raw  = signature_obj.raw
             prefix   = f"{receiver_raw} {name}"
@@ -1049,13 +1056,15 @@ class GolangLanguageHelper(AbstractLanguageHelper):
                 lines.append(self.get_symbol_summary(m, indent, include_comments=include_comments, include_docs=include_docs))
             return "\n".join(lines)
         elif sym.kind == SymbolKind.INTERFACE:
-            header = f"type {sym.name} interface {{"
-            lines.append(f"{IND}{header}")
             if sym.children:
-                for child in sym.children:
-                    lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
-            lines.append(f"{IND}}}")
-            return "\n".join(lines)
+                header = f"type {sym.name} interface {{"
+                lines.append(f"{IND}{header}")
+                    for child in sym.children:
+                        lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+                lines.append(f"{IND}}}")
+                return "\n".join(lines)
+            else:
+                return sym.body
         else:
             body_lines = (sym.body or "").splitlines()
             if not body_lines:

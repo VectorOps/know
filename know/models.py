@@ -131,6 +131,7 @@ class SymbolSignature(BaseModel):
     decorators: List[str] = Field(default_factory=list)
     receiver: Optional[str] = None
     lexical_type: Optional[str] = None
+    type_parameters: Optional[str] = None   # raw "[T any, U comparable]" etc.
 
 
 class SymbolMetadata(BaseModel):
