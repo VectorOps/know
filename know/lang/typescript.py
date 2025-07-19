@@ -165,25 +165,25 @@ _TS_REF_QUERY = TS_LANGUAGE.query(r"""
   ] @typeid
 """)
 
-    def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
-        # local   →  starts with '.'  (./foo, ../bar/baz)
-        if module.startswith("."):
-            base_dir  = os.path.dirname(self.rel_path)
-            rel_candidate = os.path.normpath(os.path.join(base_dir, module))
-            # if no suffix, try to add the usual ones until a file exists
-            if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
-                for suf in self._RESOLVE_SUFFIXES:
-                    cand = f"{rel_candidate}{suf}"
-                    if os.path.exists(
-                        os.path.join(self.project.settings.project_path, cand)
-                    ):
-                        rel_candidate = cand
-                        break
-            physical = rel_candidate
-            virtual  = self._rel_to_virtual_path(rel_candidate)
-            return physical, virtual, False        # local
-        # external package (npm, built-in, etc.)
-        return None, module, True
+def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
+    # local   →  starts with '.'  (./foo, ../bar/baz)
+    if module.startswith("."):
+        base_dir  = os.path.dirname(self.rel_path)
+        rel_candidate = os.path.normpath(os.path.join(base_dir, module))
+        # if no suffix, try to add the usual ones until a file exists
+        if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
+            for suf in self._RESOLVE_SUFFIXES:
+                cand = f"{rel_candidate}{suf}"
+                if os.path.exists(
+                    os.path.join(self.project.settings.project_path, cand)
+                ):
+                    rel_candidate = cand
+                    break
+        physical = rel_candidate
+        virtual  = self._rel_to_virtual_path(rel_candidate)
+        return physical, virtual, False        # local
+    # external package (npm, built-in, etc.)
+    return None, module, True
 
     def _handle_import(self, node, parent=None):
         raw = node.text.decode("utf8")
