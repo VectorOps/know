@@ -52,7 +52,7 @@ class SearchSymbolsTool(BaseTool):
         elif isinstance(symbol_visibility, Visibility):
             vis = symbol_visibility
         elif str(symbol_visibility).lower() == "all":
-            vis = None                       # sentinel → no visibility filter
+            vis = None
         else:
             vis = Visibility(symbol_visibility)
 
@@ -103,7 +103,10 @@ class SearchSymbolsTool(BaseTool):
                 elif helper is not None:
                     include_docs = summary_mode == SummaryMode.FullSummary
                     include_comments = summary_mode == SummaryMode.FullSummary
-                    sym_body  = helper.get_symbol_summary(s, include_comments=include_comments, include_docs=include_docs)
+                    sym_body  = helper.get_symbol_summary(s,
+                                                          include_comments=include_comments,
+                                                          include_docs=include_docs,
+                                                          include_parents=True)
 
             results.append(
                 SymbolSearchResult(

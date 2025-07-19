@@ -31,6 +31,7 @@ from know.data import (
     SymbolSearchQuery,
     PackageFilter,
     include_direct_descendants,
+    resolve_symbol_hierarchy,
     SymbolFilter,
     ImportEdgeFilter,
 )
@@ -293,19 +294,11 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
         if query.symbol_kind:
             base_where.append("s.kind = ?")
-            base_params.append(getattr(query.symbol_kind, "value", query.symbol_kind))
+            base_params.append(query.symbol_kind)
 
         if query.symbol_visibility:
             base_where.append("s.visibility = ?")
-            base_params.append(getattr(query.symbol_visibility, "value", query.symbol_visibility))
-
-        if query.top_level_only:
-            base_where.append("s.parent_symbol_id IS NULL")
-
-        if query.embedding is True:          # only symbols WITH an embedding
-            base_where.append("s.embedding_code_vec IS NOT NULL")
-        elif query.embedding is False:       # only symbols WITHOUT an embedding
-            base_where.append("s.embedding_code_vec IS NULL")
+            base_params.append(query.symbol_visibility)
 
         # Compose base WHERE clause string
         base_where_clause = " AND ".join(base_where)
@@ -418,6 +411,11 @@ LIMIT ? OFFSET ?
         ).fetchall()
         return len(rows)
 
+    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
+        syms = super().get_list_by_ids(symbol_ids)
+        resolve_symbol_hierarchy(syms)
+        return syms
+
     def get_list(self, flt: SymbolFilter) -> list[SymbolMetadata]:
         """
         Generic selector that supersedes the old specialised helpers.
@@ -430,17 +428,40 @@ LIMIT ? OFFSET ?
                 f"parent_symbol_id IN ({', '.join('?' for _ in flt.parent_ids)})"
             )
             params.extend(flt.parent_ids)
+        if flt.repo_id:
+            where.append("repo_id = ?")
+            params.append(flt.file_id)
         if flt.file_id:
             where.append("file_id = ?")
             params.append(flt.file_id)
         if flt.package_id:
             where.append("package_id = ?")
             params.append(flt.package_id)
+        if flt.symbol_kind:
+            where.append("kind = ?")
+            params.append(flt.symbol_kind)
+        if flt.symbol_visibility:
+            where.append("visibility = ?")
+            params.append(flt.symbol_visibility)
+        if flt.has_embedding is True:
+            where.append("embedding_code_vec IS NOT NULL")
+        elif flt.has_embedding is False:
+            where.append("embedding_code_vec IS NULL")
+        if flt.top_level_only:
+            where.append("parent_symbol_id IS NULL")
 
         sql = "SELECT * FROM symbols" + (" WHERE " + " AND ".join(where) if where else "")
+
+        if flt.offset:
+            sql += " OFFSET ?"
+            params.append(flt.offset)
+        if flt.limit:
+            sql += " LIMIT ?"
+            params.append(flt.limit)
+
         rows = _row_to_dict(self.cursor().execute(sql, params))
         syms = [self.model(**self._deserialize_row(r)) for r in rows]
-        SymbolMetadata.resolve_symbol_hierarchy(syms)
+        resolve_symbol_hierarchy(syms)
         return syms
 
 
@@ -448,7 +469,7 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
     table = "import_edges"
     model = ImportEdge
 
-    def get_list(self, flt: ImportEdgeFilter) -> list[ImportEdge]:      # NEW
+    def get_list(self, flt: ImportEdgeFilter) -> list[ImportEdge]:
         where, params = [], []
         if flt.source_package_id:
             where.append("from_package_id = ?")

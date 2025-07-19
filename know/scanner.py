@@ -68,11 +68,15 @@ def schedule_missing_embeddings(project: "Project") -> None:
     PAGE_SIZE = 1_000
     offset = 0
     while True:
-        page = symbol_repo.search(
-            repo_id,
-            SymbolSearchQuery(embedding=False, limit=PAGE_SIZE, offset=offset),
+        page = symbol_repo.get_list(
+            SymbolFilter(
+                repo_id=repo_id,
+                has_embedding=False,
+                limit=PAGE_SIZE,
+                offset=offset,
+            ),
         )
-        if not page:                 # no more results
+        if not page:
             break
         for sym in page:
             if sym.body:
@@ -101,10 +105,14 @@ def schedule_outdated_embeddings(project: "Project") -> None:
     PAGE_SIZE    = 1_000
     offset       = 0
 
+    # TODO: Add data filter
     while True:
-        page = symbol_repo.search(
-            repo_id,
-            SymbolSearchQuery(limit=PAGE_SIZE, offset=offset),   # fetch next slice
+        page = symbol_repo.get_list(
+            SymbolFilter(
+                repo_id=repo_id,
+                limit=PAGE_SIZE,
+                offset=offset,
+            ),
         )
         if not page:
             break
@@ -463,9 +471,9 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     orphan_methods: list[SymbolMetadata] = []
     offset = 0
     while True:
-        page = symbol_repo.search(
-            repo_id,
-            SymbolSearchQuery(
+        page = symbol_repo.get_list(
+            SymbolFilter(
+                repo_id=repo_id,
                 symbol_kind=SymbolKind.METHOD,
                 top_level_only=True,
                 limit=PAGE_SIZE,
@@ -480,14 +488,14 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     if not orphan_methods:
         return
 
-    # 2) group methods by package for efficient lookup
+    # group methods by package for efficient lookup
     by_pkg: dict[str | None, list[SymbolMetadata]] = {}
     for m in orphan_methods:
         by_pkg.setdefault(m.package_id, []).append(m)
 
     parent_kinds = {SymbolKind.CLASS, SymbolKind.INTERFACE}
 
-    # 3) per-package candidate parents & assignment
+    # per-package candidate parents & assignment
     for pkg_id, methods in by_pkg.items():
         if pkg_id is None:
             continue

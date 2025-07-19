@@ -953,17 +953,29 @@ class GolangLanguageHelper(AbstractLanguageHelper):
                            indent: int = 0,
                            include_comments: bool = False,
                            include_docs: bool = False,
+                           include_parents: bool = False,
+                           child_stack: Optional[List[List[SymbolMetadata]]] = None,
                            ) -> str:
         """
         Produce a human-readable summary for *sym* (Go flavour).
-
-        • leading comment/docstring (if any)
-        • declaration header
-        • for funcs/methods → indented “...”
-        • for types (struct/interface) → recurse over children
         """
+        # Get to the top of the stack and then generate symbols down
+        if include_parents:
+            if sym.parent_ref:
+                return self.get_symbol_summary(
+                    sym.parent_ref,
+                    indent,
+                    include_comments,
+                    include_docs,
+                    include_parents,
+                    (child_stack or []) + [[sym]])
+            else:
+                include_parents = False
+
         IND   = " " * indent
         lines: list[str] = []
+
+        only_children = child_stack.pop() if child_stack else None
 
         # special-case: keep full multi-line import blocks
         if sym.kind == SymbolKind.IMPORT:
@@ -1009,18 +1021,32 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}{header}")
             in_body = [c for c in sym.children if c.kind != SymbolKind.METHOD]
             methods = [c for c in sym.children if c.kind == SymbolKind.METHOD]
+
             for child in in_body:
+                if only_children and child not in only_children:
+                    continue
+
                 lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+
             lines.append(f"{IND}}}")
-            for m in methods:
-                lines.append(self.get_symbol_summary(m, indent, include_comments=include_comments, include_docs=include_docs))
+
+            for child in methods:
+                if only_children and child not in only_children:
+                    continue
+
+                lines.append(self.get_symbol_summary(child, indent, include_comments=include_comments, include_docs=include_docs))
             return "\n".join(lines)
         elif sym.kind == SymbolKind.INTERFACE:
             if sym.children:
                 header = f"type {sym.name} interface {{"
                 lines.append(f"{IND}{header}")
+
                 for child in sym.children:
+                    if only_children and child not in only_children:
+                        continue
+
                     lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+
                 lines.append(f"{IND}}}")
                 return "\n".join(lines)
             else:

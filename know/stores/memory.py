@@ -265,19 +265,21 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
                 and (not flt.repo_id    or s.repo_id == flt.repo_id)
                 and (not flt.file_id    or s.file_id == flt.file_id)
                 and (not flt.package_id or s.package_id == flt.package_id)
+                and (not flt.symbol_kind or s.kind == flt.symbol_kind)
+                and (not flt.symbol_visibility or s.visibility == flt.symbol_visibility)
+                and (not flt.top_level_only or s.parent_symbol_id is None)
                 and (
                     flt.has_embedding is None
                     or (flt.has_embedding is True  and s.embedding_code_vec is not None)
                     or (flt.has_embedding is False and s.embedding_code_vec is None)
                 )
             ]
-        resolve_symbol_hierarchy(syms)
-        # Deterministic order before pagination
-        syms.sort(key=lambda s: s.name or "")
-        # ----- pagination -----
         offset = flt.offset or 0
         limit  = flt.limit  or len(syms)
         syms   = syms[offset : offset + limit]
+
+        resolve_symbol_hierarchy(syms)
+
         return syms
 
     @staticmethod
@@ -342,9 +344,6 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             if query.symbol_visibility:
                 candidates = [s for s in candidates if s.visibility == query.symbol_visibility]
 
-            if query.top_level_only:
-                candidates = [s for s in candidates if s.parent_symbol_id is None]
-
             has_fts       = bool(query.doc_needle)
             has_embedding = bool(query.embedding_query)
 
@@ -404,9 +403,6 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
                 candidates = ranked_candidates
             else:
                 candidates.sort(key=lambda s: s.name or "")
-
-            from devtools import pprint
-            pprint(candidates)
 
             results = candidates
 

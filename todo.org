@@ -4,6 +4,7 @@
 ** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
 ** [X] Do insert/delete instead of update?
 ** [ ] Rename to Node
+* [ ] Rewrite SQL backends to use PyPika
 * [X] Add public OpenAI API call definitions for existing tools
 * [X] Add language to symbol and use it find parser when generating a summary
 * [X] Fix python decorators to be included in raw symbol output
@@ -28,6 +29,19 @@
 *** [X] Generics
 *** [ ] Test module path resolution
 ** [-] TypeScript
+*** [ ] Fix summary:
+Down   (constant) (c8350ef9-fc3d-4e95-a668-8a92453bb96a)
+FQN:  tests.parsers.typescript.samples.simple.Down
+File: tests/parsers/typescript/samples/simple.tsx
+
+enum Direction {
+}
+--------------------------------------------------------------------------------
+f   (variable) (4eee3c8c-9631-417c-a50e-76b0cf273aae)
+FQN:  tests.parsers.typescript.samples.simple.f
+File: tests/parsers/typescript/samples/simple.tsx
+
+var ;
 *** [ ] Reference parsing
 *** [X] Generics
 *** [X] Namespaces
@@ -37,13 +51,10 @@
 *** [ ] Test module path resolution
 *** [ ] React TSX support
 ** [ ] JavaScript
-** [ ] C#
 ** [ ] C
+** [ ] C#
 ** [ ] Java
 ** [ ] PHP
-** [ ] Rust
-** [ ] Zig
-** [ ] C++
 * [ ] Documentation generator
 * [ ] CI/CD pipeline
 * [ ] Add git support

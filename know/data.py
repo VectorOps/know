@@ -130,8 +130,15 @@ class AbstractFileMetadataRepository(ABC):
 @dataclass
 class SymbolFilter:
     parent_ids: Optional[List[str]] = None
+    repo_id: Optional[str] = None
     file_id: Optional[str] = None
     package_id: Optional[str] = None
+    symbol_kind: Optional[SymbolKind] = None
+    symbol_visibility: Optional[Visibility] = None
+    has_embedding: Optional[bool] = None
+    top_level_only: Optional[bool] = False
+    limit: Optional[int] = None
+    offset: Optional[int] = None
 
 
 @dataclass
@@ -152,10 +159,6 @@ class SymbolSearchQuery:
     limit: Optional[int] = None
     # Zero-based offset
     offset: Optional[int] = None
-    # Return only top-level symbols
-    top_level_only: Optional[bool] = False
-    # Return symbols with or without embedding vectors
-    embedding: Optional[bool] = None
 
 
 class AbstractSymbolMetadataRepository(ABC):
@@ -313,6 +316,64 @@ class AbstractDataRepository(ABC):
 
 
 # Helpers
+def resolve_symbol_hierarchy(symbols: list[SymbolMetadata]) -> None:
+    """
+    Populate in-memory parent/child links inside *symbols* **in-place**.
+
+    • parent_ref   ↔  points to the parent SymbolMetadata instance
+    • children     ↔  list with direct child SymbolMetadata instances
+
+    Function is no-op when list is empty.
+    """
+    if not symbols:
+        return
+
+    id_map: dict[str | None, SymbolMetadata] = {s.id: s for s in symbols if s.id}
+    # clear any previous links to avoid duplicates on repeated invocations
+    for s in symbols:
+        s.children.clear()
+        s.parent_ref = None
+
+    for s in symbols:
+        pid = s.parent_symbol_id
+        if pid and (parent := id_map.get(pid)):
+            s.parent_ref = parent
+            parent.children.append(s)
+
+
+def include_parents(
+    repo: AbstractSymbolMetadataRepository,
+    symbols: list[SymbolMetadata],
+) -> list[SymbolMetadata]:
+    """
+    Traverse all symbol parents and include them to in the tree.
+    """
+    source = symbols
+
+    while source:
+        parent_ids = {s.parent_symbol_id for s in source if s.parent_symbol_id}
+        if not parent_ids:
+            break
+
+        parents = {s.id: s for s in repo.get_list_by_ids(parent_ids)}
+
+        for s in source:
+            if s.parent_symbol_id:
+                parent = parents[s.parent_symbol_id]
+                s.parent_ref = parent
+
+                for i, c in enumerate(parent.children):
+                    if c.id == s.id:
+                        parent.children[i] = s
+                        break
+                else:
+                    parent.children.append(s)
+
+        source = parents.values()
+
+    return symbols
+
+
 def include_direct_descendants(
     repo: AbstractSymbolMetadataRepository,    # repository to fetch children
     symbols: list[SymbolMetadata],             # initial search results
@@ -335,11 +396,11 @@ def include_direct_descendants(
                 symbols.append(c)
                 seen_ids.add(c.id)
 
-    # build parent-→child relations
-    SymbolMetadata.resolve_symbol_hierarchy(symbols)
+    resolve_symbol_hierarchy(symbols)
 
-    # keep only those symbols that are NOT children of a returned parent
     parent_id_set = set(parent_ids)
     result = [s for s in symbols if s.parent_symbol_id not in parent_id_set]
+
+    result = include_parents(repo, result)
 
     return result

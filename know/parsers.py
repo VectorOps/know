@@ -234,7 +234,7 @@ class AbstractCodeParser:
         name: str | None = None,
         fqn: str | None = None,
         body: str | None = None,
-        visibility: Visibility | None = None,
+        visibility: Visibility = Visibility.PUBLIC,
         modifiers: list[Modifier] | None = None,
         signature: SymbolSignature | None = None,
         docstring: str | None = None,

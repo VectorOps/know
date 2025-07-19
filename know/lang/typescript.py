@@ -1001,8 +1001,26 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                            indent: int = 0,
                            include_comments: bool = False,
                            include_docs: bool = False,
+                           include_parents: bool = False,
+                           child_stack: Optional[List[List[SymbolMetadata]]] = None,
                            ) -> str:
+        # Get to the top of the stack and then generate symbols down
+        if include_parents:
+            if sym.parent_ref:
+                return self.get_symbol_summary(
+                    sym.parent_ref,
+                    indent,
+                    include_comments,
+                    include_docs,
+                    include_parents,
+                    (child_stack or []) + [[sym]])
+            else:
+                include_parents = False
+
         IND = " " * indent
+
+        only_children = child_stack.pop() if child_stack else None
+
         if sym.signature:
             header = sym.signature.raw
         elif sym.body:
@@ -1025,6 +1043,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                                         include_comments=include_comments,
                                         include_docs=include_docs)
                 for ch in sym.children
+                if not only_children or ch.id in only_children
             ]
 
             if header:
@@ -1041,6 +1060,9 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             # assignment that owns child symbols (e.g. arrow-functions)
             lines = []
             for ch in sym.children:
+                if only_children and ch.id not in only_children:
+                    continue
+
                 lines.append(
                     self.get_symbol_summary(
                         ch,
@@ -1059,6 +1081,9 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
             # recurse over children
             for ch in sym.children or []:
+                if only_children and ch.id not in only_children:
+                    continue
+
                 child_summary = self.get_symbol_summary(
                     ch,
                     indent=indent + 2,
@@ -1081,8 +1106,12 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
         elif sym.kind == SymbolKind.NAMESPACE:
             if not header.endswith("{"):
                 header += " {"
+
             lines = [IND + header]
             for ch in sym.children or []:
+                if only_children and ch.id not in only_children:
+                    continue
+
                 lines.append(
                     self.get_symbol_summary(
                         ch,
@@ -1106,6 +1135,9 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             if sym.children:
                 lines = []
                 for ch in sym.children:
+                    if only_children and ch.id not in only_children:
+                        continue
+
                     child_summary = self.get_symbol_summary(
                         ch,
                         indent=indent,

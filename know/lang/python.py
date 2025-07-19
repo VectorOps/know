@@ -573,6 +573,7 @@ class PythonCodeParser(AbstractCodeParser):
                 fqn=self._make_fqn(func_name),
                 body=wrapper.text.decode("utf8"),
                 modifiers=[Modifier.ASYNC] if self._is_async_function(wrapper) else [],
+                visibility=self._infer_visibility(func_name),
                 docstring=self._extract_docstring(node),
                 signature=self._build_function_signature(wrapper),
                 comment=self._get_preceding_comment(node),
@@ -589,6 +590,7 @@ class PythonCodeParser(AbstractCodeParser):
             kind=SymbolKind.CLASS,
             name=class_name,
             fqn=self._make_fqn(class_name, parent),
+            visibility=self._infer_visibility(class_name),
             comment=self._get_preceding_comment(node),
             docstring=self._extract_docstring(node),
             signature=self._build_class_signature(wrapper),
@@ -653,18 +655,11 @@ class PythonCodeParser(AbstractCodeParser):
         if not expr:
             return []
 
-        # crude name heuristic: token before first “(” or full expr
-        name_tok = expr.split("(", 1)[0].strip().split()[0]
-        name = name_tok or f"expr@{node.start_point[0]+1}"
-
         return [
             self._make_symbol(
                 node,
                 kind=SymbolKind.LITERAL,
-                name=name,
-                fqn=self._make_fqn(name, parent),
                 body=expr,
-                visibility=Visibility.PUBLIC,
                 comment=self._get_preceding_comment(node),
             )
         ]
@@ -765,24 +760,33 @@ class PythonCodeParser(AbstractCodeParser):
 
 
 class PythonLanguageHelper(AbstractLanguageHelper):
-    def _get_sym_summary(self,
+    def get_symbol_summary(self,
                          sym: SymbolMetadata,
                          indent: int = 0,
                          include_comments: bool = False,
                          include_docs: bool = False,
-                         only_children: Optional[List[SymbolMetadata]] = None,
+                         include_parents: bool = False,
+                         child_stack: Optional[List[List[SymbolMetadata]]] = None,
                          ) -> str:
         """
         Return a human-readable summary for *sym*.
-
-        • includes preceding comment
-        • includes definition header (class / def / assignment …)
-        • includes docstring when present
-        • for functions / methods the body is replaced with an indented “...”
-        • for classes the method recurses over *sym.children*, indenting each child
-
-        only_children: list of children to keep; None = keep all; [] = keep none.
         """
+
+        # Get to the top of the stack and then generate symbols down
+        if include_parents:
+            if sym.parent_ref:
+                return self.get_symbol_summary(
+                    sym.parent_ref,
+                    indent,
+                    include_comments,
+                    include_docs,
+                    include_parents,
+                    (child_stack or []) + [[sym]])
+            else:
+                include_parents = False
+
+        only_children = child_stack.pop() if child_stack else None
+
         IND = " " * indent
         lines: list[str] = []
 
@@ -847,9 +851,13 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
 
+            if only_children:
+                lines.append(f"{IND}    ...")
+
             body_symbols_added = False
+
             for child in sym.children:
-                if only_children is not None and child not in only_children:
+                if only_children and child not in only_children:
                     continue
 
                 if not include_comments and child.kind == SymbolKind.COMMENT:
@@ -871,8 +879,12 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         elif sym.kind == SymbolKind.TRYCATCH:
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
+
             for child in sym.children:
-                if only_children is not None and child not in only_children:
+                if only_children:
+                    lines.append(f"{IND}    ...")
+
+                if only_children and child not in only_children:
                     continue
 
                 lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
@@ -882,54 +894,6 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             _emit_docstring(sym.docstring, IND)
 
         return "\n".join(lines)
-
-    def get_symbol_summary(
-        self,
-        sym: SymbolMetadata,
-        indent: int = 0,
-        include_comments: bool = False,
-        include_docs: bool = False,
-        include_parents: bool = False,
-    ) -> str:
-        # Fast path – original behaviour
-        if not include_parents:
-            return self._get_sym_summary(
-                sym,
-                indent,
-                include_comments,
-                include_docs,
-            )
-
-        # Build ancestry chain  (root …→ … sym)
-        chain: list[SymbolMetadata] = []
-        cur = sym
-        while cur is not None:
-            chain.append(cur)
-            cur = cur.parent_ref
-        chain.reverse()
-
-        # Generate summaries – one level per element, ascending indent
-        lines: list[str] = []
-        for depth, node in enumerate(chain):
-            is_leaf = depth == len(chain) - 1
-
-            # For non-leaf nodes keep exactly the next symbol in the chain,
-            # instead of hiding all children.
-            child_filter = None
-            if not is_leaf:
-                child_filter = [chain[depth + 1]]       # sole descendant to display
-
-            lines.append(
-                self._get_sym_summary(
-                    node,
-                    indent + depth * 4,
-                    include_comments,
-                    include_docs,
-                    child_filter
-                ).rstrip()
-            )
-
-        return "\n".join(l for l in lines if l.strip())
 
     def get_import_summary(self, imp: ImportEdge) -> str:
         """
