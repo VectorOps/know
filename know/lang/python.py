@@ -849,11 +849,12 @@ class PythonLanguageHelper(AbstractLanguageHelper):
 
             body_symbols_added = False
             for child in sym.children:
-                # NEW ────────────────  skip unwanted children
                 if only_children is not None and child not in only_children:
                     continue
+
                 if not include_comments and child.kind == SymbolKind.COMMENT:
                     continue
+
                 child_summary = self.get_symbol_summary(
                     child,
                     indent + 4,
@@ -871,9 +872,9 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             for child in sym.children:
-                # NEW ────────────────  skip unwanted children
                 if only_children is not None and child not in only_children:
                     continue
+
                 lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
 
         # (Variables / constants etc. – docstring only)
@@ -904,20 +905,27 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         cur = sym
         while cur is not None:
             chain.append(cur)
-            cur = getattr(cur, "parent_ref", None)
+            cur = cur.parent_ref
         chain.reverse()
 
         # Generate summaries – one level per element, ascending indent
         lines: list[str] = []
         for depth, node in enumerate(chain):
             is_leaf = depth == len(chain) - 1
+
+            # For non-leaf nodes keep exactly the next symbol in the chain,
+            # instead of hiding all children.
+            child_filter = None
+            if not is_leaf:
+                child_filter = [chain[depth + 1]]       # sole descendant to display
+
             lines.append(
                 self._get_sym_summary(
                     node,
-                    indent + depth * 4,           # increase indent each level
+                    indent + depth * 4,
                     include_comments,
                     include_docs,
-                    [] if not is_leaf else None   # ancestors: no kids; leaf: all kids
+                    child_filter
                 ).rstrip()
             )
 
