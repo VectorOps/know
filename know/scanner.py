@@ -75,12 +75,12 @@ def schedule_missing_embeddings(project: "Project") -> None:
         if not page:                 # no more results
             break
         for sym in page:
-            if sym.symbol_body:
+            if sym.body:
                 schedule_symbol_embedding(
                     symbol_repo,
                     emb_calc,
                     sym_id=sym.id,
-                    body=sym.symbol_body,
+                    body=sym.body,
                     sync=project.settings.sync_embeddings,
                 )
         offset += PAGE_SIZE
@@ -112,7 +112,7 @@ def schedule_outdated_embeddings(project: "Project") -> None:
         for sym in page:
             # symbol already has an embedding → but with a *different* model
             if (
-                sym.symbol_body
+                sym.body
                 and sym.embedding_model
                 and sym.embedding_model != model_name
             ):
@@ -120,7 +120,7 @@ def schedule_outdated_embeddings(project: "Project") -> None:
                     symbol_repo,
                     emb_calc,
                     sym_id=sym.id,
-                    body=sym.symbol_body,
+                    body=sym.body,
                     sync=project.settings.sync_embeddings,
                 )
 

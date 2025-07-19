@@ -99,10 +99,11 @@ class SearchSymbolsTool(BaseTool):
             sym_body = None
             if summary_mode != SummaryMode.Skip:
                 if summary_mode == SummaryMode.Full:
-                    sym_body = s.symbol_body
+                    sym_body = s.body
                 elif helper is not None:
-                    skip_docs = summary_mode == SummaryMode.ShortSummary
-                    sym_body  = helper.get_symbol_summary(s, skip_docs=skip_docs)
+                    include_docs = summary_mode == SummaryMode.FullSummary
+                    include_comments = summary_mode == SummaryMode.FullSummary
+                    sym_body  = helper.get_symbol_summary(s, include_comments=include_comments, include_docs=include_docs)
 
             results.append(
                 SymbolSearchResult(

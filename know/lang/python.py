@@ -138,7 +138,7 @@ class PythonCodeParser(AbstractCodeParser):
         ]
 
     #  generic “literal” helper – used everywhere a fallback symbol is needed
-    def _create_literal_symbol(self, node):
+    def _create_literal_symbol(self, node, parent=None):
         return self._make_symbol(
             node,
             kind=SymbolKind.LITERAL,
