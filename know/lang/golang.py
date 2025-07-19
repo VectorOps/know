@@ -1059,8 +1059,8 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             if sym.children:
                 header = f"type {sym.name} interface {{"
                 lines.append(f"{IND}{header}")
-                    for child in sym.children:
-                        lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+                for child in sym.children:
+                    lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
                 lines.append(f"{IND}}}")
                 return "\n".join(lines)
             else:
