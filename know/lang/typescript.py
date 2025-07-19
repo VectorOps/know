@@ -4,6 +4,7 @@ from typing import Optional, List
 import logging
 
 from tree_sitter import Parser, Language
+from tree_sitter import QueryCursor          # after existing imports
 import tree_sitter_typescript as tsts  # pip install tree_sitter_typescript
 
 from know.parsers import (
@@ -146,6 +147,23 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     # -------------- handlers (MINIMAL) --------------------------------- #
     _RESOLVE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx")
+
+# ───────────────── tree-sitter queries for outgoing references ───────
+_TS_REF_QUERY = TS_LANGUAGE.query(r"""
+  ;; ❶ function / method calls ———————————————
+  (call_expression
+       function: [(identifier) (member_expression)] @callee) @call
+
+  ;; ❷ constructor (`new`) expressions ———————————
+  (new_expression
+       constructor: [(identifier) (member_expression)] @ctor) @new
+
+  ;; ❸ type references (identifiers inside a type context) ———
+  [
+    (type_identifier)         ;; Foo, Bar.Baz, …
+    (generic_type)            ;; Foo<…>
+  ] @typeid
+""")
 
     def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
         # local   →  starts with '.'  (./foo, ../bar/baz)
@@ -908,8 +926,71 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
     # very shallow call-collector
-    def _collect_symbol_refs(self, root):
-        return []  # TODO – later
+    # ------------------------------------------------------------------
+    #  Outgoing symbol-reference collector
+    # ------------------------------------------------------------------
+    def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
+        """
+        Extract outgoing references using a pre-compiled tree-sitter query.
+
+        • call_expression   → SymbolRefType.CALL
+        • new_expression    → SymbolRefType.NEW
+        • type identifiers  → SymbolRefType.TYPE
+        """
+        refs: list[ParsedSymbolRef] = []
+        cursor = QueryCursor()
+
+        for match in cursor.execute(_TS_REF_QUERY, root):
+            # initialise
+            node_call = node_ctor = node_type = None
+            node_target = None
+            ref_type = None
+
+            # decode captures
+            for node, cap_idx in match.captures:
+                cap = _TS_REF_QUERY.capture_names[cap_idx]
+                if cap == "call":
+                    ref_type, node_call, node_target = SymbolRefType.CALL, node, None
+                elif cap == "callee":
+                    node_target = node
+                elif cap == "new":
+                    ref_type, node_ctor, node_target = SymbolRefType.NEW, node, None
+                elif cap == "ctor":
+                    node_target = node
+                elif cap == "typeid":
+                    ref_type, node_type, node_target = SymbolRefType.TYPE, node, node
+
+            # ensure we have something to work with
+            if node_target is None or ref_type is None:
+                continue
+
+            full_name = node_target.text.decode("utf8")
+            simple_name = full_name.split(".")[-1]
+            raw = self.source_bytes[
+                (node_call or node_ctor or node_type).start_byte :
+                (node_call or node_ctor or node_type).end_byte
+            ].decode("utf8")
+
+            # best-effort import resolution – re-use logic from _collect_require_calls
+            to_pkg_path: str | None = None
+            for imp in self.parsed_file.imports:
+                if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
+                    to_pkg_path = imp.virtual_path
+                    break
+                if not imp.alias and (full_name == imp.virtual_path or full_name.startswith(f"{imp.virtual_path}.")):
+                    to_pkg_path = imp.virtual_path
+                    break
+
+            refs.append(
+                ParsedSymbolRef(
+                    name=simple_name,
+                    raw=raw,
+                    type=ref_type,
+                    to_package_path=to_pkg_path,
+                )
+            )
+
+        return refs
 
     def _collect_require_calls(self, node):
         if node.type == "call_expression":
