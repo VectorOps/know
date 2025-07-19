@@ -63,10 +63,6 @@ class GolangCodeParser(AbstractCodeParser):
         p = Path(rel_path)
         return str(p.with_suffix("")).replace("/", ".")
 
-    @staticmethod
-    def _join_fqn(*parts: Optional[str]) -> str:
-        """Join non-empty parts with a dot, skipping Nones / empty strings."""
-        return ".".join([p for p in parts if p])
 
     def parse(self, cache: ProjectCache) -> ParsedFile:
         """
@@ -496,6 +492,7 @@ class GolangCodeParser(AbstractCodeParser):
     def _handle_function_declaration(
         self,
         node,
+        parent=None,
     ) -> List[ParsedSymbol]:
         ident_node = next((c for c in node.children if c.type == "identifier"), None)
         if ident_node is None:
@@ -522,7 +519,7 @@ class GolangCodeParser(AbstractCodeParser):
             else None
         )
 
-        fqn: str = self._join_fqn(self.package.virtual_path, name)
+        fqn = self._make_fqn(name)
 
         return [
             self._make_symbol(
@@ -539,6 +536,7 @@ class GolangCodeParser(AbstractCodeParser):
     def _handle_method_declaration(
         self,
         node,
+        parent=None,
     ) -> List[ParsedSymbol]:
         ident_node = next(
             (c for c in node.children if c.type in ("field_identifier", "identifier")),
@@ -590,7 +588,7 @@ class GolangCodeParser(AbstractCodeParser):
         # --- misc. metadata ------------------------------------------------
         docstring = self._extract_preceding_comment(node)
 
-        fqn = self._join_fqn(self.package.virtual_path, receiver_type, name)
+        fqn = self._make_fqn(f"{receiver_type}.{name}")
         visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
         return [
@@ -646,7 +644,7 @@ class GolangCodeParser(AbstractCodeParser):
                     fld,
                     kind=SymbolKind.PROPERTY,
                     name=fname,
-                    fqn=self._join_fqn(self.package.virtual_path, parent.name, fname),
+                    fqn=self._make_fqn(fname, parent),
                     docstring=self._extract_preceding_comment(fld),
                     visibility=Visibility.PUBLIC if fname[0].isupper()
                                                 else Visibility.PRIVATE,
@@ -691,7 +689,7 @@ class GolangCodeParser(AbstractCodeParser):
         child = self._make_symbol(
             m,
             name=mname,
-            fqn=self._join_fqn(self.package.virtual_path, parent.name, mname),
+            fqn=self._make_fqn(mname, parent),
             kind=SymbolKind.METHOD_DEF,
             visibility=infer_visibility(mname),
             docstring=self._extract_preceding_comment(m),
@@ -700,21 +698,6 @@ class GolangCodeParser(AbstractCodeParser):
         parent.children.append(child)
 
     def _handle_type_declaration(self, node) -> List[ParsedSymbol]:
-        """
-        Extract every `type` definition (structs, interfaces, aliases …) from the
-        supplied *type_declaration* node and register them as ParsedSymbol objects.
-        Handles both the single-declaration form
-
-            type Foo struct { … }
-
-        and the grouped form
-
-            type (
-                Foo struct { … }
-                Bar interface { … }
-            )
-        """
-        # --- collect type_spec nodes ------------------------------------
         specs = [c for c in node.children if c.type == "type_spec"]
 
         # single-line declaration has no inner *type_spec* – treat the node itself
@@ -755,7 +738,7 @@ class GolangCodeParser(AbstractCodeParser):
                 spec,
                 kind=kind,
                 name=name,
-                fqn=self._join_fqn(self.package.virtual_path, name),
+                fqn=self._make_fqn(name),
                 docstring=self._extract_preceding_comment(spec),
                 visibility=infer_visibility(name),
             )
@@ -773,6 +756,7 @@ class GolangCodeParser(AbstractCodeParser):
     def _handle_const_declaration(
         self,
         node,
+        parent=None,
     ) -> List[ParsedSymbol]:
         # --- obtain every `const_spec` regardless of grouping -------------
         specs = [c for c in node.children if c.type == "const_spec"]
@@ -802,7 +786,7 @@ class GolangCodeParser(AbstractCodeParser):
 
             for idn in id_nodes:
                 name = idn.text.decode("utf8")
-                fqn = self._join_fqn(self.package.virtual_path, name)
+                fqn = self._make_fqn(name)
 
                 sym = self._make_symbol(
                     spec,
@@ -819,6 +803,7 @@ class GolangCodeParser(AbstractCodeParser):
     def _handle_var_declaration(
         self,
         node,
+        parent=None,
     ) -> List[ParsedSymbol]:
         # --- obtain every `var_spec` regardless of grouping -------------
         specs = [c for c in node.children if c.type == "var_spec"]
@@ -850,7 +835,7 @@ class GolangCodeParser(AbstractCodeParser):
 
             for idn in id_nodes:
                 name = idn.text.decode("utf8")
-                fqn = self._join_fqn(self.package.virtual_path, name)
+                fqn = self._make_fqn(name)
 
                 sym = self._make_symbol(spec,
                                         name=name,
