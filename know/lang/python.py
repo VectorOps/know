@@ -41,6 +41,8 @@ def _get_parser():
 
 
 class PythonCodeParser(AbstractCodeParser):
+    language = ProgrammingLanguage.PYTHON
+
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
         self.project = project
@@ -49,9 +51,12 @@ class PythonCodeParser(AbstractCodeParser):
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
-    # Virtual-path / FQN helpers
-    @staticmethod
-    def _rel_to_virtual_path(rel_path: str) -> str:
+    # Required methods
+    def _handle_file(self, root_node):
+        # Extract file-level docstring
+        self.parsed_file.docstring = self._extract_docstring(root_node)
+
+    def _rel_to_virtual_path(self, rel_path: str) -> str:
         """
         Convert a file’s *relative* path into its dotted Python module path.
 
@@ -65,63 +70,7 @@ class PythonCodeParser(AbstractCodeParser):
             parts = p.with_suffix("").parts       # strip ".py"
         return ".".join(parts)
 
-
-    def parse(self, cache: ProjectCache) -> ParsedFile:
-        file_path = os.path.join(self.project.settings.project_path, self.rel_path)
-        mtime: float = os.path.getmtime(file_path)
-        with open(file_path, "rb") as file:
-            self.source_bytes = file.read()
-
-        tree = self.parser.parse(self.source_bytes)
-        root_node = tree.root_node
-
-        self.package = ParsedPackage(
-            language=ProgrammingLanguage.PYTHON,
-            physical_path=self.rel_path,
-            virtual_path=self._rel_to_virtual_path(self.rel_path),
-            imports=[]
-        )
-
-        # Extract file-level docstring
-        file_docstring = self._extract_docstring(root_node)
-
-        # Initialize ParsedFile
-        self.parsed_file = ParsedFile(
-            package=self.package,
-            path=self.rel_path,
-            language=ProgrammingLanguage.PYTHON,
-            docstring=file_docstring,
-            last_updated=mtime,
-            symbols=[],
-            imports=[]
-        )
-
-        # Traverse the syntax tree and populate Parsed structures
-        for child in root_node.children:
-            nodes = self._process_node(child)
-
-            if nodes:
-                self.parsed_file.symbols.extend(nodes)
-            else:
-                logger.warning(
-                    "Parser handled node but produced no symbols",
-                    path=self.parsed_file.path,
-                    node_type=child.type,
-                    line=child.start_point[0] + 1,
-                    raw=child.text.decode("utf8", errors="replace"),
-                )
-
-        # Collect outgoing symbol-references (calls)
-        self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
-
-        # Sync package-level imports with file-level imports
-        self.package.imports = list(self.parsed_file.imports)
-
-        for sym in self.parsed_file.symbols:
-            sym.exported = (sym.visibility != Visibility.PRIVATE)
-
-        return self.parsed_file
-
+    # Symbol helpers
     def _create_import_symbol(self, node, import_path: str | None, alias: str | None) -> ParsedSymbol:
         return self._make_symbol(
             node,

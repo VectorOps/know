@@ -67,6 +67,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         "module_declaration",
                         "internal_module"}
 
+    language = ProgrammingLanguage.TYPESCRIPT
+
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
         self.project = project
@@ -75,79 +77,15 @@ class TypeScriptCodeParser(AbstractCodeParser):
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
-    # ---- helpers (shortened vs python) -------------------------------- #
-    @staticmethod
-    def _rel_to_virtual_path(rel_path: str) -> str:
+    # Required methods
+    def _handle_file(self, root_node):
+        pass
+
+    def _rel_to_virtual_path(self, rel_path: str) -> str:
         p = Path(rel_path)
         parts = p.with_suffix("").parts
         return ".".join(parts)
 
-    # ---- generic helpers -------------------------------------------- #
-    def _has_modifier(self, node, keyword: str) -> bool:
-        """
-        Return True when *keyword* (ex: "abstract") is present in *node*’s
-        modifier list.
-
-        Works with both tree-sitter token nodes (child.type == keyword) and
-        a simple textual fallback on the slice preceding the body “{”.
-        """
-        if any(ch.type == keyword for ch in node.children):
-            return True
-        header = node.text.split(b"{", 1)[0]    # ignore body
-        return (b" " + keyword.encode() + b" ") in header \
-            or header.lstrip().startswith(keyword.encode() + b" ")
-
-    # ------------------------------------------------------------------ #
-    def parse(self, cache: ProjectCache) -> ParsedFile:
-        file_abs = os.path.join(self.project.settings.project_path, self.rel_path)
-        mtime = os.path.getmtime(file_abs)
-        with open(file_abs, "rb") as fh:
-            self.source_bytes = fh.read()
-
-        tree = self.parser.parse(self.source_bytes)
-        root = tree.root_node
-
-        self.package = ParsedPackage(
-            language=ProgrammingLanguage.TYPESCRIPT,
-            physical_path=self.rel_path,
-            virtual_path=self._rel_to_virtual_path(self.rel_path),
-            imports=[],
-        )
-        self.parsed_file = ParsedFile(
-            package=self.package,
-            path=self.rel_path,
-            language=ProgrammingLanguage.TYPESCRIPT,
-            docstring=None,
-            file_hash=compute_file_hash(file_abs),
-            last_updated=mtime,
-            symbols=[],
-            imports=[],
-        )
-
-        symbols_before = len(self.parsed_file.symbols)
-
-        # walk direct children only (top-level constructs)
-        for child in root.children:
-            nodes = self._process_node(child)
-
-            if nodes:
-                self.parsed_file.symbols.extend(nodes)
-            else:
-                if len(self.parsed_file.symbols) == symbols_before:
-                    logger.warning(
-                        "Parser handled node but produced no symbols",
-                        path=self.parsed_file.path,
-                        node_type=child.type,
-                        line=child.start_point[0] + 1,
-                        raw=child.text.decode("utf8", errors="replace"),
-                    )
-
-        self.parsed_file.symbol_refs = self._collect_symbol_refs(root)
-
-        self.package.imports = list(self.parsed_file.imports)
-        return self.parsed_file
-
-    # ------------ generic dispatcher ----------------------------------- #
     def _process_node(self, node, parent=None) -> List[ParsedSymbol]:
         #print(node, node.text.decode("utf8"))
 
@@ -186,6 +124,21 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
         return [self._create_literal_symbol(node, parent=parent)]
+
+    # ---- generic helpers -------------------------------------------- #
+    def _has_modifier(self, node, keyword: str) -> bool:
+        """
+        Return True when *keyword* (ex: "abstract") is present in *node*’s
+        modifier list.
+
+        Works with both tree-sitter token nodes (child.type == keyword) and
+        a simple textual fallback on the slice preceding the body “{”.
+        """
+        if any(ch.type == keyword for ch in node.children):
+            return True
+        header = node.text.split(b"{", 1)[0]    # ignore body
+        return (b" " + keyword.encode() + b" ") in header \
+            or header.lstrip().startswith(keyword.encode() + b" ")
 
     # ------------------------------------------------------------------ #
     def _handle_generic_statement(self, node, parent=None) -> None:

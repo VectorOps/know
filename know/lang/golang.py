@@ -45,6 +45,8 @@ def _get_parser():
 
 
 class GolangCodeParser(AbstractCodeParser):
+    language = ProgrammingLanguage.GO
+
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
         self.rel_path = rel_path
@@ -54,8 +56,16 @@ class GolangCodeParser(AbstractCodeParser):
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
-    @staticmethod
-    def _rel_to_virtual_path(rel_path: str) -> str:
+    def parse(self, cache: ProjectCache) -> ParsedFile:
+        self._load_module_path(cache)
+
+        return super().parse(cache)
+
+    # Required methods
+    def _handle_file(self, root_node):
+        pass
+
+    def _rel_to_virtual_path(self, rel_path: str) -> str:
         """
         Convert a file's *relative* path into its Go import path.
         Example: "pkg/foo/bar.go" -> "pkg/foo"
@@ -63,68 +73,18 @@ class GolangCodeParser(AbstractCodeParser):
         p = Path(rel_path)
         return str(p.with_suffix("")).replace("/", ".")
 
-
-    def parse(self, cache: ProjectCache) -> ParsedFile:
-        """
-        Parse a Go source file, populating ParsedFile, ParsedSymbols, etc.
-        """
-        # Ensure we know the module path for this project
-        self._load_module_path(cache)
-
-        file_path = os.path.join(self.project.settings.project_path, self.rel_path)
-        mtime: float = os.path.getmtime(file_path)
-        with open(file_path, "rb") as file:
-            source_bytes = file.read()
-        self.source_bytes = source_bytes
-
-        # Parse the code with tree-sitter
-        tree = self.parser.parse(source_bytes)
-        root_node = tree.root_node
-
+    def _create_package(self, root_node):
         package_name = self._build_virtual_package_path(root_node)
 
         rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
         physical_path = rel_dir or "."
 
-        self.package = ParsedPackage(
+        return ParsedPackage(
             language=ProgrammingLanguage.GO,
             physical_path=physical_path,
             virtual_path=package_name,
             imports=[],
         )
-
-        self.parsed_file = ParsedFile(
-            package=self.package,
-            path=self.rel_path,
-            language=ProgrammingLanguage.GO,
-            docstring=None,
-            file_hash=compute_file_hash(file_path),
-            last_updated=mtime,
-            symbols=[],
-            imports=[],
-        )
-
-        # Visit all top-level nodes (imports, functions, types, vars, etc)
-        for child in root_node.children:
-            nodes = self._process_node(child)
-
-            if nodes:
-                self.parsed_file.symbols.extend(nodes)
-            else:
-                logger.warning(
-                    "Parser handled node but produced no symbols",
-                    path=self.parsed_file.path,
-                    node_type=child.type,
-                    line=child.start_point[0] + 1,
-                    raw=child.text.decode("utf8", errors="replace"),
-                )
-
-        # Collect outgoing symbol-references (calls & types)
-        self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
-
-        self.package.imports = list(self.parsed_file.imports)
-
-        return self.parsed_file
 
     def _process_node(
         self,

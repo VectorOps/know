@@ -1,3 +1,4 @@
+import os
 from typing import Optional, List, Dict, Any, Type
 from abc import abstractmethod
 from pydantic import BaseModel, Field
@@ -14,6 +15,7 @@ from know.models import (
     SymbolRefType,
 )
 from know.project import Project, ProjectCache
+from know.helpers import compute_file_hash
 
 
 # Parser-specific data structures
@@ -150,6 +152,65 @@ class AbstractCodeParser:
         pass
 
     # Helpers
+    def parse(self, cache: ProjectCache) -> ParsedFile:
+        file_path = os.path.join(self.project.settings.project_path, self.rel_path)
+        mtime: float = os.path.getmtime(file_path)
+        with open(file_path, "rb") as file:
+            self.source_bytes = file.read()
+
+        tree = self.parser.parse(self.source_bytes)
+        root_node = tree.root_node
+
+        self.package = self._create_package(root_node)
+        self.parsed_file = self._create_file(file_path, mtime)
+
+        # Traverse the syntax tree and populate Parsed structures
+        for child in root_node.children:
+            nodes = self._process_node(child)
+
+            if nodes:
+                self.parsed_file.symbols.extend(nodes)
+            else:
+                logger.warning(
+                    "Parser handled node but produced no symbols",
+                    path=self.parsed_file.path,
+                    node_type=child.type,
+                    line=child.start_point[0] + 1,
+                    raw=child.text.decode("utf8", errors="replace"),
+                )
+
+        self._handle_file(root_node)
+
+        # Collect outgoing symbol-references (calls)
+        self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
+
+        # Sync package-level imports with file-level imports
+        self.package.imports = list(self.parsed_file.imports)
+
+        for sym in self.parsed_file.symbols:
+            sym.exported = (sym.visibility != Visibility.PRIVATE)
+
+        return self.parsed_file
+
+    def _create_package(self, root_node):
+        return ParsedPackage(
+            language=self.language,
+            physical_path=self.rel_path,
+            virtual_path=self._rel_to_virtual_path(self.rel_path),
+            imports=[]
+        )
+
+    def _create_file(self, file_path, mtime):
+        return ParsedFile(
+            package=self.package,
+            path=self.rel_path,
+            language=self.language,
+            file_hash=compute_file_hash(file_path),
+            last_updated=mtime,
+            symbols=[],
+            imports=[]
+        )
+
     def _make_fqn(self,
                   name: str | None,
                   parent: ParsedSymbol | None = None) -> str | None:
