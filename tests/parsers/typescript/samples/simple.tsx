@@ -95,3 +95,6 @@ export default function MyApp() {
     </div>
   );
 }
+
+const circle = require('./circle.js');
+exports.area = (r) => PI * r ** 2;

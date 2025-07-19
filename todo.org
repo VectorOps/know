@@ -33,14 +33,14 @@
 *** [X] Generics
 *** [ ] Test module path resolution
 ** [-] TypeScript
-*** [ ] Reference parsing
+*** [X] Reference parsing
 *** [X] Generics
 *** [X] Namespaces
-*** [ ] CommonJS imports and exports
-*** [ ] Modules
+*** [X] CommonJS imports and exports
+*** [X] Modules
 *** [ ] Declare
 *** [ ] Test module path resolution
-*** [ ] React TSX support
+*** [X] React TSX support
 ** [ ] JavaScript
 ** [ ] C
 ** [ ] C#

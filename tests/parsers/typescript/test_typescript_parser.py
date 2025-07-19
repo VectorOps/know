@@ -41,8 +41,10 @@ def test_typescript_parser_on_simple_file():
     assert parsed_file.language == ProgrammingLanguage.TYPESCRIPT
 
     # imports
-    assert len(parsed_file.imports) == 1
+    assert len(parsed_file.imports) == 2
     assert parsed_file.imports[0].raw.startswith("import React")
+    print(parsed_file.imports[1])
+    assert parsed_file.imports[1].physical_path.startswith("circle.js")
 
     # verify import resolution
     imp = parsed_file.imports[0]

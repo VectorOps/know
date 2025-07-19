@@ -181,6 +181,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if module.startswith("."):
             base_dir  = os.path.dirname(self.rel_path)
             rel_candidate = os.path.normpath(os.path.join(base_dir, module))
+
             # if no suffix, try to add the usual ones until a file exists
             if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
                 for suf in self._RESOLVE_SUFFIXES:
@@ -190,9 +191,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     ):
                         rel_candidate = cand
                         break
+
             physical = rel_candidate
             virtual  = self._rel_to_virtual_path(rel_candidate)
-            return physical, virtual, False        # local
+            return physical, virtual, False
+
         # external package (npm, built-in, etc.)
         return None, module, True
 
