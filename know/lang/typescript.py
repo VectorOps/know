@@ -100,8 +100,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return ".".join(parts)
 
     def _process_node(self, node, parent=None) -> List[ParsedSymbol]:
-        #print(node, node.text.decode("utf8"))
-
         if node.type == "import_statement":
             return self._handle_import(node, parent=parent)
         elif node.type == "export_statement":
@@ -484,8 +482,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         body = next((c for c in node.children if c.type == "class_body"), None)
         if body:
             for ch in body.children:
-                #print(ch, ch.text.decode('utf8'))
-
                 # TODO: Symbol visibility
                 if ch.type in ("method_definition", "abstract_method_signature"):
                     m = self._create_method_symbol(ch, parent=sym)
@@ -917,69 +913,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             visibility=Visibility.PUBLIC,
         )
 
-    # very shallow call-collector
-    def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
-        """
-        Extract outgoing references using a pre-compiled tree-sitter query.
-
-        • call_expression   → SymbolRefType.CALL
-        • new_expression    → SymbolRefType.TYPE
-        • type identifiers  → SymbolRefType.TYPE
-        """
-        refs: list[ParsedSymbolRef] = []
-
-        for match in self._TS_REF_QUERY.matches(root):
-            # initialise
-            node_call = node_ctor = node_type = None
-            node_target = None
-            ref_type = None
-
-            # decode captures
-            for node, cap in match.captures:
-                if cap == "call":
-                    ref_type, node_call = SymbolRefType.CALL, node
-                elif cap == "callee":
-                    node_target = node
-                elif cap == "new":
-                    ref_type, node_ctor = SymbolRefType.NEW, node        # NEW ↔ constructor
-                elif cap == "ctor":
-                    node_target = node
-                elif cap == "typeid":
-                    ref_type, node_type = SymbolRefType.TYPE, node
-                    node_target = node
-
-            # ensure we have something to work with
-            if node_target is None or ref_type is None:
-                continue
-
-            full_name = node_target.text.decode("utf8")
-            simple_name = full_name.split(".")[-1]
-            raw_node = node_call or node_ctor or node_type
-            raw = self.source_bytes[
-                raw_node.start_byte : raw_node.end_byte
-            ].decode("utf8")
-
-            # best-effort import resolution – re-use logic from _collect_require_calls
-            to_pkg_path: str | None = None
-            for imp in self.parsed_file.imports:
-                if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
-                    to_pkg_path = imp.virtual_path
-                    break
-                if not imp.alias and (full_name == imp.virtual_path or full_name.startswith(f"{imp.virtual_path}.")):
-                    to_pkg_path = imp.virtual_path
-                    break
-
-            refs.append(
-                ParsedSymbolRef(
-                    name=simple_name,
-                    raw=raw,
-                    type=ref_type,
-                    to_package_path=to_pkg_path,
-                )
-            )
-
-        return refs
-
     def _collect_require_calls(self, node):
         if node.type == "call_expression":
             fn = node.child_by_field_name("function")
@@ -1062,8 +995,70 @@ class TypeScriptCodeParser(AbstractCodeParser):
             sym,
         ]
 
+    def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
+        """
+        Extract outgoing references using a pre-compiled tree-sitter query.
 
-# ---------------------------------------------------------------------- #
+        • call_expression   → SymbolRefType.CALL
+        • new_expression    → SymbolRefType.TYPE
+        • type identifiers  → SymbolRefType.TYPE
+        """
+        refs: list[ParsedSymbolRef] = []
+
+        for _, match in self._TS_REF_QUERY.matches(root):
+            # initialise
+            node_call = node_ctor = node_type = None
+            node_target = None
+            ref_type = None
+
+            # decode captures
+            for cap, nodes in match.items():
+                for node in nodes:
+                    if cap == "call":
+                        ref_type, node_call = SymbolRefType.CALL, node
+                    elif cap == "callee":
+                        node_target = node
+                    elif cap == "new":
+                        ref_type, node_ctor = SymbolRefType.TYPE, node
+                    elif cap == "ctor":
+                        node_target = node
+                    elif cap == "typeid":
+                        ref_type, node_type = SymbolRefType.TYPE, node
+                        node_target = node
+
+            # ensure we have something to work with
+            if node_target is None or ref_type is None:
+                continue
+
+            full_name = node_target.text.decode("utf8")
+            simple_name = full_name.split(".")[-1]
+            raw_node = node_call or node_ctor or node_type
+            raw = self.source_bytes[
+                raw_node.start_byte : raw_node.end_byte
+            ].decode("utf8")
+
+            # best-effort import resolution – re-use logic from _collect_require_calls
+            to_pkg_path: str | None = None
+            for imp in self.parsed_file.imports:
+                if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
+                    to_pkg_path = imp.virtual_path
+                    break
+                if not imp.alias and (full_name == imp.virtual_path or full_name.startswith(f"{imp.virtual_path}.")):
+                    to_pkg_path = imp.virtual_path
+                    break
+
+            refs.append(
+                ParsedSymbolRef(
+                    name=simple_name,
+                    raw=raw,
+                    type=ref_type,
+                    to_package_path=to_pkg_path,
+                )
+            )
+
+        return refs
+
+
 class TypeScriptLanguageHelper(AbstractLanguageHelper):
     def get_symbol_summary(self,
                            sym: SymbolMetadata,

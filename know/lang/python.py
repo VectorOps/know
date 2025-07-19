@@ -756,6 +756,7 @@ class PythonCodeParser(AbstractCodeParser):
                 visit(ch)
 
         visit(root)
+
         return refs
 
 

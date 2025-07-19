@@ -20,28 +20,19 @@
 * [ ] Summary mode where parent symbols are also included
 * [ ] Add a inherits field to symbols
 * [X] Move parse() implementation to AbstractCodeparser. Allow to customize.
+* [ ] When parsing references from files, skip duplicate names
+* [ ] Define the meaning of to_package_path for ParsedSymbolRef (virtual path, physical path, etc)
 * [ ] Language support
 ** [-] Python
 *** [ ] Test module path resolution
+*** [ ] Fix to_package_path for python
+        to_package_path='os', for 'os.path.join'
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
 *** [X] Refactror node parser to return nodes like python and typescript parsers
 *** [X] Generics
 *** [ ] Test module path resolution
 ** [-] TypeScript
-*** [ ] Fix summary:
-Down   (constant) (c8350ef9-fc3d-4e95-a668-8a92453bb96a)
-FQN:  tests.parsers.typescript.samples.simple.Down
-File: tests/parsers/typescript/samples/simple.tsx
-
-enum Direction {
-}
---------------------------------------------------------------------------------
-f   (variable) (4eee3c8c-9631-417c-a50e-76b0cf273aae)
-FQN:  tests.parsers.typescript.samples.simple.f
-File: tests/parsers/typescript/samples/simple.tsx
-
-var ;
 *** [ ] Reference parsing
 *** [X] Generics
 *** [X] Namespaces
