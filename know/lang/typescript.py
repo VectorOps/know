@@ -846,6 +846,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         if sym:
                             children.append(sym)
                         continue
+                    # NEW – class expression on RHS
+                    elif rhs.type in ("class", "class_declaration", "abstract_class_declaration"):
+                        child = self._handle_class_expression(
+                            ch, rhs, parent=parent, exported=False
+                        )
+                        if child:
+                            children.append(child)
+                        continue
 
                 elif rhs and rhs.type == "call_expression":
                     alias_node = lhs.child_by_field_name("identifier") or \
@@ -953,6 +961,89 @@ class TypeScriptCodeParser(AbstractCodeParser):
             exported   = exported,
         )
 
+    # --------------------------------------------------------------- #
+    #  Class-expression helpers  ( const Foo = class { … } )
+    # --------------------------------------------------------------- #
+    def _resolve_class_expression_name(self, holder_node) -> Optional[str]:
+        """
+        Mirrors _resolve_arrow_function_name but for anonymous `class` RHS.
+        """
+        name_node = holder_node.child_by_field_name("name")
+        if name_node:
+            return name_node.text.decode("utf8").split(".")[-1]
+
+        lhs_node = holder_node.child_by_field_name("left") \
+                   or holder_node.child_by_field_name("name")
+        if lhs_node:
+            lhs_txt = lhs_node.text.decode("utf8")
+            if lhs_txt:
+                return lhs_txt.split(".")[-1]
+
+        ident_node = next((c for c in holder_node.children
+                           if c.type in ("identifier", "property_identifier")), None)
+        if ident_node is None:
+            ident_node = self._find_first_identifier(holder_node)
+
+        return ident_node.text.decode("utf8").split(".")[-1] if ident_node else None
+
+
+    def _handle_class_expression(
+        self,
+        holder_node,
+        class_node,
+        parent=None,
+        exported: bool = False,
+    ) -> Optional[ParsedSymbol]:
+        name = self._resolve_class_expression_name(holder_node)
+        if not name:
+            return None
+
+        # keep the declarator header (without body) for the signature
+        raw_header = holder_node.text.decode("utf8").split("{", 1)[0].strip().rstrip(";")
+        tp         = self._extract_type_parameters(class_node)
+        sig        = SymbolSignature(raw=raw_header,
+                                     parameters=[],
+                                     return_type=None,
+                                     type_parameters=tp)
+
+        mods: list[Modifier] = []
+        if tp:
+            mods.append(Modifier.GENERIC)
+
+        sym = self._make_symbol(
+            class_node,
+            kind=SymbolKind.CLASS,
+            name=name,
+            fqn=self._make_fqn(name, parent),
+            signature=sig,
+            modifiers=mods,
+            children=[],
+            exported=exported,
+        )
+
+        body = next((c for c in class_node.children if c.type == "class_body"), None)
+        if body:
+            for ch in body.children:
+                if ch.type in ("method_definition", "abstract_method_signature"):
+                    m = self._create_method_symbol(ch, parent=sym)
+                    sym.children.append(m)
+                elif ch.type in (
+                    "variable_statement",
+                    "lexical_declaration",
+                    "public_field_declaration",
+                    "public_field_definition",
+                ):
+                    value_node = ch.child_by_field_name("value")
+                    if value_node and value_node.type == "arrow_function":
+                        child = self._handle_arrow_function(ch, value_node, parent=sym, exported=exported)
+                        if child:
+                            sym.children.append(child)
+                        continue
+                    v = self._create_variable_symbol(ch, parent=sym, exported=exported)
+                    if v:
+                        sym.children.append(v)
+        return sym
+
     def _handle_lexical(self, node, parent=None, exported=False):
         lexical_kw = node.text.decode("utf8").lstrip().split()[0]
         is_const_decl = node.text.lstrip().startswith(b"const")
@@ -980,6 +1071,19 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 continue
 
             value_node = ch.child_by_field_name("value")
+
+            # --- NEW : class expression --------------------------------
+            if value_node and value_node.type in (
+                "class",
+                "class_declaration",
+                "abstract_class_declaration",
+            ):
+                child = self._handle_class_expression(
+                    ch, value_node, parent=parent, exported=exported
+                )
+                if child:
+                    sym.children.append(child)
+                continue
 
             if value_node:
                 if value_node.type == "arrow_function":

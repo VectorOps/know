@@ -72,6 +72,12 @@ window.onload = () => {
     alert("yes");
 };
 
+const Foo = class {
+  bar() {
+    return 123;
+  }
+};
+
 function identity<Type>(arg: Type): Type {
   return arg;
 }
