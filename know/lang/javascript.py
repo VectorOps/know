@@ -18,6 +18,7 @@ from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash
 from know.logger import logger
 
+
 JS_LANGUAGE = Language(tsjs.language())
 _parser: Parser | None = None
 def _get_parser() -> Parser:
@@ -27,38 +28,37 @@ def _get_parser() -> Parser:
     return _parser
 
 
-_MODULE_SUFFIXES     = (".js", ".jsx", ".mjs")
-_RESOLVE_SUFFIXES    = _MODULE_SUFFIXES
-_GENERIC_STATEMENT_NODES = {
-    "ambient_declaration",
-    "declare_statement",
-    "decorator",
-    "for_statement",
-    "for_in_statement",
-    "for_of_statement",
-    "if_statement",
-    "while_statement",
-    "do_statement",
-    "switch_statement",
-    "break_statement",
-    "continue_statement",
-    "return_statement",
-    "throw_statement",
-    "try_statement",
-    "debugger_statement",
-    "labeled_statement",
-    "with_statement",
-}
-_JS_REF_QUERY = JS_LANGUAGE.query(r"""
-    (call_expression
-        function: [(identifier) (member_expression)] @callee) @call
-    (new_expression
-        constructor: [(identifier) (member_expression)] @ctor) @new
-""")
-
-
 class JavaScriptCodeParser(AbstractCodeParser):
     language = ProgrammingLanguage.JAVASCRIPT
+
+    _MODULE_SUFFIXES     = (".js", ".jsx", ".mjs")
+    _RESOLVE_SUFFIXES    = _MODULE_SUFFIXES
+    _GENERIC_STATEMENT_NODES = {
+        "ambient_declaration",
+        "declare_statement",
+        "decorator",
+        "for_statement",
+        "for_in_statement",
+        "for_of_statement",
+        "if_statement",
+        "while_statement",
+        "do_statement",
+        "switch_statement",
+        "break_statement",
+        "continue_statement",
+        "return_statement",
+        "throw_statement",
+        "try_statement",
+        "debugger_statement",
+        "labeled_statement",
+        "with_statement",
+    }
+    _JS_REF_QUERY = JS_LANGUAGE.query(r"""
+        (call_expression
+            function: [(identifier) (member_expression)] @callee) @call
+        (new_expression
+            constructor: [(identifier) (member_expression)] @ctor) @new
+    """)
 
     def __init__(self, project: Project, rel_path: str):
         self.parser      = _get_parser()
@@ -129,8 +129,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
         if module.startswith("."):
             base_dir  = os.path.dirname(self.rel_path)
             rel_candidate = os.path.normpath(os.path.join(base_dir, module))
-            if not rel_candidate.endswith(_RESOLVE_SUFFIXES):
-                for suf in _RESOLVE_SUFFIXES:
+            if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
+                for suf in self._RESOLVE_SUFFIXES:
                     cand = f"{rel_candidate}{suf}"
                     if os.path.exists(
                         os.path.join(self.project.settings.project_path, cand)
@@ -170,6 +170,43 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 visibility=Visibility.PUBLIC,
             )]
 
+    def _handle_export_clause(self, node, parent=None):
+        exported_names: set[str] = set()
+        for spec in (c for c in node.named_children if c.type == "export_specifier"):
+            name_node  = spec.child_by_field_name("name") \
+                        or next((c for c in spec.named_children
+                                 if c.type == "identifier"), None)
+            alias_node = spec.child_by_field_name("alias")
+
+            if name_node:
+                exported_names.add(name_node.text.decode("utf8"))
+            if alias_node:
+                exported_names.add(alias_node.text.decode("utf8"))
+
+            if name_node or alias_node:
+                logger.debug(
+                    "JS parser: export clause identifier",
+                    path=self.rel_path,
+                    name=(alias_node or name_node).text.decode("utf8"),
+                )
+
+        # mark already-parsed symbols as exported
+        if exported_names:
+            def _mark(sym):
+                if sym.name and sym.name in exported_names:
+                    sym.exported = True
+                if sym.kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE, SymbolKind.ASSIGNMENT):
+                    for ch in sym.children:
+                        _mark(ch)
+            for s in self.parsed_file.symbols:
+                _mark(s)
+
+        return [self._make_symbol(
+                    node,
+                    kind=SymbolKind.LITERAL,
+                    visibility=Visibility.PUBLIC,
+                    exported=True)]
+
     def _handle_export(self, node, parent=None):
         decl_handled   = False
         default_seen = False
@@ -184,6 +221,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             if child.type == "default":
                 default_seen = True
                 continue
+            print(child.type)
             match child.type:
                 case "function_declaration":
                     sym.children.extend(self._handle_function(child, parent=parent, exported=True))
@@ -193,6 +231,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     decl_handled = True
                 case "variable_statement" | "lexical_declaration":
                     sym.children.extend(self._handle_lexical(child, parent=parent, exported=True))
+                    decl_handled = True
+                case "export_clause":
+                    sym.children.extend(self._handle_export_clause(child, parent=parent))
                     decl_handled = True
         if default_seen and not decl_handled:
             sym.children.append(
@@ -629,8 +670,15 @@ class JavaScriptCodeParser(AbstractCodeParser):
             sym
         ]
 
+    def _handle_comment(self, node, parent=None):
+        return [
+            self._make_symbol(
+                node,
+                kind=SymbolKind.COMMENT,
+                visibility=Visibility.PUBLIC,
+            )
+        ]
 
-# ---------------------------------------------------------------------- #
 class JavaScriptLanguageHelper(AbstractLanguageHelper):
     """
     Build human-readable summaries for JavaScript symbols.
