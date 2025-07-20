@@ -60,7 +60,7 @@ def test_package_metadata_repository(data_repo):
     assert pkg_repo.get_by_physical_path("pkg/used.go").id == used_id
     assert {p.id for p in pkg_repo.get_list(PackageFilter(repo_id=rid))} == {orphan_id, used_id}
     # delete_orphaned should remove only the orphan package
-    assert pkg_repo.delete_orphaned() == 1
+    pkg_repo.delete_orphaned()
     assert pkg_repo.get_by_id(orphan_id) is None
     assert pkg_repo.get_by_id(used_id) is not None
     assert [p.id for p in pkg_repo.get_list(PackageFilter(repo_id=rid))] == [used_id]
@@ -216,4 +216,5 @@ def test_symbol_embedding_search(data_repo):
         rid,
         SymbolSearchQuery(embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3),
     )
+
     assert res[0].name == "VecA"

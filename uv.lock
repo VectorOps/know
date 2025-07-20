@@ -540,6 +540,7 @@ dependencies = [
     { name = "prompt-toolkit" },
     { name = "pydantic" },
     { name = "pygments" },
+    { name = "pypika" },
     { name = "pytest" },
     { name = "sentence-transformers" },
     { name = "structlog" },
@@ -563,6 +564,7 @@ requires-dist = [
     { name = "prompt-toolkit", specifier = ">=3.0.51" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pygments", specifier = ">=2.19.1" },
+    { name = "pypika", git = "https://github.com/VectorOps/pypika.git?rev=v0.49.3-dev" },
     { name = "pytest", specifier = ">=8.4.0" },
     { name = "sentence-transformers", specifier = "==4.1.0" },
     { name = "structlog", specifier = ">=25.4.0" },
@@ -1142,6 +1144,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/7c/2d/c3338d48ea6cc0feb
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/0b/9fcc47d19c48b59121088dd6da2488a49d5f72dacf8262e2790a1d2c7d15/pygments-2.19.1-py3-none-any.whl", hash = "sha256:9ea1544ad55cecf4b8242fab6dd35a93bbce657034b0611ee383099054ab6d8c", size = 1225293, upload-time = "2025-01-06T17:26:25.553Z" },
 ]
+
+[[package]]
+name = "pypika"
+version = "0.48.9"
+source = { git = "https://github.com/VectorOps/pypika.git?rev=v0.49.3-dev#99f557654f24338fdead7094833da03cc26dcd64" }
 
 [[package]]
 name = "pytest"

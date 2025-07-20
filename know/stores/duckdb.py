@@ -9,6 +9,8 @@ import zlib
 from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime, timezone
+from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order
+from pypika.terms import ValueWrapper, LiteralValue
 
 from know.models import (
     RepoMetadata,
@@ -38,6 +40,9 @@ from know.data import (
 from know.data import SymbolRefFilter
 
 T = TypeVar("T")
+
+MatchBM25Fn = CustomFunction('fts_main_symbols.match_bm25', ['id', 'query'])
+ArrayCosineSimilarityFn = CustomFunction("array_cosine_similarity", ["vec", "param"])
 
 # helpers
 def _row_to_dict(rel) -> list[dict[str, Any]]:
@@ -89,9 +94,9 @@ class _DuckDBBaseRepo(Generic[T]):
     table: str
     model: Type[T]
 
-    _json_fields: set[str] = set()                    # columns stored as JSON
-    _json_parsers: dict[str, Callable[[Any], Any]] = {}   # field → decode-fn
-    _compress_fields: set[str] = set()     # column names that store (possibly)
+    _json_fields: set[str] = set()
+    _field_parsers: dict[str, Callable[[Any], Any]] = {}
+    _compress_fields: set[str] = set()
 
     def cursor(self):
         cur = self.conn.cursor()
@@ -100,9 +105,9 @@ class _DuckDBBaseRepo(Generic[T]):
 
     def __init__(self, conn: duckdb.DuckDBPyConnection):
         self.conn = conn
+        self._table = Table(self.table)
 
-    def _serialize_json(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Return *data* with JSON fields dumped to str."""
+    def _serialize_data(self, data: dict[str, Any]) -> dict[str, Any]:
         for fld in self._json_fields:
             if fld in data and data[fld] is not None:
                 val = data[fld]
@@ -110,31 +115,27 @@ class _DuckDBBaseRepo(Generic[T]):
                 if hasattr(val, "model_dump"):
                     val = val.model_dump(exclude_none=False)
                 data[fld] = json.dumps(val)
-        return data
 
-    def _deserialize_row(self, row: dict[str, Any]) -> dict[str, Any]:
-        """Return *row* with JSON fields loaded & parsed."""
-        for fld in self._json_fields:
-            if fld in row and row[fld] is not None:
-                parsed = json.loads(row[fld])
-                parser = self._json_parsers.get(fld)
-                row[fld] = parser(parsed) if parser else parsed
-        row = self._apply_decompression(row)
-        return row
-
-    # binary compression handling
-    def _apply_compression(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Mutate *data*: encode+compress fields listed in `_compress_fields`."""
         for fld in self._compress_fields:
             if fld in data and data[fld] is not None:
                 raw = data[fld]
                 if isinstance(raw, str):
                     raw = raw.encode("utf-8")
                 data[fld] = _compress_blob(bytes(raw))
+
+        for k, v in data.items():
+            if isinstance(v, list):
+                data[k] = ValueWrapper(v)
+
         return data
 
-    def _apply_decompression(self, row: dict[str, Any]) -> dict[str, Any]:
-        """Decode+decompress fields when reading from DB."""
+    def _deserialize_data(self, row: dict[str, Any]) -> dict[str, Any]:
+        for fld in self._json_fields:
+            if fld in row and row[fld] is not None:
+                parsed = json.loads(row[fld])
+                parser = self._field_parsers.get(fld)
+                row[fld] = parser(parsed) if parser else parsed
+
         for fld in self._compress_fields:
             if fld in row and row[fld] is not None:
                 blob = bytes(row[fld])
@@ -142,42 +143,59 @@ class _DuckDBBaseRepo(Generic[T]):
                 try:
                     row[fld] = text.decode("utf-8")
                 except Exception:
-                    row[fld] = text      # leave as bytes if not UTF-8
+                    row[fld] = text
+
         return row
+
+    def _get_query(self, q):
+        parameter = QmarkParameter()
+        sql = q.get_sql(parameter=parameter)
+        return sql, parameter.get_parameters()
+
+    def _execute(self, q):
+        sql, args = self._get_query(q)
+        return _row_to_dict(self.cursor().execute(sql, args))
 
     # CRUD
     def get_by_id(self, item_id: str) -> Optional[T]:
-        rows = _row_to_dict(self.cursor().execute(f"SELECT * FROM {self.table} WHERE id = ?", [item_id]))
-        return self.model(**self._deserialize_row(rows[0])) if rows else None
+        q = Query.from_(self._table).select("*").where(self._table.id == item_id)
+        rows = self._execute(q)
+        return self.model(**self._deserialize_data(rows[0])) if rows else None
 
     def get_list_by_ids(self, item_ids: list[str]) -> list[T]:
         if not item_ids:
             return []
-        placeholders = ", ".join("?" for _ in item_ids)
-        rows = _row_to_dict(self.cursor().execute(f"SELECT * FROM {self.table} WHERE id IN ({placeholders})", item_ids))
-        return [self.model(**self._deserialize_row(r)) for r in rows]
+        q = Query.from_(self._table).select("*").where(self._table.id.isin(item_ids))
+        rows = self._execute(q)
+        return [self.model(**self._deserialize_data(r)) for r in rows]
 
     def create(self, item: T) -> T:
-        data = item.model_dump(exclude_none=True)
-        data = self._apply_compression(data)
-        data = self._serialize_json(data)
-        cols = ", ".join(data.keys())
-        placeholders = ", ".join("?" for _ in data)
-        self.cursor().execute(f"INSERT INTO {self.table} ({cols}) VALUES ({placeholders})", list(data.values()))
+        data = self._serialize_data(item.model_dump(exclude_none=True))
+
+        keys = data.keys()
+        q = Query.into(self._table).columns([self._table[k] for k in keys]).insert([data[k] for k in keys])
+        self._execute(q)
+
         return item
 
     def update(self, item_id: str, data: Dict[str, Any]) -> Optional[T]:
         if not data:
             return self.get_by_id(item_id)
-        data = self._apply_compression(data.copy())
-        data = self._serialize_json(data)
-        set_clause = ", ".join(f"{k}=?" for k in data)
-        params = list(data.values()) + [item_id]
-        self.cursor().execute(f"UPDATE {self.table} SET {set_clause} WHERE id = ?", params)
+
+        # TODO: Unify helpers
+        data = self._serialize_data(data)
+
+        q = Query.update(self._table).where(self._table.id == item_id)
+        for k, v in data.items():
+            q = q.set(k, v)
+
+        self._execute(q)
+
         return self.get_by_id(item_id)
 
     def delete(self, item_id: str) -> bool:
-        self.cursor().execute(f"DELETE FROM {self.table} WHERE id = ?", [item_id])
+        q = Query.from_(self._table).where(self._table.id == item_id).delete()
+        self._execute(q)
         return True
 
 # ---------------------------------------------------------------------------
@@ -189,7 +207,8 @@ class DuckDBRepoMetadataRepo(_DuckDBBaseRepo[RepoMetadata], AbstractRepoMetadata
     model = RepoMetadata
 
     def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM repos WHERE root_path = ?", [root_path]))
+        q = Query.from_(self._table).select("*").where(self._table.root_path == root_path)
+        rows = self._execute(q)
         return RepoMetadata(**rows[0]) if rows else None
 
 
@@ -202,36 +221,31 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         self._file_repo = file_repo
 
     def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM packages WHERE physical_path = ?", [path]))
+        q = Query.from_(self._table).select("*").where(self._table.physical_path == path)
+        rows = self._execute(q)
         return PackageMetadata(**rows[0]) if rows else None
 
     def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM packages WHERE virtual_path = ?", [path]))
+        q = Query.from_(self._table).select("*").where(self._table.virtual_path == path)
+        rows = self._execute(q)
         return PackageMetadata(**rows[0]) if rows else None
 
     def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
-        """
-        Return all PackageMetadata rows matching *flt*.
-        Currently supports filtering by repo_id only.
-        """
+        q = Query.from_(self._table).select("*")
+
         if flt.repo_id:
-            rows = _row_to_dict(
-                self.cursor().execute(
-                    "SELECT * FROM packages WHERE repo_id = ?", [flt.repo_id]
-                )
-            )
-        else:
-            rows = _row_to_dict(self.cursor().execute("SELECT * FROM packages"))
+            q = q.where(self._table.repo_id == flt.repo_id)
+
+        rows = self._execute(q)
+
         return [PackageMetadata(**r) for r in rows]
 
-    def delete_orphaned(self) -> int:
-        used_pkg_ids = {row["package_id"] for row in
-                        _row_to_dict(self.cursor().execute("SELECT DISTINCT package_id FROM files WHERE package_id IS NOT NULL"))}
-        rows = _row_to_dict(self.cursor().execute("SELECT id FROM packages"))
-        orphan_ids = [r["id"] for r in rows if r["id"] not in used_pkg_ids]
-        for oid in orphan_ids:
-            self.delete(oid)
-        return len(orphan_ids)
+    def delete_orphaned(self) -> None:
+        files_tbl = Table("files")
+        subq = Query.from_(files_tbl).select(files_tbl.package_id).where(files_tbl.package_id.notnull())
+
+        q = Query.from_(self._table).where(self._table.id.notin(subq)).delete()
+        self._execute(q)
 
 
 from know.data import FileFilter      # already present – keep / ensure
@@ -241,175 +255,197 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
     model = FileMetadata
 
     def get_by_path(self, path: str) -> Optional[FileMetadata]:
-        rows = _row_to_dict(self.cursor().execute("SELECT * FROM files WHERE path = ?", [path]))
+        q = Query.from_(self._table).select("*").where(self._table.path == path)
+        rows = self._execute(q)
         return FileMetadata(**rows[0]) if rows else None
 
     def get_list(self, flt: FileFilter) -> list[FileMetadata]:
-        """
-        Return all FileMetadata rows that satisfy *flt*.
-        Supports filtering by repo_id and/or package_id.
-        """
-        where, params = [], []
+        q = Query.from_(self._table).select("*")
+
         if flt.repo_id:
-            where.append("repo_id = ?")
-            params.append(flt.repo_id)
+            q = q.where(self._table.repo_id == flt.repo_id)
         if flt.package_id:
-            where.append("package_id = ?")
-            params.append(flt.package_id)
+            q = q.where(self._table.package_id == flt.package_id)
 
-        sql = "SELECT * FROM files"
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-
-        rows = _row_to_dict(self.cursor().execute(sql, params))
+        rows = self._execute(q)
         return [FileMetadata(**r) for r in rows]
 
 
 class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMetadataRepository):
     table = "symbols"
     model = SymbolMetadata
+
     _json_fields = {"signature", "modifiers"}
-    _json_parsers = {
+    _compress_fields = {"body"}
+    _field_parsers = {
         "signature": lambda v: SymbolSignature(**v) if v is not None else None,
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
-    _compress_fields = {"body"}
 
     RRF_K: int = 60          # tuning-parameter k (see RRF paper)
     RRF_CODE_WEIGHT: float = 0.7
     RRF_FTS_WEIGHT:  float = 0.3
 
     def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
-        # ---- FROM / JOIN clause to filter by repo_id via files table ----
-        base_where, base_params = ["f.repo_id = ?"], [repo_id]
+        q = Query.from_(self._table)
 
-        # ---------- scalar filters ----------
+        # Candidates
+        candidates = (
+            Query.
+            from_(self._table).
+            select(self._table.id, self._table.embedding_code_vec).
+            where(self._table.repo_id == repo_id)
+        )
+
         if query.symbol_name:
-            base_where.append("LOWER(s.name) = ?")
-            base_params.append(query.symbol_name.lower())
+            q = q.where(functions.Lower(self._table.name) == query.symbol_name.lower())
 
         if query.symbol_fqn:
-            base_where.append("LOWER(s.fqn) LIKE ?")
-            base_params.append(f"%{query.symbol_fqn.lower()}%")
+            q = q.where(functions.Lower(self._table.fqn).like(f"%{query.symbol_fqn.lower()}%"))
 
         if query.symbol_kind:
-            base_where.append("s.kind = ?")
-            base_params.append(query.symbol_kind)
+            q = q.where(self._table.kind == query.symbol_kind)
 
         if query.symbol_visibility:
-            base_where.append("s.visibility = ?")
-            base_params.append(query.symbol_visibility)
-
-        # Compose base WHERE clause string
-        base_where_clause = " AND ".join(base_where)
+            q = q.where(self._table.visibility == query.symbol_visibility)
 
         # Determine which search dimensions are provided
         has_fts = bool(query.doc_needle)
         has_embedding = bool(query.embedding_query)
 
-        # ------------------------------------------------------------------ #
-        # unified CTE / query construction                                   #
-        # ------------------------------------------------------------------ #
-        cte_parts: list[str] = [f"""
-WITH candidates AS (
-    SELECT s.*
-    FROM symbols s
-    JOIN files f ON s.file_id = f.id
-    WHERE {base_where_clause}
-)"""]
+        q = q.with_(candidates, "candidates")
+        aliased_candidates = AliasedQuery("candidates")
 
-        params: list[Any] = base_params[:]      # start with scalar-filter params
-
-        # ---------- optional rank CTEs ---------- #
-        if has_fts:
-            cte_parts.append("""
-, rank_fts_scores AS (
-    SELECT id,
-           fts_main_symbols.match_bm25(id, ?) as score
-    FROM candidates
-), rank_fts AS (
-    SELECT id,
-           row_number() OVER (ORDER BY score DESC) AS fts_rank
-    FROM rank_fts_scores
-    WHERE score IS NOT NULL
-)""")
-            params.append(query.doc_needle)
-
+        # unified CTE / query construction
         if has_embedding:
-            cte_parts.append("""
-, rank_code_scores AS (
-    SELECT id,
-           array_cosine_similarity(embedding_code_vec,
-                          CAST(? AS FLOAT[1024])) AS dist
-    FROM candidates
-), rank_code AS (
-    SELECT id,
-           row_number() OVER (ORDER BY dist DESC) AS code_rank
-    FROM rank_code_scores
-    WHERE dist IS NOT NULL
-      AND dist >= 0.4
-)""")
-            params.append(query.embedding_query)
+            rank_code_scores = (
+                Query.
+                from_(aliased_candidates).
+                select(
+                    aliased_candidates.id,
+                    ArrayCosineSimilarityFn(
+                        aliased_candidates.embedding_code_vec,
+                        functions.Cast(ValueWrapper(query.embedding_query), "FLOAT[1024]")
+                    ).as_("dist"))
+            )
+
+            aliased = AliasedQuery("rank_code_scores")
+
+            rank_code = (
+                Query.
+                from_(aliased).
+                select(aliased.id, analytics.RowNumber().orderby(aliased.dist, order=Order.desc).as_("code_rank")).
+                where(aliased.dist >= 0.4)
+            )
+
+            q = q.with_(rank_code_scores, "rank_code_scores").with_(rank_code, "rank_code")
+
+        if has_fts:
+            rank_fts_scores = (
+                Query.
+                from_(aliased_candidates).
+                select(
+                    aliased_candidates.id,
+                    MatchBM25Fn(
+                        aliased_candidates.id,
+                        query.doc_needle
+                    ).as_("score"))
+            )
+
+            aliased = AliasedQuery("rank_fts_scores")
+
+            rank_fts = (
+                Query.
+                from_(aliased).
+                select(aliased.id, analytics.RowNumber().orderby(aliased.score, order=Order.desc).as_("fts_rank")).
+                where(aliased.score.notnull())
+            )
+
+            q = q.with_(rank_fts_scores, "rank_fts_scores").with_(rank_fts, "rank_fts")
 
         has_ranking = has_fts or has_embedding
         if has_ranking:
-            union_parts: list[str] = []
+            union_parts = []
 
             if has_embedding:
+                aliased = AliasedQuery("rank_code")
+
                 union_parts.append(
-                    "SELECT id, ? / (? + code_rank) AS score FROM rank_code"
+                    Query.
+                    from_(aliased).
+                    select(
+                        aliased.id,
+                        (LiteralValue(self.RRF_CODE_WEIGHT) / (LiteralValue(self.RRF_K) + aliased.code_rank)).as_("score"))
                 )
-                params.extend([self.RRF_CODE_WEIGHT, self.RRF_K])
 
             if has_fts:
-                union_parts.append(
-                    "SELECT id, ? / (? + fts_rank) AS score FROM rank_fts"
-                )
-                params.extend([self.RRF_FTS_WEIGHT, self.RRF_K])
+                aliased = AliasedQuery("rank_fts")
 
-            cte_parts.append(f"""
-, rrf_scores AS (
-    {' UNION ALL '.join(union_parts)}
-), fused AS (
-    SELECT c.*,
-           COALESCE(rs.rrf_score, 0) AS rrf_score
-    FROM candidates c
-    INNER JOIN (
-        SELECT id, SUM(score) AS rrf_score
-        FROM rrf_scores
-        GROUP BY id
-    ) rs USING(id)
-)""")
+                union_parts.append(
+                    Query.
+                    from_(aliased).
+                    select(
+                        aliased.id,
+                        (LiteralValue(self.RRF_FTS_WEIGHT) / (LiteralValue(self.RRF_K) + aliased.fts_rank)).as_("score")
+                    )
+                )
+
+            rrf_scores = union_parts[0]
+            for p in union_parts[1:]:
+                rrf_scores = rrf_scores.union_all(p)
+
+            aliased = AliasedQuery("rrf_scores")
+
+            rrf_final = (
+                Query.
+                from_(aliased).
+                select(aliased.id, functions.Sum(aliased.score).as_("score")).
+                groupby(aliased.id)
+            )
+
+            aliased_scores = AliasedQuery("rrf_final")
+            aliased_fused = AliasedQuery("fused")
+
+            fused = (
+                Query.
+                from_(aliased_candidates).
+                join(aliased_scores).on(aliased_candidates.id == aliased_scores.id).
+                select(aliased_scores.id, aliased_scores.score.as_("rrf_score"))
+            )
+
+            q = (
+                q.with_(rrf_scores, "rrf_scores").
+                with_(rrf_final, "rrf_final").
+                with_(fused, "fused").
+                join(aliased_fused).on(self._table.id == aliased_fused.id).
+                select(self._table.star, aliased_fused.rrf_score).
+                orderby(aliased_fused.rrf_score, order=Order.desc).
+                orderby(self._table.name)
+            )
+        else:
+            q = (
+                q.select("*").
+                join(aliased_candidates).on(self._table.id == aliased_candidates.id).
+                orderby(self._table.name)
+            )
 
         limit  = query.limit  if query.limit  is not None else 20
         offset = query.offset if query.offset is not None else 0
 
-        if has_ranking:
-            final_select = """
-SELECT * FROM fused
-ORDER BY rrf_score DESC, name ASC
-LIMIT ? OFFSET ?
-"""
-        else:
-            final_select = """
-SELECT * FROM candidates
-ORDER BY name ASC
-LIMIT ? OFFSET ?
-"""
-        params.extend([limit, offset])
+        q = q.limit(limit).offset(offset)
 
-        sql = "".join(cte_parts) + final_select
+        parameter = QmarkParameter()
+        sql = q.get_sql(parameter=parameter)
+        print(sql, parameter.get_parameters())
 
-        rows = _row_to_dict(self.cursor().execute(sql, params))
-        syms = [self.model(**self._deserialize_row(r)) for r in rows]
+        rows = self._execute(q)
+        syms = [self.model(**self._deserialize_data(r)) for r in rows]
         syms = include_direct_descendants(self, syms)
         return syms
 
-    def delete_by_file_id(self, file_id: str) -> int:
-        rows = self.cursor().execute(
-            "DELETE FROM symbols WHERE file_id = ? RETURNING id", [file_id]
-        ).fetchall()
-        return len(rows)
+    def delete_by_file_id(self, file_id: str) -> None:
+        q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
+        self._execute(q)
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
         syms = super().get_list_by_ids(symbol_ids)
@@ -417,50 +453,34 @@ LIMIT ? OFFSET ?
         return syms
 
     def get_list(self, flt: SymbolFilter) -> list[SymbolMetadata]:
-        """
-        Generic selector that supersedes the old specialised helpers.
-        Supports filtering by ids, parent_ids, file_id and/or package_id.
-        """
-        where, params = [], []
+        q = Query.from_(self._table).select("*")
 
         if flt.parent_ids:
-            where.append(
-                f"parent_symbol_id IN ({', '.join('?' for _ in flt.parent_ids)})"
-            )
-            params.extend(flt.parent_ids)
+            q = q.where(self._table.parent_symbol_id.isin(flt.parent_ids))
         if flt.repo_id:
-            where.append("repo_id = ?")
-            params.append(flt.file_id)
+            q = q.where(self._table.repo_id == flt.repo_id)
         if flt.file_id:
-            where.append("file_id = ?")
-            params.append(flt.file_id)
+            q = q.where(self._table.file_id == flt.file_id)
         if flt.package_id:
-            where.append("package_id = ?")
-            params.append(flt.package_id)
+            q = q.where(self._table.package_id == flt.package_id)
         if flt.symbol_kind:
-            where.append("kind = ?")
-            params.append(flt.symbol_kind)
+            q = q.where(self._table.kind == flt.symbol_kind)
         if flt.symbol_visibility:
-            where.append("visibility = ?")
-            params.append(flt.symbol_visibility)
+            q = q.where(self._table.visibility == flt.symbol_visibility)
         if flt.has_embedding is True:
-            where.append("embedding_code_vec IS NOT NULL")
+            q = q.where(self._table.embedding_code_vec.notnull())
         elif flt.has_embedding is False:
-            where.append("embedding_code_vec IS NULL")
+            q = q.where(self._table.embedding_code_vec.isnull())
         if flt.top_level_only:
-            where.append("parent_symbol_id IS NULL")
-
-        sql = "SELECT * FROM symbols" + (" WHERE " + " AND ".join(where) if where else "")
+            q = q.where(self._table.parent_symbol_id.isnull())
 
         if flt.offset:
-            sql += " OFFSET ?"
-            params.append(flt.offset)
+            q = q.offset(flt.offset)
         if flt.limit:
-            sql += " LIMIT ?"
-            params.append(flt.limit)
+            q = q.limit(flt.limit)
 
-        rows = _row_to_dict(self.cursor().execute(sql, params))
-        syms = [self.model(**self._deserialize_row(r)) for r in rows]
+        rows = self._execute(q)
+        syms = [self.model(**self._deserialize_data(r)) for r in rows]
         resolve_symbol_hierarchy(syms)
         return syms
 
@@ -470,19 +490,16 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
     model = ImportEdge
 
     def get_list(self, flt: ImportEdgeFilter) -> list[ImportEdge]:
-        where, params = [], []
-        if flt.source_package_id:
-            where.append("from_package_id = ?")
-            params.append(flt.source_package_id)
-        if flt.source_file_id:
-            where.append("from_file_id = ?")
-            params.append(flt.source_file_id)
-        if flt.repo_id:
-            where.append("repo_id = ?")
-            params.append(flt.repo_id)
+        q = Query.from_(self._table).select("*")
 
-        sql = f"SELECT * FROM {self.table}" + (" WHERE " + " AND ".join(where) if where else "")
-        rows = _row_to_dict(self.cursor().execute(sql, params))
+        if flt.source_package_id:
+            q = q.where(self._table.from_package_id == flt.source_package_id)
+        if flt.source_file_id:
+            q = q.where(self._table.from_file_id == flt.source_file_id)
+        if flt.repo_id:
+            q = q.where(self._table.repo_id == flt.repo_id)
+
+        rows = self._execute(q)
         return [ImportEdge(**r) for r in rows]
 
 
@@ -491,34 +508,21 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
     model = SymbolRef
 
     def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
-        """
-        Return all SymbolRef rows that satisfy *flt*.
-        Supports filtering by file_id, package_id and/or repo_id.
-        """
-        where, params = [], []
-        if flt.file_id:
-            where.append("file_id = ?")
-            params.append(flt.file_id)
-        if flt.package_id:
-            where.append("package_id = ?")
-            params.append(flt.package_id)
-        if flt.repo_id:
-            where.append("repo_id = ?")
-            params.append(flt.repo_id)
+        q = Query.from_(self._table).select("*")
 
-        sql = f"SELECT * FROM {self.table}" + (" WHERE " + " AND ".join(where) if where else "")
-        rows = _row_to_dict(self.cursor().execute(sql, params))
+        if flt.file_id:
+            q = q.where(self._table.file_id == flt.file_id)
+        if flt.package_id:
+            q = q.where(self._table.package_id == flt.package_id)
+        if flt.repo_id:
+            q = q.where(self._table.repo_id == flt.repo_id)
+
+        rows = self._execute(q)
         return [SymbolRef(**r) for r in rows]
 
-    def delete_by_file_id(self, file_id: str) -> int:
-        """
-        Bulk-delete refs belonging to *file_id*.
-        DuckDB ≥0.8.0 supports RETURNING; we use that to count rows.
-        """
-        rows = self.cursor().execute(
-            "DELETE FROM symbol_refs WHERE file_id = ? RETURNING id", [file_id]
-        ).fetchall()
-        return len(rows)
+    def delete_by_file_id(self, file_id: str) -> None:
+        q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
+        self._execute(q)
 
 # ---------------------------------------------------------------------------
 # Migration logic

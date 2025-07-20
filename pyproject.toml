@@ -24,7 +24,11 @@ dependencies = [
     "structlog>=25.4.0",
     "faker>=37.4.0",
     "tree-sitter-typescript>=0.23.2",
+    "pypika",
 ]
 
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+pypika = { git = "https://github.com/VectorOps/pypika.git", rev = "v0.49.3-dev" }

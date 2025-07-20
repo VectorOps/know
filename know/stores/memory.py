@@ -414,7 +414,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
         return results
 
-    def delete_by_file_id(self, file_id: str) -> int:
+    def delete_by_file_id(self, file_id: str) -> None:
         with self._lock:
             to_delete = [sid for sid, sym in self._items.items() if sym.file_id == file_id]
             for sid in to_delete:
@@ -451,8 +451,7 @@ class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
                 and (not flt.repo_id    or r.repo_id    == flt.repo_id)
             ]
 
-    # NEW ---------------------------------------------------------------
-    def delete_by_file_id(self, file_id: str) -> int:
+    def delete_by_file_id(self, file_id: str) -> None:
         with self._lock:
             to_delete = [rid for rid, ref in self._items.items() if ref.file_id == file_id]
             for rid in to_delete:

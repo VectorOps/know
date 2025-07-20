@@ -20,7 +20,7 @@ from know.helpers import compute_file_hash
 
 # Parser-specific data structures
 class ParsedImportEdge(BaseModel):
-    physical_path: Optional[str] = None # relative physical path to package. Can be None for external packages.
+    physical_path: Optional[str] = None # relative physical path to package from project root.
     virtual_path: str # syntax specific virtual path to package
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")

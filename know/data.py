@@ -73,7 +73,7 @@ class AbstractPackageMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def delete_orphaned(self) -> int:
+    def delete_orphaned(self) -> None:
         pass
 
     @abstractmethod
@@ -171,7 +171,7 @@ class AbstractSymbolMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def delete_by_file_id(self, file_id: str) -> int:
+    def delete_by_file_id(self, file_id: str) -> None:
         """
         Delete every SymbolMetadata whose ``file_id`` equals *file_id*.
         Return number of deleted rows.
@@ -264,9 +264,8 @@ class AbstractSymbolRefRepository(ABC):
     def delete(self, ref_id: str) -> bool:
         pass
 
-    # NEW ---------------------------------------------------------------
     @abstractmethod
-    def delete_by_file_id(self, file_id: str) -> int:
+    def delete_by_file_id(self, file_id: str) -> None:
         """
         Delete every SymbolRef whose ``file_id`` equals *file_id*.
         Returns the number of deleted rows.
