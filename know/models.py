@@ -12,6 +12,7 @@ class ProgrammingLanguage(str, Enum):
     PYTHON = "python"
     GO = "go"
     TYPESCRIPT = "typescript"
+    JAVASCRIPT = "javascript"
 
 
 class SymbolKind(str, Enum):

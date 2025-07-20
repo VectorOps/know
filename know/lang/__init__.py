@@ -17,3 +17,4 @@ def register_parsers():
     CodeParserRegistry.register_parser(".tsx", TypeScriptCodeParser)
     CodeParserRegistry.register_helper(ProgrammingLanguage.TYPESCRIPT,
                                        TypeScriptLanguageHelper())
+from . import javascript   # noqa: F401  (forces registration)
