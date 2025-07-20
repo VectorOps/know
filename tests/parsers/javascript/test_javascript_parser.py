@@ -44,7 +44,7 @@ def test_javascript_parser_on_simple_file():
 
     # top-level symbols (named)
     top_level = _to_map(parsed_file.symbols)
-    assert set(top_level.keys()) == {"Base", "identity"}
+    assert set(top_level.keys()) == {"Base", "identity", "Foo"}
 
     # flatten whole tree
     def _flatten(syms):
@@ -63,7 +63,10 @@ def test_javascript_parser_on_simple_file():
     assert flat_map["j1"].kind     == SymbolKind.VARIABLE
     assert flat_map["f1"].kind     == SymbolKind.FUNCTION
 
-    nested_expected = {"CONST", "z", "j1", "f1", "a", "fn", "Test"}
+    # new class-expression symbol
+    assert flat_map["Foo"].kind    == SymbolKind.CLASS
+
+    nested_expected = {"CONST", "z", "j1", "f1", "a", "fn", "Test", "Foo"}
     assert nested_expected.issubset(flat_map.keys())
 
     # class member sanity check
