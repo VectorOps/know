@@ -26,6 +26,7 @@ def _get_parser() -> Parser:
         _parser = Parser(JS_LANGUAGE)
     return _parser
 
+
 _MODULE_SUFFIXES     = (".js", ".jsx", ".mjs")
 _RESOLVE_SUFFIXES    = _MODULE_SUFFIXES
 _GENERIC_STATEMENT_NODES = {
@@ -55,6 +56,7 @@ _JS_REF_QUERY = JS_LANGUAGE.query(r"""
         constructor: [(identifier) (member_expression)] @ctor) @new
 """)
 
+
 class JavaScriptCodeParser(AbstractCodeParser):
     language = ProgrammingLanguage.JAVASCRIPT
 
@@ -66,14 +68,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
         self.package     : ParsedPackage | None = None
         self.parsed_file : ParsedFile  | None = None
 
-    # ------------------------------------------------------------------
-    # keep helper methods identical to TS version unless noted otherwise;
-    # remove TS-specific logic (generics / type_parameters / interfaces /
-    # type aliases / enums).  Where removal is non-trivial, replace the
-    # handler with a stub that returns Literal symbol and add a
-    # “TODO: implement” comment.
-    # ------------------------------------------------------------------
-    # REQUIRED overrides
     def _handle_file(self, root_node):
         pass
 
@@ -81,9 +75,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
         p = Path(rel_path)
         return ".".join(p.with_suffix("").parts)
 
-    # ------------------------------------------------------------------
-    # Node dispatcher
-    # ------------------------------------------------------------------
     def _process_node(self, node, parent=None) -> List[ParsedSymbol]:
         if node.type == "import_statement":
             return self._handle_import(node, parent)
@@ -101,18 +92,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return self._handle_expression(node, parent)
         elif node.type == "comment":
             return self._handle_comment(node, parent)
-        # ---------------------- typescript-only -----------------------
-        elif node.type in ("interface_declaration",
-                           "type_alias_declaration",
-                           "enum_declaration",
-                           "abstract_class_declaration",
-                           "abstract_method_signature"):
-            # not part of JavaScript – produce a literal and leave TODO
-            logger.debug("JS parser: TODO unimplemented TS node",
-                         type=node.type, path=self.rel_path,
-                         line=node.start_point[0] + 1)
-            return [self._create_literal_symbol(node, parent)]
-        # --------------------------------------------------------------
         elif node.type in self._GENERIC_STATEMENT_NODES:
             return self._handle_generic_statement(node, parent)
 
@@ -121,38 +100,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
                      line=node.start_point[0] + 1)
         return [self._create_literal_symbol(node, parent)]
 
-    # ------------------------------------------------------------------
-    # COPY the following helpers from TypeScript parser unchanged:
-    #   _has_modifier, _is_commonjs_export, _handle_generic_statement,
-    #   _resolve_module, _handle_import, _handle_export,
-    #   _handle_expression, _resolve_arrow_function_name,
-    #   _handle_arrow_function, _handle_lexical, _create_literal_symbol,
-    #   _collect_require_calls, _collect_symbol_refs,
-    #   _find_first_identifier, _create_variable_symbol,
-    #   _create_method_symbol, _handle_method, _build_signature
-    #
-    # REMOVE or strip out any type-parameter / generic handling code.
-    # If removing is complicated, leave code in place – it will simply
-    # produce “<…>” strings that JS never has.
-    # ------------------------------------------------------------------
-    # COPY _handle_function and _handle_class; drop references to
-    # abstract_class_declaration / _extract_type_parameters etc.
-    # ------------------------------------------------------------------
-    # DELETE helpers that are TS-only:
-    #   _extract_type_parameters, _handle_interface, _handle_type_alias,
-    #   _handle_enum, _handle_namespace, _handle_import_equals
-    # Provide simple stubs that log and return Literal symbols, e.g.:
-    #
-    #   def _handle_interface(self, node, parent=None):
-    #       logger.debug("JS parser: interface stub; node ignored",
-    #                    path=self.rel_path)
-    #       return [self._create_literal_symbol(node, parent)]
-    #
-    # Stub list:  _handle_interface, _handle_type_alias,
-    #             _handle_enum, _handle_namespace, _handle_import_equals.
-    # ------------------------------------------------------------------
-
-    # --- Begin copied helpers from TypeScript parser ---
     def _has_modifier(self, node, keyword: str) -> bool:
         if any(ch.type == keyword for ch in node.children):
             return True
@@ -681,52 +628,143 @@ class JavaScriptCodeParser(AbstractCodeParser):
         return [
             sym
         ]
-    # --- End copied helpers ---
-
-    # --- TS-only helpers replaced with stubs ---
-    def _handle_interface(self, node, parent=None):
-        logger.debug("JS parser: interface stub; node ignored",
-                     path=self.rel_path)
-        return [self._create_literal_symbol(node, parent)]
-
-    def _handle_type_alias(self, node, parent=None):
-        logger.debug("JS parser: type_alias stub; node ignored",
-                     path=self.rel_path)
-        return [self._create_literal_symbol(node, parent)]
-
-    def _handle_enum(self, node, parent=None):
-        logger.debug("JS parser: enum stub; node ignored",
-                     path=self.rel_path)
-        return [self._create_literal_symbol(node, parent)]
-
-    def _handle_namespace(self, node, parent=None, exported: bool = False):
-        logger.debug("JS parser: namespace stub; node ignored",
-                     path=self.rel_path)
-        return [self._create_literal_symbol(node, parent)]
-
-    def _handle_import_equals(self, node, parent=None):
-        logger.debug("JS parser: import_equals stub; node ignored",
-                     path=self.rel_path)
-        return [self._create_literal_symbol(node, parent)]
 
 
-# ----------------------------------------------------------------------
+# ---------------------------------------------------------------------- #
 class JavaScriptLanguageHelper(AbstractLanguageHelper):
     """
-    Trivial helper – identical to TypeScriptLanguageHelper for now.
-    TODO: later adjust JS-specific formatting if needed.
+    Build human-readable summaries for JavaScript symbols.
+
+    Implementation is based on the TypeScript helper but kept independent
+    (no cross-module imports) and trimmed to JavaScript-specific constructs.
     """
-    def get_symbol_summary(self, *args, **kw):
-        from know.lang.typescript import TypeScriptLanguageHelper
-        return TypeScriptLanguageHelper().get_symbol_summary(*args, **kw)
 
-    def get_import_summary(self, imp: ImportEdge) -> str:
+    def get_symbol_summary(
+        self,
+        sym: SymbolMetadata,
+        indent: int = 0,
+        include_comments: bool = False,
+        include_docs: bool = False,
+        include_parents: bool = False,
+        child_stack: Optional[List[List[SymbolMetadata]]] = None,
+    ) -> str:
+        # ── optionally climb to the root and recurse back ──────────────
+        if include_parents and sym.parent_ref:
+            return self.get_symbol_summary(
+                sym.parent_ref,
+                indent,
+                include_comments,
+                include_docs,
+                include_parents,
+                (child_stack or []) + [[sym]],
+            )
+
+        IND = " " * indent
+        only_children = (child_stack.pop() if child_stack else None)
+
+        # ---------- header --------------------------------------------
+        if sym.signature:
+            header = sym.signature.raw
+        elif sym.body:
+            header = "\n".join(f"{IND}{ln.rstrip()}"
+                               for ln in sym.body.splitlines() if ln.strip())
+        else:
+            header = sym.name or ""
+
+        # ---------- VARIABLE / CONSTANT -------------------------------
+        if sym.kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE):
+            if not sym.children:
+                body = (sym.body or "").strip()
+                return "\n".join(f"{IND}{ln.strip()}" for ln in body.splitlines())
+
+            child_parts = [
+                self.get_symbol_summary(
+                    ch,
+                    0,
+                    include_comments,
+                    include_docs,
+                    child_stack=child_stack,
+                )
+                for ch in sym.children
+                if not only_children or ch in only_children
+            ]
+            if header:
+                header += " "
+            return IND + header + ", ".join(child_parts) + ";"
+
+        # ---------- ASSIGNMENT ----------------------------------------
+        if sym.kind == SymbolKind.ASSIGNMENT:
+            if not sym.children:
+                body = (sym.body or "").strip()
+                return "\n".join(f"{IND}{ln.strip()}" for ln in body.splitlines())
+
+            lines: list[str] = []
+            for ch in sym.children:
+                if only_children and ch not in only_children:
+                    continue
+                lines.append(
+                    self.get_symbol_summary(
+                        ch,
+                        indent,
+                        include_comments,
+                        include_docs,
+                        child_stack=child_stack,
+                    ) + ";"
+                )
+            return "\n".join(lines)
+
+        # ---------- CLASS ---------------------------------------------
+        if sym.kind == SymbolKind.CLASS:
+            if not header.endswith("{"):
+                header += " {"
+            lines = [IND + header]
+            for ch in sym.children or []:
+                if only_children and ch not in only_children:
+                    continue
+                child_summary = self.get_symbol_summary(
+                    ch,
+                    indent + 2,
+                    include_comments,
+                    include_docs,
+                    child_stack=child_stack,
+                )
+                if ch.kind == SymbolKind.VARIABLE:
+                    child_summary = child_summary.rstrip() + ";"
+                lines.append(child_summary)
+            lines.append(IND + "}")
+            return "\n".join(lines)
+
+        # ---------- EXPORT --------------------------------------------
+        if sym.kind == SymbolKind.EXPORT:
+            if sym.children:
+                lines: list[str] = []
+                for ch in sym.children:
+                    if only_children and ch not in only_children:
+                        continue
+                    child_summary = self.get_symbol_summary(
+                        ch,
+                        indent,
+                        include_comments,
+                        include_docs,
+                        child_stack=child_stack,
+                    )
+                    first, *rest = child_summary.splitlines()
+                    lines.append(f"{IND}export {first.lstrip()}")
+                    lines.extend(f"{IND}{ln}" for ln in rest)
+                return "\n".join(lines)
+            header = sym.signature.raw if sym.signature else (sym.body or "export").strip()
+            return IND + header
+
+        # ---------- FUNCTION / METHOD  --------------------------------
+        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+            if not header.endswith("{"):
+                header += " { ... }" if sym.kind == SymbolKind.FUNCTION else \
+                          (";" if Modifier.ABSTRACT in (sym.modifiers or []) else " { ... }")
+            return IND + header
+
+        # ---------- fall-back -----------------------------------------
+        return IND + header
+
+    # ------------------------------------------------------------------
+    def get_import_summary(self, imp: ImportEdge) -> str:  # unchanged
         return imp.raw.strip() if imp.raw else f"import {imp.to_package_path}"
-
-
-# ---------------- Registry bootstrap ----------------------------------
-CodeParserRegistry.register_parser(".js",  JavaScriptCodeParser)
-CodeParserRegistry.register_parser(".jsx", JavaScriptCodeParser)
-CodeParserRegistry.register_parser(".mjs", JavaScriptCodeParser)
-CodeParserRegistry.register_helper(ProgrammingLanguage.JAVASCRIPT,
-                                   JavaScriptLanguageHelper())
