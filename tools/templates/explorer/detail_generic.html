@@ -1,0 +1,44 @@
+{% extends "explorer/base.html" %}
+{% block content %}
+  <h2>{{ item.__class__.__name__ }} {{ item.id }}</h2>
+  <table class="table table-bordered">
+    {% for k, v in item.model_dump().items() %}
+      <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
+    {% endfor %}
+  </table>
+  {% if symbols %}
+  <h2>Symbols</h2>
+  <table class="table table-bordered">
+    <thead><tr>
+      <th>Id</th><th>Name</th><th>Kind</th>
+    </tr></thead>
+    <tbody>
+      {% for sym in symbols %}
+        <tr>
+          <td><a href="{{ _link_to(sym) }}">{{ sym.id }}</a></td>
+          <td>{{ sym.name or sym.fqn }}</td>
+          <td>{{ sym.kind }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if importedges %}
+  <h2>Import edges</h2>
+  <table class="table table-bordered">
+    <thead><tr>
+      <th>Id</th><th>To package id</th><th>Raw</th>
+    </tr></thead>
+    <tbody>
+      {% for edge in importedges %}
+        <tr>
+          <td><a href="{{ _link_to(edge) }}">{{ edge.id }}</a></td>
+          <td>{{ edge.to_package_id }}</td>
+          <td>{{ edge.raw }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+{% endblock %}
