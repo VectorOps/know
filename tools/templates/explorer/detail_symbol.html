@@ -1,0 +1,62 @@
+{% extends "explorer/base.html" %}
+{% block content %}
+  <h2>{{ item.__class__.__name__ }} {{ item.id }}</h2>
+  <table class="table table-bordered">
+    {% for k, v in item.model_dump().items() %}
+      {% if k == "signature" %}
+      <tr>
+        <th>{{ k }}</th>
+        <td>
+          {% if v %}
+          <table class="table table-sm mb-0">
+            {% if v.raw %}
+            <tr><th>raw</th><td><code>{{ v.raw }}</code></td></tr>
+            {% endif %}
+
+            {% if v.parameters %}
+            <tr>
+              <th>parameters</th>
+              <td>
+                <table class="table table-sm mb-0">
+                  <thead>
+                    <tr><th>Name</th><th>Type</th><th>Default</th><th>Doc</th></tr>
+                  </thead>
+                  <tbody>
+                    {% for p in v.parameters %}
+                    <tr>
+                      <td>{{ p.name }}</td>
+                      <td>{{ p.type_annotation }}</td>
+                      <td>{{ p.default }}</td>
+                      <td>{{ p.doc }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            {% endif %}
+
+            {% if v.return_type      %}<tr><th>return_type</th><td>{{ v.return_type }}</td></tr>{% endif %}
+            {% if v.decorators       %}<tr><th>decorators</th><td>{{ v.decorators | join(', ') }}</td></tr>{% endif %}
+            {% if v.receiver         %}<tr><th>receiver</th><td>{{ v.receiver }}</td></tr>{% endif %}
+            {% if v.lexical_type     %}<tr><th>lexical_type</th><td>{{ v.lexical_type }}</td></tr>{% endif %}
+            {% if v.type_parameters  %}<tr><th>type_parameters</th><td>{{ v.type_parameters }}</td></tr>{% endif %}
+          </table>
+          {% else %}
+            <em>None</em>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <th>{{ k }}</th>
+        {% if k == "body" %}
+        <td><pre><code>{{ v | e }}</code></pre></td>
+        {% else %}
+        <td>{{ v }}</td>
+        {% endif %}
+      </tr>
+      {% endif %}
+    {% endfor %}
+  </table>
+{% endblock %}
