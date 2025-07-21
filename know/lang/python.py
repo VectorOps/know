@@ -428,9 +428,14 @@ class PythonCodeParser(AbstractCodeParser):
                     param_name = ch.text.decode("utf8")
 
                 elif ch.type == "typed_parameter":
-                    name_node = ch.child_by_field_name("name")
+                    # For `x: int`, ch is `x: int` (typed_parameter). Its name is
+                    # not a named field but the first `identifier` child.
+                    name_node = next((c for c in ch.children if c.type == 'identifier'), None)
                     type_node = ch.child_by_field_name("type")
-                    param_name = name_node.text.decode("utf8") if name_node else ch.text.decode("utf8")
+                    if name_node:
+                        param_name = name_node.text.decode("utf8")
+                    else:  # fallback for things like *args: T
+                        param_name = ch.text.decode("utf8").split(':')[0].strip()
                     param_type = type_node.text.decode("utf8") if type_node else None
 
                 elif ch.type == "default_parameter":
@@ -442,9 +447,13 @@ class PythonCodeParser(AbstractCodeParser):
                         if name_node.type == "identifier":
                             param_name = name_node.text.decode("utf8")
                         elif name_node.type == "typed_parameter":
-                            p_name_node = name_node.child_by_field_name("name")
+                            # For `x: int = 1`, name_node is `x: int` (typed_parameter).
+                            p_name_node = next((c for c in name_node.children if c.type == 'identifier'), None)
                             p_type_node = name_node.child_by_field_name("type")
-                            param_name = p_name_node.text.decode("utf8") if p_name_node else name_node.text.decode("utf8")
+                            if p_name_node:
+                                param_name = p_name_node.text.decode("utf8")
+                            else:  # fallback
+                                param_name = name_node.text.decode("utf8").split(':')[0].strip()
                             param_type = p_type_node.text.decode("utf8") if p_type_node else None
 
                 if param_name:
