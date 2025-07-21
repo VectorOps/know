@@ -7,6 +7,8 @@ from know.data     import (
     AbstractDataRepository, RepoMetadata, PackageMetadata, FileMetadata,
     SymbolMetadata, ImportEdge, SymbolRef, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter, SymbolRefFilter
 )
+from know.file_summary import build_file_summary
+from know.tools.base import SummaryMode
 
 def _parse_cli():
     p = argparse.ArgumentParser(prog="project-explorer",
@@ -96,12 +98,15 @@ def create_app(project) -> Flask:
         importedges  = data.importedge.get_list(
             ImportEdgeFilter(source_file_id=file_id)
         )
+        file_summary_obj = build_file_summary(project, file.path, summary_mode=SummaryMode.ShortSummary)
+        summary = file_summary_obj.summary if file_summary_obj else "Could not generate summary."
 
         return render_template(
             "explorer/detail_generic.html",
             item=file,
             symbols=symbols,
             importedges=importedges,
+            summary=summary,
         )
 
     # ----- symbol -----
