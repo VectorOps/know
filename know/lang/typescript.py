@@ -1072,22 +1072,20 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
             value_node = ch.child_by_field_name("value")
 
-            # --- NEW : class expression --------------------------------
-            if value_node and value_node.type in (
-                "class",
-                "class_declaration",
-                "abstract_class_declaration",
-            ):
-                child = self._handle_class_expression(
-                    ch, value_node, parent=parent, exported=exported
-                )
-                if child:
-                    sym.children.append(child)
-                continue
-
             if value_node:
                 if value_node.type == "arrow_function":
                     child = self._handle_arrow_function(ch, value_node, parent=parent, exported=exported)
+                    if child:
+                        sym.children.append(child)
+                    continue
+                if value_node.type in (
+                    "class",
+                    "class_declaration",
+                    "abstract_class_declaration",
+                ):
+                    child = self._handle_class_expression(
+                        ch, value_node, parent=parent, exported=exported
+                    )
                     if child:
                         sym.children.append(child)
                     continue

@@ -1,6 +1,7 @@
 from .python import PythonCodeParser, PythonLanguageHelper
 from .golang import GolangCodeParser, GolangLanguageHelper
 from .typescript import TypeScriptCodeParser, TypeScriptLanguageHelper
+from .javascript import JavaScriptCodeParser, JavaScriptLanguageHelper
 from know.parsers import CodeParserRegistry
 from know.models import ProgrammingLanguage
 
@@ -17,4 +18,9 @@ def register_parsers():
     CodeParserRegistry.register_parser(".tsx", TypeScriptCodeParser)
     CodeParserRegistry.register_helper(ProgrammingLanguage.TYPESCRIPT,
                                        TypeScriptLanguageHelper())
-from . import javascript   # noqa: F401  (forces registration)
+
+    CodeParserRegistry.register_parser(".js",  JavaScriptCodeParser)
+    CodeParserRegistry.register_parser(".jsx", JavaScriptCodeParser)
+    CodeParserRegistry.register_parser(".mjs", JavaScriptCodeParser)
+    CodeParserRegistry.register_helper(ProgrammingLanguage.JAVASCRIPT,
+                                    JavaScriptLanguageHelper())

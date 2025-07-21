@@ -44,12 +44,11 @@ const CONST = 42;
 let z = "foobar";
 export { z };
 
- // ↓ ADD just before the “// plain function” section (exact spot not important)
- const Foo = class {
-   bar() {
-     return 123;
-   }
- };
+const Foo = class {
+  bar() {
+    return 123;
+  }
+};
 
 // assignment with arrow-fn
 window.onload = () => { alert("yes"); };

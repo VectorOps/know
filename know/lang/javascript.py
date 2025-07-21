@@ -221,7 +221,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
             if child.type == "default":
                 default_seen = True
                 continue
-            print(child.type)
             match child.type:
                 case "function_declaration":
                     sym.children.extend(self._handle_function(child, parent=parent, exported=True))

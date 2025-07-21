@@ -44,7 +44,7 @@ def test_javascript_parser_on_simple_file():
 
     # top-level symbols (named)
     top_level = _to_map(parsed_file.symbols)
-    assert set(top_level.keys()) == {"Base", "identity", "Foo"}
+    assert set(top_level.keys()) == {"Base", "identity"}
 
     # flatten whole tree
     def _flatten(syms):

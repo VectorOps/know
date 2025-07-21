@@ -88,7 +88,7 @@ def test_typescript_parser_on_simple_file():
     # variable & function names introduced by the sample that were
     # previously untested
     nested_expected = {
-        "CONST", "z", "Foo",       #  ← added "Foo"
+        "CONST", "z", "Foo",     # added "Foo"
         "j1", "f1",              # exported const + arrow-fn
         "a1", "b1", "c1",        # let-declaration
         "e2", "f",               # var-declaration

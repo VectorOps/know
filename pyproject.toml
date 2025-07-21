@@ -25,6 +25,7 @@ dependencies = [
     "faker>=37.4.0",
     "tree-sitter-typescript>=0.23.2",
     "pypika",
+    "tree-sitter-javascript>=0.23.1",
 ]
 
 [tool.uv]
