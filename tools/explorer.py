@@ -136,6 +136,8 @@ def create_app(project) -> Flask:
         return url_for(f"{mapping[type(obj)]}_detail", **{f"{mapping[type(obj)]}_id": obj.id})
 
     app.jinja_env.globals["_link_to"] = _link_to
+    # expose getattr so templates can safely access attributes with defaults
+    app.jinja_env.globals["getattr"] = getattr
 
     return app
 
