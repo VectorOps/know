@@ -6,6 +6,13 @@
       <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
     {% endfor %}
   </table>
+  {# ----------------------------------------------------------- #}
+  {# Symbol body (pretty-printed with highlight.js)              #}
+  {# ----------------------------------------------------------- #}
+  {% if item.__class__.__name__ == "SymbolMetadata" and item.body %}
+    <h2>Body</h2>
+    <pre><code>{{ item.body | e }}</code></pre>
+  {% endif %}
   {% if symbols %}
   <h2>Symbols</h2>
   <table class="table table-bordered">
