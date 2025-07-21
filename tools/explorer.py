@@ -87,17 +87,20 @@ def create_app(project) -> Flask:
     @app.route("/files/<file_id>")
     def file_detail(file_id):
         file = data.file.get_by_id(file_id) or abort(404)
-        symbols = data.symbol.get_list(SymbolFilter(file_id=file_id))
-        return render_template("explorer/detail_generic.html",
-                               item=file, symbols=symbols)
+
+        symbols      = data.symbol.get_list(SymbolFilter(file_id=file_id))
+        importedges  = data.importedge.get_list(
+            ImportEdgeFilter(source_file_id=file_id)
+        )
+
+        return render_template(
+            "explorer/detail_generic.html",
+            item=file,
+            symbols=symbols,
+            importedges=importedges,       #  NEW
+        )
 
     # ----- symbol -----
-    @app.route("/symbols")
-    def list_symbols():
-        items = data.symbol.get_list(SymbolFilter())
-        return render_template("explorer/list.html", title="Symbols",
-                               items=items, item_type="symbol")
-
     @app.route("/symbols/<symbol_id>")
     def symbol_detail(symbol_id):
         symbol = data.symbol.get_by_id(symbol_id) or abort(404)
