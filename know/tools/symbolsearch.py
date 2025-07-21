@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from know.data import SymbolSearchQuery
 from know.models import SymbolKind, Visibility
 from know.project import Project
-from know.tools.base import BaseTool, SummaryMode
+from know.tools.base import BaseTool
+from know.file_summary import SummaryMode
 from know.parsers import CodeParserRegistry, AbstractCodeParser, AbstractLanguageHelper
 from know.models import FileMetadata
 

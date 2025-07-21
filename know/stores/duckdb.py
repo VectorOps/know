@@ -44,6 +44,12 @@ T = TypeVar("T")
 MatchBM25Fn = CustomFunction('fts_main_symbols.match_bm25', ['id', 'query'])
 ArrayCosineSimilarityFn = CustomFunction("array_cosine_similarity", ["vec", "param"])
 
+
+class RawValue(ValueWrapper):
+     def get_value_sql(self, **kwargs: Any) -> str:
+        return self.value
+
+
 # helpers
 def _row_to_dict(rel) -> list[dict[str, Any]]:
     """
@@ -125,7 +131,7 @@ class _DuckDBBaseRepo(Generic[T]):
 
         for k, v in data.items():
             if isinstance(v, list):
-                data[k] = ValueWrapper(v)
+                data[k] = RawValue(v)
 
         return data
 
@@ -436,7 +442,6 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
         parameter = QmarkParameter()
         sql = q.get_sql(parameter=parameter)
-        print(sql, parameter.get_parameters())
 
         rows = self._execute(q)
         syms = [self.model(**self._deserialize_data(r)) for r in rows]

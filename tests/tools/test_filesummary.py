@@ -2,7 +2,7 @@ import textwrap
 
 from know.settings import ProjectSettings
 from know.project import init_project
-from know.tools.base import SummaryMode
+from know.file_summary import SummaryMode
 from know.tools.filesummary import SummarizeFilesTool
 
 

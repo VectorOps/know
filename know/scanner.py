@@ -166,7 +166,9 @@ def scan_project_directory(project: Project) -> ScanResult:
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
     gitignore_spec = parse_gitignore(root)
 
-    for path in root.rglob("*"):
+    all_files = list(root.rglob("*"))
+
+    for idx, path in enumerate(all_files):
         rel_path = path.relative_to(root)
 
         # Skip ignored directories
@@ -179,6 +181,9 @@ def scan_project_directory(project: Project) -> ScanResult:
 
         if not path.is_file():
             continue
+
+        if idx % 100 == 0:
+            logger.debug("processing...", num=idx, total=len(all_files))
 
         processed_paths.add(str(path.relative_to(root)))
 

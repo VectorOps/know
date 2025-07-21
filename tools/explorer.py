@@ -13,6 +13,8 @@ from know.data     import (
 )
 from know.file_summary import SummaryMode, build_file_summary
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 def _parse_cli():
     p = argparse.ArgumentParser(prog="project-explorer",
@@ -31,6 +33,9 @@ def _parse_cli():
     return p.parse_args()
 
 def create_project(args) -> Project:
+    import logging
+    logging
+
     ps_kwargs = {
         "project_path":         args.path,
         "repository_backend":   args.repo_backend,

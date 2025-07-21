@@ -2,18 +2,27 @@
 from __future__ import annotations
 import os
 from typing import Sequence, Optional, List
+from enum import Enum
 from pydantic import BaseModel
 
 from know.logger import logger
 from know.parsers import CodeParserRegistry, AbstractLanguageHelper
 from know.project import Project
 from know.models import ImportEdge, Visibility, SymbolMetadata, SymbolKind
-from know.tools.base import SummaryMode
 from know.data import ImportEdgeFilter, SymbolFilter
+
+
+class SummaryMode(str, Enum):
+    Skip = "skip"
+    ShortSummary = "summary_short"
+    FullSummary = "summary_full"
+    Full = "full"
+
 
 class FileSummary(BaseModel):
     path: str
     content: str
+
 
 def _symbol_to_text(sym: SymbolMetadata, include_docs: bool = False) -> str:
     parts: list[str] = []

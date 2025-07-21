@@ -13,12 +13,10 @@ from litellm import token_counter
 import networkx as nx
 from pydantic import BaseModel
 from know.logger import logger
-from know.tools.base import SummaryMode
-
 from know.project import Project, ScanResult, ProjectComponent
 from know.models import SymbolMetadata, Visibility
 from know.tools.base import BaseTool
-from know.file_summary import build_file_summary
+from know.file_summary import SummaryMode, build_file_summary
 from know.data import FileFilter, SymbolFilter, SymbolRefFilter
 
 
@@ -307,7 +305,6 @@ class RepoMapTool(BaseTool):
         prompt:       Optional[str]           = None,
         limit:        int   = LIMIT_DEFAULT,
         restart_prob: float = RESTART_PROB,
-        include_summary: bool = True,
         summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
         min_symbol_len: int = 3,
         token_limit_count: int | None = None,
@@ -358,8 +355,6 @@ class RepoMapTool(BaseTool):
 
                 if len(last) >= min_symbol_len and last in known_syms:
                     symbol_names_set.add(last)
-
-        print(file_paths_set, symbol_names_set)
 
         # convert back to the lists consumed below
         symbol_names = list(symbol_names_set) if symbol_names_set else None
@@ -417,11 +412,11 @@ class RepoMapTool(BaseTool):
 
         tokens_used = 0
         for path, score in ranked:
-            need_summary = include_summary and path not in mentioned
+            skip_summary = path in mentioned
             summary = None
             summary_tokens = 0
 
-            effective_mode = SummaryMode.Skip if not need_summary else summary_mode
+            effective_mode = SummaryMode.Skip if skip_summary else summary_mode
             fs = build_file_summary(
                 project,
                 path,

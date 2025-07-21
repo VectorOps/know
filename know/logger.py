@@ -20,5 +20,3 @@ structlog.configure(
 )
 
 logger: structlog.BoundLogger = structlog.get_logger("know")
-
-logger.debug("test")

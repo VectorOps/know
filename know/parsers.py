@@ -16,6 +16,7 @@ from know.models import (
 )
 from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash
+from know.logger import logger
 
 
 # Parser-specific data structures

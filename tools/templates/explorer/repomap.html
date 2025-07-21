@@ -80,9 +80,9 @@
           <tr>
             <td>
                 {% if result.file_obj %}
-                    {{ _link_to(result.file_obj) | safe }}
+                <a href="{{ url_for('file_detail', file_id=result.file_obj.id) }}">{{ result.file_path }}</a>
                 {% else %}
-                    {{ result.file_path }}
+                {{ result.file_path }}
                 {% endif %}
             </td>
             <td>{{ "%.4f"|format(result.score) }}</td>

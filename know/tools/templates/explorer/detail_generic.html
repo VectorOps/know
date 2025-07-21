@@ -1,9 +1,0 @@
-{% extends "explorer/base.html" %}
-{% block content %}
-  <h2>{{ item.__class__.__name__ }} {{ item.id }}</h2>
-  <table class="table table-bordered">
-    {% for k, v in item.model_dump().items() %}
-      <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
-    {% endfor %}
-  </table>
-{% endblock %}

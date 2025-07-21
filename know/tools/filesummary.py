@@ -4,8 +4,7 @@ from __future__ import annotations
 from typing import Sequence, List
 from .base import BaseTool
 
-from know.file_summary import FileSummary, build_file_summary
-from know.tools.base import SummaryMode
+from know.file_summary import FileSummary, SummaryMode, build_file_summary
 
 from know.project import Project
 from know.models import Visibility
