@@ -1,14 +1,16 @@
 import argparse, pathlib
 from flask import Flask, render_template, url_for, redirect, abort
 from markupsafe import Markup          # NEW
+from flask import request
 from know.settings import ProjectSettings, EmbeddingSettings
 from know.project  import init_project, Project
+from know.tools.repomap import RepoMapTool
 from know.data     import (
     AbstractDataRepository, RepoMetadata, PackageMetadata, FileMetadata,
     SymbolMetadata, ImportEdge, SymbolRef, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter, SymbolRefFilter
 )
-from know.file_summary import build_file_summary
-from know.tools.base import SummaryMode
+from know.file_summary import SummaryMode, build_file_summary
+
 
 def _parse_cli():
     p = argparse.ArgumentParser(prog="project-explorer",
@@ -99,7 +101,7 @@ def create_app(project) -> Flask:
             ImportEdgeFilter(source_file_id=file_id)
         )
         file_summary_obj = build_file_summary(project, file.path, summary_mode=SummaryMode.ShortSummary)
-        summary = file_summary_obj.summary if file_summary_obj else "Could not generate summary."
+        summary = file_summary_obj.content if file_summary_obj else "Could not generate summary."
 
         return render_template(
             "explorer/detail_generic.html",
@@ -141,6 +143,57 @@ def create_app(project) -> Flask:
         ref = data.symbolref.get_by_id(symbolref_id) or abort(404)
         return render_template("explorer/detail_generic.html",
                                item=ref)
+
+    @app.route("/tools/repomap", methods=["GET", "POST"])
+    def repomap_tool():
+        results = None
+        form_data = request.form
+
+        if request.method == "POST":
+            symbol_names = [s.strip() for s in form_data.get("symbol_names", "").split(",") if s.strip()]
+            file_paths = [p.strip() for p in form_data.get("file_paths", "").split(",") if p.strip()]
+            prompt = form_data.get("prompt") or None
+
+            limit = int(form_data.get("limit") or 20)
+            restart_prob = float(form_data.get("restart_prob") or 0.15)
+            min_symbol_len = int(form_data.get("min_symbol_len") or 3)
+            include_summary = form_data.get("include_summary") == "on"
+            summary_mode = form_data.get("summary_mode", SummaryMode.ShortSummary.value)
+            
+            token_limit_count_str = form_data.get("token_limit_count")
+            token_limit_count = int(token_limit_count_str) if token_limit_count_str else None
+            token_limit_model = form_data.get("token_limit_model") or None
+
+            tool = RepoMapTool()
+            raw_results = tool.execute(
+                project=project,
+                symbol_names=symbol_names,
+                file_paths=file_paths,
+                prompt=prompt,
+                limit=limit,
+                restart_prob=restart_prob,
+                include_summary=include_summary,
+                summary_mode=summary_mode,
+                min_symbol_len=min_symbol_len,
+                token_limit_count=token_limit_count,
+                token_limit_model=token_limit_model,
+            )
+            
+            enriched_results = []
+            for r in raw_results:
+                file_obj = data.file.get_by_path(r['file_path'])
+                enriched_results.append({
+                    "file_obj": file_obj,
+                    "score": r['score'],
+                    "summary": r['summary'],
+                })
+            results = enriched_results
+
+        return render_template("explorer/repomap.html",
+                               title="RepoMap Tool",
+                               summary_modes=[e.value for e in SummaryMode],
+                               results=results,
+                               form_values=form_data)
 
     def _link_to(obj):
         mapping = {RepoMetadata:"repo", PackageMetadata:"package", FileMetadata:"file",
