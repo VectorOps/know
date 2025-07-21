@@ -1,5 +1,6 @@
 import argparse, pathlib
 from flask import Flask, render_template, url_for, redirect, abort
+from markupsafe import Markup          # NEW
 from know.settings import ProjectSettings, EmbeddingSettings
 from know.project  import init_project, Project
 from know.data     import (
@@ -74,8 +75,11 @@ def create_app(project) -> Flask:
         pkg = data.package.get_by_id(package_id) or abort(404)
         files = data.file.get_list(FileFilter(package_id=package_id))
         symbols = data.symbol.get_list(SymbolFilter(package_id=package_id))
+        importedges  = data.importedge.get_list(
+            ImportEdgeFilter(source_package_id=package_id)
+        )
         return render_template("explorer/detail_generic.html",
-                               item=pkg, files=files, symbols=symbols)
+                               item=pkg, files=files, symbols=symbols, importedges=importedges)
 
     # ----- file -----
     @app.route("/files")
@@ -97,14 +101,14 @@ def create_app(project) -> Flask:
             "explorer/detail_generic.html",
             item=file,
             symbols=symbols,
-            importedges=importedges,       #  NEW
+            importedges=importedges,
         )
 
     # ----- symbol -----
     @app.route("/symbols/<symbol_id>")
     def symbol_detail(symbol_id):
         symbol = data.symbol.get_by_id(symbol_id) or abort(404)
-        return render_template("explorer/detail_generic.html",
+        return render_template("explorer/detail_symbol.html",
                                item=symbol)
 
     # ----- importedge -----
@@ -141,6 +145,29 @@ def create_app(project) -> Flask:
     app.jinja_env.globals["_link_to"] = _link_to
     # expose getattr so templates can safely access attributes with defaults
     app.jinja_env.globals["getattr"] = getattr
+
+    def _linkify(value, field_name):
+        """
+        Turn *_id fields into HTML links pointing at the referenced object.
+        Used as a Jinja filter.
+        """
+        mapping = {
+            "repo_id":           "repo",
+            "package_id":        "package",
+            "file_id":           "file",
+            "symbol_id":         "symbol",
+            "parent_symbol_id":  "symbol",
+            "from_package_id":   "package",
+            "from_file_id":      "file",
+            "to_package_id":     "package",
+        }
+        target = mapping.get(field_name)
+        if target and isinstance(value, str) and value:
+            url = url_for(f"{target}_detail", **{f"{target}_id": value})
+            return Markup(f'<a href="{url}">{value}</a>')
+        return value
+
+    app.jinja_env.filters["linkify"] = _linkify    # NEW
 
     return app
 
