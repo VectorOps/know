@@ -420,29 +420,43 @@ class PythonCodeParser(AbstractCodeParser):
         param_node = node.child_by_field_name("parameters")
         if param_node is not None:
             for ch in param_node.children:
-                # Basic identifiers
+                param_name: str | None = None
+                param_type: str | None = None
+                param_default: str | None = None
+
                 if ch.type == "identifier":
-                    parameters.append(
-                        SymbolParameter(
-                            name=ch.text.decode("utf8"),
-                            type_annotation=None,
-                            default=None,
-                            doc=None,
-                        )
-                    )
-                # Typed parameter (`x: int`)
+                    param_name = ch.text.decode("utf8")
+
                 elif ch.type == "typed_parameter":
                     name_node = ch.child_by_field_name("name")
                     type_node = ch.child_by_field_name("type")
+                    param_name = name_node.text.decode("utf8") if name_node else ch.text.decode("utf8")
+                    param_type = type_node.text.decode("utf8") if type_node else None
+
+                elif ch.type == "default_parameter":
+                    name_node = ch.child_by_field_name("name")
+                    value_node = ch.child_by_field_name("value")
+                    param_default = value_node.text.decode("utf8") if value_node else None
+
+                    if name_node:
+                        if name_node.type == "identifier":
+                            param_name = name_node.text.decode("utf8")
+                        elif name_node.type == "typed_parameter":
+                            p_name_node = name_node.child_by_field_name("name")
+                            p_type_node = name_node.child_by_field_name("type")
+                            param_name = p_name_node.text.decode("utf8") if p_name_node else name_node.text.decode("utf8")
+                            param_type = p_type_node.text.decode("utf8") if p_type_node else None
+
+                if param_name:
                     parameters.append(
                         SymbolParameter(
-                            name=name_node.text.decode("utf8") if name_node else ch.text.decode("utf8"),
-                            type_annotation=type_node.text.decode("utf8") if type_node else None,
-                            default=None,
+                            name=param_name,
+                            type_annotation=param_type,
+                            default=param_default,
                             doc=None,
                         )
                     )
-                # *args / **kwargs etc. can be added later; ignore for now.
+                # *args / **kwargs etc. are ignored by not handling their node types.
 
         # Return-type annotation                                             #
         return_type: str | None = None
