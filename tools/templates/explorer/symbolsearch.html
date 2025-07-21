@@ -1,0 +1,101 @@
+{% extends "explorer/base.html" %}
+
+{% block content %}
+<h1 class="mb-4">{{ title }}</h1>
+
+<form method="post" class="mb-5">
+  <div class="mb-3">
+    <label for="query" class="form-label">Query</label>
+    <textarea class="form-control" id="query" name="query" rows="3">{{ form_values.query or '' }}</textarea>
+    <div class="form-text">Natural-language search string.</div>
+  </div>
+  <div class="mb-3">
+    <label for="symbol_name" class="form-label">Symbol Name</label>
+    <input type="text" class="form-control" id="symbol_name" name="symbol_name" value="{{ form_values.symbol_name or '' }}">
+  </div>
+  <div class="mb-3">
+    <label for="symbol_fqn" class="form-label">Symbol FQN</label>
+    <input type="text" class="form-control" id="symbol_fqn" name="symbol_fqn" value="{{ form_values.symbol_fqn or '' }}">
+  </div>
+
+  <div class="row g-3 align-items-center mb-3">
+    <div class="col-auto">
+      <label for="symbol_kind" class="form-label">Symbol Kind</label>
+      <select class="form-select" id="symbol_kind" name="symbol_kind">
+        <option value="" {% if not form_values.get('symbol_kind') %}selected{% endif %}>Any</option>
+        {% for kind in symbol_kinds %}
+          <option value="{{ kind }}" {% if form_values.get('symbol_kind') == kind %}selected{% endif %}>{{ kind }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <label for="symbol_visibility" class="form-label">Symbol Visibility</label>
+      <select class="form-select" id="symbol_visibility" name="symbol_visibility">
+        {% for vis in visibilities %}
+          <option value="{{ vis }}" {% if (not form_values.get('symbol_visibility') and vis == 'public') or (form_values.get('symbol_visibility') == vis) %}selected{% endif %}>{{ vis }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="row g-3 align-items-center mb-3">
+    <div class="col-auto">
+      <label for="limit" class="form-label">Limit</label>
+      <input type="number" class="form-control" id="limit" name="limit" value="{{ form_values.get('limit') or '20' }}" min="1">
+    </div>
+    <div class="col-auto">
+      <label for="summary_mode" class="form-label">Summary Mode</label>
+      <select class="form-select" id="summary_mode" name="summary_mode">
+        {% for mode in summary_modes %}
+          <option value="{{ mode }}" {% if (not form_values.get('summary_mode') and mode == 'summary_short') or (form_values.get('summary_mode') == mode) %}selected{% endif %}>{{ mode }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Search Symbols</button>
+</form>
+
+{% if results is not none %}
+  <h2>Results</h2>
+  {% if results %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Kind</th>
+          <th>Visibility</th>
+          <th>File</th>
+          <th>Summary</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for result in results %}
+          <tr>
+            <td>
+                <a href="{{ url_for('symbol_detail', symbol_id=result.symbol_id) }}">{{ result.fqn or result.name }}</a>
+            </td>
+            <td>{{ result.kind }}</td>
+            <td>{{ result.visibility }}</td>
+            <td>
+                {% if result.file_obj %}
+                <a href="{{ url_for('file_detail', file_id=result.file_obj.id) }}">{{ result.file_path }}</a>
+                {% elif result.file_path %}
+                {{ result.file_path }}
+                {% endif %}
+            </td>
+            <td>
+              {% if result.body %}
+                <pre style="white-space: pre-wrap; word-wrap: break-word;"><code>{{ result.body }}</code></pre>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No results found.</p>
+  {% endif %}
+{% endif %}
+
+{% endblock %}

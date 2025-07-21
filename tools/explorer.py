@@ -5,6 +5,8 @@ from flask import request
 from know.settings import ProjectSettings, EmbeddingSettings
 from know.project  import init_project, Project
 from know.tools.repomap import RepoMapTool
+from know.tools.symbolsearch import SearchSymbolsTool
+from know.models import SymbolKind, Visibility
 from know.data     import (
     AbstractDataRepository, RepoMetadata, PackageMetadata, FileMetadata,
     SymbolMetadata, ImportEdge, SymbolRef, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter, SymbolRefFilter
@@ -157,8 +159,7 @@ def create_app(project) -> Flask:
             limit = int(form_data.get("limit") or 20)
             restart_prob = float(form_data.get("restart_prob") or 0.15)
             min_symbol_len = int(form_data.get("min_symbol_len") or 3)
-            include_summary = form_data.get("include_summary") == "on"
-            summary_mode = form_data.get("summary_mode", SummaryMode.ShortSummary.value)
+            summary_mode = SummaryMode(form_data.get("summary_mode", SummaryMode.ShortSummary.value))
             
             token_limit_count_str = form_data.get("token_limit_count")
             token_limit_count = int(token_limit_count_str) if token_limit_count_str else None
@@ -172,7 +173,6 @@ def create_app(project) -> Flask:
                 prompt=prompt,
                 limit=limit,
                 restart_prob=restart_prob,
-                include_summary=include_summary,
                 summary_mode=summary_mode,
                 min_symbol_len=min_symbol_len,
                 token_limit_count=token_limit_count,
@@ -181,8 +181,9 @@ def create_app(project) -> Flask:
             
             enriched_results = []
             for r in raw_results:
-                file_obj = data.file.get_by_path(r['file_path'])
+                file_obj = data.file.get_by_path(r["file_path"])
                 enriched_results.append({
+                    "file_path": r["file_path"],
                     "file_obj": file_obj,
                     "score": r['score'],
                     "summary": r['summary'],
@@ -194,6 +195,41 @@ def create_app(project) -> Flask:
                                summary_modes=[e.value for e in SummaryMode],
                                results=results,
                                form_values=form_data)
+
+    @app.route("/tools/symbolsearch", methods=["GET", "POST"])
+    def symbolsearch_tool():
+        results = None
+        form_data = request.form
+
+        if request.method == "POST":
+            tool = SearchSymbolsTool()
+            raw_results = tool.execute(
+                project=project,
+                symbol_name=form_data.get("symbol_name") or None,
+                symbol_fqn=form_data.get("symbol_fqn") or None,
+                symbol_kind=form_data.get("symbol_kind") or None,
+                symbol_visibility=form_data.get("symbol_visibility") or "public",
+                query=form_data.get("query") or None,
+                limit=int(form_data.get("limit") or 20),
+                summary_mode=SummaryMode(form_data.get("summary_mode", SummaryMode.ShortSummary.value)),
+            )
+
+            enriched_results = []
+            for r in raw_results:
+                if r.get("file_path"):
+                    r["file_obj"] = data.file.get_by_path(r["file_path"])
+                else:
+                    r["file_obj"] = None
+                enriched_results.append(r)
+            results = enriched_results
+
+        return render_template("explorer/symbolsearch.html",
+                               title="Symbol Search Tool",
+                               results=results,
+                               form_values=form_data,
+                               symbol_kinds=[k.value for k in SymbolKind],
+                               visibilities=[v.value for v in Visibility] + ["all"],
+                               summary_modes=[e.value for e in SummaryMode])
 
     def _link_to(obj):
         mapping = {RepoMetadata:"repo", PackageMetadata:"package", FileMetadata:"file",
