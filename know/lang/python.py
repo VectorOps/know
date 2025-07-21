@@ -424,37 +424,40 @@ class PythonCodeParser(AbstractCodeParser):
                 param_type: str | None = None
                 param_default: str | None = None
 
+                # Simple identifier: def f(a)
                 if ch.type == "identifier":
                     param_name = ch.text.decode("utf8")
 
+                # Typed parameter: def f(a: int)
                 elif ch.type == "typed_parameter":
-                    # For `x: int`, ch is `x: int` (typed_parameter). Its name is
-                    # not a named field but the first `identifier` child.
-                    name_node = next((c for c in ch.children if c.type == 'identifier'), None)
+                    name_node = ch.children[0]
+                    param_name = name_node.text.decode("utf8")
                     type_node = ch.child_by_field_name("type")
-                    if name_node:
-                        param_name = name_node.text.decode("utf8")
-                    else:  # fallback for things like *args: T
-                        param_name = ch.text.decode("utf8").split(':')[0].strip()
                     param_type = type_node.text.decode("utf8") if type_node else None
 
+                # Default parameter: def f(a=1)
                 elif ch.type == "default_parameter":
                     name_node = ch.child_by_field_name("name")
                     value_node = ch.child_by_field_name("value")
+                    param_name = name_node.text.decode("utf8") if name_node else None
                     param_default = value_node.text.decode("utf8") if value_node else None
 
-                    if name_node:
-                        if name_node.type == "identifier":
-                            param_name = name_node.text.decode("utf8")
-                        elif name_node.type == "typed_parameter":
-                            # For `x: int = 1`, name_node is `x: int` (typed_parameter).
-                            p_name_node = next((c for c in name_node.children if c.type == 'identifier'), None)
-                            p_type_node = name_node.child_by_field_name("type")
-                            if p_name_node:
-                                param_name = p_name_node.text.decode("utf8")
-                            else:  # fallback
-                                param_name = name_node.text.decode("utf8").split(':')[0].strip()
-                            param_type = p_type_node.text.decode("utf8") if p_type_node else None
+                # Typed default parameter: def f(a: int = 1)
+                elif ch.type == "typed_default_parameter":
+                    name_node = ch.child_by_field_name("name")
+                    type_node = ch.child_by_field_name("type")
+                    value_node = ch.child_by_field_name("value")
+                    param_name = name_node.text.decode("utf8") if name_node else None
+                    param_type = type_node.text.decode("utf8") if type_node else None
+                    param_default = value_node.text.decode("utf8") if value_node else None
+
+                # List splat: def f(*args)
+                elif ch.type == "list_splat":
+                    param_name = ch.text.decode("utf8")
+
+                # Dictionary splat: def f(**kwargs)
+                elif ch.type == "dictionary_splat":
+                    param_name = ch.text.decode("utf8")
 
                 if param_name:
                     parameters.append(
@@ -465,7 +468,7 @@ class PythonCodeParser(AbstractCodeParser):
                             doc=None,
                         )
                     )
-                # *args / **kwargs etc. are ignored by not handling their node types.
+                # Other node types like '(', ')', ',', and '*' are correctly ignored.
 
         # Return-type annotation                                             #
         return_type: str | None = None
