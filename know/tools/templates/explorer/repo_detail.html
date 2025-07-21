@@ -1,0 +1,19 @@
+{% extends "explorer/base.html" %}
+{% block content %}
+  <h2>Repository {{ item.name or item.id }}</h2>
+  <p><strong>Root:</strong> {{ item.root_path }}</p>
+
+  <h4>Packages</h4>
+  <ul>
+    {% for p in packages %}
+      <li><a href="{{ url_for('package_detail', package_id=p.id) }}">{{ p.name or p.id }}</a></li>
+    {% endfor %}
+  </ul>
+
+  <h4>Files</h4>
+  <ul>
+    {% for f in files %}
+      <li><a href="{{ url_for('file_detail', file_id=f.id) }}">{{ f.path }}</a></li>
+    {% endfor %}
+  </ul>
+{% endblock %}
