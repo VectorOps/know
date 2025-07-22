@@ -90,6 +90,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return self._handle_lexical(node, parent)
         elif node.type == "expression_statement":
             return self._handle_expression(node, parent)
+        elif node.type == "empty_statement":
+            return []
         elif node.type == "comment":
             return self._handle_comment(node, parent)
         elif node.type in self._GENERIC_STATEMENT_NODES:
@@ -318,8 +320,11 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 if sym:
                     children.append(sym)
                 continue
-            elif ch.type == "call_expression":
-                self._collect_require_calls(ch)
+            elif ch.type in ("call_expression", "member_expression", "unary_expression"):
+                if ch.type == "call_expression":
+                    self._collect_require_calls(ch)
+                children.append(self._create_literal_symbol(ch, parent))
+                continue
             else:
                 logger.warning(
                     "JS parser: unhandled expression child",
