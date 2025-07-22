@@ -20,7 +20,7 @@ from know.models import (
 from know.data import SymbolSearchQuery, SymbolFilter, ImportEdgeFilter
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
 from know.project import Project, ProjectCache
-from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings
+from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings, schedule_symbol_embedding
 
 # TODO: Make configurable
 IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode", ".pytest_cache"}
