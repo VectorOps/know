@@ -109,8 +109,9 @@ class _DuckDBBaseRepo(Generic[T]):
         cur.execute("USE db")
         return cur
 
-    def __init__(self, conn: duckdb.DuckDBPyConnection):
+    def __init__(self, conn: duckdb.DuckDBPyConnection, lock: threading.RLock):
         self.conn = conn
+        self._lock = lock
         self._table = Table(self.table)
 
     def _serialize_data(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -160,7 +161,8 @@ class _DuckDBBaseRepo(Generic[T]):
 
     def _execute(self, q):
         sql, args = self._get_query(q)
-        return _row_to_dict(self.cursor().execute(sql, args))
+        with self._lock:
+            return _row_to_dict(self.cursor().execute(sql, args))
 
     # CRUD
     def get_by_id(self, item_id: str) -> Optional[T]:
@@ -222,8 +224,8 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
     table = "packages"
     model = PackageMetadata
 
-    def __init__(self, conn, file_repo: "DuckDBFileMetadataRepo"):  # type: ignore
-        super().__init__(conn)
+    def __init__(self, conn, file_repo: "DuckDBFileMetadataRepo", lock: threading.RLock):  # type: ignore
+        super().__init__(conn, lock)
         self._file_repo = file_repo
 
     def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
@@ -582,6 +584,7 @@ class DuckDBDataRepository(AbstractDataRepository):
             os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
 
         self._conn = duckdb.connect()
+        self._lock = threading.RLock()
 
         # --- enable vector-similarity search extension --------------------------
         try:
@@ -603,12 +606,12 @@ class DuckDBDataRepository(AbstractDataRepository):
         _apply_migrations(self._conn)
 
         # build repositories (some need cross-references)
-        self._file_repo    = DuckDBFileMetadataRepo(self._conn)
-        self._package_repo = DuckDBPackageMetadataRepo(self._conn, self._file_repo)
-        self._repo_repo    = DuckDBRepoMetadataRepo(self._conn)
-        self._symbol_repo  = DuckDBSymbolMetadataRepo(self._conn)
-        self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
-        self._symbolref_repo = DuckDBSymbolRefRepo(self._conn)
+        self._file_repo    = DuckDBFileMetadataRepo(self._conn, self._lock)
+        self._package_repo = DuckDBPackageMetadataRepo(self._conn, self._file_repo, self._lock)
+        self._repo_repo    = DuckDBRepoMetadataRepo(self._conn, self._lock)
+        self._symbol_repo  = DuckDBSymbolMetadataRepo(self._conn, self._lock)
+        self._edge_repo    = DuckDBImportEdgeRepo(self._conn, self._lock)
+        self._symbolref_repo = DuckDBSymbolRefRepo(self._conn, self._lock)
 
     def close(self):
         pass
