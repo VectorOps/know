@@ -1,5 +1,9 @@
 #+title: Todo
-* [ ] Measure startup time
+* [X] Measure startup time
+* [X] Measure time it takes to process file, a batch of files, etc
+* [ ] Cache improvements
+** [ ] Collect and mass-update embeddings that were recently used
+** [ ] Add lifecycle rules to cleanup old unused embeddings
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols
 * [ ] Refactor symbols
@@ -35,7 +39,7 @@
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
 *** [X] Refactror node parser to return nodes like python and typescript parsers
 *** [X] Generics
-*** [ ] Add support for multi-module projects with nested go.mod
+*** [X] Add support for multi-module projects with nested go.mod
 ** [-] TypeScript
 *** [X] Reference parsing
 *** [X] Generics

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional, Any
 
@@ -36,15 +37,6 @@ def scan_project_directory(project: Project) -> ScanResult:
     """
     Recursively walk the project directory, parse every supported source file
     and store parsing results via the project-wide data repository.
-
-    • Skips hard-coded directories like “.git”, “__pycache__”, etc.
-    • Additionally respects ignore patterns from a top-level .gitignore.
-    • For each non-ignored file:
-        – Get a parser from CodeParserRegistry using file suffix.
-        – If no parser, log at DEBUG and continue.
-        – If parser exists, call parser.parse(project, <rel_path>).
-          Any exception raised is caught and logged at ERROR (with stack-trace).
-    Returns a ScanResult object describing added/updated/deleted files.
     """
     start_time = time.perf_counter()
     result = ScanResult()
@@ -59,6 +51,7 @@ def scan_project_directory(project: Project) -> ScanResult:
 
     cache = ProjectCache()
     state = ParsingState()
+    timing_stats = defaultdict(lambda: {"count": 0, "total_time": 0.0})
 
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
     gitignore_spec = parse_gitignore(root)
@@ -98,6 +91,8 @@ def scan_project_directory(project: Project) -> ScanResult:
             if existing_meta and existing_meta.file_hash == file_hash:
                 continue
 
+        file_proc_start = time.perf_counter()
+
         parser_cls = CodeParserRegistry.get_parser(path.suffix)
         if parser_cls is None:
             logger.debug("No parser registered for path – storing bare FileMetadata.", path=rel_path)
@@ -126,6 +121,11 @@ def scan_project_directory(project: Project) -> ScanResult:
                     },
                 )
                 result.files_updated.append(str(rel_path))
+
+            duration = time.perf_counter() - file_proc_start
+            suffix = path.suffix or "no_suffix"
+            timing_stats[suffix]["count"] += 1
+            timing_stats[suffix]["total_time"] += duration
             continue
 
         try:
@@ -136,6 +136,11 @@ def scan_project_directory(project: Project) -> ScanResult:
                 result.files_added.append(str(rel_path))
             else:
                 result.files_updated.append(str(rel_path))
+
+            duration = time.perf_counter() - file_proc_start
+            suffix = path.suffix or "no_suffix"
+            timing_stats[suffix]["count"] += 1
+            timing_stats[suffix]["total_time"] += duration
         except Exception as exc:
             logger.error("Failed to parse file", path=rel_path, exc=exc)
 
@@ -178,8 +183,24 @@ def scan_project_directory(project: Project) -> ScanResult:
     schedule_outdated_embeddings(project)
 
     duration = time.perf_counter() - start_time
-    logger.debug("scan_project_directory finished.",
-                 duration=f"{duration:.3f}s")
+    logger.debug(
+        "scan_project_directory finished.",
+        duration=f"{duration:.3f}s",
+        files_added=len(result.files_added),
+        files_updated=len(result.files_updated),
+        files_deleted=len(result.files_deleted),
+    )
+
+    if timing_stats:
+        logger.debug("File processing summary:")
+        for suffix, stats in sorted(timing_stats.items()):
+            avg_time = stats["total_time"] / stats["count"]
+            logger.debug(
+                f"  - Suffix: {suffix:<10} | "
+                f"Files: {stats['count']:>4} | "
+                f"Total: {stats['total_time']:>7.3f}s | "
+                f"Avg: {avg_time * 1000:>8.2f} ms/file"
+            )
 
     return result
 
