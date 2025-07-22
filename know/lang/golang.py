@@ -342,7 +342,9 @@ class GolangCodeParser(AbstractCodeParser):
                 )
             )
             if abs_target.startswith(self.project.settings.project_path) and os.path.isdir(abs_target):
-                physical_path = os.path.relpath(abs_target, self.project.settings.project_path)
+                physical_path = os.path.relpath(
+                    abs_target, self.project.settings.project_path
+                ).replace(os.sep, "/")
                 external = False
 
         # 2) paths inside the current Go module (from go.mod)
@@ -862,10 +864,19 @@ class GolangCodeParser(AbstractCodeParser):
 
         def _resolve_pkg(full_name: str) -> str | None:
             for imp in self.parsed_file.imports:
-                if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
-                    return imp.virtual_path
-                if not imp.alias and (full_name == imp.virtual_path or full_name.startswith(f"{imp.virtual_path}.")):
-                    return imp.virtual_path
+                # Case 1: Explicit alias (e.g., `import f "fmt"`)
+                # This includes blank imports `_ "..."` which do not expose symbols.
+                if imp.alias and imp.alias != "_":
+                    if full_name == imp.alias or full_name.startswith(f"{imp.alias}."):
+                        return imp.virtual_path
+
+                # Case 2: No alias (e.g., `import "net/http"` -> package `http`)
+                # Dot imports have no qualifier, so they are not handled here.
+                elif not imp.alias and not imp.dot:
+                    # Default package name is the last component of the import path
+                    pkg_name = imp.virtual_path.split("/")[-1]
+                    if full_name == pkg_name or full_name.startswith(f"{pkg_name}."):
+                        return imp.virtual_path
             return None
 
         # helper for creating a TYPE ref
