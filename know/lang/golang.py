@@ -53,6 +53,7 @@ class GolangCodeParser(AbstractCodeParser):
         self.project = project
         self.source_bytes: bytes = b""
         self.module_path: str | None = None
+        self.module_root_abs_path: str | None = None
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
@@ -118,43 +119,57 @@ class GolangCodeParser(AbstractCodeParser):
         )
         return [self._make_symbol(node, kind=SymbolKind.LITERAL)]
 
-    # go.mod handling
     def _load_module_path(self, cache: ProjectCache) -> None:
         """
-        Look up or cache the project's Go module path (first `module ...` in go.mod).
-        Uses project-wide cache for performance.
+        Find the governing `go.mod` for the current file by searching upwards
+        from its directory, and cache the module path and its root directory.
+        Uses a project-wide cache of all go.mod files for performance.
         """
         project_path = self.project.settings.project_path
 
-        cache_key = f"go.mod.module_path::{project_path}"
-        if cache is not None:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                self.module_path = cached
-                return cached
+        # 1. Get (or build) a map of all go.mod files in the project
+        cache_key = f"go.project.gomods::{project_path}"
+        gomods_map = cache.get(cache_key) if cache is not None else None
+
+        if gomods_map is None:
+            gomods_map = {}  # Map[str, str] of {mod_dir_abs_path: module_path}
+            for root, _, files in os.walk(project_path):
+                if "go.mod" in files:
+                    gomod_path = os.path.join(root, "go.mod")
+                    try:
+                        with open(gomod_path, "r", encoding="utf8") as fh:
+                            for ln in fh:
+                                ln = ln.strip()
+                                if ln.startswith("module"):
+                                    parts = ln.split()
+                                    if len(parts) >= 2:
+                                        module_path = parts[1]
+                                        gomods_map[os.path.normpath(root)] = module_path
+                                    break
+                    except OSError:
+                        pass
+            if cache is not None:
+                cache.set(cache_key, gomods_map)
+
+        # 2. Find the best-matching module for the current file
+        file_abs_dir = os.path.dirname(os.path.join(project_path, self.rel_path))
 
         module_path = None
-        gomod = os.path.join(project_path, "go.mod")
-        if not os.path.isfile(gomod):
-            if cache is not None:
-                cache.set(cache_key, None)
-            return None
-        try:
-            with open(gomod, "r", encoding="utf8") as fh:
-                for ln in fh:
-                    ln = ln.strip()
-                    if ln.startswith("module"):
-                        parts = ln.split()
-                        if len(parts) >= 2:
-                            module_path = parts[1]
-                        break
-        except OSError:
-            pass
-        if cache is not None:
-            cache.set(cache_key, module_path)
+        module_root_abs_path = None
+        best_match_len = -1
+
+        for mod_dir_abs, mod_path in gomods_map.items():
+            norm_file_dir = os.path.normpath(file_abs_dir)
+            norm_mod_dir = os.path.normpath(mod_dir_abs)
+            if norm_file_dir.startswith(norm_mod_dir):
+                if len(norm_mod_dir) > best_match_len:
+                    best_match_len = len(norm_mod_dir)
+                    module_root_abs_path = mod_dir_abs
+                    module_path = mod_path
 
         self.module_path = module_path
-        return module_path
+        self.module_root_abs_path = module_root_abs_path
+        return None
 
     def _extract_package_name(self, root_node) -> Optional[str]:
         """
@@ -199,15 +214,21 @@ class GolangCodeParser(AbstractCodeParser):
             rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
             return rel_dir or "."
 
-        if self.module_path:
-            rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
+        if self.module_path and self.module_root_abs_path:
+            project_path = self.project.settings.project_path
+            file_abs_dir = os.path.dirname(os.path.join(project_path, self.rel_path))
+
+            rel_dir_from_module_root = os.path.relpath(file_abs_dir, self.module_root_abs_path).replace(os.sep, "/")
+            if rel_dir_from_module_root == ".":
+                rel_dir_from_module_root = ""
+
             full_path = (
-                self.module_path + ("/" + rel_dir if rel_dir else "")
+                self.module_path + ("/" + rel_dir_from_module_root if rel_dir_from_module_root else "")
             )
 
             expected_pkg = (
-                rel_dir.split("/")[-1]
-                if rel_dir
+                rel_dir_from_module_root.split("/")[-1]
+                if rel_dir_from_module_root
                 else self.module_path.split("/")[-1]
             )
 
@@ -348,14 +369,16 @@ class GolangCodeParser(AbstractCodeParser):
                 external = False
 
         # 2) paths inside the current Go module (from go.mod)
-        elif self.module_path and (
+        elif self.module_path and self.module_root_abs_path and (
             import_path == self.module_path
             or import_path.startswith(self.module_path + "/")
         ):
             sub_path = import_path[len(self.module_path) :].lstrip("/")
-            abs_target = os.path.join(self.project.settings.project_path, sub_path)
-            if os.path.isdir(abs_target) or sub_path == "":
-                physical_path = sub_path or "."      # root package ⇒ "."
+            abs_target = os.path.join(self.module_root_abs_path, sub_path)
+            if os.path.isdir(abs_target):
+                physical_path = os.path.relpath(
+                    abs_target, self.project.settings.project_path
+                ).replace(os.sep, "/")
                 external = False
 
         # 3) plain “path” that maps directly into project directory
