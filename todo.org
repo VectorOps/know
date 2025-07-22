@@ -1,6 +1,4 @@
 #+title: Todo
-* [X] Measure startup time
-* [X] Measure time it takes to process file, a batch of files, etc
 * [ ] Cache improvements
 ** [ ] Collect and mass-update embeddings that were recently used
 ** [ ] Add lifecycle rules to cleanup old unused embeddings
@@ -12,6 +10,57 @@
 ** [X] Do insert/delete instead of update?
 ** [ ] Rename to Node
 * [ ] Fix summary generator to not include module docstring if level is short summary
+* [ ] Add a inherits field to symbols and use for classes
+** [ ] Update SymbolRef to use these too
+* [ ] When parsing references from files, skip duplicate names?
+* [X] Define the meaning of to_package_path for ParsedSymbolRef (virtual path, physical path, etc)
+* [ ] Language support
+** [-] Python
+*** [X] Test module path resolution
+*** [X] Fix to_package_path for python
+        to_package_path='os', for 'os.path.join'
+** [ ] Golang
+*** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
+*** [X] Refactror node parser to return nodes like python and typescript parsers
+*** [X] Generics
+*** [X] Add support for multi-module projects with nested go.mod
+** [-] TypeScript
+*** [X] Reference parsing
+*** [X] Generics
+*** [X] Namespaces
+*** [X] CommonJS imports and exports
+*** [X] Modules
+*** [ ] Declare
+*** [ ] Test module path resolution
+*** [X] React TSX support
+** [X] JavaScript
+*** [X] Add support for member_expression, empty_statement node type
+** [ ] C
+** [ ] C#
+** [ ] Java
+** [ ] PHP
+* [ ] Documentation generator
+* [ ] CI/CD pipeline
+* [ ] Add git support
+** [ ]  Use git to quickly find what files have changed?
+* [ ] MCP-compatible tool definition support
+* [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
+* [ ] Add support for Python del_statement?
+* [ ] Do not refresh DuckDB index if project did not change
+* [ ] Add reranking model support
+* [-] Add infra to maintain in-memory tools like RepoMap
+** [ ] Enable/Disable tools configuration flag
+* [ ] Validate traversal logic to ensure we can not go outside of the project directory.
+* [ ] Search to support exclude. For example - tests
+* [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
+* [ ] Figure out lockup in filelist tool
+* [ ] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
+* [ ] Only include mentioned symbols in repomap instead of file summary?
+* [ ] Add a way to initialize project, but only scan and work from a subpath
+** [ ] Search should be scoped to files in subdirectories
+* [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
+* [X] Measure startup time
+* [X] Measure time it takes to process file, a batch of files, etc
 * [X] Rewrite SQL backends to use PyPika
 * [X] Add public OpenAI API call definitions for existing tools
 * [X] Add language to symbol and use it find parser when generating a summary
@@ -26,44 +75,11 @@
 * [X] Get rid of symbol hashes for short (all?) symbols - just check the body.
 * [X] Add a flag to mark symbols as exported instead of treating them as public
 * [X] Summary mode where parent symbols are also included
-* [ ] Add a inherits field to symbols
 * [X] Move parse() implementation to AbstractCodeparser. Allow to customize.
-* [ ] When parsing references from files, skip duplicate names
-* [ ] Define the meaning of to_package_path for ParsedSymbolRef (virtual path, physical path, etc)
-* [ ] Language support
-** [-] Python
-*** [X] Test module path resolution
-*** [ ] Fix to_package_path for python
-        to_package_path='os', for 'os.path.join'
-** [X] Golang
-*** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
-*** [X] Refactror node parser to return nodes like python and typescript parsers
-*** [X] Generics
-*** [X] Add support for multi-module projects with nested go.mod
-** [-] TypeScript
-*** [X] Reference parsing
-*** [X] Generics
-*** [X] Namespaces
-*** [X] CommonJS imports and exports
-*** [X] Modules
-*** [ ] Declare
-*** [ ] Test module path resolution
-*** [X] React TSX support
-** [ ] JavaScript
-*** [ ] Add support for member_expression, empty_statement node type
-** [ ] C
-** [ ] C#
-** [ ] Java
-** [ ] PHP
-* [ ] Documentation generator
-* [ ] CI/CD pipeline
-* [ ] Add git support
-** [ ]  Use git to quickly find what files have changed
 * [X] Expose a helper method in Project class to calculate embedding for the arbitrary search term
 * [X] Better in-memory vector index for faster lookups
 * [X] Separate embeddings from primary data store
 * [X] Create a helper that generates a summary view of a file
-* [ ] MCP-compatible tool definition support
 * [X] Tools
 ** [X] File list
 ** [X] Summary lists
@@ -77,22 +93,17 @@
 * [X] Figure out a way to update embeddings in background
 * [X] Add embedding value caching
 ** [X] A shared cross-project table
-* [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
 * [X] Do not warn on python pass_statement
-* [ ] Add support for Python del_statement?
 * [X] Add support for FTS when embedding search is not feasible
 * [X] Even if file can not be parsed, store information about it in the database
 * [X] When reparsing file and symbols did not change - do not recalculate embeddings
 * [X] Build a tool that provides recommendations for a list of files/packages by applying PageRank algorithm to dependencies.
 * [X] Add package_id to symbols to speed up search
 * [X] Add caching for go.mod at project level to avoid loading it for each and every Go file
-* [ ] Do not refresh DuckDB index if project did not change
 * [X] Figure out a way to have a single query parameter that searches code by embedding and documentation. Idea: calculate embedding vector for commend/docstring and use that instead of FTS. Fallback to FTS if embeddings are not enabled.
 * [X] Add symbol search test
-* [ ] Add reranking model support
 * [X] Python parser should preserve decorators when parsing symbols. Extend model to collect decorators and store them in model.
 * [X] Python parser does not parse symbols of decorated methods
-* [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
 * [X] Search for public symbols by default
 * [X] Recommendation engine
 ** [X] Store all references for each file
@@ -103,23 +114,13 @@
 - Implement ranking algorithm to find recommendations
 ** [X] Figure out incremental graph updates
 ** [X] Create a tool that takes in file paths, query, runs above algorithm
-* [-] Add infra to maintain in-memory tools like RepoMap
-** [ ] Enable/Disable tools configuration flag
 * [X] Create a simple web ui to navigate project database
-* [ ] Validate traversal logic to ensure we can not go outside of the project directory.
 * [X] Add a way to destroy the project. This should also shutdown/stop embedding worker.
 ** [X] Add a destory() method to embedding worker
-* [ ] Add a way to initialize project, but only scan and work from a subpath
-** [ ] Search should be scoped to files in subdirectories
 * [X] Strip spaces from multi-line commends, but recover when generating summaries
 * [X] Instead of having multiple flags for summary/full/none, add enum to tools
 * [X] If embedding model for the vector does not match current embedding model - either update OR skip
 * [X] Find a way to de-dupe embedding queue to avoid calculating vectors multiple times
-* [ ] Search to support exclude. For example - tests
-* [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
 * [X] Move file summary helper out of tools
 * [X] Better lookup with filters methods in data layer, similar to symbol search instead of dedicated methods.
-* [ ] Figure out lockup in filelist tool
 * [X] Compress long symbol bodies
-* [ ] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
-* [ ] Only include mentioned symbols in repomap instead of file summary?
