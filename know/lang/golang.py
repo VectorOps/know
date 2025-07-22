@@ -127,12 +127,12 @@ class GolangCodeParser(AbstractCodeParser):
         """
         project_path = self.project.settings.project_path
 
-        # 1. Get (or build) a map of all go.mod files in the project
-        cache_key = f"go.project.gomods::{project_path}"
+        # Get (or build) a map of all go.mod files in the project
+        cache_key = f"go.project.gomods::{self.project.get_repo().id}"
         gomods_map = cache.get(cache_key) if cache is not None else None
 
         if gomods_map is None:
-            gomods_map = {}  # Map[str, str] of {mod_dir_abs_path: module_path}
+            gomods_map = {}
             for root, _, files in os.walk(project_path):
                 if "go.mod" in files:
                     gomod_path = os.path.join(root, "go.mod")
@@ -151,7 +151,7 @@ class GolangCodeParser(AbstractCodeParser):
             if cache is not None:
                 cache.set(cache_key, gomods_map)
 
-        # 2. Find the best-matching module for the current file
+        # Find the best-matching module for the current file
         file_abs_dir = os.path.dirname(os.path.join(project_path, self.rel_path))
 
         module_path = None
@@ -169,6 +169,7 @@ class GolangCodeParser(AbstractCodeParser):
 
         self.module_path = module_path
         self.module_root_abs_path = module_root_abs_path
+
         return None
 
     def _extract_package_name(self, root_node) -> Optional[str]:
@@ -348,9 +349,7 @@ class GolangCodeParser(AbstractCodeParser):
         if import_path[0] in "\"`" and import_path[-1] in "\"`":
             import_path = import_path[1:-1]
 
-        # ------------------------------------------------------------------
         # Resolve import – relative, module-local, or truly external
-        # ------------------------------------------------------------------
         physical_path: str | None = None
         external = True
 
@@ -911,7 +910,7 @@ class GolangCodeParser(AbstractCodeParser):
                     name=simple,
                     raw=full_name,
                     type=SymbolRefType.TYPE,
-                    to_package_path=_resolve_pkg(full_name),
+                    to_package_virtual_path=_resolve_pkg(full_name),
                 )
             )
 
@@ -928,7 +927,7 @@ class GolangCodeParser(AbstractCodeParser):
                             name=simple,
                             raw=raw_expr,
                             type=SymbolRefType.CALL,
-                            to_package_path=_resolve_pkg(full_name),
+                            to_package_virtual_path=_resolve_pkg(full_name),
                         )
                     )
 
@@ -966,9 +965,9 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
             return imp.raw.strip()
 
-        path  = getattr(imp, "to_package_path", "") or ""
-        alias = getattr(imp, "alias", None)
-        dot   = bool(getattr(imp, "dot", False))
+        path  = imp.to_package_virtual_path
+        alias = imp.alias
+        dot   = imp.dot
 
         if dot:
             return f'import . "{path}"'.strip()

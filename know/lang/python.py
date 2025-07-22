@@ -774,7 +774,7 @@ class PythonCodeParser(AbstractCodeParser):
                             name=simple_name,          # store only the plain symbol name
                             raw=raw,                   # keep full expression here
                             type=SymbolRefType.CALL,
-                            to_package_path=to_pkg_path,
+                            to_package_virtual_path=to_pkg_path,
                         )
                     )
             # recurse
@@ -939,7 +939,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         if imp.raw:
             return imp.raw.strip()
 
-        path  = imp.to_package_path or ""
+        path  = imp.to_package_virtual_path or ""
         alias = f" as {imp.alias}" if imp.alias else ""
 
         if imp.dot:

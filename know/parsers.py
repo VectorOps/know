@@ -30,7 +30,8 @@ class ParsedImportEdge(BaseModel):
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "to_package_path": self.virtual_path,
+            "to_package_physical_path": self.physical_path,
+            "to_package_virtual_path": self.virtual_path,
             "alias": self.alias,
             "dot": self.dot,
             "external": self.external,
@@ -57,14 +58,14 @@ class ParsedSymbolRef(BaseModel):
     name: str
     raw: str
     type: SymbolRefType
-    to_package_path: Optional[str] = None
+    to_package_virtual_path: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "raw": self.raw,
             "type": self.type,
-            "to_package_path": self.to_package_path,
+            "to_package_virtual_path": self.to_package_virtual_path,
         }
 
 

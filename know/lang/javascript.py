@@ -579,7 +579,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     name=simple_name,
                     raw=raw,
                     type=ref_type,
-                    to_package_path=to_pkg_path,
+                    to_package_virtual_path=to_pkg_path,
                 )
             )
         return refs
@@ -900,4 +900,4 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
 
     # ------------------------------------------------------------------
     def get_import_summary(self, imp: ImportEdge) -> str:  # unchanged
-        return imp.raw.strip() if imp.raw else f"import {imp.to_package_path}"
+        return imp.raw.strip() if imp.raw else f"import {imp.to_package_virtual_path}"

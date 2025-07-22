@@ -327,7 +327,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     # Existing edges from this file and package
     existing_edges = import_repo.get_list(ImportEdgeFilter(source_file_id=file_meta.id))
     existing_by_key: dict[tuple[str | None, str | None, bool], ImportEdge] = {
-        (e.to_package_path, e.alias, e.dot): e for e in existing_edges
+        (e.to_package_virtual_path, e.alias, e.dot): e for e in existing_edges
     }
 
     # Helper: resolve internal package_id if we already know about the target package
@@ -450,8 +450,8 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
 
     # (re)create refs from the freshly parsed data
     for ref in parsed_file.symbol_refs:
-        ref_data = ref.to_dict()                # ← use helper
-        to_pkg_id = _resolve_pkg_id(ref_data.pop("to_package_path"))
+        ref_data = ref.to_dict()
+        to_pkg_id = _resolve_pkg_id(ref_data.pop("to_package_virtual_path"))
         ref_data.update(
             {
                 "repo_id": project.get_repo().id,
@@ -531,9 +531,9 @@ def resolve_pending_import_edges(project: Project, state: ParsingState) -> None:
     for edge in list(state.pending_import_edges):
         if edge.external or edge.to_package_id is not None:
             continue
-        if edge.to_package_path is None:
+        if edge.to_package_physical_path is None:
             continue
-        pkg = pkg_repo.get_by_virtual_path(edge.to_package_path)
+        pkg = pkg_repo.get_by_physical_path(edge.to_package_physical_path)
         if pkg:
             imp_repo.update(edge.id, {"to_package_id": pkg.id})
             edge.to_package_id = pkg.id

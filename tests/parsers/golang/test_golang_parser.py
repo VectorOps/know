@@ -126,4 +126,4 @@ def test_golang_parser_on_sample_file():
     # verify package-resolution for the aliased k.foobar() call
     foobar_ref = next(r for r in refs
                       if r.name == "foobar" and r.type == SymbolRefType.CALL)
-    assert foobar_ref.to_package_path == "example.com/m"
+    assert foobar_ref.to_package_virtual_path == "example.com/m"

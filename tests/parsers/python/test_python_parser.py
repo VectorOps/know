@@ -130,7 +130,7 @@ def test_python_parser_on_simple_file():
     ref_d = refs_by_name.get("d")
     assert ref_d is not None
     assert ref_d.type == SymbolRefType.CALL
-    assert ref_d.to_package_path == ".foobuz"
+    assert ref_d.to_package_virtual_path == ".foobuz"
 
     ref_ellipsis_fn = refs_by_name.get("ellipsis_fn")
     assert ref_ellipsis_fn is not None

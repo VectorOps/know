@@ -181,7 +181,8 @@ class ImportEdge(BaseModel):
     repo_id: str # related repository
     from_package_id: str  # importing package
     from_file_id: str # importing file
-    to_package_path: str  # textual path like "fmt"; may not map to a package_id if external
+    to_package_physical_path: Optional[str] # physical path for local packages
+    to_package_virtual_path: str  # textual path like "fmt"; may not map to a package_id if external
     to_package_id: Optional[str] = None  # filled when the imported package exists in the same repo
     alias: Optional[str] = None  # import alias if any
     dot: bool = False  # true for dot-imports (import . "pkg")
