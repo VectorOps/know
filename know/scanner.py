@@ -6,6 +6,7 @@ from typing import Optional, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import threading
+from enum import Enum
 
 from dataclasses import dataclass, field
 import time
@@ -35,8 +36,28 @@ class ParsingState:
         self.pending_import_edges: list[ImportEdge] = []
 
 
+class ProcessFileStatus(Enum):
+    SKIPPED = "skipped"
+    BARE_FILE = "bare_file"
+    PARSED_FILE = "parsed_file"
+    ERROR = "error"
 
-def _process_file(project: Project, path: Path, root: Path, cache: ProjectCache) -> tuple:
+
+@dataclass
+class ProcessFileResult:
+    status: ProcessFileStatus
+    duration: float
+    suffix: str
+    rel_path: Optional[str] = None
+    parsed_file: Optional[ParsedFile] = None
+    existing_meta: Optional[FileMetadata] = None
+    file_hash: Optional[str] = None
+    mod_time: Optional[float] = None
+    exception: Optional[Exception] = None
+
+
+
+def _process_file(project: Project, path: Path, root: Path, cache: ProjectCache) -> ProcessFileResult:
     file_proc_start = time.perf_counter()
     rel_path_str = str(path.relative_to(root))
     suffix = path.suffix or "no_suffix"
@@ -48,26 +69,48 @@ def _process_file(project: Project, path: Path, root: Path, cache: ProjectCache)
 
         mod_time = path.stat().st_mtime
         if existing_meta and existing_meta.last_updated == mod_time:
-            return ("skipped",)
+            duration = time.perf_counter() - file_proc_start
+            return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
 
         file_hash = compute_file_hash(str(path))
         if existing_meta and existing_meta.file_hash == file_hash:
-            return ("skipped",)
+            duration = time.perf_counter() - file_proc_start
+            return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
 
         # File has changed or is new, needs processing
         parser_cls = CodeParserRegistry.get_parser(path.suffix)
         if parser_cls is None:
             duration = time.perf_counter() - file_proc_start
-            return ("bare_file", rel_path_str, file_hash, mod_time, existing_meta, duration, suffix)
+            return ProcessFileResult(
+                status=ProcessFileStatus.BARE_FILE,
+                duration=duration,
+                suffix=suffix,
+                rel_path=rel_path_str,
+                existing_meta=existing_meta,
+                file_hash=file_hash,
+                mod_time=mod_time,
+            )
 
         parser = parser_cls(project, rel_path_str)
         parsed_file = parser.parse(cache)
         duration = time.perf_counter() - file_proc_start
-        return ("parsed_file", parsed_file, existing_meta, duration, suffix)
+        return ProcessFileResult(
+            status=ProcessFileStatus.PARSED_FILE,
+            duration=duration,
+            suffix=suffix,
+            parsed_file=parsed_file,
+            existing_meta=existing_meta,
+        )
 
     except Exception as exc:
         duration = time.perf_counter() - file_proc_start
-        return ("error", rel_path_str, exc, duration, suffix)
+        return ProcessFileResult(
+            status=ProcessFileStatus.ERROR,
+            duration=duration,
+            suffix=suffix,
+            rel_path=rel_path_str,
+            exception=exc,
+        )
 
 
 def scan_project_directory(project: Project) -> ScanResult:
@@ -128,59 +171,49 @@ def scan_project_directory(project: Project) -> ScanResult:
             if (idx + 1) % 100 == 0:
                 logger.debug("processing...", num=idx + 1, total=total_tasks)
 
-            res = future.result()
-            status = res[0]
+            res: ProcessFileResult = future.result()
 
-            if status == "skipped":
+            if res.status == ProcessFileStatus.SKIPPED:
                 continue
 
-            if status == "error":
-                _, rel_path, exc, duration, suffix = res
-                logger.error("Failed to parse file", path=rel_path, exc=exc)
-                with timing_stats_lock:
-                    timing_stats[suffix]["count"] += 1
-                    timing_stats[suffix]["total_time"] += duration
+            # Update timing stats for all processed files (error, bare, parsed)
+            with timing_stats_lock:
+                timing_stats[res.suffix]["count"] += 1
+                timing_stats[res.suffix]["total_time"] += res.duration
+
+            if res.status == ProcessFileStatus.ERROR:
+                logger.error("Failed to parse file", path=res.rel_path, exc=res.exception)
                 continue
 
-            if status == "bare_file":
-                _, rel_path, file_hash, mod_time, existing_meta, duration, suffix = res
-                logger.debug("No parser registered for path – storing bare FileMetadata.", path=rel_path)
-                if existing_meta is None:
+            if res.status == ProcessFileStatus.BARE_FILE:
+                logger.debug("No parser registered for path – storing bare FileMetadata.", path=res.rel_path)
+                if res.existing_meta is None:
                     fm = FileMetadata(
                         id=generate_id(),
                         repo_id=project.get_repo().id,
                         package_id=None,  # no package context
-                        path=rel_path,
-                        file_hash=file_hash,
-                        last_updated=mod_time,
+                        path=res.rel_path,
+                        file_hash=res.file_hash,
+                        last_updated=res.mod_time,
                     )
                     file_repo.create(fm)
-                    result.files_added.append(rel_path)
+                    result.files_added.append(res.rel_path)
                 else:
                     file_repo.update(
-                        existing_meta.id,
+                        res.existing_meta.id,
                         {
-                            "file_hash": file_hash,
-                            "last_updated": mod_time,
+                            "file_hash": res.file_hash,
+                            "last_updated": res.mod_time,
                         },
                     )
-                    result.files_updated.append(rel_path)
+                    result.files_updated.append(res.rel_path)
 
-                with timing_stats_lock:
-                    timing_stats[suffix]["count"] += 1
-                    timing_stats[suffix]["total_time"] += duration
-
-            elif status == "parsed_file":
-                _, parsed_file, existing_meta, duration, suffix = res
-                upsert_parsed_file(project, state, parsed_file)
-                if existing_meta is None:
-                    result.files_added.append(parsed_file.path)
+            elif res.status == ProcessFileStatus.PARSED_FILE:
+                upsert_parsed_file(project, state, res.parsed_file)
+                if res.existing_meta is None:
+                    result.files_added.append(res.parsed_file.path)
                 else:
-                    result.files_updated.append(parsed_file.path)
-
-                with timing_stats_lock:
-                    timing_stats[suffix]["count"] += 1
-                    timing_stats[suffix]["total_time"] += duration
+                    result.files_updated.append(res.parsed_file.path)
 
     #  Remove stale metadata for files that have disappeared from disk
     file_repo   = project.data_repository.file
