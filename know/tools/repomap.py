@@ -330,15 +330,19 @@ class RepoMapTool(BaseTool):
         file_paths_set:   Set[str] = set(file_paths or [])
 
         if prompt:
-            txt = prompt
+            txt = prompt.lower()
 
             # ----- file names / paths ----------------------------------
             for path in repomap._path_to_fid.keys():
-                if path in txt or os.path.basename(path) in txt:
+                if path.lower() in txt or os.path.basename(path).lower() in txt:
                     file_paths_set.add(path)
 
             # ----- symbol names ----------------------------------------
             known_syms = set(repomap._defs.keys()) | set(repomap._refs.keys())
+            known_syms_lower_map = defaultdict(list)
+            for s in known_syms:
+                known_syms_lower_map[s.lower()].append(s)
+
             tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_\.]*", txt)
             for tok in tokens:
                 if tok.endswith('.'):
@@ -350,11 +354,13 @@ class RepoMapTool(BaseTool):
 
                 last = tok.rsplit(".", 1)[-1]
 
-                if tok in known_syms:
-                    symbol_names_set.add(tok)
+                if tok in known_syms_lower_map:
+                    for s in known_syms_lower_map[tok]:
+                        symbol_names_set.add(s)
 
-                if len(last) >= min_symbol_len and last in known_syms:
-                    symbol_names_set.add(last)
+                if len(last) >= min_symbol_len and last in known_syms_lower_map:
+                    for s in known_syms_lower_map[last]:
+                        symbol_names_set.add(s)
 
         # convert back to the lists consumed below
         symbol_names = list(symbol_names_set) if symbol_names_set else None
