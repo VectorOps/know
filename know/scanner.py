@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
+import threading
 
 from dataclasses import dataclass, field
 import time
@@ -33,6 +36,40 @@ class ParsingState:
 
 
 
+def _process_file(project: Project, path: Path, root: Path, cache: ProjectCache) -> tuple:
+    file_proc_start = time.perf_counter()
+    rel_path_str = str(path.relative_to(root))
+    suffix = path.suffix or "no_suffix"
+
+    try:
+        # mtime-based change detection
+        file_repo = project.data_repository.file
+        existing_meta = file_repo.get_by_path(rel_path_str)
+
+        mod_time = path.stat().st_mtime
+        if existing_meta and existing_meta.last_updated == mod_time:
+            return ("skipped",)
+
+        file_hash = compute_file_hash(str(path))
+        if existing_meta and existing_meta.file_hash == file_hash:
+            return ("skipped",)
+
+        # File has changed or is new, needs processing
+        parser_cls = CodeParserRegistry.get_parser(path.suffix)
+        if parser_cls is None:
+            duration = time.perf_counter() - file_proc_start
+            return ("bare_file", rel_path_str, file_hash, mod_time, existing_meta, duration, suffix)
+
+        parser = parser_cls(project, rel_path_str)
+        parsed_file = parser.parse(cache)
+        duration = time.perf_counter() - file_proc_start
+        return ("parsed_file", parsed_file, existing_meta, duration, suffix)
+
+    except Exception as exc:
+        duration = time.perf_counter() - file_proc_start
+        return ("error", rel_path_str, exc, duration, suffix)
+
+
 def scan_project_directory(project: Project) -> ScanResult:
     """
     Recursively walk the project directory, parse every supported source file
@@ -52,97 +89,98 @@ def scan_project_directory(project: Project) -> ScanResult:
     cache = ProjectCache()
     state = ParsingState()
     timing_stats = defaultdict(lambda: {"count": 0, "total_time": 0.0})
+    timing_stats_lock = threading.Lock()
 
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
     gitignore_spec = parse_gitignore(root)
 
     all_files = list(root.rglob("*"))
 
-    for idx, path in enumerate(all_files):
-        rel_path = path.relative_to(root)
+    # TODO: Make num_workers configurable
+    try:
+        num_workers = max(1, os.cpu_count() - 1)
+    except NotImplementedError:
+        num_workers = 4  # A reasonable default
 
-        # Skip ignored directories
-        if any(part in IGNORED_DIRS for part in rel_path.parts):
-            continue
+    file_repo = project.data_repository.file
 
-        # Skip paths ignored by .gitignore
-        if gitignore_spec.match_file(str(rel_path)):
-            continue
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = []
+        for path in all_files:
+            rel_path = path.relative_to(root)
 
-        if not path.is_file():
-            continue
-
-        if idx % 100 == 0:
-            logger.debug("processing...", num=idx, total=len(all_files))
-
-        processed_paths.add(str(path.relative_to(root)))
-
-        # mtime-based change detection
-        file_repo = project.data_repository.file
-        existing_meta = file_repo.get_by_path(str(rel_path))
-
-        if existing_meta:
-            mod_time: float = path.stat().st_mtime
-            if existing_meta.last_updated == mod_time:
+            # Skip ignored directories
+            if any(part in IGNORED_DIRS for part in rel_path.parts):
                 continue
 
-            file_hash: str = compute_file_hash(str(path))
-            # TODO: Do we even need this?
-            if existing_meta and existing_meta.file_hash == file_hash:
+            # Skip paths ignored by .gitignore
+            if gitignore_spec.match_file(str(rel_path)):
                 continue
 
-        file_proc_start = time.perf_counter()
+            if not path.is_file():
+                continue
 
-        parser_cls = CodeParserRegistry.get_parser(path.suffix)
-        if parser_cls is None:
-            logger.debug("No parser registered for path – storing bare FileMetadata.", path=rel_path)
+            processed_paths.add(str(rel_path))
+            futures.append(executor.submit(_process_file, project, path, root, cache))
 
-            # Ensure FileMetadata exists / is up-to-date so the file is still discoverable
-            file_hash = compute_file_hash(str(path))
-            mod_time  = path.stat().st_mtime
+        total_tasks = len(futures)
+        for idx, future in enumerate(as_completed(futures)):
+            if (idx + 1) % 100 == 0:
+                logger.debug("processing...", num=idx + 1, total=total_tasks)
 
-            if existing_meta is None:
-                fm = FileMetadata(
-                    id=generate_id(),
-                    repo_id=project.get_repo().id,
-                    package_id=None,          # no package context
-                    path=str(rel_path),
-                    file_hash=file_hash,
-                    last_updated=mod_time,
-                )
-                file_repo.create(fm)
-                result.files_added.append(str(rel_path))
-            else:
-                file_repo.update(
-                    existing_meta.id,
-                    {
-                        "file_hash": file_hash,
-                        "last_updated": mod_time,
-                    },
-                )
-                result.files_updated.append(str(rel_path))
+            res = future.result()
+            status = res[0]
 
-            duration = time.perf_counter() - file_proc_start
-            suffix = path.suffix or "no_suffix"
-            timing_stats[suffix]["count"] += 1
-            timing_stats[suffix]["total_time"] += duration
-            continue
+            if status == "skipped":
+                continue
 
-        try:
-            parser = parser_cls(project, str(rel_path))
-            parsed_file = parser.parse(cache)
-            upsert_parsed_file(project, state, parsed_file)
-            if existing_meta is None:
-                result.files_added.append(str(rel_path))
-            else:
-                result.files_updated.append(str(rel_path))
+            if status == "error":
+                _, rel_path, exc, duration, suffix = res
+                logger.error("Failed to parse file", path=rel_path, exc=exc)
+                with timing_stats_lock:
+                    timing_stats[suffix]["count"] += 1
+                    timing_stats[suffix]["total_time"] += duration
+                continue
 
-            duration = time.perf_counter() - file_proc_start
-            suffix = path.suffix or "no_suffix"
-            timing_stats[suffix]["count"] += 1
-            timing_stats[suffix]["total_time"] += duration
-        except Exception as exc:
-            logger.error("Failed to parse file", path=rel_path, exc=exc)
+            if status == "bare_file":
+                _, rel_path, file_hash, mod_time, existing_meta, duration, suffix = res
+                logger.debug("No parser registered for path – storing bare FileMetadata.", path=rel_path)
+                if existing_meta is None:
+                    fm = FileMetadata(
+                        id=generate_id(),
+                        repo_id=project.get_repo().id,
+                        package_id=None,  # no package context
+                        path=rel_path,
+                        file_hash=file_hash,
+                        last_updated=mod_time,
+                    )
+                    file_repo.create(fm)
+                    result.files_added.append(rel_path)
+                else:
+                    file_repo.update(
+                        existing_meta.id,
+                        {
+                            "file_hash": file_hash,
+                            "last_updated": mod_time,
+                        },
+                    )
+                    result.files_updated.append(rel_path)
+
+                with timing_stats_lock:
+                    timing_stats[suffix]["count"] += 1
+                    timing_stats[suffix]["total_time"] += duration
+
+            elif status == "parsed_file":
+                _, parsed_file, existing_meta, duration, suffix = res
+                upsert_parsed_file(project, state, parsed_file)
+                if existing_meta is None:
+                    result.files_added.append(parsed_file.path)
+                else:
+                    result.files_updated.append(parsed_file.path)
+
+                with timing_stats_lock:
+                    timing_stats[suffix]["count"] += 1
+                    timing_stats[suffix]["total_time"] += duration
 
     #  Remove stale metadata for files that have disappeared from disk
     file_repo   = project.data_repository.file
