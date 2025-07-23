@@ -1,7 +1,9 @@
 #+title: Todo
+* [ ] Configuration object
 * [ ] Cache improvements
 ** [ ] Collect and mass-update embeddings that were recently used
 ** [ ] Add lifecycle rules to cleanup old unused embeddings
+* [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols
 * [ ] Refactor symbols

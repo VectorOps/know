@@ -57,12 +57,17 @@ class ProcessFileResult:
 
 
 
-def _process_file(project: Project, path: Path, root: Path, cache: ProjectCache) -> ProcessFileResult:
+def _process_file(project: Project, path: Path, root: Path, gitignore: "pathspec.PathSpec", cache: ProjectCache) -> ProcessFileResult:
     file_proc_start = time.perf_counter()
     rel_path_str = str(path.relative_to(root))
     suffix = path.suffix or "no_suffix"
 
     try:
+        # Skip paths ignored by .gitignore
+        if gitignore.match_file(str(rel_path_str)):
+            duration = time.perf_counter() - file_proc_start
+            return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
+
         # mtime-based change detection
         file_repo = project.data_repository.file
         existing_meta = file_repo.get_by_path(rel_path_str)
@@ -135,7 +140,7 @@ def scan_project_directory(project: Project) -> ScanResult:
     timing_stats_lock = threading.Lock()
 
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
-    gitignore_spec = parse_gitignore(root)
+    gitignore = parse_gitignore(root)
 
     all_files = list(root.rglob("*"))
 
@@ -145,6 +150,8 @@ def scan_project_directory(project: Project) -> ScanResult:
     except NotImplementedError:
         num_workers = 4  # A reasonable default
 
+    logger.debug("number of workers", count=num_workers)
+
     file_repo = project.data_repository.file
 
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
@@ -152,19 +159,15 @@ def scan_project_directory(project: Project) -> ScanResult:
         for path in all_files:
             rel_path = path.relative_to(root)
 
+            if not path.is_file():
+                continue
+
             # Skip ignored directories
             if any(part in IGNORED_DIRS for part in rel_path.parts):
                 continue
 
-            # Skip paths ignored by .gitignore
-            if gitignore_spec.match_file(str(rel_path)):
-                continue
-
-            if not path.is_file():
-                continue
-
             processed_paths.add(str(rel_path))
-            futures.append(executor.submit(_process_file, project, path, root, cache))
+            futures.append(executor.submit(_process_file, project, path, root, gitignore, cache))
 
         total_tasks = len(futures)
         for idx, future in enumerate(as_completed(futures)):

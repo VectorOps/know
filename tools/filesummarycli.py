@@ -4,7 +4,8 @@ import argparse
 from typing import List
 from know.settings import ProjectSettings, EmbeddingSettings
 from know.project import init_project
-from know.tools.base import ToolRegistry, SummaryMode
+from know.tools.base import ToolRegistry
+from know.file_summary import SummaryMode
 from know.logger import logger
 
 def _parse_cli() -> argparse.Namespace:
