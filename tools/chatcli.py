@@ -12,10 +12,11 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from know.logger import logger
-from know.settings import ProjectSettings, iter_settings
+from know.settings import ProjectSettings
 from know.project import init_project
 from know.tools.base import ToolRegistry
 from devtools import pformat
+from .helper import print_help
 
 
 SYSTEM_PROMPT = """
@@ -146,26 +147,7 @@ async def _chat(model: str, system_msg: str, project):
 def main() -> None:
     # Custom help handler using iter_settings
     if "--help" in sys.argv or "-h" in sys.argv:
-        print("usage: chatcli.py [OPTIONS]")
-        print("\nOptions:")
-        for opt in iter_settings(Settings, kebab=True):
-            flags = [opt.flag] + opt.aliases
-            flag_str = ", ".join(flags)
-            line = f"  {flag_str:<40} {opt.description}"
-
-            details = []
-            if opt.is_required:
-                details.append("required")
-
-            if opt.default_value is not ...:
-                # for multiline defaults, only show the first line
-                default_str = str(opt.default_value).split("\n")[0]
-                details.append(f"default: {default_str!r}")
-
-            if details:
-                line += f" [{', '.join(details)}]"
-            print(line)
-
+        print_help(Settings, "chatcli.py")
         sys.exit(0)
 
     try:
