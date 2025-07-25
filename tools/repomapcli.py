@@ -69,21 +69,18 @@ def _print_scores(scores: List[Dict[str, Any]]) -> None:
 
 
 def main() -> None:
-    args = _parse_cli()
+    # Custom help handler using iter_settings
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print_help(Settings, "repomapcli.py")
+        sys.exit(0)
 
-    ps_kwargs = {
-        "project_path": args.path,
-        "repository_backend": args.repo_backend,
-        "repository_connection": args.repo_connection,
-    }
-    if args.enable_embeddings:
-        ps_kwargs["embedding"] = EmbeddingSettings(
-            enabled=True,
-            model_name=args.embedding_model,
-            cache_backend=args.embedding_cache_backend,
-            cache_path=args.embedding_cache_path,
-        )
-    project = init_project(ProjectSettings(**ps_kwargs))
+    try:
+        settings = Settings()
+    except Exception as e:
+        print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
+        sys.exit(1)
+
+    project = init_project(settings)
 
     repomap_tool = ToolRegistry.get("vectorops_repomap")
 
@@ -207,7 +204,7 @@ def main() -> None:
                             symbol_names=symbol_seeds or None,
                             file_paths=file_seeds   or None,
                             prompt=prompt_text,
-                            limit=args.limit,
+                            limit=settings.limit,
                             include_summary=include_summaries,
                             token_limit_count=token_limit_count,
                             token_limit_model=token_limit_model,
