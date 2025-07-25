@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import argparse
-import os
+import sys
 from typing import List, Dict, Any
 
+from pydantic import Field, AliasChoices
+from pydantic_settings import SettingsConfigDict
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
-from know.settings import ProjectSettings, EmbeddingSettings
+from know.settings import ProjectSettings, print_help
 from know.project import init_project
 from know.tools.base import ToolRegistry
 from know.logger import logger
@@ -21,41 +22,24 @@ logging.basicConfig(
 )
 
 
-def _parse_cli() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Interactive symbol search CLI.")
-    p.add_argument("-p", "--path", "--project-path",
-                   required=True,
-                   help="Root directory of the project to analyse/assist with")
-    p.add_argument(
-        "--enable-embeddings",
-        action="store_true",
-        help="Load the embeddings engine so semantic-search works.",
+class Settings(ProjectSettings):
+    """Search-CLI specific settings, extending project settings."""
+    model_config = SettingsConfigDict(
+        cli_parse_args=True,
+        cli_kebab_case=True,
+        cli_enforce_required=True,
+        env_prefix="KNOW_",
+        env_nested_delimiter="_",
     )
-    p.add_argument(
-        "--embedding-model",
-        default=os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
+
+    project_path: str = Field(
+        ...,
+        description="Root directory of the project to analyse/assist with.",
+        validation_alias=AliasChoices("project-path", "p", "path"),
     )
-    p.add_argument(
-        "--embedding-cache-backend",
-        choices=["duckdb", "sqlite", "none"],
-        default=os.getenv("EMBEDDING_CACHE_BACKEND", "duckdb"),
-    )
-    p.add_argument(
-        "--embedding-cache-path",
-        default=os.getenv("EMBEDDING_CACHE_PATH", "cache.duckdb"),
-    )
-    p.add_argument(
-        "--repo-backend",
-        choices=["memory", "duckdb"],
-        default=os.getenv("REPO_BACKEND", "duckdb"),
-    )
-    p.add_argument(
-        "--repo-connection",
-        default=os.getenv("REPO_CONNECTION"),
-    )
-    p.add_argument("--limit", type=int, default=20)
-    p.add_argument("--offset", type=int, default=0)
-    return p.parse_args()
+
+    limit: int = Field(20, description="Maximum number of search results to return.")
+    offset: int = Field(0, description="Offset for paginating search results.")
 
 
 def _print_results(results: List[Dict[str, Any]]) -> None:
@@ -76,21 +60,17 @@ def _print_results(results: List[Dict[str, Any]]) -> None:
 
 
 def main() -> None:
-    args = _parse_cli()
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print_help(Settings, "searchcli.py")
+        sys.exit(0)
 
-    ps_kwargs = {
-        "project_path": args.path,
-        "repository_backend": args.repo_backend,
-        "repository_connection": args.repo_connection,
-    }
-    if args.enable_embeddings:
-        ps_kwargs["embedding"] = EmbeddingSettings(
-            enabled=True,
-            model_name=args.embedding_model,
-            cache_backend=args.embedding_cache_backend,
-            cache_path=args.embedding_cache_path,
-        )
-    project = init_project(ProjectSettings(**ps_kwargs))
+    try:
+        settings = Settings()
+    except Exception as e:
+        print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
+        sys.exit(1)
+
+    project = init_project(settings)
 
     # obtain tool instance from registry
     search_tool = ToolRegistry.get("vectorops_search_symbols")
@@ -113,8 +93,8 @@ def main() -> None:
                 results = search_tool.execute(
                     project,
                     query=query,
-                    limit=args.limit,
-                    offset=args.offset,
+                    limit=settings.limit,
+                    offset=settings.offset,
                 )
                 _print_results(results)
             except Exception as exc:        # noqa: BLE001
