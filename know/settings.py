@@ -185,7 +185,7 @@ def iter_settings(
                     aliases=sorted(list(aliases)),
                     description=desc,
                     is_required=field.is_required(),
-                    default_value=field.get_default() if field.has_default() else ...,
+                    default_value=field.get_default() if not field.is_required() else ...,
                 )
             )
 
