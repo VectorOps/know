@@ -1,59 +1,65 @@
 from __future__ import annotations
 
-import argparse
+import sys
 from typing import List
-from know.settings import ProjectSettings, EmbeddingSettings
+
+from pydantic import Field, AliasChoices
+from pydantic_settings import SettingsConfigDict
+
+from know.settings import ProjectSettings, print_help
 from know.project import init_project
 from know.tools.base import ToolRegistry
 from know.file_summary import SummaryMode
 from know.logger import logger
 
-def _parse_cli() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        prog="filesummarycli",
-        description="CLI for SummarizeFilesTool.",
+class Settings(ProjectSettings):
+    """filesummarycli specific settings."""
+
+    model_config = SettingsConfigDict(
+        cli_parse_args=True,
+        cli_kebab_case=True,
+        cli_enforce_required=True,
+        env_prefix="KNOW_",
+        env_nested_delimiter="_",
     )
-    p.add_argument("-p", "--path",      required=True, help="Project root directory")
-    p.add_argument("files",             nargs="+",     help="Project-relative file paths to summarise")
-    p.add_argument("-m", "--summary-mode",
-                   choices=[m.value for m in SummaryMode],
-                   default=SummaryMode.ShortSummary.value,
-                   help="Detail level for summaries")
-    p.add_argument("--repo-backend",    choices=["memory", "duckdb"], default="duckdb")
-    p.add_argument("--repo-connection", default=None)
-    p.add_argument("--enable-embeddings", action="store_true")
-    p.add_argument("--embedding-model", default="all-MiniLM-L6-v2")
-    p.add_argument("--embedding-cache-backend",
-                   choices=["duckdb", "sqlite", "none"], default="duckdb")
-    p.add_argument("--embedding-cache-path", default="cache.duckdb")
-    return p.parse_args()
+
+    project_path: str = Field(
+        description="Project root directory.",
+        validation_alias=AliasChoices("project-path", "p", "path"),
+    )
+
+    files: List[str] = Field(
+        description="Project-relative file paths to summarise.",
+    )
+
+    summary_mode: SummaryMode = Field(
+        default=SummaryMode.ShortSummary,
+        description="Detail level for summaries.",
+        validation_alias=AliasChoices("summary-mode", "m"),
+    )
 
 
 # Main method
 def main() -> None:
-    args = _parse_cli()
+    # Custom help handler using iter_settings
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print_help(Settings, "filesummarycli.py")
+        sys.exit(0)
 
-    ps_kwargs = {
-        "project_path":         args.path,
-        "repository_backend":   args.repo_backend,
-        "repository_connection": args.repo_connection,
-    }
-    if args.enable_embeddings:
-        ps_kwargs["embedding"] = EmbeddingSettings(
-            enabled=True,
-            model_name=args.embedding_model,
-            cache_backend=args.embedding_cache_backend,
-            cache_path=args.embedding_cache_path,
-        )
+    try:
+        settings = Settings()
+    except Exception as e:
+        print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
+        sys.exit(1)
 
-    project = init_project(ProjectSettings(**ps_kwargs))
+    project = init_project(settings)
 
     summarize_tool = ToolRegistry.get("vectorops_summarize_files")
 
     summaries: List[dict] = summarize_tool.execute(
         project,
-        paths=args.files,
-        summary_mode=SummaryMode(args.summary_mode),
+        paths=settings.files,
+        summary_mode=settings.summary_mode,
     )
 
     for s in summaries:
