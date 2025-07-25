@@ -15,7 +15,7 @@ class EmbeddingSettings(BaseSettings):
 
 
 class ToolSettings(BaseSettings):
-    disabled: list[str] = []
+    disabled: set[str] = Field(default_factory=set)
 
 
 class ProjectSettings(BaseSettings):
