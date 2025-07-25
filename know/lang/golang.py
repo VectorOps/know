@@ -646,7 +646,47 @@ class GolangCodeParser(AbstractCodeParser):
             # all identifiers belonging to this field declaration
             id_nodes = [c for c in fld.children if c.type == "field_identifier"]
             if not id_nodes:
-                # embedded / anonymous field – skip for now
+                # embedded / anonymous field
+                type_node = next((c for c in fld.children if c.type not in ("comment",)), None)
+
+                if type_node is None:
+                    logger.warning(
+                        "Could not parse embedded struct field (no type node found)",
+                        path=self.parsed_file.path,
+                        line=fld.start_point[0] + 1,
+                        raw=fld.text.decode("utf8", errors="replace"),
+                    )
+                    continue
+
+                type_text = (
+                    self.source_bytes[type_node.start_byte : type_node.end_byte]
+                    .decode("utf8", errors="replace")
+                    .strip()
+                )
+
+                # field name is the base type name. e.g. for "*pkg.MyType", it is "MyType"
+                fname = type_text.lstrip("*")
+                if "." in fname:
+                    fname = fname.split(".")[-1]
+
+                if not fname:
+                    logger.warning(
+                        "Could not determine name for embedded struct field",
+                        path=self.parsed_file.path,
+                        line=fld.start_point[0] + 1,
+                        raw=fld.text.decode("utf8", errors="replace"),
+                    )
+                    continue
+
+                child = self._make_symbol(
+                    fld,
+                    kind=SymbolKind.PROPERTY,
+                    name=fname,
+                    fqn=self._make_fqn(fname, parent),
+                    docstring=self._extract_preceding_comment(fld),
+                    visibility=infer_visibility(fname),
+                )
+                parent.children.append(child)
                 continue
 
             # try to capture the textual type (first non-comment node after idents)
@@ -672,8 +712,7 @@ class GolangCodeParser(AbstractCodeParser):
                     name=fname,
                     fqn=self._make_fqn(fname, parent),
                     docstring=self._extract_preceding_comment(fld),
-                    visibility=Visibility.PUBLIC if fname[0].isupper()
-                                                else Visibility.PRIVATE,
+                    visibility=infer_visibility(fname),
                 )
                 parent.children.append(child)
 
