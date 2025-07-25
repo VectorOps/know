@@ -93,6 +93,7 @@ class ProjectSettings(BaseSettings):
         pass
 
 
+# Various settings parsing helpers helpers
 class CliOption(BaseModel):
     """Represents a single command-line option."""
 
@@ -157,32 +158,42 @@ def iter_settings(
     def _walk(cls: Type[BaseModel], dotted: str = "") -> None:
         for name, field in cls.model_fields.items():
             path = f"{dotted}.{name}" if dotted else name
-            flag_name = ".".join(p.replace("_", "-") for p in path.split(".")) if kebab else path
             desc = field.description or ""
 
-            aliases = set()
-            # standard pydantic alias
-            if field.alias:
-                aliases_from_field: Iterable[str]
-                aliases_from_field = (
-                    field.alias if isinstance(field.alias, (tuple, list, set)) else [field.alias]
-                )
-                for al in aliases_from_field:
-                    aliases.add(f'--{al.replace("_", "-")}' if len(al) > 1 else f"-{al}")
+            all_flags = []
+            path_prefix = ".".join(p.replace("_", "-") for p in dotted.split(".")) if kebab and dotted else ""
+            path_prefix_dot = f"{path_prefix}." if path_prefix else ""
 
-            # custom cli aliases from json_schema_extra
-            extra = field.json_schema_extra or {}
-            if "cli_alias" in extra:
-                al = extra["cli_alias"]
-                aliases.add(f"--{al}" if len(al) > 1 else f"-{al}")
-            if "cli_aliases" in extra:
-                for al in extra["cli_aliases"]:
-                    aliases.add(f"--{al}" if len(al) > 1 else f"-{al}")
+            choices = []
+            if field.validation_alias:
+                if isinstance(field.validation_alias, str):
+                    choices.append(field.validation_alias)
+                elif hasattr(field.validation_alias, 'choices'):  # AliasChoices
+                    choices.extend(field.validation_alias.choices)
+
+            if choices:
+                for choice in choices:
+                    # short-form aliases are only for non-nested, single-character names
+                    if len(choice) == 1 and not path_prefix:
+                        all_flags.append(f"-{choice}")
+                    else:
+                        # kebab-casing does not apply to aliases
+                        full_name = f"{path_prefix_dot}{choice}"
+                        all_flags.append(f"--{full_name}")
+            else:
+                # No validation_alias, use field name
+                flag_name = ".".join(p.replace("_", "-") for p in path.split(".")) if kebab else path
+                all_flags.append(f"--{flag_name}")
+
+            # Sort to have a predictable "main" flag (longest, prefer --)
+            all_flags.sort(key=lambda x: (x.startswith('--'), len(x)), reverse=True)
+            main_flag = all_flags[0]
+            aliases = all_flags[1:]
 
             add(
                 CliOption(
-                    flag=f"--{flag_name}",
-                    aliases=sorted(list(aliases)),
+                    flag=main_flag,
+                    aliases=sorted(aliases),
                     description=desc,
                     is_required=field.is_required(),
                     default_value=field.get_default() if not field.is_required() else ...,
@@ -211,3 +222,34 @@ def iter_settings(
 
     _walk(model)
     return sorted(out, key=lambda o: o.flag)
+
+
+def print_help(model: Type[BaseModel], script_name: str, kebab: bool = True):
+    """
+    Print a formatted help message for a Pydantic settings model.
+
+    Parameters
+    ----------
+    model : BaseModel | BaseSettings subclass
+    script_name : file name to show in the "usage: " line
+    kebab : convert snake_case to kebab‑case for CLI flags
+    """
+    print(f"usage: {script_name} [OPTIONS]")
+    print("\nOptions:")
+    for opt in iter_settings(model, kebab=kebab):
+        flags = [opt.flag] + opt.aliases
+        flag_str = ", ".join(flags)
+        line = f"  {flag_str:<40} {opt.description}"
+
+        details = []
+        if opt.is_required:
+            details.append("required")
+
+        if opt.default_value is not ...:
+            # for multiline defaults, only show the first line
+            default_str = str(opt.default_value).split("\n")[0]
+            details.append(f"default: {default_str!r}")
+
+        if details:
+            line += f" [{', '.join(details)}]"
+        print(line)

@@ -5,18 +5,17 @@ import json
 from typing import List, Dict
 
 import litellm
-from pydantic import Field
+from pydantic import Field, AliasChoices
 from pydantic_settings import SettingsConfigDict
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from know.logger import logger
-from know.settings import ProjectSettings
+from know.settings import ProjectSettings, print_help
 from know.project import init_project
 from know.tools.base import ToolRegistry
 from devtools import pformat
-from .helper import print_help
 
 
 SYSTEM_PROMPT = """
@@ -37,23 +36,24 @@ class Settings(ProjectSettings):
     model_config = SettingsConfigDict(
         cli_parse_args=True,
         cli_kebab_case=True,
+        cli_enforce_required=True,
         env_prefix="KNOW_",
         env_nested_delimiter="_",
     )
 
     model: str = Field(
-        default=os.getenv("OPENAI_MODEL", "gpt-4.1"),
+        default="gpt-4.1",
         description="Name of the LLM to use for chat.",
-        cli_alias="m",
+        validation_alias=AliasChoices("model", "m"),
     )
     system: str = Field(
         default=SYSTEM_PROMPT,
         description="System prompt for the chat.",
-        cli_alias="s",
+        validation_alias=AliasChoices("system", "s"),
     )
     project_path: str = Field(
         description="Root directory of the project to analyse/assist with.",
-        cli_aliases=["p", "path"],
+        validation_alias=AliasChoices("project-path", "p", "path"),
     )
 
 
@@ -155,11 +155,6 @@ def main() -> None:
     except Exception as e:
         print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
         sys.exit(1)
-
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY env var not set.")
 
     project = init_project(settings)
     with patch_stdout():
