@@ -27,11 +27,18 @@ in the codebase. Use these tools to search for relevant code needed to solve use
 Design and architect the best solution and provide code diffs with explanation of the proposed
 changes to the user. Avoid reading excessive number of files - get *minimum* required set
 of file summaries to answer the question. Use symbol search to find relevant code snippets.
+To do overall discovery, use the repo map and pass original user prompt as an input.
 """
 
 
-class ChatCliSettings(ProjectSettings):
+class Settings(ProjectSettings):
     """Chat-CLI specific settings, extending project settings."""
+    model_config = SettingsConfigDict(
+        cli_parse_args=True,
+        cli_kebab_case=True,
+        env_prefix="KNOW_",
+        env_nested_delimiter="_",
+    )
 
     model: str = Field(
         default=os.getenv("OPENAI_MODEL", "gpt-4.1"),
@@ -44,7 +51,6 @@ class ChatCliSettings(ProjectSettings):
         cli_alias="s",
     )
     project_path: str = Field(
-        ...,
         description="Root directory of the project to analyse/assist with.",
         cli_aliases=["p", "path"],
     )
@@ -142,22 +148,32 @@ def main() -> None:
     if "--help" in sys.argv or "-h" in sys.argv:
         print("usage: chatcli.py [OPTIONS]")
         print("\nOptions:")
-        for flag, desc in iter_settings(ChatCliSettings, kebab=True, include_aliases=True):
-            print(f"  {flag:<40} {desc}")
+        for opt in iter_settings(Settings, kebab=True):
+            flags = [opt.flag] + opt.aliases
+            flag_str = ", ".join(flags)
+            line = f"  {flag_str:<40} {opt.description}"
+
+            details = []
+            if opt.is_required:
+                details.append("required")
+
+            if opt.default_value is not ...:
+                # for multiline defaults, only show the first line
+                default_str = str(opt.default_value).split("\n")[0]
+                details.append(f"default: {default_str!r}")
+
+            if details:
+                line += f" [{', '.join(details)}]"
+            print(line)
+
         sys.exit(0)
 
-    config = SettingsConfigDict(
-        cli_parse_args=True,
-        cli_kebab_case=True,
-        cli_help_flag=None,  # we handle help ourselves
-        env_prefix="KNOW_",
-        env_nested_delimiter="__",
-    )
+    try:
+        settings = Settings()
+    except Exception as e:
+        print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
+        sys.exit(1)
 
-    class Settings(ChatCliSettings):
-        model_config = config
-
-    settings = Settings()
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:

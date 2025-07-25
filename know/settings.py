@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import Optional, Iterable, List, Set, Tuple, Type, Any
 
-from pydantic import Field
+from pydantic import Field, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -93,6 +93,16 @@ class ProjectSettings(BaseSettings):
         pass
 
 
+class CliOption(BaseModel):
+    """Represents a single command-line option."""
+
+    flag: str
+    aliases: List[str] = Field(default_factory=list)
+    description: str
+    is_required: bool
+    default_value: Any
+
+
 def load_settings(
     cli: bool = False,
     env_prefix: Optional[str] = None,
@@ -113,3 +123,91 @@ def load_settings(
         model_config = config_dict
 
     return Settings(**kwargs)
+
+
+def iter_settings(
+    model: Type[BaseModel],
+    *,
+    kebab: bool = False,
+    implicit_flags: bool | None = None,
+) -> List[CliOption]:
+    """
+    Return a list of `CliOption` models for every CLI option that *model* would accept.
+
+    Parameters
+    ----------
+    model : BaseModel | BaseSettings subclass
+    kebab : convert snake_case to kebab‑case (matches ``cli_kebab_case``)
+    implicit_flags : add ``--no-flag`` for bools when ``cli_implicit_flags`` would be true
+                     (pass None to autodetect from model.model_config)
+    """
+    seen: Set[str] = set()
+    out: List[CliOption] = []
+
+    # Resolve whether booleans get --no-* automatically
+    if implicit_flags is None:
+        # pydantic-settings defaults to True for cli_implicit_flags
+        implicit_flags = bool(getattr(model, "model_config", {}).get("cli_implicit_flags", True))
+
+    def add(option: CliOption) -> None:
+        if option.flag not in seen:
+            seen.add(option.flag)
+            out.append(option)
+
+    def _walk(cls: Type[BaseModel], dotted: str = "") -> None:
+        for name, field in cls.model_fields.items():
+            path = f"{dotted}.{name}" if dotted else name
+            flag_name = ".".join(p.replace("_", "-") for p in path.split(".")) if kebab else path
+            desc = field.description or ""
+
+            aliases = set()
+            # standard pydantic alias
+            if field.alias:
+                aliases_from_field: Iterable[str]
+                aliases_from_field = (
+                    field.alias if isinstance(field.alias, (tuple, list, set)) else [field.alias]
+                )
+                for al in aliases_from_field:
+                    aliases.add(f'--{al.replace("_", "-")}' if len(al) > 1 else f"-{al}")
+
+            # custom cli aliases from json_schema_extra
+            extra = field.json_schema_extra or {}
+            if "cli_alias" in extra:
+                al = extra["cli_alias"]
+                aliases.add(f"--{al}" if len(al) > 1 else f"-{al}")
+            if "cli_aliases" in extra:
+                for al in extra["cli_aliases"]:
+                    aliases.add(f"--{al}" if len(al) > 1 else f"-{al}")
+
+            add(
+                CliOption(
+                    flag=f"--{flag_name}",
+                    aliases=sorted(list(aliases)),
+                    description=desc,
+                    is_required=field.is_required(),
+                    default_value=field.get_default() if field.has_default() else ...,
+                )
+            )
+
+            # negated boolean
+            if implicit_flags and field.annotation is bool:
+                add(
+                    CliOption(
+                        flag=f"--no-{flag_name}",
+                        aliases=[],
+                        description=f"Disable '{flag_name}'",
+                        is_required=False,
+                        default_value=...,
+                    )
+                )
+
+            # recurse into nested models
+            ann = field.annotation
+            if (
+                hasattr(ann, "__pydantic_generic_metadata__")  # parametrised generics
+                or isinstance(ann, type) and issubclass(ann, BaseModel)
+            ):
+                _walk(ann, path)
+
+    _walk(model)
+    return sorted(out, key=lambda o: o.flag)
