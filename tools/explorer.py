@@ -1,8 +1,11 @@
-import argparse, pathlib
+import sys
+import pathlib
 from flask import Flask, render_template, url_for, redirect, abort
-from markupsafe import Markup          # NEW
+from markupsafe import Markup
 from flask import request
-from know.settings import ProjectSettings, EmbeddingSettings
+from pydantic import Field, AliasChoices
+from pydantic_settings import SettingsConfigDict
+from know.settings import ProjectSettings, EmbeddingSettings, print_help
 from know.project  import init_project, Project
 from know.tools.repomap import RepoMapTool
 from know.tools.symbolsearch import SearchSymbolsTool
@@ -16,39 +19,35 @@ from know.file_summary import SummaryMode, build_file_summary
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
-def _parse_cli():
-    p = argparse.ArgumentParser(prog="project-explorer",
-                                description="Flask UI for browsing a project")
-    p.add_argument("-p", "--path", required=True)
-    p.add_argument("--repo-backend", choices=["memory", "duckdb"], default="duckdb")
-    p.add_argument("--repo-connection", default=None)
-    p.add_argument("--enable-embeddings", action="store_true")
-    p.add_argument("--embedding-model", default="all-MiniLM-L6-v2")
-    p.add_argument("--embedding-cache-backend",
-                   choices=["duckdb", "sqlite", "none"], default="duckdb")
-    p.add_argument("--embedding-cache-path", default="cache.duckdb")
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=5000)
-    p.add_argument("--debug", action="store_true")
-    return p.parse_args()
+class Settings(ProjectSettings):
+    """Explorer-specific settings, extending project settings."""
+    model_config = SettingsConfigDict(
+        cli_parse_args=True,
+        cli_kebab_case=True,
+        cli_enforce_required=True,
+        env_prefix="KNOW_",
+        env_nested_delimiter="_",
+    )
 
-def create_project(args) -> Project:
-    import logging
-    logging
+    project_path: str = Field(
+        description="Root directory of the project to analyse.",
+        validation_alias=AliasChoices("project-path", "p", "path"),
+    )
 
-    ps_kwargs = {
-        "project_path":         args.path,
-        "repository_backend":   args.repo_backend,
-        "repository_connection": args.repo_connection,
-    }
-    if getattr(args, "enable_embeddings", False):
-        ps_kwargs["embedding"] = EmbeddingSettings(
-            enabled=True,
-            model_name=args.embedding_model,
-            cache_backend=args.embedding_cache_backend,
-            cache_path=args.embedding_cache_path,
-        )
-    return init_project(ProjectSettings(**ps_kwargs))
+    repository_backend: str = Field(
+        "duckdb",
+        description='The backend to use for storing metadata. Options are "memory" or "duckdb".',
+    )
+
+    embedding: EmbeddingSettings = Field(
+        default_factory=lambda: EmbeddingSettings(cache_path="cache.duckdb"),
+        description="An `EmbeddingSettings` object with embedding-specific configurations.",
+    )
+
+    host: str = Field("127.0.0.1", description="Host to bind the web server to.")
+    port: int = Field(5000, description="Port to bind the web server to.")
+    debug: bool = Field(False, description="Enable Flask debug mode.")
+
 
 def create_app(project) -> Flask:
     template_folder = str(pathlib.Path(__file__).with_suffix('').parent / "templates")
@@ -271,10 +270,19 @@ def create_app(project) -> Flask:
     return app
 
 def main():
-    args = _parse_cli()
-    project = create_project(args)
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print_help(Settings, "explorer.py")
+        sys.exit(0)
+
+    try:
+        settings = Settings()
+    except Exception as e:
+        print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
+        sys.exit(1)
+
+    project = init_project(settings)
     app = create_app(project)
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    app.run(host=settings.host, port=settings.port, debug=settings.debug)
 
 if __name__ == "__main__":
     main()
