@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import argparse
-from typing import List, Dict, Any
+import sys
+from typing import List, Dict, Any, Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
+from pydantic import Field, AliasChoices
+from pydantic_settings import SettingsConfigDict
 
-from know.settings import ProjectSettings, EmbeddingSettings
+from know.settings import ProjectSettings, EmbeddingSettings, print_help
 from know.project import init_project
 from know.tools.base import ToolRegistry
 from know.data import FileFilter
@@ -19,27 +21,40 @@ logging.basicConfig(
 )
 
 
-def _parse_cli() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        prog = "repomapcli",
-        description = "Interactive test-CLI for RepoMapTool.",
+class RepomapCliEmbeddingSettings(EmbeddingSettings):
+    """Custom embedding settings for repomapcli with different defaults."""
+    cache_path: Optional[str] = Field(
+        "cache.duckdb",
+        description=(
+            "The file path or connection string for the embedding cache backend. "
+            'This is ignored if `cache_backend` is "none".'
+        ),
     )
-    p.add_argument("-p", "--path", required=True,
-                   help="Project root directory")
-    p.add_argument("--limit", type=int, default=20)
-    p.add_argument("--repo-backend", choices=["memory", "duckdb"],
-                   default="duckdb")
-    p.add_argument("--repo-connection",
-                   default=None)
-    p.add_argument("--enable-embeddings", action="store_true")
-    p.add_argument("--embedding-model",
-                   default="all-MiniLM-L6-v2")
-    p.add_argument("--embedding-cache-backend",
-                   choices=["duckdb", "sqlite", "none"],
-                   default="duckdb")
-    p.add_argument("--embedding-cache-path",
-                   default="cache.duckdb")
-    return p.parse_args()
+
+
+class Settings(ProjectSettings):
+    """RepoMap-CLI specific settings, extending project settings."""
+    model_config = SettingsConfigDict(
+        cli_parse_args=True,
+        cli_kebab_case=True,
+        cli_enforce_required=True,
+        env_prefix="KNOW_",
+        env_nested_delimiter="_",
+    )
+
+    project_path: str = Field(
+        ...,
+        description="Project root directory.",
+        validation_alias=AliasChoices("project-path", "p", "path"),
+    )
+    limit: int = Field(20, description="Default result limit for RepoMap runs.")
+    repository_backend: str = Field(
+        "duckdb",
+        description='The backend to use for storing metadata. Options are "memory" or "duckdb".',
+    )
+
+    # To override nested defaults, we must override the parent field.
+    embedding: RepomapCliEmbeddingSettings = Field(default_factory=RepomapCliEmbeddingSettings)
 
 
 def _print_scores(scores: List[Dict[str, Any]]) -> None:
