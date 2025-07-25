@@ -1,16 +1,18 @@
 import os
 import asyncio
-import argparse
+import sys
 import json
 from typing import List, Dict
 
 import litellm
+from pydantic import Field
+from pydantic_settings import SettingsConfigDict
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from know.logger import logger
-from know.settings import ProjectSettings, EmbeddingSettings
+from know.settings import ProjectSettings, iter_settings
 from know.project import init_project
 from know.tools.base import ToolRegistry
 from devtools import pformat
@@ -28,51 +30,24 @@ of file summaries to answer the question. Use symbol search to find relevant cod
 """
 
 
-def _parse_cli() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Simple interactive chat CLI.")
-    p.add_argument("-m", "--model", default=os.getenv("OPENAI_MODEL", "gpt-4.1"))
-    p.add_argument("-s", "--system", default=SYSTEM_PROMPT)
-    p.add_argument("-p", "--path", "--project-path",
-                   required=True,
-                   help="Root directory of the project to analyse/assist with")
-    p.add_argument(
-        "--enable-embeddings",
-        action="store_true",
-        help="Load the embeddings engine so semantic-search tools work.",
+class ChatCliSettings(ProjectSettings):
+    """Chat-CLI specific settings, extending project settings."""
+
+    model: str = Field(
+        default=os.getenv("OPENAI_MODEL", "gpt-4.1"),
+        description="Name of the LLM to use for chat.",
+        cli_alias="m",
     )
-    p.add_argument(
-        "--embedding-model",
-        default=os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
-        help=(
-            "HuggingFace hub model name or local path to use for the embeddings "
-            "engine (only used when --enable-embeddings is given)."
-        ),
+    system: str = Field(
+        default=SYSTEM_PROMPT,
+        description="System prompt for the chat.",
+        cli_alias="s",
     )
-    p.add_argument(
-        "--embedding-cache-backend",
-        choices=["duckdb", "sqlite", "none"],
-        default=os.getenv("EMBEDDING_CACHE_BACKEND", "duckdb"),
-        help="Backend used for the embeddings cache ('duckdb', 'sqlite', or 'none').",
+    project_path: str = Field(
+        ...,
+        description="Root directory of the project to analyse/assist with.",
+        cli_aliases=["p", "path"],
     )
-    p.add_argument(
-        "--embedding-cache-path",
-        default=os.getenv("EMBEDDING_CACHE_PATH", "cache.duckdb"),
-        help="File / connection string for the embeddings-cache backend "
-             "(ignored when backend is 'none').",
-    )
-    p.add_argument(
-        "--repo-backend",
-        choices=["memory", "duckdb"],
-        default=os.getenv("REPO_BACKEND", "duckdb"),
-        help="Metadata store backend to use ('memory' or 'duckdb').",
-    )
-    p.add_argument(
-        "--repo-connection",
-        default=os.getenv("REPO_CONNECTION"),
-        help="Connection string / path for the selected backend "
-             "(e.g. DuckDB file path).",
-    )
-    return p.parse_args()
 
 
 async def _chat(model: str, system_msg: str, project):
@@ -163,26 +138,34 @@ async def _chat(model: str, system_msg: str, project):
 
 
 def main() -> None:
-    args = _parse_cli()
+    # Custom help handler using iter_settings
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print("usage: chatcli.py [OPTIONS]")
+        print("\nOptions:")
+        for flag, desc in iter_settings(ChatCliSettings, kebab=True, include_aliases=True):
+            print(f"  {flag:<40} {desc}")
+        sys.exit(0)
+
+    config = SettingsConfigDict(
+        cli_parse_args=True,
+        cli_kebab_case=True,
+        cli_help_flag=None,  # we handle help ourselves
+        env_prefix="KNOW_",
+        env_nested_delimiter="__",
+    )
+
+    class Settings(ChatCliSettings):
+        model_config = config
+
+    settings = Settings()
+
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY env var not set.")
-    ps_kwargs = {
-        "project_path": args.path,
-        "repository_backend": args.repo_backend,
-        "repository_connection": args.repo_connection,
-    }
-    if args.enable_embeddings:
-        ps_kwargs["embedding"] = EmbeddingSettings(
-            enabled=True,
-            model_name=args.embedding_model,
-            cache_backend=args.embedding_cache_backend,
-            cache_path=args.embedding_cache_path,
-        )
-    settings = ProjectSettings(**ps_kwargs)
-    project  = init_project(settings)
+
+    project = init_project(settings)
     with patch_stdout():
-        asyncio.run(_chat(args.model, args.system, project))
+        asyncio.run(_chat(settings.model, settings.system, project))
 
 
 if __name__ == "__main__":
