@@ -14,6 +14,10 @@ class EmbeddingSettings(BaseSettings):
     cache_backend: str = "duckdb"
 
 
+class ToolSettings(BaseSettings):
+    disabled: list[str] = []
+
+
 class ProjectSettings(BaseSettings):
     project_path: Optional[str] = None
     project_id: Optional[str] = None
@@ -21,6 +25,7 @@ class ProjectSettings(BaseSettings):
     repository_connection: Optional[str] = None
     sync_embeddings: bool = False
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    tools: ToolSettings = Field(default_factory=ToolSettings)
 
     class Config:
         env_nested_delimiter = "__"

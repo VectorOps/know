@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from know.project import Project
+from know.settings import ProjectSettings
 from typing import Dict, Type, Any
 import inspect
 from enum import Enum
@@ -57,3 +58,11 @@ class ToolRegistry:
     @classmethod
     def get(cls, name: str) -> "BaseTool":
         return cls._tools[name]
+
+    @classmethod
+    def get_enabled_tools(cls, settings: ProjectSettings) -> list["BaseTool"]:
+        disabled_tools = settings.tools.disabled
+        return [
+            tool for name, tool in cls._tools.items()
+            if name not in disabled_tools
+        ]
