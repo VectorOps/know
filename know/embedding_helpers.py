@@ -29,7 +29,7 @@ def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str, syn
                 exc_info=True,
             )
 
-    if sync:                                       # ← new branch
+    if sync:
         _on_vec(emb_calc.get_embedding(body))
         return
 

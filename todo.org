@@ -1,11 +1,21 @@
 #+title: Todo
 * [ ] Configuration object
+** [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
 * [ ] Cache improvements
 ** [ ] Collect and mass-update embeddings that were recently used
 ** [ ] Add lifecycle rules to cleanup old unused embeddings
-* [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
+* [ ] Embedding calculation should include docstring and prior comment
 * [ ] Search tool
-** [ ] Lower weight of comment symbols
+** [ ] Lower weight of comment symbols?
+** [ ] Why this found nothing?
+Tool call request vectorops_search_symbols
+{
+    'query': 'def _handle_file(self, root_node)',
+    'symbol_kind': 'method',
+    'limit': 20,
+}
+** [ ] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
+* [ ] Update chat example to use litellm instead of OpenAI API directly
 * [ ] Refactor symbols
 ** [X] Everything is a symbol
 ** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
@@ -34,6 +44,7 @@
 *** [X] Modules
 *** [ ] Declare
 *** [ ] Test module path resolution
+*** [ ] Include extends type to ref results
 *** [X] React TSX support
 ** [X] JavaScript
 *** [X] Add support for member_expression, empty_statement node type
@@ -41,15 +52,14 @@
 ** [ ] C#
 ** [ ] Java
 ** [ ] PHP
+* [ ] MCP server
+* [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
+* [ ] Add support for Python del_statement, if statement, etc.
 * [ ] Documentation generator
 * [ ] CI/CD pipeline
-* [ ] Add git support
-** [ ]  Use git to quickly find what files have changed?
-* [ ] MCP-compatible tool definition support
-* [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
-* [ ] Add support for Python del_statement?
 * [ ] Do not refresh DuckDB index if project did not change
-* [ ] Add reranking model support
+* [ ] Improve symbol search
+** [ ] Add reranking model support
 * [-] Add infra to maintain in-memory tools like RepoMap
 ** [ ] Enable/Disable tools configuration flag
 * [ ] Validate traversal logic to ensure we can not go outside of the project directory.
@@ -61,6 +71,10 @@
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
+* [ ] Cross-repo symbol search
+* [ ] Non-programming languages parsers (rst/md/text). Figure out chunking.
+* [ ] Add git support
+** [ ]  Use git to quickly find what files have changed?
 * [X] Measure startup time
 * [X] Measure time it takes to process file, a batch of files, etc
 * [X] Rewrite SQL backends to use PyPika

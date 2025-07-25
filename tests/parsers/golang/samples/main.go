@@ -16,7 +16,12 @@ var (
 	f = 0.1 // Hello
 )
 
+type E struct {
+	d str
+}
+
 type S struct {
+	E
 	a int `valid:"test"`
 	b str
 	c *T

@@ -11,6 +11,7 @@ from pydantic_settings import SettingsConfigDict
 
 from know.settings import ProjectSettings, EmbeddingSettings, print_help
 from know.project import init_project
+from know.file_summary import SummaryMode
 from know.tools.base import ToolRegistry
 from know.data import FileFilter
 from know.logger import logger
@@ -86,10 +87,10 @@ def main() -> None:
 
     symbol_seeds: list[str] = []
     file_seeds:   list[str] = []
-    prompt_text:  str | None = None          # NEW – free-text prompt seed
-    include_summaries: bool = False          # NEW – include summaries?
-    token_limit_count: int | None = None     # NEW – summary token budget
-    token_limit_model: str | None = None     # NEW – model name for budget
+    prompt_text:  str | None = None
+    token_limit_count: int | None = None
+    token_limit_model: str | None = None
+    summary_mode: SummaryMode = SummaryMode.ShortSummary
 
     print("RepoMap interactive CLI.  Type '/help' for commands, '/exit' to quit.")
     session = PromptSession(history=FileHistory(".repomap_history"))
@@ -167,17 +168,15 @@ def main() -> None:
                 elif cmd == "/clear":
                     symbol_seeds.clear()
                     file_seeds.clear()
-                    prompt_text = None             # NEW
+                    prompt_text = None
                     print("Seeds cleared.")
 
-                elif cmd == "/summary":                # NEW
+                elif cmd == "/summary":
                     if arg.lower() in {"on", "yes"}:
-                        include_summaries = True
+                        summary_mode = SummaryMode.ShortSummary
                     elif arg.lower() in {"off", "no"}:
-                        include_summaries = False
-                    else:                              # toggle when no/unknown arg
-                        include_summaries = not include_summaries
-                    print(f"Summaries {'enabled' if include_summaries else 'disabled'}.")
+                        summary_mode = SummaryMode.Skip
+                    print(f"Summaries {summary_mode}.")
 
                 elif cmd == "/tokens":                 # NEW
                     if not arg:
@@ -205,7 +204,7 @@ def main() -> None:
                             file_paths=file_seeds   or None,
                             prompt=prompt_text,
                             limit=settings.limit,
-                            include_summary=include_summaries,
+                            summary_mode=summary_mode,
                             token_limit_count=token_limit_count,
                             token_limit_model=token_limit_model,
                         )

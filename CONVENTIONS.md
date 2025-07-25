@@ -16,7 +16,6 @@ This document outlines the coding conventions and best practices for Python appl
 - [Scalability Considerations](#scalability-considerations)
 - [Testing](#testing)
 
-
 ## Conventions
 
 1. If you want to run a tool, such as test - always prefix the tool with `uv run` as project is managed by uv package manager. For example, instead of `pytest` run `uv run pytest`.
@@ -33,6 +32,8 @@ from src.notifications import service as notification_service
 ```
 
 2. Never add imports inside of functions or methods - only add them to the top of the file
+
+3. Never write any comments unless requested by the user. If requested by the user, try to be as concise as possible.
 
 ## Type Hints
 

@@ -73,19 +73,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
         function: [(identifier) (member_expression)] @callee) @call
     (new_expression
         constructor: [(identifier) (member_expression)] @ctor) @new
-    (extends_clause
-        [
-            (type_identifier)
-            (generic_type)
-        ] @parent_type)
-    (implements_clause
-        [
-            (type_identifier)
-            (generic_type)
-        ] @parent_type)
     [
-        (type_identifier)         ;; Foo, Bar.Baz, …
-        (generic_type)            ;; Foo<…>
+        (type_identifier)
+        (generic_type)
     ] @typeid
     """)
 
@@ -1242,7 +1232,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         for _, match in self._TS_REF_QUERY.matches(root):
             # initialise
-            node_call = node_ctor = node_type = node_parent_type = None
+            node_call = node_ctor = node_type = None
             node_target = None
             ref_type = None
 
@@ -1257,21 +1247,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         ref_type, node_ctor = SymbolRefType.TYPE, node
                     elif cap == "ctor":
                         node_target = node
-                    elif cap == "parent_type":
-                        ref_type, node_parent_type = SymbolRefType.TYPE, node
-                        node_target = node
                     elif cap == "typeid":
-                        # avoid double-counting with parent_type
-                        parent = node.parent
-                        is_inheritance = False
-                        while parent:
-                            if parent.type in ("extends_clause", "implements_clause"):
-                                is_inheritance = True
-                                break
-                            parent = parent.parent
-                        if is_inheritance:
-                            continue
-
                         ref_type, node_type = SymbolRefType.TYPE, node
                         node_target = node
 
@@ -1281,7 +1257,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
             full_name = node_target.text.decode("utf8")
             simple_name = full_name.split(".")[-1]
-            raw_node = node_call or node_ctor or node_type or node_parent_type
+            raw_node = node_call or node_ctor or node_type
             raw = self.source_bytes[
                 raw_node.start_byte : raw_node.end_byte
             ].decode("utf8")

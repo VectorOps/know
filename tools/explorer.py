@@ -30,18 +30,8 @@ class Settings(ProjectSettings):
     )
 
     project_path: str = Field(
-        description="Root directory of the project to analyse.",
+        description="Root directory of the project to analyse/assist with.",
         validation_alias=AliasChoices("project-path", "p", "path"),
-    )
-
-    repository_backend: str = Field(
-        "duckdb",
-        description='The backend to use for storing metadata. Options are "memory" or "duckdb".',
-    )
-
-    embedding: EmbeddingSettings = Field(
-        default_factory=lambda: EmbeddingSettings(cache_path="cache.duckdb"),
-        description="An `EmbeddingSettings` object with embedding-specific configurations.",
     )
 
     host: str = Field("127.0.0.1", description="Host to bind the web server to.")

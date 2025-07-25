@@ -26,6 +26,7 @@ dependencies = [
     "tree-sitter-typescript>=0.23.2",
     "tree-sitter-javascript>=0.23.1",
     "pypika",
+    "pydantic-settings>=2.10.1",
 ]
 
 [tool.uv]
@@ -37,4 +38,5 @@ pypika = { git = "https://github.com/VectorOps/pypika.git", rev = "v0.49.4-dev" 
 [dependency-groups]
 dev = [
     "flask>=3.1.1",
+    "google-auth>=2.40.3",
 ]

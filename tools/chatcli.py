@@ -57,14 +57,14 @@ class Settings(ProjectSettings):
     )
 
 
-async def _chat(model: str, system_msg: str, project):
+async def _chat(settings: Settings, project):
     session = PromptSession()
-    messages: List[Dict] = [{"role": "system", "content": system_msg}]
+    messages: List[Dict] = [{"role": "system", "content": settings.system}]
 
-    tools = [t.get_openai_schema() for t in ToolRegistry._tools.values()]
+    tools = [t.get_openai_schema() for t in ToolRegistry.get_enabled_tools(settings)]
     session_cost_usd: float = 0.0      # running total for the whole chat session
 
-    print(f"Loaded model '{model}'.   Type '/new' to start a fresh session, "
+    print(f"Loaded model '{settings.model}'.   Type '/new' to start a fresh session, "
           "'/exit' or Ctrl-D to quit.")
     while True:
         try:
@@ -87,7 +87,7 @@ async def _chat(model: str, system_msg: str, project):
         # -------- LLM / tool loop -----------------------------------------
         while True:
             response = litellm.completion(
-                model=model,
+                model=settings.model,
                 messages=messages,
                 tools=[
                     {                       # OpenAI / litellm tool-definition format
@@ -158,7 +158,7 @@ def main() -> None:
 
     project = init_project(settings)
     with patch_stdout():
-        asyncio.run(_chat(settings.model, settings.system, project))
+        asyncio.run(_chat(settings, project))
 
 
 if __name__ == "__main__":

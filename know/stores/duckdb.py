@@ -162,7 +162,7 @@ class _DuckDBBaseRepo(Generic[T]):
     def _execute(self, q):
         sql, args = self._get_query(q)
         with self._lock:
-            return _row_to_dict(self.cursor().execute(sql, args))
+             return _row_to_dict(self.cursor().execute(sql, args))
 
     # CRUD
     def get_by_id(self, item_id: str) -> Optional[T]:
