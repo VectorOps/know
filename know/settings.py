@@ -98,6 +98,13 @@ class ProjectSettings(BaseSettings):
             "(e.g., a DuckDB file path)."
         ),
     )
+    scanner_num_workers: Optional[int] = Field(
+        None,
+        description=(
+            "Number of worker threads for the scanner. If None, it defaults to "
+            "`os.cpu_count() - 1` (min 1, fallback 4)."
+        ),
+    )
     ignored_dirs: set[str] = Field(
         default_factory=lambda: {
             ".git",

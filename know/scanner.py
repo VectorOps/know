@@ -143,11 +143,12 @@ def scan_project_directory(project: Project) -> ScanResult:
 
     all_files = list(root.rglob("*"))
 
-    # TODO: Make num_workers configurable
-    try:
-        num_workers = max(1, os.cpu_count() - 1)
-    except NotImplementedError:
-        num_workers = 4  # A reasonable default
+    num_workers = project.settings.scanner_num_workers
+    if num_workers is None:
+        try:
+            num_workers = max(1, os.cpu_count() - 1)
+        except (NotImplementedError, TypeError):
+            num_workers = 4  # A reasonable default
 
     logger.debug("number of workers", count=num_workers)
 
