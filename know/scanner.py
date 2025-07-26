@@ -27,8 +27,6 @@ from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImp
 from know.project import Project, ProjectCache
 from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings, schedule_symbol_embedding
 
-# TODO: Make configurable
-IGNORED_DIRS: set[str] = {".git", ".hg", ".svn", "__pycache__", ".idea", ".vscode", ".pytest_cache"}
 
 
 class ParsingState:
@@ -163,7 +161,7 @@ def scan_project_directory(project: Project) -> ScanResult:
                 continue
 
             # Skip ignored directories
-            if any(part in IGNORED_DIRS for part in rel_path.parts):
+            if any(part in project.settings.ignored_dirs for part in rel_path.parts):
                 continue
 
             processed_paths.add(str(rel_path))

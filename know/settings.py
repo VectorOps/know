@@ -79,6 +79,18 @@ class ProjectSettings(BaseSettings):
             "(e.g., a DuckDB file path)."
         ),
     )
+    ignored_dirs: set[str] = Field(
+        default_factory=lambda: {
+            ".git",
+            ".hg",
+            ".svn",
+            "__pycache__",
+            ".idea",
+            ".vscode",
+            ".pytest_cache",
+        },
+        description="A set of directory names to ignore during project scanning.",
+    )
     sync_embeddings: bool = Field(False, description="If True, embeddings will be synchronized.")
     embedding: EmbeddingSettings = Field(
         default_factory=EmbeddingSettings,
