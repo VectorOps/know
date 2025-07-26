@@ -6,6 +6,8 @@ import json
 import pandas as pd
 import math
 import zlib
+import queue
+from concurrent.futures import Future
 from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime, timezone
@@ -51,12 +53,36 @@ class RawValue(ValueWrapper):
 
 
 # helpers
+def _apply_migrations(conn: duckdb.DuckDBPyConnection) -> None:
+    # ensure bookkeeping table exists
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS __migrations__ (
+            name TEXT PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    applied_rows = _row_to_dict(conn.execute("SELECT name FROM __migrations__"))
+    already_applied = {r["name"] for r in applied_rows}
+
+    with pkg_resources.as_file(pkg_resources.files("know.migrations.duckdb")) as mig_root:
+        sql_files = sorted(p for p in mig_root.iterdir() if p.suffix == ".sql")
+
+        for file_path in sql_files:
+            if file_path.name in already_applied:
+                continue
+            sql = file_path.read_text()
+            conn.execute(sql)
+
+            conn.execute("INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)",
+                         [file_path.name, datetime.now(timezone.utc)])
+
+
 def _row_to_dict(rel) -> list[dict[str, Any]]:
     """
     Convert a DuckDB relation to List[Dict] via a pandas DataFrame.
     Using DataFrame avoids the manual column-name handling and is faster.
     """
-    df = rel.df()              # pandas DataFrame
+    df = rel.df()
     records = df.to_dict(orient="records")  # [] when df is empty
     for row in records:
         for k, v in row.items():
@@ -71,6 +97,73 @@ def _row_to_dict(rel) -> list[dict[str, Any]]:
             if isinstance(is_na, bool) and is_na:
                 row[k] = None
     return records
+
+
+class DuckDBThreadWrapper:
+    """
+    DuckDB is not great with threading, initialize connection and serialize all accesses to DuckDB
+    to a separate worker thread. Without this random lockups in execute() were happening even
+    with cursor.
+    """
+    def __init__(self, db_path: Optional[str] = None):
+        self._queue = queue.Queue()
+        self._db_path = db_path
+        self._conn = None
+        self._thread = None
+
+    def start(self):
+        self._init = Future()
+        self._thread = threading.Thread(target=self._worker, daemon=True)
+        self._thread.start()
+        return self._init.result()
+
+    def _worker(self):
+        try:
+            self._conn = duckdb.connect()
+
+            self._conn.execute("INSTALL vss")
+            self._conn.execute("LOAD vss")
+
+            self._conn.execute("INSTALL fts")
+            self._conn.execute("LOAD fts")
+
+            # TODO: SQL injection?
+            if self._db_path:
+                self._conn.execute(f"ATTACH '{self._db_path}' as db")
+                self._conn.execute("USE db")
+
+            _apply_migrations(self._conn)
+
+            self._init.set_result(True)
+        except Exception as ex:
+            self._init.set_exception(ex)
+            return
+
+        while True:
+            item = self._queue.get()
+            if item is None:
+                break
+            sql, params, fut = item
+            if fut.set_running_or_notify_cancel():
+                 try:
+                      fut.set_result(_row_to_dict(self._conn.execute(sql, params)))
+                 except Exception as exc:
+                      fut.set_exception(exc)
+            self._queue.task_done()
+
+        if self._conn:
+            self._conn.close()
+
+    def execute(self, sql, params):
+        fut = Future()
+        self._queue.put((sql, params, fut))
+        return fut.result()
+
+    def close(self):
+        if self._thread:
+            self._queue.put(None)
+            self._thread.join()
+
 
 # binary-compression helpers
 _UNCOMPRESSED_PREFIX = b"\x00"           # 1-byte marker → raw payload follows
@@ -104,14 +197,8 @@ class _DuckDBBaseRepo(Generic[T]):
     _field_parsers: dict[str, Callable[[Any], Any]] = {}
     _compress_fields: set[str] = set()
 
-    def cursor(self):
-        cur = self.conn.cursor()
-        cur.execute("USE db")
-        return cur
-
-    def __init__(self, conn: duckdb.DuckDBPyConnection, lock: threading.RLock):
+    def __init__(self, conn: duckdb.DuckDBPyConnection):
         self.conn = conn
-        self._lock = lock
         self._table = Table(self.table)
 
     def _serialize_data(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -161,9 +248,7 @@ class _DuckDBBaseRepo(Generic[T]):
 
     def _execute(self, q):
         sql, args = self._get_query(q)
-        with self._lock:
-             data = self.cursor().execute(sql, args)
-        return _row_to_dict(data)
+        return self.conn.execute(sql, args)
 
     # CRUD
     def get_by_id(self, item_id: str) -> Optional[T]:
@@ -225,8 +310,8 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
     table = "packages"
     model = PackageMetadata
 
-    def __init__(self, conn, file_repo: "DuckDBFileMetadataRepo", lock: threading.RLock):  # type: ignore
-        super().__init__(conn, lock)
+    def __init__(self, conn, file_repo: "DuckDBFileMetadataRepo"):  # type: ignore
+        super().__init__(conn)
         self._file_repo = file_repo
 
     def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
@@ -532,38 +617,7 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
         self._execute(q)
 
-# ---------------------------------------------------------------------------
-# Migration logic
-# ---------------------------------------------------------------------------
-
-def _apply_migrations(conn: duckdb.DuckDBPyConnection) -> None:
-    # ensure bookkeeping table exists
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS __migrations__ (
-            name TEXT PRIMARY KEY,
-            applied_at TIMESTAMP DEFAULT NOW()
-        );
-    """)
-    applied_rows = _row_to_dict(conn.execute("SELECT name FROM __migrations__"))
-    already_applied = {r["name"] for r in applied_rows}
-
-    with pkg_resources.as_file(pkg_resources.files("know.migrations.duckdb")) as mig_root:
-        sql_files = sorted(p for p in mig_root.iterdir() if p.suffix == ".sql")
-
-        for file_path in sql_files:
-            if file_path.name in already_applied:
-                continue
-            sql = file_path.read_text()
-            conn.execute(sql)
-
-            conn.execute("INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)",
-                         [file_path.name, datetime.now(timezone.utc)])
-
-
-# ---------------------------------------------------------------------------
-# Data-repository façade
-# ---------------------------------------------------------------------------
-
+# Data-repository
 class DuckDBDataRepository(AbstractDataRepository):
     """
     Main entry point.  Automatically applies pending SQL migrations on first
@@ -584,38 +638,19 @@ class DuckDBDataRepository(AbstractDataRepository):
         if db_path != ":memory:":
             os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
 
-        self._conn = duckdb.connect()
-        self._lock = threading.RLock()
-
-        # --- enable vector-similarity search extension --------------------------
-        try:
-            self._conn.execute("INSTALL vss")
-            self._conn.execute("LOAD vss")
-        except Exception:
-            pass
-
-        try:
-            self._conn.execute("INSTALL fts")
-            self._conn.execute("LOAD fts")
-        except Exception:
-            pass
-
-        # TODO: SQL injection?
-        self._conn.execute(f"ATTACH '{db_path}' as db")
-        self._conn.execute("USE db")
-
-        _apply_migrations(self._conn)
+        self._conn = DuckDBThreadWrapper(db_path)
+        self._conn.start()
 
         # build repositories (some need cross-references)
-        self._file_repo    = DuckDBFileMetadataRepo(self._conn, self._lock)
-        self._package_repo = DuckDBPackageMetadataRepo(self._conn, self._file_repo, self._lock)
-        self._repo_repo    = DuckDBRepoMetadataRepo(self._conn, self._lock)
-        self._symbol_repo  = DuckDBSymbolMetadataRepo(self._conn, self._lock)
-        self._edge_repo    = DuckDBImportEdgeRepo(self._conn, self._lock)
-        self._symbolref_repo = DuckDBSymbolRefRepo(self._conn, self._lock)
+        self._file_repo    = DuckDBFileMetadataRepo(self._conn)
+        self._package_repo = DuckDBPackageMetadataRepo(self._conn, self._file_repo)
+        self._repo_repo    = DuckDBRepoMetadataRepo(self._conn)
+        self._symbol_repo  = DuckDBSymbolMetadataRepo(self._conn)
+        self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
+        self._symbolref_repo = DuckDBSymbolRefRepo(self._conn)
 
     def close(self):
-        pass
+        self._conn.close()
 
     @property
     def repo(self) -> AbstractRepoMetadataRepository:
