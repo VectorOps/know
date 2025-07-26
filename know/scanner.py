@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import threading
 from enum import Enum
+import pathspec
 
 from dataclasses import dataclass, field
 import time
