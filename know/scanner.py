@@ -373,7 +373,15 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
 
     # collect existing symbols
     existing_symbols = symbol_repo.get_list(SymbolFilter(file_id=file_meta.id))
-    _old_by_body: dict[str, SymbolMetadata] = {s.body: s for s in existing_symbols}
+
+    def _get_embedding_text(body: str, docstring: Optional[str]) -> str:
+        if docstring:
+            return f"{docstring}\n{body}"
+        return body
+
+    _old_by_content: dict[str, SymbolMetadata] = {
+        _get_embedding_text(s.body, s.docstring): s for s in existing_symbols
+    }
 
     emb_calc = project.embeddings
 
@@ -395,10 +403,11 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         })
 
         # reuse embedding if we had an identical symbol earlier
-        old = _old_by_body.get(psym.body)
+        embedding_text = _get_embedding_text(psym.body, psym.docstring)
+        old = _old_by_content.get(embedding_text)
         if old and old.embedding_code_vec is not None:
             sm_data["embedding_code_vec"] = old.embedding_code_vec
-            sm_data["embedding_model"]    = old.embedding_model
+            sm_data["embedding_model"] = old.embedding_model
             schedule_emb = False
         else:
             schedule_emb = emb_calc is not None
@@ -411,7 +420,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
                 symbol_repo,
                 emb_calc,
                 sym_id=sm.id,
-                body=psym.body,
+                body=embedding_text,
                 sync=project.settings.sync_embeddings,
             )
 
