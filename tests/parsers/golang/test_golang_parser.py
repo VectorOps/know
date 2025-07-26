@@ -56,7 +56,7 @@ def test_golang_parser_on_sample_file():
     assert m_imp.alias == "k"
     assert m_imp.dot is False
     assert m_imp.external is False
-    assert m_imp.physical_path == "."
+    assert m_imp.physical_path == "m"
 
     # std-lib import
     fmt_imp = imports["fmt"]
@@ -76,7 +76,7 @@ def test_golang_parser_on_sample_file():
     assert "S" in symbols
     struct_s = symbols["S"]
     assert struct_s.kind == SymbolKind.CLASS
-    assert {c.name for c in struct_s.children if c.name} == {"a", "b", "c"}
+    assert {c.name for c in struct_s.children if c.name} == {"a", "b", "c", "E"}
 
     # Method `m` attached to S (registered as top-level method symbol)
     assert "m" in symbols
@@ -104,6 +104,7 @@ def test_golang_parser_on_sample_file():
         "m",         # method attached to S
         "dummy",     # function
         "main",      # function
+        "E",
         "Number",
         "SumIntsOrFloats",
     }

@@ -213,7 +213,6 @@ class PythonCodeParser(AbstractCodeParser):
             if_block_symbol = self._make_symbol(
                 consequence,
                 kind=SymbolKind.BLOCK,
-                name="if",
                 signature=SymbolSignature(raw=raw_sig, lexical_type="if"),
             )
             _process_block_children(consequence, if_block_symbol)
@@ -893,13 +892,8 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             for deco in sym.signature.decorators:
                 lines.append(f"{IND}@{deco}")
 
-        # early return literal
-        if sym.kind == SymbolKind.LITERAL:
-            for ln in sym.body.splitlines():
-                lines.append(f"{IND}{ln}")
-            return "\n".join(lines)
-
         # header line
+        header = ""
         if sym.signature and sym.signature.raw:
             header = sym.signature.raw.rstrip()
         else:
@@ -907,12 +901,12 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                 header = f"def {sym.name}():"
             elif sym.kind == SymbolKind.CLASS:
                 header = f"class {sym.name}:"
-            else:
-                header = (sym.body or "").splitlines()[0].rstrip()
 
         if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD, SymbolKind.CLASS) and not header.endswith(":"):
             header += ":"
-        lines.append(f"{IND}{header}")
+
+        if header and sym.kind not in (SymbolKind.LITERAL, SymbolKind.IF):
+            lines.append(f"{IND}{header}")
 
         # For simple statements (constants, variables, etc.) include all
         # remaining body lines so multi-line statements are not truncated.
@@ -921,9 +915,10 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             SymbolKind.METHOD,
             SymbolKind.CLASS,
             SymbolKind.TRYCATCH,
-            SymbolKind.LITERAL,      # already returned earlier
+            SymbolKind.IF,
+            SymbolKind.BLOCK,
         ):
-            for ln in (sym.body or "").splitlines()[1:]:
+            for ln in (sym.body or "").splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
 
         # body / docstring
@@ -983,13 +978,6 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                     child_stack=child_stack))
 
         elif sym.kind == SymbolKind.BLOCK:
-            if sym.signature and sym.signature.raw:
-                header = sym.signature.raw
-            else:
-                lexical_type = sym.signature.lexical_type if sym.signature and sym.signature.lexical_type else "block"
-                header = f"{lexical_type}:"
-            lines.append(f"{IND}{header}")
-
             if only_children:
                 lines.append(f"{IND}    ...")
 

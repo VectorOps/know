@@ -87,3 +87,7 @@ class Foobar(Foo, Bar, Buzz):
 
 
 d()
+
+if __name__ == "__main__":
+    import foo
+    print("123")

@@ -590,14 +590,14 @@ class DuckDBDataRepository(AbstractDataRepository):
         try:
             self._conn.execute("INSTALL vss")
             self._conn.execute("LOAD vss")
-        except Exception:          # extension already installed / not available
+        except Exception:
             pass
 
         try:
             self._conn.execute("INSTALL fts")
             self._conn.execute("LOAD fts")
         except Exception:
-            pass          # already installed / unavailable
+            pass
 
         # TODO: SQL injection?
         self._conn.execute(f"ATTACH '{db_path}' as db")
@@ -616,32 +616,31 @@ class DuckDBDataRepository(AbstractDataRepository):
     def close(self):
         pass
 
-    # ---------- interface impl ----------
     @property
-    def repo(self) -> AbstractRepoMetadataRepository:     # type: ignore[override]
+    def repo(self) -> AbstractRepoMetadataRepository:
         return self._repo_repo
 
     @property
-    def package(self) -> AbstractPackageMetadataRepository:  # type: ignore[override]
+    def package(self) -> AbstractPackageMetadataRepository:
         return self._package_repo
 
     @property
-    def file(self) -> AbstractFileMetadataRepository:     # type: ignore[override]
+    def file(self) -> AbstractFileMetadataRepository:
         return self._file_repo
 
     @property
-    def symbol(self) -> AbstractSymbolMetadataRepository:  # type: ignore[override]
+    def symbol(self) -> AbstractSymbolMetadataRepository:
         return self._symbol_repo
 
     @property
-    def importedge(self) -> AbstractImportEdgeRepository:  # type: ignore[override]
+    def importedge(self) -> AbstractImportEdgeRepository:
         return self._edge_repo
 
     @property
-    def symbolref(self) -> AbstractSymbolRefRepository:  # type: ignore[override]
+    def symbolref(self) -> AbstractSymbolRefRepository:
         return self._symbolref_repo
 
-    def refresh_full_text_indexes(self) -> None:               # NEW
+    def refresh_full_text_indexes(self) -> None:
         try:
             self._conn.execute("PRAGMA drop_fts_index('symbols');")
             self._conn.execute(

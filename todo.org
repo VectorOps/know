@@ -1,6 +1,5 @@
 #+title: Todo
-* [ ] Configuration object
-** [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
+* [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
 * [ ] Cache improvements
 ** [ ] Collect and mass-update embeddings that were recently used
 ** [ ] Add lifecycle rules to cleanup old unused embeddings
@@ -75,6 +74,7 @@ Tool call request vectorops_search_symbols
 * [ ] Non-programming languages parsers (rst/md/text). Figure out chunking.
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed?
+* [X] Configuration object
 * [X] Measure startup time
 * [X] Measure time it takes to process file, a batch of files, etc
 * [X] Rewrite SQL backends to use PyPika

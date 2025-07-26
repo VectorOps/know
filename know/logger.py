@@ -4,7 +4,6 @@ from typing import Any
 
 import structlog
 
-# TODO: Logging config
 structlog.configure(
     wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
     logger_factory=structlog.stdlib.LoggerFactory(),

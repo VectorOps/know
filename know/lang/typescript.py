@@ -961,9 +961,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             exported   = exported,
         )
 
-    # --------------------------------------------------------------- #
     #  Class-expression helpers  ( const Foo = class { … } )
-    # --------------------------------------------------------------- #
     def _resolve_class_expression_name(self, holder_node) -> Optional[str]:
         """
         Mirrors _resolve_arrow_function_name but for anonymous `class` RHS.
