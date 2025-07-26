@@ -3,8 +3,8 @@ import threading
 import os
 import duckdb
 import json
-import pandas as pd   # new – required for .df() conversion
-import math          # needed for math.isnan
+import pandas as pd
+import math
 import zlib
 from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
@@ -162,7 +162,8 @@ class _DuckDBBaseRepo(Generic[T]):
     def _execute(self, q):
         sql, args = self._get_query(q)
         with self._lock:
-             return _row_to_dict(self.cursor().execute(sql, args))
+             data = self.cursor().execute(sql, args)
+        return _row_to_dict(data)
 
     # CRUD
     def get_by_id(self, item_id: str) -> Optional[T]:

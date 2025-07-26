@@ -48,9 +48,7 @@ class SearchSymbolsTool(BaseTool):
             kind = SymbolKind(symbol_kind)
 
         # symbol_visibility
-        if symbol_visibility is None:
-            vis: Visibility | None = Visibility.PUBLIC
-        elif isinstance(symbol_visibility, Visibility):
+        if isinstance(symbol_visibility, Visibility):
             vis = symbol_visibility
         elif str(symbol_visibility).lower() == "all":
             vis = None

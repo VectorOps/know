@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Any, Optional, Type, Dict
-from dataclasses import dataclass, field            # NEW
-from typing import TYPE_CHECKING                    # NEW
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+import pandas
 from abc import ABC, abstractmethod
 from know.models import (
     RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata,

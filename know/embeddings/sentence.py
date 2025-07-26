@@ -10,7 +10,6 @@ from know.embeddings.cache import EmbeddingCacheBackend
 
 try:
     from sentence_transformers import SentenceTransformer  # third-party
-    import numpy as np
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
         "The 'sentence_transformers' and 'numpy' packages are required for "
@@ -120,33 +119,9 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
             model_name=self._model_name,
             num_texts=len(texts),
         )
+
         try:
             start_ts = time.perf_counter()
-
-            embeddings = self._get_model().encode(
-                texts,
-                batch_size=self._batch_size,
-                normalize_embeddings=self._normalize,
-                show_progress_bar=False,
-            )
-
-            #import torch.mps; print(f'alloc: {torch.mps.current_allocated_memory():,}, driver: {torch.mps.driver_allocated_memory():,}')
-
-            duration = time.perf_counter() - start_ts
-            self._last_encode_time = duration
-            logger.debug(
-                "embeddings_encode_time",
-                model_name=self._model_name,
-                num_texts=len(texts),
-                duration_sec=duration,
-            )
-        except Exception as exc:
-            logger.debug(
-                "embeddings_encode_error",
-                model_name=self._model_name,
-                exc=exc,
-            )
-            raise
 
             model = self._get_model()
 
@@ -162,7 +137,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                     add_special_tokens=False,
                 )["input_ids"]
 
-                if len(token_ids) > model.max_seq_length:
+                if len(token_ids) >= model.max_seq_length:
                     long_texts_with_indices.append((i, token_ids))
                 else:
                     short_texts_with_indices.append((i, text))
@@ -178,6 +153,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                     short_texts_to_encode,
                     batch_size=self._batch_size,
                     normalize_embeddings=self._normalize,
+                    truncate=True,
                     show_progress_bar=False,
                 )
 
@@ -193,6 +169,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                         for j in range(0, len(token_ids), model.max_seq_length - stride)
                     ]
 
+
                     chunk_texts = model.tokenizer.batch_decode(windows, skip_special_tokens=False)
 
                     chunk_embeddings = model.encode(
@@ -202,11 +179,10 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                         show_progress_bar=False,
                     )
 
-                    pooled_embedding = np.mean(chunk_embeddings, axis=0)
+                    pooled_embedding = chunk_embeddings.mean(axis=0)
                     results[i] = self._process_embedding(pooled_embedding)
 
-            # type ignore: all slots are filled.
-            processed: List[Vector] = results  # type: ignore
+            processed: List[Vector] = results
 
             duration = time.perf_counter() - start_ts
             self._last_encode_time = duration
@@ -249,8 +225,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                 result[i] = v
                 self._cache.set_vector(self._model_name, h, v)
 
-        # type ignore: every slot is filled
-        return result  # type: ignore[return-value]
+        return result
 
     # --------------------------------------------------------------------- #
     # Public API required by EmbeddingsCalculator

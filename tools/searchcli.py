@@ -80,6 +80,12 @@ def main() -> None:
             try:
                 query = session.prompt("> ")
             except (EOFError, KeyboardInterrupt):
+                import threading
+                import traceback
+                for th in threading.enumerate():
+                    print(th)
+                    traceback.print_stack(sys._current_frames()[th.ident])
+                    print()
                 break
             query = query.strip()
             if not query:

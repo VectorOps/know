@@ -1,9 +1,10 @@
 #+title: Todo
+* [ ] Add dedicated single-thread worker for DuckDB to work around its thread handling.
 * [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
 * [ ] Cache improvements
 ** [ ] Collect and mass-update embeddings that were recently used
 ** [ ] Add lifecycle rules to cleanup old unused embeddings
-* [ ] Embedding calculation should include docstring and prior comment
+* [X] Embedding calculation should include docstring and prior comment
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols?
 ** [ ] Why this found nothing?

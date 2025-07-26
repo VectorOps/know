@@ -30,14 +30,14 @@ class DuckDBEmbeddingCacheBackend(EmbeddingCacheBackend):
         """)
 
     def get_vector(self, model: str, hash_: str) -> Optional[Vector]:
-        row = self._conn.execute(
+        row = self._conn.cursor().execute(
             "SELECT vector FROM embedding_cache WHERE model=? AND hash=?",
             [model, hash_],
         ).fetchone()
         return json.loads(row[0]) if row else None
 
     def set_vector(self, model: str, hash_: str, vector: Vector) -> None:
-        self._conn.execute(
+        self._conn.cursor().execute(
             "INSERT OR IGNORE INTO embedding_cache(model, hash, vector) VALUES (?,?,?)",
             [model, hash_, json.dumps(vector)],
         )
