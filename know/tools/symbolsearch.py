@@ -48,12 +48,14 @@ class SearchSymbolsTool(BaseTool):
             kind = SymbolKind(symbol_kind)
 
         # symbol_visibility
+        vis = None
         if isinstance(symbol_visibility, Visibility):
             vis = symbol_visibility
-        elif str(symbol_visibility).lower() == "all":
-            vis = None
-        else:
-            vis = Visibility(symbol_visibility)
+        elif isinstance(symbol_visibility, str):
+            if lower(symbol_visibility) == "all":
+                vis = None
+            else:
+                vis = Visibility(symbol_visibility)
 
         # summary_mode
         if isinstance(summary_mode, str):
