@@ -55,6 +55,25 @@ class ToolSettings(BaseSettings):
     )
 
 
+class LanguageSettings(BaseModel):
+    """Base class for language-specific settings."""
+
+    pass
+
+
+class PythonSettings(LanguageSettings):
+    """Settings specific to the Python language parser."""
+
+    venv_dirs: set[str] = Field(
+        default_factory=lambda: {".venv", "venv", "env", ".env"},
+        description="Directory names to be treated as virtual environments.",
+    )
+    module_suffixes: tuple[str, ...] = Field(
+        default=(".py", ".pyc", ".so", ".pyd"),
+        description="File suffixes to be considered as Python modules.",
+    )
+
+
 class ProjectSettings(BaseSettings):
     """Top-level settings for a project."""
 
@@ -99,6 +118,12 @@ class ProjectSettings(BaseSettings):
     tools: ToolSettings = Field(
         default_factory=ToolSettings,
         description="A `ToolSettings` object with tool-specific configurations.",
+    )
+    languages: dict[str, LanguageSettings] = Field(
+        default_factory=lambda: {
+            "python": PythonSettings(),
+        },
+        description="A dictionary of language-specific settings, keyed by language name.",
     )
 
     class Config:

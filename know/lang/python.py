@@ -20,14 +20,13 @@ from know.models import (
     FileMetadata,
 )
 from know.project import Project, ProjectCache
+from know.settings import PythonSettings
 from know.parsers import CodeParserRegistry
 from know.logger import logger
 from know.helpers import compute_file_hash
 from devtools import pprint
 
 
-_VENV_DIRS: set[str] = {".venv", "venv", "env", ".env"}
-_MODULE_SUFFIXES: tuple[str, ...] = (".py", ".pyc", ".so", ".pyd")
 
 PY_LANGUAGE = Language(tspython.language())
 
@@ -50,6 +49,15 @@ class PythonCodeParser(AbstractCodeParser):
         self.source_bytes: bytes = b""
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
+
+        lang_settings = self.project.settings.languages.get(self.language.value, PythonSettings())
+        if not isinstance(lang_settings, PythonSettings):
+            logger.warning(
+                "Python language settings are not of the correct type, using defaults.",
+                actual_type=type(lang_settings).__name__,
+            )
+            lang_settings = PythonSettings()
+        self.settings: PythonSettings = lang_settings
 
     # Required methods
     def _handle_file(self, root_node):
@@ -716,11 +724,11 @@ class PythonCodeParser(AbstractCodeParser):
             base = project_root.joinpath(*parts[:idx])
 
             # Skip anything located inside a virtual-env folder
-            if any(seg in _VENV_DIRS for seg in base.parts):
+            if any(seg in self.settings.venv_dirs for seg in base.parts):
                 continue
 
             # 1) concrete module file (preferred)
-            for suffix in _MODULE_SUFFIXES:
+            for suffix in self.settings.module_suffixes:
                 file_candidate = base.with_suffix(suffix)
                 if file_candidate.exists():
                     found = file_candidate
