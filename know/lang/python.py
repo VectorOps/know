@@ -206,37 +206,44 @@ class PythonCodeParser(AbstractCodeParser):
         # Handle 'if' block
         consequence = node.child_by_field_name("consequence")
         if consequence:
+            condition_node = node.child_by_field_name("condition")
+            condition_text = condition_node.text.decode("utf8") if condition_node else ""
+            raw_sig = f"if {condition_text}:"
+
             if_block_symbol = self._make_symbol(
                 consequence,
                 kind=SymbolKind.BLOCK,
                 name="if",
-                signature=SymbolSignature(raw="if:", lexical_type="if")
+                signature=SymbolSignature(raw=raw_sig, lexical_type="if"),
             )
             _process_block_children(consequence, if_block_symbol)
             if_symbol.children.append(if_block_symbol)
 
         # Handle 'elif' and 'else' clauses
-        alternatives = node.children_by_field_name('alternative')
+        alternatives = node.children_by_field_name("alternative")
         for alt_node in alternatives:
-            if alt_node.type == 'elif_clause':
-                block_node = alt_node.child_by_field_name('consequence')
+            if alt_node.type == "elif_clause":
+                block_node = alt_node.child_by_field_name("consequence")
                 if block_node:
+                    condition_node = alt_node.child_by_field_name("condition")
+                    condition_text = condition_node.text.decode("utf8") if condition_node else ""
+                    raw_sig = f"elif {condition_text}:"
                     elif_block_symbol = self._make_symbol(
                         block_node,
                         kind=SymbolKind.BLOCK,
                         name="elif",
-                        signature=SymbolSignature(raw="elif:", lexical_type="elif")
+                        signature=SymbolSignature(raw=raw_sig, lexical_type="elif"),
                     )
                     _process_block_children(block_node, elif_block_symbol)
                     if_symbol.children.append(elif_block_symbol)
-            elif alt_node.type == 'else_clause':
-                block_node = alt_node.child_by_field_name('consequence')
+            elif alt_node.type == "else_clause":
+                block_node = alt_node.child_by_field_name("consequence")
                 if block_node:
                     else_block_symbol = self._make_symbol(
                         block_node,
                         kind=SymbolKind.BLOCK,
                         name="else",
-                        signature=SymbolSignature(raw="else:", lexical_type="else")
+                        signature=SymbolSignature(raw="else:", lexical_type="else"),
                     )
                     _process_block_children(block_node, else_block_symbol)
                     if_symbol.children.append(else_block_symbol)
@@ -976,8 +983,12 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                     child_stack=child_stack))
 
         elif sym.kind == SymbolKind.BLOCK:
-            lexical_type = sym.signature.lexical_type if sym.signature and sym.signature.lexical_type else "block"
-            lines.append(f"{IND}{lexical_type}:")
+            if sym.signature and sym.signature.raw:
+                header = sym.signature.raw
+            else:
+                lexical_type = sym.signature.lexical_type if sym.signature and sym.signature.lexical_type else "block"
+                header = f"{lexical_type}:"
+            lines.append(f"{IND}{header}")
 
             if only_children:
                 lines.append(f"{IND}    ...")
