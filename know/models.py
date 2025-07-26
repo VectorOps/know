@@ -35,6 +35,8 @@ class SymbolKind(str, Enum):
     COMMENT = "comment"
     ASSIGNMENT = "assignment"
     NAMESPACE = "namespace"
+    IF = "if"
+    BLOCK = "block"
 
 
 class Visibility(str, Enum):

@@ -78,6 +78,48 @@ class PythonCodeParser(AbstractCodeParser):
             parts = p.with_suffix("").parts       # strip ".py"
         return ".".join(parts)
 
+    def _process_node(
+        self,
+        node,
+        parent=None,
+    ) -> List[ParsedSymbol]:
+        if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
+            return self._handle_import_statement(node, parent=parent)
+        elif node.type in ("function_definition", "async_function_definition"):
+            return self._handle_function_definition(node, parent=parent)
+        elif node.type == "class_definition":
+            return self._handle_class_definition(node, parent=parent)
+        elif node.type == "assignment":
+            return self._handle_assignment(node, parent=parent)
+        elif node.type == "decorated_definition":
+            return self._handle_decorated_definition(node, parent=parent)
+        elif node.type == "expression_statement":
+            assign_child = next((c for c in node.children if c.type == "assignment"), None)
+            if assign_child is not None:
+                return self._handle_assignment(assign_child, parent=parent)
+            else:
+                return self._handle_expression_statement(node, parent=parent)
+        elif node.type == "try_statement":
+            return self._handle_try_statement(node, parent=parent)
+        elif node.type == "if_statement":
+            return self._handle_if_statement(node, parent=parent)
+        elif node.type == "pass_statement":
+            return [self._create_literal_symbol(node, parent=parent)]
+        elif node.type == "comment":
+            return self._handle_comment_symbol(node, parent=parent)
+
+        # Unknown / unhandled → debug-log (mirrors previous behaviour)
+        logger.debug(
+            "Unknown node",
+            path=self.parsed_file.path,
+            type=node.type,
+            line=node.start_point[0] + 1,
+            byte_offset=node.start_byte,
+            raw=node.text.decode("utf8", errors="replace"),
+        )
+
+        return [self._create_literal_symbol(node, parent=parent)]
+
     # Symbol helpers
     def _create_import_symbol(self, node, import_path: str | None, alias: str | None) -> ParsedSymbol:
         return self._make_symbol(
@@ -152,6 +194,55 @@ class PythonCodeParser(AbstractCodeParser):
             parent_sym
         ]
 
+    def _handle_if_statement(self, node, parent=None):
+        if_symbol = self._make_symbol(node, kind=SymbolKind.IF)
+
+        def _process_block_children(block_node, parent_symbol):
+            if block_node:
+                for child_node in block_node.children:
+                    # _process_node will handle different statement types
+                    parent_symbol.children.extend(self._process_node(child_node, parent=parent_symbol))
+
+        # Handle 'if' block
+        consequence = node.child_by_field_name("consequence")
+        if consequence:
+            if_block_symbol = self._make_symbol(
+                consequence,
+                kind=SymbolKind.BLOCK,
+                name="if",
+                signature=SymbolSignature(raw="if:", lexical_type="if")
+            )
+            _process_block_children(consequence, if_block_symbol)
+            if_symbol.children.append(if_block_symbol)
+
+        # Handle 'elif' and 'else' clauses
+        alternatives = node.children_by_field_name('alternative')
+        for alt_node in alternatives:
+            if alt_node.type == 'elif_clause':
+                block_node = alt_node.child_by_field_name('consequence')
+                if block_node:
+                    elif_block_symbol = self._make_symbol(
+                        block_node,
+                        kind=SymbolKind.BLOCK,
+                        name="elif",
+                        signature=SymbolSignature(raw="elif:", lexical_type="elif")
+                    )
+                    _process_block_children(block_node, elif_block_symbol)
+                    if_symbol.children.append(elif_block_symbol)
+            elif alt_node.type == 'else_clause':
+                block_node = alt_node.child_by_field_name('consequence')
+                if block_node:
+                    else_block_symbol = self._make_symbol(
+                        block_node,
+                        kind=SymbolKind.BLOCK,
+                        name="else",
+                        signature=SymbolSignature(raw="else:", lexical_type="else")
+                    )
+                    _process_block_children(block_node, else_block_symbol)
+                    if_symbol.children.append(else_block_symbol)
+
+        return [if_symbol]
+
     def _handle_import_statement(self, node, parent=None):
         raw_stmt = node.text.decode("utf8")
 
@@ -213,46 +304,6 @@ class PythonCodeParser(AbstractCodeParser):
         return [
             self._create_import_symbol(node, import_path, alias)
         ]
-
-    def _process_node(
-        self,
-        node,
-        parent=None,
-    ) -> List[ParsedSymbol]:
-        if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
-            return self._handle_import_statement(node, parent=parent)
-        elif node.type in ("function_definition", "async_function_definition"):
-            return self._handle_function_definition(node, parent=parent)
-        elif node.type == "class_definition":
-            return self._handle_class_definition(node, parent=parent)
-        elif node.type == "assignment":
-            return self._handle_assignment(node, parent=parent)
-        elif node.type == "decorated_definition":
-            return self._handle_decorated_definition(node, parent=parent)
-        elif node.type == "expression_statement":
-            assign_child = next((c for c in node.children if c.type == "assignment"), None)
-            if assign_child is not None:
-                return self._handle_assignment(assign_child, parent=parent)
-            else:
-                return self._handle_expression_statement(node, parent=parent)
-        elif node.type == "try_statement":
-            return self._handle_try_statement(node, parent=parent)
-        elif node.type == "pass_statement":
-            return [self._create_literal_symbol(node, parent=parent)]
-        elif node.type == "comment":
-            return self._handle_comment_symbol(node, parent=parent)
-
-        # Unknown / unhandled → debug-log (mirrors previous behaviour)
-        logger.debug(
-            "Unknown node",
-            path=self.parsed_file.path,
-            type=node.type,
-            line=node.start_point[0] + 1,
-            byte_offset=node.start_byte,
-            raw=node.text.decode("utf8", errors="replace"),
-        )
-
-        return [self._create_literal_symbol(node, parent=parent)]
 
     def _clean_docstring(self, doc: str) -> str:
         return ('\n'.join((s.strip() for s in doc.split('\n')))).strip()
@@ -896,6 +947,45 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                     continue
 
                 if not include_comments and child.kind == SymbolKind.COMMENT:
+                    continue
+
+                child_summary = self.get_symbol_summary(
+                    child,
+                    indent + 4,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                    child_stack=child_stack,
+                )
+                if child_summary.strip():
+                    lines.append(child_summary)
+                    body_symbols_added = True
+
+            if not body_symbols_added:
+                lines.append(f"{IND}    ...")
+
+        elif sym.kind == SymbolKind.IF:
+            for child in sym.children:
+                if only_children and child not in only_children:
+                    continue
+
+                lines.append(self.get_symbol_summary(
+                    child,
+                    indent,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                    child_stack=child_stack))
+
+        elif sym.kind == SymbolKind.BLOCK:
+            lexical_type = sym.signature.lexical_type if sym.signature and sym.signature.lexical_type else "block"
+            lines.append(f"{IND}{lexical_type}:")
+
+            if only_children:
+                lines.append(f"{IND}    ...")
+
+            body_symbols_added = False
+
+            for child in sym.children:
+                if only_children and child not in only_children:
                     continue
 
                 child_summary = self.get_symbol_summary(
