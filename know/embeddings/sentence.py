@@ -5,7 +5,7 @@ import time
 import os
 
 from typing import List, Optional, Any
-import hashlib, json
+import hashlib
 from know.embeddings.cache import EmbeddingCacheBackend
 
 try:
@@ -206,7 +206,9 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
         if not self._cache:
             return self._encode_uncached(texts)
 
-        hashes = [hashlib.sha256(t.encode("utf-8")).hexdigest() for t in texts]
+        hashes = [
+            hashlib.blake2s(t.encode("utf-8"), digest_size=16).digest() for t in texts
+        ]
         result: List[Vector | None] = [None] * len(texts)
         to_compute_idx, to_compute_texts, to_compute_hashes = [], [], []
 

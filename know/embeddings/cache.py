@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from abc import ABC, abstractmethod
@@ -8,16 +7,21 @@ from collections import defaultdict
 from typing import Any, Optional, Tuple
 
 import duckdb
+import numpy as np
 
 from know.models import Vector
 
 
 class EmbeddingCacheBackend(ABC):
-    @abstractmethod
-    def get_vector(self, model: str, hash_: str) -> Optional[Vector]: ...
+    TOUCH_BATCH_SIZE = 100
 
     @abstractmethod
-    def set_vector(self, model: str, hash_: str, vector: Vector) -> None: ...
+    def get_vector(self, model: str, hash_: bytes) -> Optional[Vector]:
+        pass
+
+    @abstractmethod
+    def set_vector(self, model: str, hash_: bytes, vector: Vector) -> None:
+        pass
 
     def flush(self) -> None:
         """Flushes any pending writes to the cache."""
@@ -28,18 +32,15 @@ class EmbeddingCacheBackend(ABC):
         self.flush()
 
 
-class _BaseSqlCache(EmbeddingCacheBackend):
-    TOUCH_BATCH_SIZE = 100
-
+class BaseSQLCacheBackend(EmbeddingCacheBackend):
     def __init__(self, max_size: Optional[int]):
         self._max_size = max_size
-        self._touched_hashes: set[tuple[str, str]] = set()
+        self._touched_hashes: set[tuple[str, bytes]] = set()
         self._lock = threading.Lock()
-        self._conn: Any = None  # to be set by subclass
+        self._conn: Any = None
 
-    def get_vector(self, model: str, hash_: str) -> Optional[Vector]:
-        row = self._fetch_vector_from_db(model, hash_)
-        vector = json.loads(row[0]) if row else None
+    def get_vector(self, model: str, hash_: bytes) -> Optional[Vector]:
+        vector = self._fetch_vector_from_db(model, hash_)
 
         if vector is not None:
             with self._lock:
@@ -48,7 +49,7 @@ class _BaseSqlCache(EmbeddingCacheBackend):
                     self._flush_touches_nolock()
         return vector
 
-    def set_vector(self, model: str, hash_: str, vector: Vector) -> None:
+    def set_vector(self, model: str, hash_: bytes, vector: Vector) -> None:
         self._insert_vector_into_db(model, hash_, vector)
         if self._max_size is not None and self._max_size > 0:
             self._trim_db(model)
@@ -76,20 +77,24 @@ class _BaseSqlCache(EmbeddingCacheBackend):
         self._touched_hashes.clear()
 
     @abstractmethod
-    def _fetch_vector_from_db(self, model: str, hash_: str) -> Optional[tuple]: ...
+    def _fetch_vector_from_db(self, model: str, hash_: bytes) -> Optional[Vector]:
+        pass
 
     @abstractmethod
-    def _insert_vector_into_db(self, model: str, hash_: str, vector: Vector) -> None: ...
+    def _insert_vector_into_db(self, model: str, hash_: bytes, vector: Vector) -> None:
+        pass
 
     @abstractmethod
-    def _update_timestamps_in_db(self, model: str, hashes: Tuple[str, ...]) -> None: ...
+    def _update_timestamps_in_db(self, model: str, hashes: Tuple[bytes, ...]) -> None:
+        pass
 
     @abstractmethod
-    def _trim_db(self, model: str) -> None: ...
+    def _trim_db(self, model: str) -> None:
+        pass
 
 
 # ---------- DuckDB -------------------------------------------------
-class DuckDBEmbeddingCacheBackend(_BaseSqlCache):
+class DuckDBEmbeddingCacheBackend(BaseSQLCacheBackend):
     def __init__(self, path: str | None, max_size: Optional[int] = None):
         super().__init__(max_size)
         self._conn = duckdb.connect(path or ":memory:")
@@ -99,8 +104,8 @@ class DuckDBEmbeddingCacheBackend(_BaseSqlCache):
             CREATE TABLE IF NOT EXISTS embedding_cache (
                 id              BIGINT DEFAULT nextval('embedding_cache_seq') PRIMARY KEY,
                 model           TEXT NOT NULL,
-                hash            TEXT NOT NULL,
-                vector          TEXT NOT NULL,
+                hash            BLOB NOT NULL,
+                vector          FLOAT[] NOT NULL,
                 last_accessed_at TIMESTAMP WITH TIME ZONE,
                 UNIQUE(model, hash)
             );
@@ -119,23 +124,24 @@ class DuckDBEmbeddingCacheBackend(_BaseSqlCache):
             """
         )
 
-    def _fetch_vector_from_db(self, model: str, hash_: str) -> Optional[tuple]:
-        return self._conn.cursor().execute(
+    def _fetch_vector_from_db(self, model: str, hash_: bytes) -> Optional[Vector]:
+        row = self._conn.cursor().execute(
             "SELECT vector FROM embedding_cache WHERE model=? AND hash=?",
             [model, hash_],
         ).fetchone()
+        return row[0] if row else None
 
-    def _insert_vector_into_db(self, model: str, hash_: str, vector: Vector) -> None:
+    def _insert_vector_into_db(self, model: str, hash_: bytes, vector: Vector) -> None:
         self._conn.cursor().execute(
             "INSERT OR IGNORE INTO embedding_cache(model, hash, vector, last_accessed_at) "
             "VALUES (?,?,?, NOW())",
-            [model, hash_, json.dumps(vector)],
+            [model, hash_, vector],
         )
 
-    def _update_timestamps_in_db(self, model: str, hashes: Tuple[str, ...]) -> None:
+    def _update_timestamps_in_db(self, model: str, hashes: Tuple[bytes, ...]) -> None:
         self._conn.cursor().execute(
             "UPDATE embedding_cache SET last_accessed_at = NOW() WHERE model = ? AND hash = ANY(?)",
-            (model, hashes),
+            (model, list(hashes)),
         )
 
     def _trim_db(self, model: str) -> None:
@@ -161,7 +167,7 @@ class DuckDBEmbeddingCacheBackend(_BaseSqlCache):
 
 
 # ---------- SQLite -------------------------------------------------
-class SQLiteEmbeddingCacheBackend(_BaseSqlCache):
+class SQLiteEmbeddingCacheBackend(BaseSQLCacheBackend):
     def __init__(self, path: str | None, max_size: Optional[int] = None):
         super().__init__(max_size)
         self._conn = sqlite3.connect(path or ":memory:", check_same_thread=False)
@@ -170,8 +176,8 @@ class SQLiteEmbeddingCacheBackend(_BaseSqlCache):
             CREATE TABLE IF NOT EXISTS embedding_cache (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 model TEXT NOT NULL,
-                hash  TEXT NOT NULL,
-                vector TEXT NOT NULL,
+                hash  BLOB NOT NULL,
+                vector BLOB NOT NULL,
                 last_accessed_at DATETIME,
                 UNIQUE(model, hash)
             );
@@ -186,22 +192,26 @@ class SQLiteEmbeddingCacheBackend(_BaseSqlCache):
             "ON embedding_cache(last_accessed_at);"
         )
 
-    def _fetch_vector_from_db(self, model: str, hash_: str) -> Optional[tuple]:
+    def _fetch_vector_from_db(self, model: str, hash_: bytes) -> Optional[Vector]:
         cur = self._conn.execute(
             "SELECT vector FROM embedding_cache WHERE model=? AND hash=?",
             (model, hash_),
         )
-        return cur.fetchone()
+        row = cur.fetchone()
+        if not row:
+            return None
+        return np.frombuffer(row[0], dtype="float32").tolist()
 
-    def _insert_vector_into_db(self, model: str, hash_: str, vector: Vector) -> None:
+    def _insert_vector_into_db(self, model: str, hash_: bytes, vector: Vector) -> None:
+        vec_bytes = np.array(vector, dtype="float32").tobytes()
         self._conn.execute(
             "INSERT OR IGNORE INTO embedding_cache(model, hash, vector, last_accessed_at) "
             "VALUES (?,?,?, CURRENT_TIMESTAMP)",
-            (model, hash_, json.dumps(vector)),
+            (model, hash_, vec_bytes),
         )
         self._conn.commit()
 
-    def _update_timestamps_in_db(self, model: str, hashes: Tuple[str, ...]) -> None:
+    def _update_timestamps_in_db(self, model: str, hashes: Tuple[bytes, ...]) -> None:
         placeholders = ",".join("?" for _ in hashes)
         self._conn.execute(
             f"UPDATE embedding_cache SET last_accessed_at = CURRENT_TIMESTAMP "
