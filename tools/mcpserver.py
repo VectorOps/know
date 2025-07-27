@@ -4,10 +4,10 @@ import sys
 from functools import partial
 
 import uvicorn
-from pydantic import Field, AliasChoices
+from pydantic import Field, AliasChoices, AnyHttpUrl
 from pydantic_settings import SettingsConfigDict
 
-from fastmcp.server import Auth, FastMCP
+from fastmcp.server import AccessToken, AuthSettings, FastMCP, TokenVerifier
 
 from know.project import init_project
 from know.settings import ProjectSettings, print_help
@@ -18,6 +18,17 @@ from know.tools import filelist  # noqa: F401
 from know.tools import filesummary  # noqa: F401
 from know.tools import repomap  # noqa: F401
 from know.tools import symbolsearch  # noqa: F401
+
+
+class StaticTokenVerifier(TokenVerifier):
+    """Simple token verifier that checks against a static token."""
+    def __init__(self, valid_token: str):
+        self._valid_token = valid_token
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        if token == self._valid_token:
+            return AccessToken(sub="know-user")  # dummy subject
+        return None
 
 
 class Settings(ProjectSettings):
@@ -53,9 +64,22 @@ def main() -> None:
 
     project = init_project(settings)
 
+    token_verifier = None
+    auth_settings = None
+    if settings.mcp_auth_token:
+        token_verifier = StaticTokenVerifier(settings.mcp_auth_token)
+        # AuthSettings is for RFC 9728 Protected Resource Metadata.
+        auth_settings = AuthSettings(
+            # Using a placeholder for issuer URL as we're using simple static token auth.
+            issuer_url=AnyHttpUrl("https://auth.example.com"),
+            resource_server_url=AnyHttpUrl(f"http://{settings.mcp_host}:{settings.mcp_port}"),
+        )
+
     # authentication token can be set via --mcp-auth-token or KNOW_MCP_AUTH_TOKEN
     mcp = FastMCP(
-        auth=Auth(token=settings.mcp_auth_token) if settings.mcp_auth_token else None,
+        "Know MCP Server",
+        token_verifier=token_verifier,
+        auth=auth_settings,
     )
 
     # register all enabled tools with the MCP server
