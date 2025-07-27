@@ -7,7 +7,7 @@ from know.scanner import ParsingState, upsert_parsed_file, scan_project_director
 from know.data import (
     PackageFilter,
     FileFilter,
-    SymbolFilter,
+    NodeFilter,
     ImportEdgeFilter,
 )
 from know.stores.memory import InMemoryDataRepository
@@ -106,7 +106,7 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     file_id_mod2 = next(f.id for f in files if f.path == "mod2.py")
 
     # symbols: CONST + foo
-    symbols = rs.symbol.get_list(SymbolFilter(file_id=file_id))
+    symbols = rs.symbol.get_list(NodeFilter(file_id=file_id))
     names   = {s.name for s in symbols if s.name}
     assert names == {"CONST", "foo"}
 
@@ -130,7 +130,7 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     assert len(rs.file.get_list(FileFilter(repo_id=repo_meta.id)))    == 2
 
     # symbols: only foo remains, id should be SAME, hash should be different
-    symbols_after = rs.symbol.get_list(SymbolFilter(file_id=file_id))
+    symbols_after = rs.symbol.get_list(NodeFilter(file_id=file_id))
     assert {s.name for s in symbols_after if s.name} == {"foo"}
 
     # import-edges: removed

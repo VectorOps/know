@@ -7,7 +7,7 @@ from know.logger import logger
 from know.parsers import CodeParserRegistry, AbstractLanguageHelper
 from know.project import Project
 from know.models import ImportEdge, Visibility, Node, NodeKind
-from know.data import ImportEdgeFilter, SymbolFilter
+from know.data import ImportEdgeFilter, NodeFilter
 
 
 class SummaryMode(str, Enum):
@@ -67,7 +67,7 @@ def build_file_summary(
         return None
     helper: AbstractLanguageHelper | None = CodeParserRegistry.get_helper(fm.language) if fm.language else None
 
-    symbols = symbol_repo.get_list(SymbolFilter(file_id=fm.id))
+    symbols = symbol_repo.get_list(NodeFilter(file_id=fm.id))
     top_level = [s for s in symbols if s.parent_ref is None]
     top_level.sort(key=lambda s: (s.start_line, s.start_col))
 

@@ -38,7 +38,7 @@ from know.data import (
     PackageFilter,
     include_direct_descendants,
     resolve_symbol_hierarchy,
-    SymbolFilter,
+    NodeFilter,
     ImportEdgeFilter,
 )
 from know.data import NodeRefFilter
@@ -544,7 +544,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         resolve_symbol_hierarchy(syms)
         return syms
 
-    def get_list(self, flt: SymbolFilter) -> list[Node]:
+    def get_list(self, flt: NodeFilter) -> list[Node]:
         q = Query.from_(self._table).select("*")
 
         if flt.parent_ids:

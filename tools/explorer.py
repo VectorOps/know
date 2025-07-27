@@ -12,7 +12,7 @@ from know.tools.symbolsearch import SearchSymbolsTool
 from know.models import NodeKind, Visibility
 from know.data     import (
     AbstractDataRepository, RepoMetadata, PackageMetadata, FileMetadata,
-    Node, ImportEdge, NodeRef, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter, NodeRefFilter
+    Node, ImportEdge, NodeRef, PackageFilter, FileFilter, NodeFilter, ImportEdgeFilter, NodeRefFilter
 )
 from know.file_summary import SummaryMode, build_file_summary
 
@@ -74,7 +74,7 @@ def create_app(project) -> Flask:
     def package_detail(package_id):
         pkg = data.package.get_by_id(package_id) or abort(404)
         files = data.file.get_list(FileFilter(package_id=package_id))
-        symbols = data.symbol.get_list(SymbolFilter(package_id=package_id))
+        symbols = data.symbol.get_list(NodeFilter(package_id=package_id))
         importedges  = data.importedge.get_list(
             ImportEdgeFilter(source_package_id=package_id)
         )
@@ -92,7 +92,7 @@ def create_app(project) -> Flask:
     def file_detail(file_id):
         file = data.file.get_by_id(file_id) or abort(404)
 
-        symbols      = data.symbol.get_list(SymbolFilter(file_id=file_id))
+        symbols      = data.symbol.get_list(NodeFilter(file_id=file_id))
         importedges  = data.importedge.get_list(
             ImportEdgeFilter(source_file_id=file_id)
         )

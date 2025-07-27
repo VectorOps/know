@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from know.data import SymbolFilter
+from know.data import NodeFilter
 from know.logger import logger
 from know.models import Vector
 
@@ -46,7 +46,7 @@ def schedule_missing_embeddings(project: "Project") -> None:
     offset = 0
     while True:
         page = symbol_repo.get_list(
-            SymbolFilter(
+            NodeFilter(
                 repo_id=repo_id,
                 has_embedding=False,
                 limit=PAGE_SIZE,
@@ -85,7 +85,7 @@ def schedule_outdated_embeddings(project: "Project") -> None:
     # TODO: Add data filter
     while True:
         page = symbol_repo.get_list(
-            SymbolFilter(
+            NodeFilter(
                 repo_id=repo_id,
                 limit=PAGE_SIZE,
                 offset=offset,

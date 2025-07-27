@@ -7,7 +7,7 @@ from know.project import init_project
 from know.parsers import CodeParserRegistry
 from know.lang.python import PythonCodeParser
 from devtools import pprint
-from know.data import FileFilter, SymbolFilter, PackageFilter
+from know.data import FileFilter, NodeFilter, PackageFilter
 
 
 SAMPLES_DIR = Path(__file__).parent / "samples"
@@ -31,7 +31,7 @@ def test_project_scan_populates_repositories():
 
     # ── symbols (spot-check simple.py) ───────────────────────────────────
     simple_meta = next(f for f in files if f.path == "simple.py")
-    symbols = repo_store.symbol.get_list(SymbolFilter(file_id=simple_meta.id))
+    symbols = repo_store.symbol.get_list(NodeFilter(file_id=simple_meta.id))
     symbol_names = {s.name for s in symbols}
     print(symbol_names)
 

@@ -126,9 +126,9 @@ class AbstractFileMetadataRepository(ABC):
         pass
 
 
-# Symbols
+# Nodes
 @dataclass
-class SymbolFilter:
+class NodeFilter:
     parent_ids: Optional[List[str]] = None
     repo_id: Optional[str] = None
     file_id: Optional[str] = None
@@ -179,7 +179,7 @@ class AbstractNodeRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list(self, flt: SymbolFilter) -> List[Node]:
+    def get_list(self, flt: NodeFilter) -> List[Node]:
         pass
 
     @abstractmethod
@@ -388,7 +388,7 @@ def include_direct_descendants(
 
     parent_ids = [s.id for s in symbols if s.id]
     if parent_ids:
-        children = repo.get_list(SymbolFilter(parent_ids=parent_ids))
+        children = repo.get_list(NodeFilter(parent_ids=parent_ids))
         seen_ids = {s.id for s in symbols}
         for c in children:
             if c.id not in seen_ids:

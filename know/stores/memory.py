@@ -20,7 +20,7 @@ from know.data import (
     NodeSearchQuery,
     PackageFilter,
     FileFilter,
-    SymbolFilter,
+    NodeFilter,
     ImportEdgeFilter,
     include_direct_descendants,
     resolve_symbol_hierarchy,
@@ -245,7 +245,7 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
         resolve_symbol_hierarchy(syms)
         return syms
 
-    def get_list(self, flt: SymbolFilter) -> list[Node]:
+    def get_list(self, flt: NodeFilter) -> list[Node]:
         """
         Return all Node objects that satisfy *flt*.
         Supports ids, parent_ids, file_id and/or package_id.

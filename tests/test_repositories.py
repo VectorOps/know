@@ -12,7 +12,7 @@ from know.models import (
 )
 from typing import Dict, Any
 import uuid
-from know.data import NodeSearchQuery, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter
+from know.data import NodeSearchQuery, PackageFilter, FileFilter, NodeFilter, ImportEdgeFilter
 
 
 def make_id() -> str:
@@ -112,7 +112,7 @@ def test_symbol_metadata_repository(data_repo):
 
     # read back (by id and by file_id) and ensure signature persisted
     assert sym_repo.get_by_id(sid).signature == signature
-    assert sym_repo.get_list(SymbolFilter(file_id=fid))[0].signature == signature
+    assert sym_repo.get_list(NodeFilter(file_id=fid))[0].signature == signature
 
     # update signature
     new_sig = SymbolSignature(raw="def sym()")

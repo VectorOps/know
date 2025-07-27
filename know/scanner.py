@@ -21,7 +21,7 @@ from know.models import (
     NodeKind,
     NodeRef,
 )
-from know.data import NodeSearchQuery, SymbolFilter, ImportEdgeFilter
+from know.data import NodeSearchQuery, NodeFilter, ImportEdgeFilter
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedNode, ParsedImportEdge
 from know.project import Project, ProjectCache
 from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings, schedule_symbol_embedding
@@ -377,7 +377,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     symbol_repo = repo_store.symbol
 
     # collect existing symbols
-    existing_symbols = symbol_repo.get_list(SymbolFilter(file_id=file_meta.id))
+    existing_symbols = symbol_repo.get_list(NodeFilter(file_id=file_meta.id))
 
     def _get_embedding_text(body: str, docstring: Optional[str]) -> str:
         if docstring:
@@ -483,7 +483,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     offset = 0
     while True:
         page = symbol_repo.get_list(
-            SymbolFilter(
+            NodeFilter(
                 repo_id=repo_id,
                 symbol_kind=NodeKind.METHOD,
                 top_level_only=True,
@@ -511,7 +511,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
         if pkg_id is None:
             continue
         candidates = [
-            s for s in symbol_repo.get_list(SymbolFilter(package_id=pkg_id))
+            s for s in symbol_repo.get_list(NodeFilter(package_id=pkg_id))
             if s.kind in parent_kinds and s.fqn
         ]
         if not candidates:
