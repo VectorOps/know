@@ -171,9 +171,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return False, None
 
     # ------------------------------------------------------------------ #
-    def _handle_generic_statement(self, node, parent=None) -> None:
-        return [self._create_literal_symbol(node)]
-
     def _handle_generic_statement(self, node: Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
         return [self._create_literal_symbol(node)]
 
@@ -382,65 +379,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return None
 
     # ───────────────── signature helpers ────────────────────────────
-    def _build_signature(self, node, name: str, prefix: str = "") -> SymbolSignature:
-        """
-        Extract (very lightly) the parameter-list and the optional
-        return-type from a *function_declaration* / *method_definition* node.
-        """
-        # ---- parameters -------------------------------------------------
-        params_node   = node.child_by_field_name("parameters")
-        params_objs   : list[SymbolParameter] = []
-        params_raw    : list[str]             = []
-        if params_node:
-            # only *named* children – this automatically ignores punctuation
-            for prm in params_node.named_children:
-                # parameter name
-                name_node = prm.child_by_field_name("name")
-                if name_node is None:
-                    # typical TS node: required_parameter -> contains an identifier child
-                    name_node = next(
-                        (c for c in prm.named_children if c.type == "identifier"),
-                        None,
-                    )
-                if name_node is None and prm.type == "identifier":
-                    name_node = prm
-
-                # last-chance fallback – entire slice
-                p_name = (
-                    name_node.text.decode("utf8")
-                    if name_node is not None
-                    else prm.text.decode("utf8")
-                )
-                # (optional) type annotation
-                t_node   = (prm.child_by_field_name("type")
-                            or prm.child_by_field_name("type_annotation"))
-                if t_node:
-                    p_type = t_node.text.decode("utf8").lstrip(":").strip()
-                    params_raw.append(f"{p_name}: {p_type}")
-                else:
-                    p_type = None
-                    params_raw.append(p_name)
-                params_objs.append(SymbolParameter(name=p_name, type=p_type))
-
-        # ---- return type ------------------------------------------------
-        rt_node   = node.child_by_field_name("return_type")
-        return_ty = (rt_node.text.decode("utf8").lstrip(":").strip()
-                     if rt_node else None)
-
-        # --- raw header taken verbatim from source -----------------
-        raw_header = node.text.decode("utf8")
-        # keep only the declaration header part (before the body “{”)
-        raw_header = raw_header.split("{", 1)[0].strip()
-
-        type_params = self._extract_type_parameters(node)
-
-        return SymbolSignature(
-            raw         = raw_header,
-            parameters  = params_objs,
-            return_type = return_ty,
-            type_parameters=type_params,
-        )
-
     def _build_signature(self, node: Node, name: str, prefix: str = "") -> SymbolSignature:
         """
         Extract (very lightly) the parameter-list and the optional
@@ -526,76 +464,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 modifiers=mods,
                 exported=exported,
             )
-        ]
-
-    def _handle_class(self, node, parent=None, exported=False):
-        name_node = node.child_by_field_name("name")
-        if name_node is None:
-            return []
-
-        name = name_node.text.decode("utf8")
-        # take full node text and truncate at the opening brace → drop the body
-        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
-        tp = self._extract_type_parameters(node)
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
-
-        mods: list[Modifier] = []
-        if node.type == "abstract_class_declaration" or self._has_modifier(node, "abstract"):
-            mods.append(Modifier.ABSTRACT)
-        if tp is not None:
-            mods.append(Modifier.GENERIC)
-
-        sym = self._make_symbol(
-            node,
-            kind=SymbolKind.CLASS,
-            name=name,
-            fqn=self._make_fqn(name, parent),
-            signature=sig,
-            modifiers=mods,
-            children=[],
-            exported=exported,
-        )
-
-        body = next((c for c in node.children if c.type == "class_body"), None)
-        if body:
-            for ch in body.children:
-                # TODO: Symbol visibility
-                if ch.type in ("method_definition", "abstract_method_signature"):
-                    m = self._create_method_symbol(ch, parent=sym)
-                    sym.children.append(m)
-
-                # variable / field declarations & definitions  ───────────
-                elif ch.type in (
-                    "variable_statement",
-                    "lexical_declaration",
-                    "public_field_declaration",
-                    "public_field_definition",
-                ):
-                    value_node = ch.child_by_field_name("value")
-                    if value_node:
-                        if value_node.type == "arrow_function":
-                            child = self._handle_arrow_function(ch, value_node, parent=sym, exported=exported)
-                            if child:
-                                sym.children.append(child)
-                            continue
-
-                    v = self._create_variable_symbol(ch, parent=sym, exported=exported)
-                    if v:
-                        sym.children.append(v)
-
-                elif ch.type in ("{", "}", ";"):
-                    continue
-
-                else:
-                    logger.warning(
-                        "TS parser: unknown class body node",
-                        path=self.rel_path,
-                        class_name=name,
-                        node_type=ch.type,
-                        line=ch.start_point[0] + 1,
-                    )
-        return [
-            sym
         ]
 
     def _handle_class(self, node: Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
