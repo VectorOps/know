@@ -95,8 +95,10 @@ class BaseSQLCacheBackend(EmbeddingCacheBackend):
 
 # ---------- DuckDB -------------------------------------------------
 class DuckDBEmbeddingCacheBackend(BaseSQLCacheBackend):
-    def __init__(self, path: str | None, max_size: Optional[int] = None):
-        super().__init__(max_size)
+    def __init__(
+        self, path: str | None, max_size: Optional[int] = None, trim_batch_size: int = 100
+    ):
+        super().__init__(max_size, trim_batch_size)
         self._conn = duckdb.connect(path or ":memory:")
         self._conn.execute("CREATE SEQUENCE IF NOT EXISTS embedding_cache_seq START 1;")
         self._conn.execute(
@@ -154,7 +156,7 @@ class DuckDBEmbeddingCacheBackend(BaseSQLCacheBackend):
 
         count = count_row[0]
         if self._max_size and count > self._max_size:
-            to_delete = count - self._max_size
+            to_delete = max(self._trim_batch_size, count - self._max_size)
             cur.execute(
                 """
                 DELETE FROM embedding_cache WHERE id IN (
@@ -168,8 +170,10 @@ class DuckDBEmbeddingCacheBackend(BaseSQLCacheBackend):
 
 # ---------- SQLite -------------------------------------------------
 class SQLiteEmbeddingCacheBackend(BaseSQLCacheBackend):
-    def __init__(self, path: str | None, max_size: Optional[int] = None):
-        super().__init__(max_size)
+    def __init__(
+        self, path: str | None, max_size: Optional[int] = None, trim_batch_size: int = 100
+    ):
+        super().__init__(max_size, trim_batch_size)
         self._conn = sqlite3.connect(path or ":memory:", check_same_thread=False)
         self._conn.execute(
             """
@@ -229,7 +233,7 @@ class SQLiteEmbeddingCacheBackend(BaseSQLCacheBackend):
 
         count = count_row[0]
         if self._max_size and count > self._max_size:
-            to_delete = count - self._max_size
+            to_delete = max(self._trim_batch_size, count - self._max_size)
             cur.execute(
                 f"""
                 DELETE FROM embedding_cache WHERE id IN (
