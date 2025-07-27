@@ -11,6 +11,7 @@ from know.settings import ProjectSettings, EmbeddingSettings, print_help
 from know.project import init_project
 from know.file_summary import SummaryMode
 from know.tools.base import ToolRegistry
+from know.tools.repomap import RepoMapScore
 from know.data import FileFilter
 from know.logger import logger
 
@@ -18,17 +19,6 @@ import logging
 logging.basicConfig(
     level=logging.DEBUG,
 )
-
-
-class RepomapCliEmbeddingSettings(EmbeddingSettings):
-    """Custom embedding settings for repomapcli with different defaults."""
-    cache_path: Optional[str] = Field(
-        "cache.duckdb",
-        description=(
-            "The file path or connection string for the embedding cache backend. "
-            'This is ignored if `cache_backend` is "none".'
-        ),
-    )
 
 
 class Settings(ProjectSettings):
@@ -41,22 +31,18 @@ class Settings(ProjectSettings):
         env_nested_delimiter="_",
     )
 
-    project_path: str = Field(
-        ...,
-        description="Project root directory.",
-        validation_alias=AliasChoices("project-path", "p", "path"),
+    limit: int = Field(
+        default=20,
+        description="Default result limit for RepoMap runs."
     )
-    limit: int = Field(20, description="Default result limit for RepoMap runs.")
+
     repository_backend: str = Field(
-        "duckdb",
+        default="duckdb",
         description='The backend to use for storing metadata. Options are "memory" or "duckdb".',
     )
 
-    # To override nested defaults, we must override the parent field.
-    embedding: RepomapCliEmbeddingSettings = Field(default_factory=RepomapCliEmbeddingSettings)
 
-
-def _print_scores(scores: List[Dict[str, Any]]) -> None:
+def _print_scores(scores: List[RepoMapScore]) -> None:
     if not scores:
         print("No results.")
         return
@@ -157,7 +143,7 @@ def main() -> None:
                     print("Symbol seeds:", symbol_seeds or "—")
                     print("File   seeds:", file_seeds or "—")
                     print("Prompt text :", repr(prompt_text) if prompt_text else "—")
-                    print("Summaries    :", "on" if include_summaries else "off")
+                    print("Summaries    :", summary_mode)
                     print("Token budget :", (
                         f"{token_limit_count} @ {token_limit_model}"
                         if token_limit_count and token_limit_model else "—"

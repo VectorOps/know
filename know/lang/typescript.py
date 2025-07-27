@@ -312,7 +312,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             sym
         ]
 
-    def _handle_export_clause(self, node, parent=None):
+    def _handle_export_clause(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
         exported_names: set[str] = set()
         for spec in (c for c in node.named_children if c.type == "export_specifier"):
             # local/original identifier

@@ -289,6 +289,8 @@ class RepoMapTool(BaseTool):
     by the `RepoMap` component.
     """
     tool_name = "vectorops_repomap"
+    tool_input = RepoMapReq
+    tool_output = List[RepoMapScore]
 
     def __init__(self, *a, **kw):
         from know.project import Project

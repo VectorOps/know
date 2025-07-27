@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from know.project import Project
 from know.settings import ProjectSettings
-from typing import Dict, Type, Any, List
+from typing import Dict, Type, Any, List, Type
 import inspect
 from enum import Enum
 from pydantic import BaseModel
@@ -10,20 +10,24 @@ from pydantic import BaseModel
 
 @dataclass
 class MCPToolDefinition:
-    fn: any
+    fn: Any
     name: str
     description: str | None = None
 
 
 class BaseTool(ABC):
     tool_name: str
-    tool_input: BaseModel
-    tool_output: BaseModel | List[BaseModel]
+    tool_input: Type[BaseModel]
+    tool_output: Type[BaseModel | List[BaseModel]]
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
         if not inspect.isabstract(cls):
             ToolRegistry.register_tool(cls)
+
+    @abstractmethod
+    def execute(self, project: Project, req: Any) -> Any:
+        pass
 
     @abstractmethod
     def get_openai_schema(self) -> dict:

@@ -10,6 +10,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from know.settings import ProjectSettings, print_help
 from know.project import init_project
 from know.tools.base import ToolRegistry
+from know.tools.symbolsearch import SymbolSearchResult
 from know.logger import logger
 
 import logging
@@ -28,17 +29,11 @@ class Settings(ProjectSettings):
         env_nested_delimiter="_",
     )
 
-    project_path: str = Field(
-        ...,
-        description="Root directory of the project to analyse/assist with.",
-        validation_alias=AliasChoices("project-path", "p", "path"),
-    )
-
-    limit: int = Field(20, description="Maximum number of search results to return.")
-    offset: int = Field(0, description="Offset for paginating search results.")
+    limit: int = Field(default=20, description="Maximum number of search results to return.")
+    offset: int = Field(default=0, description="Offset for paginating search results.")
 
 
-def _print_results(results: List[Dict[str, Any]]) -> None:
+def _print_results(results: List[SymbolSearchResult]) -> None:
     if not results:
         print("No symbols found.")
         return

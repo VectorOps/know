@@ -92,19 +92,19 @@ class ProjectSettings(BaseSettings):
     project_path: str = Field(
         description="The root directory of the project to be analyzed."
     )
-    repository_backend: str = Field(
-        "memory",
+    repository_backend: Optional[str] = Field(
+        default="memory",
         description='The backend to use for storing metadata. Options are "memory" or "duckdb".',
     )
     repository_connection: Optional[str] = Field(
-        None,
+        default=None,
         description=(
             "The connection string or file path for the selected repository backend "
             "(e.g., a DuckDB file path)."
         ),
     )
     scanner_num_workers: Optional[int] = Field(
-        None,
+        default=None,
         description=(
             "Number of worker threads for the scanner. If None, it defaults to "
             "`os.cpu_count() - 1` (min 1, fallback 4)."
@@ -122,7 +122,10 @@ class ProjectSettings(BaseSettings):
         },
         description="A set of directory names to ignore during project scanning.",
     )
-    sync_embeddings: bool = Field(False, description="If True, embeddings will be synchronized.")
+    sync_embeddings: bool = Field(
+        default=False,
+        description="If True, embeddings will be synchronized."
+    )
     embedding: EmbeddingSettings = Field(
         default_factory=EmbeddingSettings,
         description="An `EmbeddingSettings` object with embedding-specific configurations.",

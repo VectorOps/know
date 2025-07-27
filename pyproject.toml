@@ -36,6 +36,9 @@ package = true
 [tool.uv.sources]
 pypika = { git = "https://github.com/VectorOps/pypika.git", rev = "v0.49.4-dev" }
 
+[tool.mypy]
+plugins = ['pydantic.mypy']
+
 [dependency-groups]
 dev = [
     "pytest>=8.4.0",

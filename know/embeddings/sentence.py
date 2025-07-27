@@ -164,7 +164,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                     pooled_embedding = chunk_embeddings.mean(axis=0)
                     results[i] = self._process_embedding(pooled_embedding)
 
-            processed: List[Vector] = results
+            processed: List[Vector] = results # type: ignore
 
             duration = time.perf_counter() - start_ts
             self._last_encode_time = duration
@@ -209,7 +209,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
                 result[i] = v
                 self._cache.set_vector(self._model_name, h, v)
 
-        return result
+        return result # type: ignore
 
     # Public API required by EmbeddingsCalculator
     def get_model_name(self):

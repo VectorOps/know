@@ -16,6 +16,8 @@ class SummarizeFilesReq(BaseModel):
 
 class SummarizeFilesTool(BaseTool):
     tool_name = "vectorops_summarize_files"
+    tool_input = SummarizeFilesReq
+    tool_output = List[FileSummary]
 
     def execute(
         self,

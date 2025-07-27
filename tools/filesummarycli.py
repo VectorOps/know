@@ -21,11 +21,6 @@ class Settings(ProjectSettings):
         env_nested_delimiter="_",
     )
 
-    project_path: str = Field(
-        description="Project root directory.",
-        validation_alias=AliasChoices("project-path", "p", "path"),
-    )
-
     files: List[str] = Field(
         description="Project-relative file paths to summarise.",
     )
@@ -54,7 +49,7 @@ def main() -> None:
 
     summarize_tool = ToolRegistry.get("vectorops_summarize_files")
 
-    summaries: List[dict] = summarize_tool.execute(
+    summaries = summarize_tool.execute(
         project,
         summarize_tool.tool_input(
             paths=settings.files,

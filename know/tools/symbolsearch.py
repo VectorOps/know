@@ -34,6 +34,8 @@ class SymbolSearchResult(BaseModel):
 
 class SearchSymbolsTool(BaseTool):
     tool_name = "vectorops_search_symbols"
+    tool_input = SymbolSearchReq
+    tool_output = List[SymbolSearchResult]
 
     def execute(
         self,

@@ -826,6 +826,7 @@ class PythonCodeParser(AbstractCodeParser):
 
                     # best-effort import-resolution
                     to_pkg_path: str | None = None
+                    assert self.parsed_file is not None
                     for imp in self.parsed_file.imports:
                         if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
                             to_pkg_path = imp.virtual_path

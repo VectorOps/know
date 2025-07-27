@@ -259,7 +259,7 @@ class GolangCodeParser(AbstractCodeParser):
             # no go.mod
             rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
 
-            expected_pkg = rel_dir.split("/")[-1] if rel_dir else None
+            expected_pkg = rel_dir.split("/")[-1] if rel_dir else ""
             pkg_suffix: str = ""
             if pkg_ident and expected_pkg and self._matches_with_allowed_suffix(pkg_ident, expected_pkg):
                 pkg_suffix = pkg_ident[len(expected_pkg):]

@@ -51,10 +51,6 @@ class Settings(ProjectSettings):
         description="System prompt for the chat.",
         validation_alias=AliasChoices("system", "s"),
     )
-    project_path: str = Field(
-        description="Root directory of the project to analyse/assist with.",
-        validation_alias=AliasChoices("project-path", "p", "path"),
-    )
 
 
 async def _chat(settings: Settings, project):
@@ -76,7 +72,7 @@ async def _chat(settings: Settings, project):
             break
         if cmd in {"/new", "/restart", "/reset"}:
             # start a fresh chat session – keep the original system prompt
-            messages[:] = [{"role": "system", "content": system_msg}]
+            messages[:] = [{"role": "system", "content": settings.system}]
             print("  Started new session.")
             continue        # ask for the next user prompt
         if not user_input.strip():

@@ -96,8 +96,9 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     # expect exactly two packages / files (one per source file)
     packages = rs.package.get_list(PackageFilter(repo_id=repo_meta.id))
     assert len(packages) == 2
-    pkg_id_mod1 = next(p.id for p in packages if p.physical_path == "mod.py" or p.virtual_path.endswith("mod"))
-    pkg_id_mod2 = next(p.id for p in packages if p.physical_path == "mod2.py" or p.virtual_path.endswith("mod2"))
+
+    pkg_id_mod1 = next(p.id for p in packages if p.physical_path == "mod.py" or (p.virtual_path or "").endswith("mod"))
+    pkg_id_mod2 = next(p.id for p in packages if p.physical_path == "mod2.py" or (p.virtual_path or "").endswith("mod2"))
 
     files = rs.file.get_list(FileFilter(repo_id=repo_meta.id))
     assert len(files) == 2

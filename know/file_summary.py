@@ -26,7 +26,7 @@ def _symbol_to_text(sym: SymbolMetadata, include_docs: bool = False) -> str:
     parts: list[str] = []
     if sym.signature and sym.signature.raw:
         parts.append(sym.signature.raw.strip())
-    else:
+    elif sym.name:
         parts.append(sym.name)
     if include_docs and sym.docstring:
         parts.append(sym.docstring.strip())
