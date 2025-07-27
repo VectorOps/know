@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, cast, List
 from tree_sitter import Parser, Language
 import tree_sitter_python as tspython
-from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef
+from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
 from know.models import (
     ProgrammingLanguage,
     SymbolKind,
@@ -22,7 +22,6 @@ from know.models import (
 from know.project import Project, ProjectCache
 from know.settings import PythonSettings
 from know.parsers import CodeParserRegistry
-from know.lang.helpers import get_node_text
 from know.logger import logger
 from know.helpers import compute_file_hash
 from devtools import pprint
@@ -307,8 +306,7 @@ class PythonCodeParser(AbstractCodeParser):
             raw=raw_stmt,
         )
 
-        if self.parsed_file is None:
-            raise Exception("parsed_file is not set")
+        assert self.parsed_file is not None
         self.parsed_file.imports.append(import_edge)
 
         return [

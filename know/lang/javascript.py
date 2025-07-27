@@ -7,7 +7,7 @@ import tree_sitter_javascript as tsjs     # pip install tree_sitter_javascript
 from know.parsers import (
     AbstractCodeParser, AbstractLanguageHelper, ParsedFile,
     ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef,
-    CodeParserRegistry,
+    CodeParserRegistry, get_node_text
 )
 from know.models import (
     ProgrammingLanguage, SymbolKind, Visibility, Modifier,
@@ -17,7 +17,6 @@ from know.models import (
 from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash
 from know.logger import logger
-from know.lang.helpers import get_node_text
 
 
 JS_LANGUAGE = Language(tsjs.language())
@@ -252,7 +251,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 "JS parser: unhandled export statement",
                 path=self.rel_path,
                 line=node.start_point[0] + 1,
-                raw=node.text.decode("utf8", errors="replace"),
+                raw=get_node_text(node),
             )
         return [
             sym

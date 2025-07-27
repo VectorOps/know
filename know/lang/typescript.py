@@ -8,7 +8,7 @@ import tree_sitter_typescript as tsts  # pip install tree_sitter_typescript
 
 from know.parsers import (
     AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage,
-    ParsedSymbol, ParsedImportEdge, ParsedSymbolRef
+    ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
 )
 from know.models import (
     ProgrammingLanguage, SymbolKind, Visibility, Modifier,
@@ -17,10 +17,7 @@ from know.models import (
 )
 from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash
-from know.lang.helpers import get_node_text
 from know.logger import logger
-
-# TODO: interface support
 
 # ---------------------------------------------------------------------- #
 TS_LANGUAGE = Language(tsts.language_tsx())

@@ -194,16 +194,12 @@ def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
         raise ValueError(f"Unsupported repository backend: {backend}")
 
     repo_repository = data_repository.repo
-    repo_metadata = None
 
-    if settings.project_id:
-        repo_metadata = repo_repository.get_by_id(settings.project_id)
-    if not repo_metadata and settings.project_path:
-        repo_metadata = repo_repository.get_by_path(settings.project_path)
+    repo_metadata = repo_repository.get_by_path(settings.project_path)
     if not repo_metadata:
         # Create new RepoMetadata
         repo_metadata = RepoMetadata(
-            id=settings.project_id or generate_id(),
+            id=generate_id(),
             root_path=settings.project_path,
         )
         repo_repository.create(repo_metadata)

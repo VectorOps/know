@@ -89,15 +89,8 @@ def _get_default_languages() -> dict[str, LanguageSettings]:
 class ProjectSettings(BaseSettings):
     """Top-level settings for a project."""
 
-    project_path: Optional[str] = Field(
-        None, description="The root directory of the project to be analyzed."
-    )
-    project_id: Optional[str] = Field(
-        None,
-        description=(
-            "A unique identifier for the project. If not provided, it may be "
-            "generated or inferred."
-        ),
+    project_path: str = Field(
+        description="The root directory of the project to be analyzed."
     )
     repository_backend: str = Field(
         "memory",
