@@ -8,49 +8,49 @@ class EmbeddingSettings(BaseSettings):
     """Settings for managing embeddings."""
 
     calculator_type: str = Field(
-        "local", description='The type of embedding calculator to use (eg. "local").'
+        default="local", description='The type of embedding calculator to use (eg. "local").'
     )
     model_name: str = Field(
-        "all-MiniLM-L6-v2",
+        default="all-MiniLM-L6-v2",
         description=(
             "The name of the sentence-transformer model to use for embeddings, "
             "can be a HuggingFace Hub model name or a local path."
         ),
     )
     device: Optional[str] = Field(
-        None,
+        default=None,
         description=(
             'The torch device to use for embedding calculations (e.g., "cpu", "cuda"). '
             "If None, a suitable device is chosen automatically."
         ),
     )
-    batch_size: int = Field(128, description="The batch size for embedding calculations.")
+    batch_size: int = Field(default=128, description="The batch size for embedding calculations.")
     enabled: bool = Field(
-        False,
+        default=False,
         description=(
             "If True, embeddings are enabled and calculated. This allows "
             "semantic search tools to function."
         ),
     )
     cache_path: Optional[str] = Field(
-        None,
+        default=None,
         description=(
             "The file path or connection string for the embedding cache backend. "
             'This is ignored if `cache_backend` is "none".'
         ),
     )
     cache_backend: str = Field(
-        "duckdb",
+        default="duckdb",
         description=(
             'The backend to use for caching embeddings. Options are "duckdb", "sqlite", or "none".'
         ),
     )
     cache_size: Optional[int] = Field(
-        None,
+        default=None,
         description="The maximum number of records to keep in the embedding cache (LRU eviction).",
     )
     cache_trim_batch_size: int = Field(
-        128,
+        default=128,
         description="The number of records to delete at once when the embedding cache exceeds its max size.",
     )
 
@@ -131,7 +131,7 @@ class ProjectSettings(BaseSettings):
     )
     sync_embeddings: bool = Field(False, description="If True, embeddings will be synchronized.")
     embedding: EmbeddingSettings = Field(
-        default_factory=lambda: EmbeddingSettings(),
+        default_factory=EmbeddingSettings,
         description="An `EmbeddingSettings` object with embedding-specific configurations.",
     )
     tools: ToolSettings = Field(
