@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, List
 from tree_sitter import Parser, Language
 import tree_sitter_go as tsgo
-from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef
+from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
 from know.models import (
     ProgrammingLanguage,
     SymbolKind,
@@ -115,7 +115,7 @@ class GolangCodeParser(AbstractCodeParser):
             type=node.type,
             line=node.start_point[0] + 1,
             byte_offset=node.start_byte,
-            raw=node.text.decode("utf8", errors="replace"),
+            raw=get_node_text(node),
         )
         return [self._make_symbol(node, kind=SymbolKind.LITERAL)]
 
@@ -183,7 +183,7 @@ class GolangCodeParser(AbstractCodeParser):
                     None,
                 )
                 if ident is not None:
-                    return ident.text.decode("utf8")
+                    return get_node_text(ident)
         return None
 
     def _matches_with_allowed_suffix(self, pkg: str, base: str) -> bool:
@@ -291,8 +291,7 @@ class GolangCodeParser(AbstractCodeParser):
         comment_nodes.reverse()                  # restore top-to-bottom order
         parts: list[str] = []
         for c in comment_nodes:
-            raw = self.source_bytes[c.start_byte : c.end_byte] \
-                      .decode("utf8", errors="replace").strip()
+            raw = get_node_text(c).strip()
             parts.append(raw)
         return "\n".join(parts).strip() or None
 
@@ -321,8 +320,7 @@ class GolangCodeParser(AbstractCodeParser):
         and add it to *parsed_file.imports*.
         """
         # raw text of the spec (e.g. `alias "foo/bar"` or `"fmt"`)
-        raw_str: str = self.source_bytes[spec_node.start_byte : spec_node.end_byte] \
-            .decode("utf8", errors="replace").strip()
+        raw_str: str = get_node_text(spec_node).strip()
 
         # ---- extract components from tree-sitter children ---------------
         alias: str | None = None        # "k"   …  alias import
@@ -332,13 +330,13 @@ class GolangCodeParser(AbstractCodeParser):
         for ch in spec_node.children:
             match ch.type:
                 case "package_identifier" | "identifier":   # alias
-                    alias = ch.text.decode("utf8")
+                    alias = get_node_text(ch)
                 case "dot":
                     dot = True
                 case "blank_identifier":                    # `_`
                     alias = "_"
                 case "interpreted_string_literal":
-                    import_path = ch.text.decode("utf8").strip()
+                    import_path = get_node_text(ch).strip()
                 case _:
                     pass        # ignore comments, parens, etc.
 
@@ -413,8 +411,7 @@ class GolangCodeParser(AbstractCodeParser):
         src = self.source_bytes
 
         # ---- parameters -------------------------------------------------
-        params_raw = src[param_node.start_byte : param_node.end_byte] \
-            .decode("utf8", errors="replace").strip()
+        params_raw = get_node_text(param_node).strip()
 
         parameters: list[SymbolParameter] = []
 
@@ -427,19 +424,17 @@ class GolangCodeParser(AbstractCodeParser):
             for ch in pd.children:
                 match ch.type:
                     case "identifier" | "blank_identifier":
-                        names.append(ch.text.decode("utf8"))
+                        names.append(get_node_text(ch))
                     case "variadic_parameter":
                         variadic = True
                         # strip leading "..."
-                        txt = src[ch.start_byte : ch.end_byte] \
-                              .decode("utf8", errors="replace").strip()
+                        txt = get_node_text(ch).strip()
                         type_text = txt.lstrip(".").lstrip()
                     case "," | ":":        # ignore separators / tokens
                         pass
                     case _:
                         # treat any other child as (part of) the type
-                        type_text = src[ch.start_byte : ch.end_byte] \
-                                    .decode("utf8", errors="replace").strip()
+                        type_text = get_node_text(ch).strip()
 
             if not names:                         # unnamed parameter
                 names.append("")
@@ -456,8 +451,7 @@ class GolangCodeParser(AbstractCodeParser):
         return_raw = ""
         return_type = None
         if result_node is not None:
-            return_raw = src[result_node.start_byte : result_node.end_byte] \
-                .decode("utf8", errors="replace").strip()
+            return_raw = get_node_text(result_node).strip()
             # If the result is a single unnamed type (e.g. "error") store it
             if result_node.type != "parameter_list":
                 return_type = return_raw
@@ -482,7 +476,7 @@ class GolangCodeParser(AbstractCodeParser):
         if ident_node is None:
             return []
 
-        name: str = ident_node.text.decode("utf8")
+        name: str = get_node_text(ident_node)
 
         docstring = self._extract_preceding_comment(node)
 
@@ -512,9 +506,7 @@ class GolangCodeParser(AbstractCodeParser):
             if signature_obj is None:
                 signature_obj = SymbolSignature(raw="")
             
-            type_param_raw = self.source_bytes[
-                type_param_node.start_byte:type_param_node.end_byte
-            ].decode("utf8", errors="replace").strip()
+            type_param_raw = get_node_text(type_param_node).strip()
 
             signature_obj.type_parameters = type_param_raw
 
@@ -550,7 +542,7 @@ class GolangCodeParser(AbstractCodeParser):
         if ident_node is None:
             return []
 
-        name: str = ident_node.text.decode("utf8")
+        name: str = get_node_text(ident_node)
 
         # first parameter_list is the receiver, e.g.  (t *Test)  or  (*pkg.Type)
         param_lists = [c for c in node.children if c.type == "parameter_list"]
@@ -558,8 +550,7 @@ class GolangCodeParser(AbstractCodeParser):
             return []
 
         recv_node = param_lists[0]
-        receiver_raw = self.source_bytes[recv_node.start_byte:recv_node.end_byte] \
-                           .decode("utf8", errors="replace").strip()      # "(t *Test)"
+        receiver_raw = get_node_text(recv_node).strip()      # "(t *Test)"
 
         inner = receiver_raw[1:-1].strip()           # drop ( )
 
@@ -598,9 +589,7 @@ class GolangCodeParser(AbstractCodeParser):
 
         # ---- generics -------------------------------------------------
         if type_param_node is not None:
-            type_param_raw = self.source_bytes[
-                type_param_node.start_byte:type_param_node.end_byte
-            ].decode("utf8", errors="replace").strip()
+            type_param_raw = get_node_text(type_param_node).strip()
 
             signature_obj.type_parameters = type_param_raw
 
@@ -654,15 +643,11 @@ class GolangCodeParser(AbstractCodeParser):
                         "Could not parse embedded struct field (no type node found)",
                         path=self.parsed_file.path,
                         line=fld.start_point[0] + 1,
-                        raw=fld.text.decode("utf8", errors="replace"),
+                        raw=get_node_text(fld),
                     )
                     continue
 
-                type_text = (
-                    self.source_bytes[type_node.start_byte : type_node.end_byte]
-                    .decode("utf8", errors="replace")
-                    .strip()
-                )
+                type_text = get_node_text(type_node).strip()
 
                 # field name is the base type name. e.g. for "*pkg.MyType", it is "MyType"
                 fname = type_text.lstrip("*")
@@ -674,7 +659,7 @@ class GolangCodeParser(AbstractCodeParser):
                         "Could not determine name for embedded struct field",
                         path=self.parsed_file.path,
                         line=fld.start_point[0] + 1,
-                        raw=fld.text.decode("utf8", errors="replace"),
+                        raw=get_node_text(fld),
                     )
                     continue
 
@@ -701,11 +686,10 @@ class GolangCodeParser(AbstractCodeParser):
 
             type_text = ""
             if type_node is not None:
-                type_text = self.source_bytes[type_node.start_byte:type_node.end_byte] \
-                                .decode("utf8", errors="replace").strip()
+                type_text = get_node_text(type_node).strip()
 
             for idn in id_nodes:
-                fname = idn.text.decode("utf8")
+                fname = get_node_text(idn)
                 child = self._make_symbol(
                     fld,
                     kind=SymbolKind.PROPERTY,
@@ -734,7 +718,7 @@ class GolangCodeParser(AbstractCodeParser):
         ident = next((c for c in m.children if c.type in ("identifier", "field_identifier")), None)
         if ident is None:
             return
-        mname = ident.text.decode("utf8")
+        mname = get_node_text(ident)
 
         param_node  = next((c for c in m.children if c.type == "parameter_list"), None)
         result_node = None
@@ -780,7 +764,7 @@ class GolangCodeParser(AbstractCodeParser):
             if ident is None:
                 continue
 
-            name: str = ident.text.decode("utf8")
+            name: str = get_node_text(ident)
 
             # ---------- type node (struct / interface / …) --------------
             after_ident = False
@@ -850,7 +834,7 @@ class GolangCodeParser(AbstractCodeParser):
             docstring = self._extract_preceding_comment(spec)
 
             for idn in id_nodes:
-                name = idn.text.decode("utf8")
+                name = get_node_text(idn)
                 fqn = self._make_fqn(name)
 
                 sym = self._make_symbol(
@@ -899,7 +883,7 @@ class GolangCodeParser(AbstractCodeParser):
             docstring = self._extract_preceding_comment(spec)
 
             for idn in id_nodes:
-                name = idn.text.decode("utf8")
+                name = get_node_text(idn)
                 fqn = self._make_fqn(name)
 
                 sym = self._make_symbol(spec,
@@ -942,7 +926,7 @@ class GolangCodeParser(AbstractCodeParser):
 
         # helper for creating a TYPE ref
         def _add_type_ref(node):
-            full_name = self.source_bytes[node.start_byte: node.end_byte].decode("utf8")
+            full_name = get_node_text(node)
             simple    = full_name.split(".")[-1]
             refs.append(
                 ParsedSymbolRef(
@@ -958,9 +942,9 @@ class GolangCodeParser(AbstractCodeParser):
             if node.type == "call_expression":
                 fn_node = node.child_by_field_name("function")
                 if fn_node is not None:
-                    full_name = self.source_bytes[fn_node.start_byte: fn_node.end_byte].decode("utf8")
+                    full_name = get_node_text(fn_node)
                     simple    = full_name.split(".")[-1]
-                    raw_expr  = self.source_bytes[node.start_byte: node.end_byte].decode("utf8")
+                    raw_expr  = get_node_text(node)
                     refs.append(
                         ParsedSymbolRef(
                             name=simple,

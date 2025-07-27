@@ -15,7 +15,6 @@ from know.models import (
     SymbolRefType,
 )
 from know.project import Project, ProjectCache
-from know.lang.helpers import get_node_text
 from know.helpers import compute_file_hash
 from know.logger import logger
 
@@ -340,3 +339,14 @@ class CodeParserRegistry:
     @classmethod
     def get_parser(cls, ext: str) -> Optional[Type[AbstractCodeParser]]:
         return cls._parsers.get(ext)
+
+
+# Helpers
+def get_node_text(node) -> str:
+    """
+    Get text of the tree sitter node
+    """
+    if not node or not node.text:
+        return ""
+
+    return node.text.decode("utf-8")
