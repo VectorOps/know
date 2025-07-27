@@ -37,6 +37,6 @@ dev = [
     "fastmcp>=2.10.6",
     "flask>=3.1.1",
     "google-auth>=2.40.3",
-    "litellm>=1.73.6",
+    "litellm>=1.74.8",
     "prompt-toolkit>=3.0.51",
 ]
