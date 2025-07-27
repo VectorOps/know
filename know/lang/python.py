@@ -22,6 +22,7 @@ from know.models import (
 from know.project import Project, ProjectCache
 from know.settings import PythonSettings
 from know.parsers import CodeParserRegistry
+from know.lang.helpers import get_node_text
 from know.logger import logger
 from know.helpers import compute_file_hash
 from devtools import pprint
@@ -31,7 +32,7 @@ from devtools import pprint
 PY_LANGUAGE = Language(tspython.language())
 
 
-_parser: Parser = None
+_parser: Parser | None = None
 def _get_parser():
     global _parser
     if not _parser:
@@ -111,11 +112,11 @@ class PythonCodeParser(AbstractCodeParser):
         # Unknown / unhandled → debug-log (mirrors previous behaviour)
         logger.debug(
             "Unknown node",
-            path=self.parsed_file.path,
+            path=self.parsed_file.path if self.parsed_file else "",
             type=node.type,
             line=node.start_point[0] + 1,
             byte_offset=node.start_byte,
-            raw=node.text.decode("utf8", errors="replace"),
+            raw=get_node_text(node),
         )
 
         return [self._create_literal_symbol(node, parent=parent)]
@@ -194,7 +195,7 @@ class PythonCodeParser(AbstractCodeParser):
             parent_sym
         ]
 
-    def _handle_if_statement(self, node, parent=None):
+    def _handle_if_statement(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
         if_symbol = self._make_symbol(node, kind=SymbolKind.IF)
 
         def _process_block_children(block_node, parent_symbol):
@@ -207,7 +208,7 @@ class PythonCodeParser(AbstractCodeParser):
         consequence = node.child_by_field_name("consequence")
         if consequence:
             condition_node = node.child_by_field_name("condition")
-            condition_text = condition_node.text.decode("utf8") if condition_node else ""
+            condition_text = get_node_text(condition_node)
             raw_sig = f"if {condition_text}:"
 
             if_block_symbol = self._make_symbol(
@@ -225,7 +226,7 @@ class PythonCodeParser(AbstractCodeParser):
                 block_node = alt_node.child_by_field_name("consequence")
                 if block_node:
                     condition_node = alt_node.child_by_field_name("condition")
-                    condition_text = condition_node.text.decode("utf8") if condition_node else ""
+                    condition_text = get_node_text(condition_node)
                     raw_sig = f"elif {condition_text}:"
                     elif_block_symbol = self._make_symbol(
                         block_node,
@@ -249,8 +250,8 @@ class PythonCodeParser(AbstractCodeParser):
 
         return [if_symbol]
 
-    def _handle_import_statement(self, node, parent=None):
-        raw_stmt = node.text.decode("utf8")
+    def _handle_import_statement(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+        raw_stmt = get_node_text(node)
 
         # Defaults
         import_path: str | None = None
@@ -264,17 +265,17 @@ class PythonCodeParser(AbstractCodeParser):
                 if first_item.type == "aliased_import":
                     name_node   = first_item.child_by_field_name("name")
                     alias_node  = first_item.child_by_field_name("alias")
-                    import_path = name_node.text.decode("utf8") if name_node else None
-                    alias       = alias_node.text.decode("utf8") if alias_node else None
+                    import_path = get_node_text(name_node) or None
+                    alias       = get_node_text(alias_node) or None
                 elif first_item.type == "dotted_name":
-                    import_path = first_item.text.decode("utf8")
+                    import_path = get_node_text(first_item)
 
         elif node.type == "import_from_statement":
             rel_node = next((c for c in node.children if c.type == "relative_import"), None)
             mod_node = next((c for c in node.children if c.type == "dotted_name"), None)
 
-            rel_txt  = rel_node.text.decode("utf8") if rel_node else ""
-            mod_txt  = mod_node.text.decode("utf8") if mod_node else ""
+            rel_txt  = get_node_text(rel_node)
+            mod_txt  = get_node_text(mod_node)
             import_path = f"{rel_txt}{mod_txt}" if (rel_txt or mod_txt) else None
             dot = bool(rel_node)
 
@@ -282,7 +283,7 @@ class PythonCodeParser(AbstractCodeParser):
             if aliased is not None:
                 alias_node = aliased.child_by_field_name("alias")
                 if alias_node is not None:
-                    alias = alias_node.text.decode("utf8")
+                    alias = get_node_text(alias_node)
 
         else:
             import_path = raw_stmt  # fallback for unexpected node kinds
@@ -305,6 +306,9 @@ class PythonCodeParser(AbstractCodeParser):
             external=not is_local,
             raw=raw_stmt,
         )
+
+        if self.parsed_file is None:
+            raise Exception("parsed_file is not set")
         self.parsed_file.imports.append(import_edge)
 
         return [
@@ -333,11 +337,11 @@ class PythonCodeParser(AbstractCodeParser):
             # Module / class / function bodies wrap the string inside an expression_statement
             if child.type == "expression_statement":
                 if child.children and child.children[0].type == "string":
-                    raw = child.children[0].text.decode("utf8")
+                    raw = get_node_text(child.children[0])
                     return self._clean_docstring(raw)
             # Fallback when the string is a direct child
             if child.type == "string":
-                raw = child.text.decode("utf8")
+                raw = get_node_text(child)
                 return self._clean_docstring(raw)
             # Stop scanning once we hit a non-whitespace/comment node
             if child.type not in ("comment",):
@@ -357,7 +361,7 @@ class PythonCodeParser(AbstractCodeParser):
             if node.start_point[0] - sib.end_point[0] > 2:
                 break
             if sib.type == "comment":
-                raw = self.source_bytes[sib.start_byte : sib.end_byte].decode("utf8")
+                raw = get_node_text(sib)
                 comments.append(raw.strip())
                 sib = sib.prev_sibling
                 continue
@@ -395,9 +399,10 @@ class PythonCodeParser(AbstractCodeParser):
         params_node   = node.child_by_field_name("parameters")
         return_node   = node.child_by_field_name("return_type")
 
-        name   = name_node.text.decode("utf8") if name_node else "<anonymous>"
-        params = params_node.text.decode("utf8") if params_node else "()"
-        retann = f" -> {return_node.text.decode('utf8').strip()}" if return_node else ""
+        name   = get_node_text(name_node) or "<anonymous>"
+        params = get_node_text(params_node) or "()"
+        return_node_text = get_node_text(return_node).strip()
+        retann = f" -> {return_node_text}" if return_node_text else ""
 
         return f"{async_prefix}def {name}{params}{retann}:"
 
@@ -431,7 +436,7 @@ class PythonCodeParser(AbstractCodeParser):
         if node.type == "decorated_definition":
             cls_node = next((c for c in node.children if c.type == "class_definition"), node)
 
-        code    = cls_node.text.decode("utf8")
+        code    = get_node_text(cls_node)
         raw_sig = self._extract_class_signature_raw(code)
 
         # Decorators                                                         #
@@ -439,7 +444,7 @@ class PythonCodeParser(AbstractCodeParser):
         if node.type == "decorated_definition":
             for ch in node.children:
                 if ch.type == "decorator":
-                    txt = ch.text.decode("utf8").strip()
+                    txt = get_node_text(ch).strip()
                     if txt.startswith("@"):
                         txt = txt[1:]
                     decorators.append(txt)
@@ -469,7 +474,7 @@ class PythonCodeParser(AbstractCodeParser):
         if wrapper.type == "decorated_definition":
             for child in wrapper.children:
                 if child.type == "decorator":
-                    txt = child.text.decode("utf8").strip()
+                    txt = get_node_text(child).strip()
                     if txt.startswith("@"):
                         txt = txt[1:]
                     decorators.append(txt)
@@ -491,38 +496,38 @@ class PythonCodeParser(AbstractCodeParser):
 
                 # Simple identifier: def f(a)
                 if ch.type == "identifier":
-                    param_name = ch.text.decode("utf8")
+                    param_name = get_node_text(ch)
 
                 # Typed parameter: def f(a: int)
                 elif ch.type == "typed_parameter":
                     name_node = ch.children[0]
-                    param_name = name_node.text.decode("utf8")
+                    param_name = get_node_text(name_node)
                     type_node = ch.child_by_field_name("type")
-                    param_type = type_node.text.decode("utf8") if type_node else None
+                    param_type = get_node_text(type_node) or None
 
                 # Default parameter: def f(a=1)
                 elif ch.type == "default_parameter":
                     name_node = ch.child_by_field_name("name")
                     value_node = ch.child_by_field_name("value")
-                    param_name = name_node.text.decode("utf8") if name_node else None
-                    param_default = value_node.text.decode("utf8") if value_node else None
+                    param_name = get_node_text(name_node) or None
+                    param_default = get_node_text(value_node) or None
 
                 # Typed default parameter: def f(a: int = 1)
                 elif ch.type == "typed_default_parameter":
                     name_node = ch.child_by_field_name("name")
                     type_node = ch.child_by_field_name("type")
                     value_node = ch.child_by_field_name("value")
-                    param_name = name_node.text.decode("utf8") if name_node else None
-                    param_type = type_node.text.decode("utf8") if type_node else None
-                    param_default = value_node.text.decode("utf8") if value_node else None
+                    param_name = get_node_text(name_node) or None
+                    param_type = get_node_text(type_node) or None
+                    param_default = get_node_text(value_node) or None
 
                 # List splat: def f(*args)
                 elif ch.type == "list_splat":
-                    param_name = ch.text.decode("utf8")
+                    param_name = get_node_text(ch)
 
                 # Dictionary splat: def f(**kwargs)
                 elif ch.type == "dictionary_splat":
-                    param_name = ch.text.decode("utf8")
+                    param_name = get_node_text(ch)
 
                 if param_name:
                     parameters.append(
@@ -538,8 +543,7 @@ class PythonCodeParser(AbstractCodeParser):
         # Return-type annotation                                             #
         return_type: str | None = None
         ret_node = node.child_by_field_name("return_type")
-        if ret_node is not None:
-            return_type = ret_node.text.decode("utf8").strip()
+        return_type = get_node_text(ret_node).strip() or None
 
         return SymbolSignature(
             raw=raw_sig,
@@ -570,7 +574,7 @@ class PythonCodeParser(AbstractCodeParser):
             return True
 
         # bug-work-around: async method wrongly tagged as function_definition
-        if node.type == "function_definition" and node.text.startswith(b"async "):
+        if node.type == "function_definition" and get_node_text(node).startswith("async "):
             return True
 
         if node.type == "decorated_definition":
@@ -629,10 +633,8 @@ class PythonCodeParser(AbstractCodeParser):
         target_node = node.child_by_field_name("left") or node.children[0]
 
         # accept both plain identifiers and dotted attribute targets
-        if target_node.type in ("identifier", "attribute"):
-            name = target_node.text.decode("utf8")
-        elif target_node.type in ("subscript", "subscription"):
-            name = target_node.text.decode("utf8")
+        if target_node.type in ("identifier", "attribute", "subscript", "subscription"):
+            name = get_node_text(target_node)
         else:
             return []
 
@@ -654,7 +656,7 @@ class PythonCodeParser(AbstractCodeParser):
         if name_node is None:
             return []
 
-        func_name = name_node.text.decode("utf8")
+        func_name = get_node_text(name_node)
 
         return [
             self._make_symbol(
@@ -662,7 +664,7 @@ class PythonCodeParser(AbstractCodeParser):
                 kind=SymbolKind.FUNCTION,
                 name=func_name,
                 fqn=self._make_fqn(func_name),
-                body=wrapper.text.decode("utf8"),
+                body=get_node_text(wrapper),
                 modifiers=[Modifier.ASYNC] if self._is_async_function(wrapper) else [],
                 visibility=self._infer_visibility(func_name),
                 docstring=self._extract_docstring(node),
@@ -675,7 +677,7 @@ class PythonCodeParser(AbstractCodeParser):
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Handle class definitions
-        class_name = node.child_by_field_name('name').text.decode('utf8')
+        class_name = get_node_text(node.child_by_field_name('name'))
         symbol = self._make_symbol(
             wrapper,
             kind=SymbolKind.CLASS,
@@ -728,7 +730,7 @@ class PythonCodeParser(AbstractCodeParser):
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
-        method_name = node.child_by_field_name('name').text.decode('utf8')
+        method_name = get_node_text(node.child_by_field_name('name'))
         return self._make_symbol(
             wrapper,
             kind=SymbolKind.METHOD,
@@ -741,8 +743,8 @@ class PythonCodeParser(AbstractCodeParser):
             comment=self._get_preceding_comment(node),
         )
 
-    def _handle_expression_statement(self, node, parent=None):
-        expr: str = node.text.decode("utf8").strip()
+    def _handle_expression_statement(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+        expr: str = get_node_text(node).strip()
         if not expr:
             return []
 
@@ -808,7 +810,7 @@ class PythonCodeParser(AbstractCodeParser):
         return self._locate_module_path(import_path) is not None
 
     # Outgoing symbol-reference (call) collector
-    def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
+    def _collect_symbol_refs(self, root) -> List[ParsedSymbolRef]:
         """
         Walk *root* recursively, record every call-expression as
         ParsedSymbolRef(… type=SymbolRefType.CALL …) and try to map the call
@@ -820,9 +822,9 @@ class PythonCodeParser(AbstractCodeParser):
             if node.type == "call":
                 fn_node = node.child_by_field_name("function")
                 if fn_node is not None:
-                    full_name = fn_node.text.decode("utf8")          # may contain dotted path
+                    full_name = get_node_text(fn_node)          # may contain dotted path
                     simple_name = full_name.split(".")[-1]           # keep only final identifier
-                    raw = node.text.decode("utf8")
+                    raw = get_node_text(node)
 
                     # best-effort import-resolution
                     to_pkg_path: str | None = None

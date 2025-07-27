@@ -15,6 +15,7 @@ from know.models import (
     SymbolRefType,
 )
 from know.project import Project, ProjectCache
+from know.lang.helpers import get_node_text
 from know.helpers import compute_file_hash
 from know.logger import logger
 
@@ -265,8 +266,7 @@ class AbstractCodeParser(ABC):
         derived directly from *node*.  Callers may override any value via the
         keyword arguments.
         """
-        # get_node_text is not imported in this file, use original behavior for body
-        body = body if body is not None else node.text.decode("utf8").strip()
+        body = body if body is not None else get_node_text(node).strip()
         return ParsedSymbol(
             name=name,
             fqn=fqn,
