@@ -44,7 +44,7 @@ def test_local_embeddings_cache(backend):
         vec1 = calc.get_embedding(sample)
 
         # Vector must now be present in cache
-        h = hashlib.sha256(sample.encode("utf-8")).hexdigest()
+        h = hashlib.blake2s(sample.encode("utf-8"), digest_size=16).digest()
         cached = calc.get_cache_manager().get_vector(calc.get_model_name(), h)   # type: ignore[attr-defined]
         assert cached == vec1 and cached is not None
 
