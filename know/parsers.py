@@ -265,6 +265,7 @@ class AbstractCodeParser(ABC):
         derived directly from *node*.  Callers may override any value via the
         keyword arguments.
         """
+        # get_node_text is not imported in this file, use original behavior for body
         body = body if body is not None else node.text.decode("utf8").strip()
         return ParsedSymbol(
             name=name,
