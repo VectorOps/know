@@ -3,7 +3,7 @@ import textwrap
 from know.settings import ProjectSettings
 from know.project import init_project
 from know.file_summary import SummaryMode
-from know.tools.filesummary import SummarizeFilesTool
+from know.tools.filesummary import SummarizeFilesTool, SummarizeFilesReq
 
 
 def _setup_project(tmp_path):
@@ -41,14 +41,17 @@ def _setup_project(tmp_path):
 def test_filesummary_returns_expected_content(tmp_path):
     project = _setup_project(tmp_path)
 
-    res = SummarizeFilesTool().execute(project, ["foo.py"], summary_mode=SummaryMode.FullSummary)
+    res = SummarizeFilesTool().execute(project, SummarizeFilesReq(
+        paths=["foo.py"],
+        summary_mode=SummaryMode.FullSummary,
+    ))
     assert len(res) == 1
 
     summary = res[0]
-    assert summary['path'] == "foo.py"
+    assert summary.path == "foo.py"
 
     # Expect both symbols (and their docs / comments) to be present
-    definitions = summary['content']
+    definitions = summary.content
     assert "def foo" in definitions
     assert "Function docstring" in definitions
     assert "class Bar" in definitions
@@ -59,7 +62,7 @@ def test_filesummary_skips_unknown_files(tmp_path):
     project = _setup_project(tmp_path)
 
     # add an additional, non-existing path
-    res = SummarizeFilesTool().execute(project, ["foo.py", "does_not_exist.py"])
+    res = SummarizeFilesTool().execute(project, SummarizeFilesReq(paths=["foo.py", "does_not_exist.py"]))
     # Only one valid summary expected
     assert len(res) == 1
-    assert res[0]['path'] == "foo.py"
+    assert res[0].path == "foo.py"

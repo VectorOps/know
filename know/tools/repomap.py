@@ -1,28 +1,22 @@
-# ---------------------------------------------------------------------
-#  Repo-level Random-Walk-with-Restart graph component
-# ---------------------------------------------------------------------
 from __future__ import annotations
 
 import math, re, os
 import time
 from dataclasses import dataclass
 from collections import defaultdict
-from typing import Dict, Optional, Sequence, Set
+from typing import Dict, Optional, Sequence, Set, List
 from litellm import token_counter
 
+from .base import BaseTool, MCPToolDefinition
 import networkx as nx
 from pydantic import BaseModel
 from know.logger import logger
 from know.project import Project, ScanResult, ProjectComponent
 from know.models import SymbolMetadata, Visibility
-from know.tools.base import BaseTool
 from know.file_summary import SummaryMode, build_file_summary
 from know.data import FileFilter, SymbolFilter, SymbolRefFilter
 
 
-# ---------------------------------------------------------------------
-#  Tunables that are *still* used
-# ---------------------------------------------------------------------
 RESTART_PROB           = 0.15
 EDGE_W_DEF             = 3.0
 EDGE_W_REF             = 1.0
@@ -37,9 +31,7 @@ POLYDEF_MULTIPLIER     = 0.1
 ISOLATED_SELF_WEIGHT   = 0.3
 
 
-# ---------------------------------------------------------------------
 #  Helpers
-# ---------------------------------------------------------------------
 def _sym_node(name: str) -> str:
     """Canonical node id for a symbol."""
     return f"sym::{name}"
@@ -62,9 +54,7 @@ class _NodeAttr:
     kind: str  # "file" | "sym"
 
 
-# ---------------------------------------------------------------------
 #  Component that **maintains** the heterograph
-# ---------------------------------------------------------------------
 class RepoMap(ProjectComponent):
     component_name = "repomap"
 
@@ -271,18 +261,27 @@ class RepoMap(ProjectComponent):
         self._rebuild_graph()
 
 
-# ---------------------------------------------------------------------
-#  Score DTO
-# ---------------------------------------------------------------------
+#  Tool
+class RepoMapReq(BaseModel):
+    symbol_names: Optional[Sequence[str]] = None
+    file_paths:   Optional[Sequence[str]] = None
+    prompt:       Optional[str]           = None
+    limit:        int   = LIMIT_DEFAULT
+    # TODO: Move to config
+    restart_prob: float = RESTART_PROB
+    summary_mode: SummaryMode | str = SummaryMode.ShortSummary
+    # TODO: Move to config
+    min_symbol_len: int = 3
+    token_limit_count: int | None = None
+    token_limit_model: str | None = None
+
+
 class RepoMapScore(BaseModel):
     file_path: str
     score:     float
     summary:   Optional[str] = None
 
 
-# ---------------------------------------------------------------------
-#  Tool that *uses* the graph and builds the boosting vector
-# ---------------------------------------------------------------------
 class RepoMapTool(BaseTool):
     """
     Rank repository files with a heterogeneous Random-Walk-with-Restart.
@@ -290,6 +289,8 @@ class RepoMapTool(BaseTool):
     by the `RepoMap` component.
     """
     tool_name = "vectorops_repomap"
+    tool_input = RepoMapReq
+    tool_output = List[RepoMapScore]
 
     def __init__(self, *a, **kw):
         from know.project import Project
@@ -300,16 +301,9 @@ class RepoMapTool(BaseTool):
     def execute(
         self,
         project: Project,
-        symbol_names: Optional[Sequence[str]] = None,
-        file_paths:   Optional[Sequence[str]] = None,
-        prompt:       Optional[str]           = None,
-        limit:        int   = LIMIT_DEFAULT,
-        restart_prob: float = RESTART_PROB,
-        summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
-        min_symbol_len: int = 3,
-        token_limit_count: int | None = None,
-        token_limit_model: str | None = None,
+        req: RepoMapReq,
     ) -> list[RepoMapScore]:
+        summary_mode = req.summary_mode
         if summary_mode is str:
             summary_mode = SummaryMode(summary_mode)
 
@@ -323,14 +317,12 @@ class RepoMapTool(BaseTool):
                 "initialised) before using this tool."
             )
 
-        # ---------------------------------------------------------------
         # 0.  Extract symbol / file hints from a free-text *prompt*
-        # ---------------------------------------------------------------
-        symbol_names_set: Set[str] = set(symbol_names or [])
-        file_paths_set:   Set[str] = set(file_paths or [])
+        symbol_names_set: Set[str] = set(req.symbol_names or [])
+        file_paths_set:   Set[str] = set(req.file_paths or [])
 
-        if prompt:
-            txt = prompt.lower()
+        if req.prompt:
+            txt = req.prompt.lower()
 
             # ----- file names / paths ----------------------------------
             for path in repomap._path_to_fid.keys():
@@ -349,7 +341,7 @@ class RepoMapTool(BaseTool):
                     tok = tok[:-1]
                 if not tok:
                     continue
-                if len(tok) < min_symbol_len:
+                if len(tok) < req.min_symbol_len:
                     continue
 
                 last = tok.rsplit(".", 1)[-1]
@@ -358,7 +350,7 @@ class RepoMapTool(BaseTool):
                     for s in known_syms_lower_map[tok]:
                         symbol_names_set.add(s)
 
-                if len(last) >= min_symbol_len and last in known_syms_lower_map:
+                if len(last) >= req.min_symbol_len and last in known_syms_lower_map:
                     for s in known_syms_lower_map[last]:
                         symbol_names_set.add(s)
 
@@ -397,22 +389,18 @@ class RepoMapTool(BaseTool):
         #  2. Run Random-Walk-with-Restart (= personalised PageRank)
         pr = nx.pagerank(
             G,
-            alpha=(1.0 - restart_prob),
+            alpha=(1.0 - req.restart_prob),
             personalization=personalization,
             weight="weight",
         )
 
-        # -----------------------------------------------------------------
         #  3. Collect top-k *file* nodes
-        # -----------------------------------------------------------------
         is_file = lambda n: G.nodes[n].get("kind") == "file"
         ranked = [(p, sc) for p, sc in pr.items() if is_file(p)]
         ranked.sort(key=lambda t: t[1], reverse=True)
-        ranked = ranked[: max(1, limit)]
+        ranked = ranked[: max(1, req.limit)]
 
-        # -----------------------------------------------------------------
         #  4. Build response objects
-        # -----------------------------------------------------------------
         mentioned = set(file_paths or [])
         results: list[RepoMapScore] = []
 
@@ -429,13 +417,13 @@ class RepoMapTool(BaseTool):
                 effective_mode,
             )
             summary = fs.content if fs else None
-            if summary and token_limit_count and token_limit_model:
-                summary_tokens = _count_tokens(summary, token_limit_model)
+            if summary and req.token_limit_count and req.token_limit_model:
+                summary_tokens = _count_tokens(summary, req.token_limit_model)
 
             # -- enforce token budget ---------------------------------------
-            if token_limit_count and token_limit_model:
-                if tokens_used + summary_tokens > token_limit_count:
-                    break                                # stop adding further records
+            if req.token_limit_count and req.token_limit_model:
+                if tokens_used + summary_tokens > req.token_limit_count:
+                    break
                 tokens_used += summary_tokens
 
             results.append(
@@ -447,7 +435,7 @@ class RepoMapTool(BaseTool):
                      duration_sec=round(_elapsed, 4),
                      results=len(results))
 
-        return self.to_python(results)
+        return results
 
     # ---------- OpenAI schema (unchanged aside from defaults) ----------
     def get_openai_schema(self) -> dict:
@@ -497,3 +485,10 @@ class RepoMapTool(BaseTool):
                 },
             },
         }
+
+    def get_mcp_definition(self) -> MCPToolDefinition:
+        schema = self.get_openai_schema()
+        return MCPToolDefinition(
+            name=self.tool_name,
+            description=schema.get("description"),
+        )

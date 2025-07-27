@@ -130,9 +130,7 @@ class Project:
             except Exception as exc:
                 logger.error("Component failed to refresh", name=name, exc=exc)
 
-    # ---------------------------------------------------------------------
     # teardown helpers
-    # ---------------------------------------------------------------------
     def destroy(self, *, timeout: float | None = None) -> None:
         """
         Release every resource held by this Project instance.

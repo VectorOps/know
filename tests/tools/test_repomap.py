@@ -9,7 +9,7 @@ from know.models import (
 from know.project import Project
 from know.stores.memory import InMemoryDataRepository
 from know.scanner import ScanResult
-from know.tools.repomap import RepoMap, RepoMapTool
+from know.tools.repomap import RepoMap, RepoMapTool, RepoMapReq
 
 
 class _DummySettings:
@@ -147,38 +147,38 @@ def test_repomap_tool_pagerank_and_boost():
     project, a_path, b_path, c_path, d_path = _build_project()
 
     # baseline – a.py should outrank b.py, c.py should outrank d.py
-    res = tool.execute(project)
-    order = [r["file_path"] for r in res]
+    res = tool.execute(project, RepoMapReq())
+    order = [r.file_path for r in res]
     assert order.index(a_path) < order.index(b_path)
     assert order.index(c_path) < order.index(d_path)
-    score_a = next(r["score"] for r in res if r["file_path"] == a_path)
-    score_b = next(r["score"] for r in res if r["file_path"] == b_path)
+    score_a = next(r.score for r in res if r.file_path == a_path)
+    score_b = next(r.score for r in res if r.file_path == b_path)
     assert score_a > score_b
-    score_c = next(r["score"] for r in res if r["file_path"] == c_path)
-    score_d = next(r["score"] for r in res if r["file_path"] == d_path)
+    score_c = next(r.score for r in res if r.file_path == c_path)
+    score_d = next(r.score for r in res if r.file_path == d_path)
     assert score_c > score_d
 
     # boost edges incident to d.py – outgoing-edge boost elevates *target* (c.py)
-    res_boost = tool.execute(project, file_paths=[d_path])
-    order_boost = [r["file_path"] for r in res_boost]
+    res_boost = tool.execute(project, RepoMapReq(file_paths=[d_path]))
+    order_boost = [r.file_path for r in res_boost]
     assert order_boost.index(c_path) < order_boost.index(d_path)   # outgoing-edge boost elevates *target* (c.py)
 
     # boost edges incident to b.py – a.py now ranks highest
-    res_boost = tool.execute(project, file_paths=[b_path])
-    assert res_boost[0]["file_path"] == a_path                     # a.py now ranks highest
-    score_boost_a = res_boost[0]["score"]
-    score_boost_b = next(r["score"] for r in res_boost if r["file_path"] == b_path)
+    res_boost = tool.execute(project, RepoMapReq(file_paths=[b_path]))
+    assert res_boost[0].file_path == a_path                     # a.py now ranks highest
+    score_boost_a = res_boost[0].score
+    score_boost_b = next(r.score for r in res_boost if r.file_path == b_path)
     assert score_boost_a > score_boost_b
 
     # ------------------------------------------------------------------
     # boost by symbol name – edges carrying “beta” are multiplied (*10)
     # - definition file c.py must outrank a.py after the boost
-    res_sym_boost = tool.execute(project, symbol_names=["beta"])
-    order_sym_boost = [r["file_path"] for r in res_sym_boost]
+    res_sym_boost = tool.execute(project, RepoMapReq(symbol_names=["beta"]))
+    order_sym_boost = [r.file_path for r in res_sym_boost]
     assert order_sym_boost.index(c_path) < order_sym_boost.index(a_path)
 
-    score_c_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == c_path)
-    score_a_boost = next(r["score"] for r in res_sym_boost if r["file_path"] == a_path)
+    score_c_boost = next(r.score for r in res_sym_boost if r.file_path == c_path)
+    score_a_boost = next(r.score for r in res_sym_boost if r.file_path == a_path)
     assert score_c_boost > score_a_boost
 
 
@@ -189,15 +189,15 @@ def test_repomap_tool_prompt_parsing():
 
     # --- prompt mentions a *symbol* (“beta”) ----------------------------
     res_prompt_sym = tool.execute(project,
-                                  prompt="We should refactor the beta function soon.")
-    order_sym = [r["file_path"] for r in res_prompt_sym]
+                                  RepoMapReq(prompt="We should refactor the beta function soon."))
+    order_sym = [r.file_path for r in res_prompt_sym]
     # “beta” boost must make its definition file (c.py) outrank a.py
     assert order_sym.index(c_path) < order_sym.index(a_path)
 
     # --- prompt mentions a *file* (“d.py”) ------------------------------
     res_prompt_file = tool.execute(project,
-                                   prompt=f"Please review the logic in {d_path}.")
-    order_file = [r["file_path"] for r in res_prompt_file]
+                                   RepoMapReq(prompt=f"Please review the logic in {d_path}."))
+    order_file = [r.file_path for r in res_prompt_file]
     # outgoing-edge boost from d.py must elevate its target (c.py)
     assert order_file.index(c_path) < order_file.index(d_path)
 
@@ -210,14 +210,16 @@ def test_repomap_tool_token_budget():
     # very small token budget – force tool to trim output
     res = tool.execute(
         project,
-        token_limit_count=5,               # tiny budget
-        token_limit_model="gpt-3.5-turbo"  # arbitrary model name
+        RepoMapReq(
+            token_limit_count=5,               # tiny budget
+            token_limit_model="gpt-3.5-turbo"  # arbitrary model name
+        )
     )
 
     # helper replicating fallback logic in _count_tokens
     total_tokens = sum(
-        len(r["summary"].split()) for r in res
-        if r.get("summary")
+        len(r.summary.split()) for r in res
+        if r.summary
     )
     # all returned summaries must fit in the budget
     assert total_tokens <= 5

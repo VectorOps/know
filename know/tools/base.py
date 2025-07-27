@@ -11,9 +11,7 @@ from pydantic import BaseModel
 @dataclass
 class MCPToolDefinition:
     name: str
-    title: str | None = None
     description: str | None = None
-    structured_output: bool | None = None
 
 
 class BaseTool(ABC):

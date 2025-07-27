@@ -141,9 +141,6 @@ class ProjectSettings(BaseSettings):
         description="A dictionary of language-specific settings, keyed by language name.",
     )
 
-    class Config:
-        pass
-
 
 # Various settings parsing helpers helpers
 class CliOption(BaseModel):

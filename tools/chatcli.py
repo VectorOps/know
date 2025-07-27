@@ -119,7 +119,8 @@ async def _chat(settings: Settings, project):
                     print(f"Tool call request {call.function.name}")
                     print(pformat(args))
 
-                    result = tool.execute(project, **args)
+                    data = tool.execute(project, tool.tool_input(**args))
+                    result = tool.to_python(data)
 
                     print(f"Tool call response {call.function.name}")
                     print(pformat(result))

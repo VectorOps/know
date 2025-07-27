@@ -7,10 +7,21 @@ from pydantic import BaseModel
 from know.data import SymbolSearchQuery
 from know.models import SymbolKind, Visibility
 from know.project import Project
-from know.tools.base import BaseTool
+from .base import BaseTool, MCPToolDefinition
 from know.file_summary import SummaryMode
 from know.parsers import CodeParserRegistry, AbstractCodeParser, AbstractLanguageHelper
 from know.models import FileMetadata
+
+
+class SymbolSearchReq(BaseModel):
+    symbol_name: Optional[str] = None,
+    symbol_fqn: Optional[str] = None,
+    symbol_kind: Optional[SymbolKind | str] = None,
+    symbol_visibility: Optional[Visibility | str] = None,
+    query: Optional[str] = None,
+    limit: int | None = 20,
+    offset: int | None = 0,
+    summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
 
 
 class SymbolSearchResult(BaseModel):
@@ -25,57 +36,53 @@ class SymbolSearchResult(BaseModel):
 
 class SearchSymbolsTool(BaseTool):
     tool_name = "vectorops_search_symbols"
+    tool_input = SymbolSearchReq
+    tool_output = List[SymbolSearchResult]
 
     def execute(
         self,
         project: Project,
-        *,
-        symbol_name: Optional[str] = None,
-        symbol_fqn: Optional[str] = None,
-        symbol_kind: Optional[SymbolKind | str] = None,
-        symbol_visibility: Optional[Visibility | str] = None,
-        query: Optional[str] = None,
-        limit: int | None = 20,
-        offset: int | None = 0,
-        summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
+        req: SymbolSearchReq,
     ) -> List[SymbolSearchResult]:
         # normalise string / enum inputs
-        if symbol_kind is None:
-            kind: SymbolKind | None = None
-        elif isinstance(symbol_kind, SymbolKind):
+        kind: SymbolKind | None = None
+        if req.symbol_kind is None:
+            pass
+        elif isinstance(req.symbol_kind, SymbolKind):
             kind = symbol_kind
         else:
             kind = SymbolKind(symbol_kind)
 
         # symbol_visibility
         vis = None
-        if isinstance(symbol_visibility, Visibility):
+        if isinstance(req.symbol_visibility, Visibility):
             vis = symbol_visibility
-        elif isinstance(symbol_visibility, str):
-            if str.lower(symbol_visibility) == "all":
+        elif isinstance(req.symbol_visibility, str):
+            if req.symbol_visibility.lower() == "all":
                 vis = None
             else:
-                vis = Visibility(symbol_visibility)
+                vis = Visibility(req.symbol_visibility)
 
         # summary_mode
+        summary_mode = req.summary_mode
         if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)
 
-        # transform free-text query → embedding vector (if requested)
+        # transform free-text query -> embedding vector (if requested)
         embedding_vec = None
-        if query:
-            embedding_vec = project.compute_embedding(query)
+        if req.query:
+            embedding_vec = project.compute_embedding(req.query)
 
         repo_id = project.get_repo().id
         query   = SymbolSearchQuery(
-            symbol_name       = symbol_name,
-            symbol_fqn        = symbol_fqn,
+            symbol_name       = req.symbol_name,
+            symbol_fqn        = req.symbol_fqn,
             symbol_kind       = kind,
             symbol_visibility = vis,
-            doc_needle        = query,
+            doc_needle        = req.query,
             embedding_query   = embedding_vec,
-            limit             = limit or 20,
-            offset            = offset,
+            limit             = req.limit or 20,
+            offset            = req.offset,
         )
         syms = project.data_repository.symbol.search(repo_id, query)
         file_repo = project.data_repository.file
@@ -120,7 +127,7 @@ class SearchSymbolsTool(BaseTool):
                     body       = sym_body,
                 )
             )
-        return self.to_python(results)
+        return results
 
     def get_openai_schema(self) -> dict:
         kind_enum        = [k.value for k in SymbolKind]
@@ -185,3 +192,13 @@ class SearchSymbolsTool(BaseTool):
                 },
             },
         }
+
+    def get_mcp_definition(self) -> MCPToolDefinition:
+        schema = self.get_openai_schema()
+        # The schema contains parameters, which `add_tool` can't infer from `**kwargs` handler.
+        # Let's pass it via annotations. A common pattern for MCP tools is to use a `parameters`
+        # key in annotations.
+        return MCPToolDefinition(
+            name=self.tool_name,
+            description=schema.get("description"),
+        )

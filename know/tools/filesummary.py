@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from typing import Sequence, List
-from .base import BaseTool
+from .base import BaseTool, MCPToolDefinition
+from pydantic import BaseModel
 
 from know.file_summary import FileSummary, SummaryMode, build_file_summary
 
@@ -10,25 +11,32 @@ from know.project import Project
 from know.models import Visibility
 
 
+class SummarizeFilesReq(BaseModel):
+    paths: Sequence[str]
+    summary_mode: SummaryMode | str = SummaryMode.ShortSummary
+
+
 class SummarizeFilesTool(BaseTool):
     tool_name = "vectorops_summarize_files"
+    tool_input = SummarizeFilesReq
+    tool_output = List[FileSummary]
 
     def execute(
         self,
         project: Project,
-        paths: Sequence[str],
-        summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
+        req: SummarizeFilesReq,
     ) -> List[FileSummary]:
+        summary_mode = req.summary_mode
         if summary_mode is str:
             summary_mode = SummaryMode(summary_mode)
 
         summaries: list[FileSummary] = []
-        for rel_path in paths:
-            fs = build_file_summary(project, rel_path, summary_mode=SummaryMode(summary_mode))
+        for rel_path in req.paths:
+            fs = build_file_summary(project, rel_path, summary_mode=summary_mode)
             if fs:
                 summaries.append(fs)
 
-        return self.to_python(summaries)
+        return summaries
 
     def get_openai_schema(self) -> dict:
         visibility_enum = [v.value for v in Visibility] + ["all"]
@@ -66,3 +74,10 @@ class SummarizeFilesTool(BaseTool):
                 "required": ["paths"],
             },
         }
+
+    def get_mcp_definition(self) -> MCPToolDefinition:
+        schema = self.get_openai_schema()
+        return MCPToolDefinition(
+            name=self.tool_name,
+            description=schema.get("description"),
+        )
