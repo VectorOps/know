@@ -6,7 +6,7 @@ from typing import Dict, Optional, Sequence, Set, List
 from litellm import token_counter
 
 from .base import BaseTool, MCPToolDefinition
-import networkx as nx
+import networkx as nx  # type: ignore
 from pydantic import BaseModel
 from know.logger import logger
 from know.project import Project, ScanResult, ProjectComponent
@@ -103,6 +103,7 @@ class RepoMap(ProjectComponent):
         return round((word_score + length_score) / 2.0, 4)
 
     def _make_props(self, sym: SymbolMetadata) -> NameProps:
+        assert sym.name is not None
         vis = (
             sym.visibility.value
             if isinstance(sym.visibility, Visibility)
@@ -288,8 +289,6 @@ class RepoMapTool(BaseTool):
     by the `RepoMap` component.
     """
     tool_name = "vectorops_repomap"
-    tool_input = RepoMapReq
-    tool_output = List[RepoMapScore]
 
     def __init__(self, *a, **kw):
         from know.project import Project
@@ -303,13 +302,13 @@ class RepoMapTool(BaseTool):
         req: RepoMapReq,
     ) -> List[RepoMapScore]:
         summary_mode = req.summary_mode
-        if summary_mode is str:
+        if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)
 
         _t_start = time.perf_counter()
 
-        repomap: RepoMap = project.get_component("repomap")
-        if repomap is None:
+        repomap = project.get_component("repomap")
+        if not isinstance(repomap, RepoMap):
             raise RuntimeError(
                 "RepoMap component is missing. Call "
                 "`project.get_component('repomap')` (or ensure it is "
