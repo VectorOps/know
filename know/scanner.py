@@ -369,8 +369,8 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             state.pending_import_edges.append(edge)
 
     # Delete edges that no longer exist
-    for key, edge in existing_by_key.items():
-        if key not in new_keys:
+    for edge_key, edge in existing_by_key.items():
+        if edge_key not in new_keys:
             import_repo.delete(edge.id)
 
     # Symbols (re-create)
