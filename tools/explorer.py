@@ -161,16 +161,18 @@ def create_app(project) -> Flask:
 
             tool = RepoMapTool()
             raw_results = tool.execute(
-                project=project,
-                symbol_names=symbol_names,
-                file_paths=file_paths,
-                prompt=prompt,
-                limit=limit,
-                restart_prob=restart_prob,
-                summary_mode=summary_mode,
-                min_symbol_len=min_symbol_len,
-                token_limit_count=token_limit_count,
-                token_limit_model=token_limit_model,
+                project,
+                tool.tool_input(
+                    symbol_names=symbol_names,
+                    file_paths=file_paths,
+                    prompt=prompt,
+                    limit=limit,
+                    restart_prob=restart_prob,
+                    summary_mode=summary_mode,
+                    min_symbol_len=min_symbol_len,
+                    token_limit_count=token_limit_count,
+                    token_limit_model=token_limit_model,
+                )
             )
             
             enriched_results = []
@@ -198,14 +200,16 @@ def create_app(project) -> Flask:
         if request.method == "POST":
             tool = SearchSymbolsTool()
             raw_results = tool.execute(
-                project=project,
-                symbol_name=form_data.get("symbol_name") or None,
-                symbol_fqn=form_data.get("symbol_fqn") or None,
-                symbol_kind=form_data.get("symbol_kind") or None,
-                symbol_visibility=form_data.get("symbol_visibility") or "public",
-                query=form_data.get("query") or None,
-                limit=int(form_data.get("limit") or 20),
-                summary_mode=SummaryMode(form_data.get("summary_mode", SummaryMode.ShortSummary.value)),
+                project,
+                tool.tool_input(
+                    symbol_name=form_data.get("symbol_name") or None,
+                    symbol_fqn=form_data.get("symbol_fqn") or None,
+                    symbol_kind=form_data.get("symbol_kind") or None,
+                    symbol_visibility=form_data.get("symbol_visibility") or "public",
+                    query=form_data.get("query") or None,
+                    limit=int(form_data.get("limit") or 20),
+                    summary_mode=SummaryMode(form_data.get("summary_mode", SummaryMode.ShortSummary.value)),
+                )
             )
 
             enriched_results = []

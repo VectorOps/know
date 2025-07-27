@@ -1,6 +1,4 @@
 
-from __future__ import annotations
-
 from typing import Sequence, List
 from .base import BaseTool, MCPToolDefinition
 from pydantic import BaseModel
@@ -75,9 +73,13 @@ class SummarizeFilesTool(BaseTool):
             },
         }
 
-    def get_mcp_definition(self) -> MCPToolDefinition:
+    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+        def filesummary(req: SummarizeFilesReq) -> List[FileSummary]:
+            return self.execute(project, req)
+
         schema = self.get_openai_schema()
         return MCPToolDefinition(
+            fn=filesummary,
             name=self.tool_name,
             description=schema.get("description"),
         )

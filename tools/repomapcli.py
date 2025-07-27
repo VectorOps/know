@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 from typing import List, Dict, Any, Optional
 
@@ -200,13 +198,15 @@ def main() -> None:
                     try:
                         res = repomap_tool.execute(
                             project,
-                            symbol_names=symbol_seeds or None,
-                            file_paths=file_seeds   or None,
-                            prompt=prompt_text,
-                            limit=settings.limit,
-                            summary_mode=summary_mode,
-                            token_limit_count=token_limit_count,
-                            token_limit_model=token_limit_model,
+                            repomap_tool.tool_input(
+                                symbol_names=symbol_seeds or None,
+                                file_paths=file_seeds   or None,
+                                prompt=prompt_text,
+                                limit=settings.limit,
+                                summary_mode=summary_mode,
+                                token_limit_count=token_limit_count,
+                                token_limit_model=token_limit_model,
+                            )
                         )
                         _print_scores(res)
                     except Exception as exc:             # noqa: BLE001

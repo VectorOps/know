@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 @dataclass
 class MCPToolDefinition:
+    fn: any
     name: str
     description: str | None = None
 
@@ -32,7 +33,7 @@ class BaseTool(ABC):
         pass
 
     @abstractmethod
-    def get_mcp_definition(self) -> MCPToolDefinition:
+    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
         """
         Returns MCP tool definition.
         """

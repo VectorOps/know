@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import List, Sequence, Optional
 
 from pydantic import BaseModel
@@ -14,14 +12,14 @@ from know.models import FileMetadata
 
 
 class SymbolSearchReq(BaseModel):
-    symbol_name: Optional[str] = None,
-    symbol_fqn: Optional[str] = None,
-    symbol_kind: Optional[SymbolKind | str] = None,
-    symbol_visibility: Optional[Visibility | str] = None,
-    query: Optional[str] = None,
-    limit: int | None = 20,
-    offset: int | None = 0,
-    summary_mode: SummaryMode | str = SummaryMode.ShortSummary,
+    symbol_name: Optional[str] = None
+    symbol_fqn: Optional[str] = None
+    symbol_kind: Optional[SymbolKind | str] = None
+    symbol_visibility: Optional[Visibility | str] = None
+    query: Optional[str] = None
+    limit: int | None = 20
+    offset: int | None = 0
+    summary_mode: SummaryMode | str = SummaryMode.ShortSummary
 
 
 class SymbolSearchResult(BaseModel):
@@ -49,9 +47,9 @@ class SearchSymbolsTool(BaseTool):
         if req.symbol_kind is None:
             pass
         elif isinstance(req.symbol_kind, SymbolKind):
-            kind = symbol_kind
+            kind = req.symbol_kind
         else:
-            kind = SymbolKind(symbol_kind)
+            kind = SymbolKind(req.symbol_kind)
 
         # symbol_visibility
         vis = None
@@ -193,12 +191,13 @@ class SearchSymbolsTool(BaseTool):
             },
         }
 
-    def get_mcp_definition(self) -> MCPToolDefinition:
+    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+        def symbolsearch(req: SymbolSearchReq) -> List[SymbolSearchResult]:
+            return self.execute(project, req)
+
         schema = self.get_openai_schema()
-        # The schema contains parameters, which `add_tool` can't infer from `**kwargs` handler.
-        # Let's pass it via annotations. A common pattern for MCP tools is to use a `parameters`
-        # key in annotations.
         return MCPToolDefinition(
+            fn=symbolsearch,
             name=self.tool_name,
             description=schema.get("description"),
         )

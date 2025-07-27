@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-from __future__ import annotations
 import os
 from typing import Sequence, Optional, List
 from enum import Enum

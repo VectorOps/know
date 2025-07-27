@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 from typing import List, Dict, Any
 
@@ -46,13 +44,13 @@ def _print_results(results: List[Dict[str, Any]]) -> None:
         return
     for r in results:
         print("-" * 80)
-        print(f"{r.get('name') or '<unnamed>'}   ({r.get('kind')}) ({r.get('symbol_id')})")
-        if r.get("fqn"):
-            print(f"FQN:  {r['fqn']}")
-        if r.get("file_path"):
-            print(f"File: {r['file_path']}")
-        if r.get("body"):
-            print("\n" + r["body"])
+        print(f"{r.name or '<unnamed>'}   ({r.kind}) ({r.symbol_id})")
+        if r.fqn:
+            print(f"FQN:  {r.fqn}")
+        if r.file_path:
+            print(f"File: {r.file_path}")
+        if r.body:
+            print("\n" + r.body)
     print("-" * 80)
     print(f"{len(results)} result(s).")
 
@@ -90,9 +88,11 @@ def main() -> None:
             try:
                 results = search_tool.execute(
                     project,
-                    query=query,
-                    limit=settings.limit,
-                    offset=settings.offset,
+                    search_tool.tool_input(
+                        query=query,
+                        limit=settings.limit,
+                        offset=settings.offset,
+                    )
                 )
                 _print_results(results)
             except Exception as exc:        # noqa: BLE001

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 from typing import List
 
@@ -58,8 +56,10 @@ def main() -> None:
 
     summaries: List[dict] = summarize_tool.execute(
         project,
-        paths=settings.files,
-        summary_mode=settings.summary_mode,
+        summarize_tool.tool_input(
+            paths=settings.files,
+            summary_mode=settings.summary_mode,
+        )
     )
 
     for s in summaries:

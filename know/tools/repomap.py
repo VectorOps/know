@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math, re, os
 import time
 from dataclasses import dataclass
@@ -265,15 +263,16 @@ class RepoMap(ProjectComponent):
 class RepoMapReq(BaseModel):
     symbol_names: Optional[Sequence[str]] = None
     file_paths:   Optional[Sequence[str]] = None
-    prompt:       Optional[str]           = None
+    prompt:       Optional[str] = None
     limit:        int   = LIMIT_DEFAULT
     # TODO: Move to config
     restart_prob: float = RESTART_PROB
     summary_mode: SummaryMode | str = SummaryMode.ShortSummary
     # TODO: Move to config
     min_symbol_len: int = 3
-    token_limit_count: int | None = None
-    token_limit_model: str | None = None
+    skip_mentioned_summary: bool = False
+    token_limit_count: Optional[int] = None
+    token_limit_model: Optional[str] = None
 
 
 class RepoMapScore(BaseModel):
@@ -302,7 +301,7 @@ class RepoMapTool(BaseTool):
         self,
         project: Project,
         req: RepoMapReq,
-    ) -> list[RepoMapScore]:
+    ) -> List[RepoMapScore]:
         summary_mode = req.summary_mode
         if summary_mode is str:
             summary_mode = SummaryMode(summary_mode)
@@ -406,7 +405,7 @@ class RepoMapTool(BaseTool):
 
         tokens_used = 0
         for path, score in ranked:
-            skip_summary = path in mentioned
+            skip_summary = req.skip_mentioned_summary and path in mentioned
             summary = None
             summary_tokens = 0
 
@@ -486,9 +485,13 @@ class RepoMapTool(BaseTool):
             },
         }
 
-    def get_mcp_definition(self) -> MCPToolDefinition:
+    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+        def repomap(req: RepoMapReq) -> List[RepoMapScore]:
+            return self.execute(project, req)
+
         schema = self.get_openai_schema()
         return MCPToolDefinition(
+            fn=repomap,
             name=self.tool_name,
             description=schema.get("description"),
         )

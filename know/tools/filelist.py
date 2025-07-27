@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import fnmatch
 from typing import Sequence, List, Optional
 
@@ -12,7 +10,7 @@ from .base import BaseTool, MCPToolDefinition
 
 
 class ListFilesReq(BaseModel):
-    patterns: Sequence[str] | None = None,
+    patterns: Sequence[str]
 
 
 class FileListItem(BaseModel):
@@ -86,9 +84,14 @@ class ListFilesTool(BaseTool):
             },
         }
 
-    def get_mcp_definition(self) -> MCPToolDefinition:
+    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+        def filelist(req: ListFilesReq) -> List[FileListItem]:
+            return self.execute(project, req)
+
         schema = self.get_openai_schema()
+
         return MCPToolDefinition(
+            fn=filelist,
             name=self.tool_name,
             description=schema.get("description"),
         )
