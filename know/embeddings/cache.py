@@ -13,7 +13,9 @@ from know.models import Vector
 
 
 class EmbeddingCacheBackend(ABC):
-    TOUCH_BATCH_SIZE = 100
+    def __init__(self, max_size: Optional[int], trim_batch_size: int):
+        self._max_size = max_size
+        self._trim_batch_size = trim_batch_size
 
     @abstractmethod
     def get_vector(self, model: str, hash_: bytes) -> Optional[Vector]:
@@ -33,11 +35,17 @@ class EmbeddingCacheBackend(ABC):
 
 
 class BaseSQLCacheBackend(EmbeddingCacheBackend):
-    def __init__(self, max_size: Optional[int]):
-        self._max_size = max_size
+    TOUCH_BATCH_SIZE = 100
+    TRIM_CHECK_INTERVAL = 100
+
+    def __init__(self, max_size: Optional[int], trim_batch_size: int):
+        super().__init__(max_size, trim_batch_size)
+
         self._touched_hashes: set[tuple[str, bytes]] = set()
         self._lock = threading.Lock()
         self._conn: Any = None
+        self._insert_counts = defaultdict(int)
+        self._needs_startup_trim = defaultdict(lambda: True)
 
     def get_vector(self, model: str, hash_: bytes) -> Optional[Vector]:
         vector = self._fetch_vector_from_db(model, hash_)
@@ -47,10 +55,12 @@ class BaseSQLCacheBackend(EmbeddingCacheBackend):
                 self._touched_hashes.add((model, hash_))
                 if len(self._touched_hashes) >= self.TOUCH_BATCH_SIZE:
                     self._flush_touches_nolock()
+
         return vector
 
     def set_vector(self, model: str, hash_: bytes, vector: Vector) -> None:
         self._insert_vector_into_db(model, hash_, vector)
+
         if self._max_size is not None and self._max_size > 0:
             self._insert_counts[model] += 1
             if (
