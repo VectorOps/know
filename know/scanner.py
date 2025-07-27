@@ -22,7 +22,7 @@ from know.models import (
     SymbolRef,
 )
 from know.data import SymbolSearchQuery, SymbolFilter, ImportEdgeFilter
-from know.parsers import CodeParserRegistry, ParsedFile, ParsedSymbol, ParsedImportEdge
+from know.parsers import CodeParserRegistry, ParsedFile, ParsedNode, ParsedImportEdge
 from know.project import Project, ProjectCache
 from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings, schedule_symbol_embedding
 
@@ -390,7 +390,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
 
     emb_calc = project.embeddings
 
-    def _insert_symbol(psym: ParsedSymbol,
+    def _insert_symbol(psym: ParsedNode,
                        parent_id: str | None = None) -> str:
         """
         Insert *psym* as Node (recursively handles its children).

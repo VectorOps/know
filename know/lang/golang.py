@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, List
 from tree_sitter import Parser, Language
 import tree_sitter_go as tsgo
-from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
+from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedNode, ParsedImportEdge, ParsedNodeRef, get_node_text
 from know.models import (
     ProgrammingLanguage,
     NodeKind,
@@ -90,8 +90,8 @@ class GolangCodeParser(AbstractCodeParser):
     def _process_node(
         self,
         node,
-        parent: Optional[ParsedSymbol] = None,
-    ) -> List[ParsedSymbol]:
+        parent: Optional[ParsedNode] = None,
+    ) -> List[ParsedNode]:
         assert self.parsed_file is not None
         if node.type == "comment":
             return [self._make_symbol(node, kind=NodeKind.COMMENT)]
@@ -480,7 +480,7 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         node,
         parent=None,
-    ) -> List[ParsedSymbol]:
+    ) -> List[ParsedNode]:
         ident_node = next((c for c in node.children if c.type == "identifier"), None)
         if ident_node is None:
             return []
@@ -543,7 +543,7 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         node,
         parent=None,
-    ) -> List[ParsedSymbol]:
+    ) -> List[ParsedNode]:
         ident_node = next(
             (c for c in node.children if c.type in ("field_identifier", "identifier")),
             None,
@@ -724,7 +724,7 @@ class GolangCodeParser(AbstractCodeParser):
 
         walk(iface_node)
 
-    def _register_interface_method(self, m, parent: ParsedSymbol) -> None:
+    def _register_interface_method(self, m, parent: ParsedNode) -> None:
         ident = next((c for c in m.children if c.type in ("identifier", "field_identifier")), None)
         if ident is None:
             return
@@ -756,7 +756,7 @@ class GolangCodeParser(AbstractCodeParser):
         )
         parent.children.append(child)
 
-    def _handle_type_declaration(self, node) -> List[ParsedSymbol]:
+    def _handle_type_declaration(self, node) -> List[ParsedNode]:
         specs = [c for c in node.children if c.type == "type_spec"]
 
         # single-line declaration has no inner *type_spec* – treat the node itself
@@ -816,7 +816,7 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         node,
         parent=None,
-    ) -> List[ParsedSymbol]:
+    ) -> List[ParsedNode]:
         # --- obtain every `const_spec` regardless of grouping -------------
         specs = [c for c in node.children if c.type == "const_spec"]
 
@@ -863,7 +863,7 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         node,
         parent=None,
-    ) -> List[ParsedSymbol]:
+    ) -> List[ParsedNode]:
         # --- obtain every `var_spec` regardless of grouping -------------
         specs = [c for c in node.children if c.type == "var_spec"]
 
@@ -907,16 +907,16 @@ class GolangCodeParser(AbstractCodeParser):
 
         return symbols
 
-    def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
+    def _collect_symbol_refs(self, root) -> list[ParsedNodeRef]:
         """
-        Walk *root* recursively and return a list of ParsedSymbolRef objects.
+        Walk *root* recursively and return a list of ParsedNodeRef objects.
         • Collect call-expressions  -> SymbolRefType.CALL
         • Collect type usages       -> SymbolRefType.TYPE
         A best-effort import–resolution maps the reference to an imported
         package via self.parsed_file.imports.
         """
         assert self.parsed_file is not None
-        refs: list[ParsedSymbolRef] = []
+        refs: list[ParsedNodeRef] = []
         imports = self.parsed_file.imports
 
         def _resolve_pkg(full_name: str) -> str | None:
@@ -941,7 +941,7 @@ class GolangCodeParser(AbstractCodeParser):
             full_name = get_node_text(node)
             simple    = full_name.split(".")[-1]
             refs.append(
-                ParsedSymbolRef(
+                ParsedNodeRef(
                     name=simple,
                     raw=full_name,
                     type=SymbolRefType.TYPE,
@@ -958,7 +958,7 @@ class GolangCodeParser(AbstractCodeParser):
                     simple    = full_name.split(".")[-1]
                     raw_expr  = get_node_text(node)
                     refs.append(
-                        ParsedSymbolRef(
+                        ParsedNodeRef(
                             name=simple,
                             raw=raw_expr,
                             type=SymbolRefType.CALL,

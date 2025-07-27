@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, cast, List
 import tree_sitter as ts
 import tree_sitter_python as tspython
-from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
+from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedNode, ParsedImportEdge, ParsedNodeRef, get_node_text
 from know.models import (
     ProgrammingLanguage,
     NodeKind,
@@ -81,7 +81,7 @@ class PythonCodeParser(AbstractCodeParser):
         self,
         node: ts.Node,
         parent=None,
-    ) -> List[ParsedSymbol]:
+    ) -> List[ParsedNode]:
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
             return self._handle_import_statement(node, parent=parent)
         elif node.type in ("function_definition", "async_function_definition"):
@@ -120,7 +120,7 @@ class PythonCodeParser(AbstractCodeParser):
         return [self._create_literal_symbol(node, parent=parent)]
 
     # Symbol helpers
-    def _create_import_symbol(self, node: ts.Node, import_path: str | None, alias: str | None) -> ParsedSymbol:
+    def _create_import_symbol(self, node: ts.Node, import_path: str | None, alias: str | None) -> ParsedNode:
         return self._make_symbol(
             node,
             kind=NodeKind.IMPORT,
@@ -166,7 +166,7 @@ class PythonCodeParser(AbstractCodeParser):
             kind=NodeKind.TRYCATCH,
         )
 
-        def _build_block_symbol(block_node, block_name: str) -> ParsedSymbol:
+        def _build_block_symbol(block_node, block_name: str) -> ParsedNode:
             return self._make_symbol(
                 block_node,
                 kind=NodeKind.LITERAL,
@@ -193,7 +193,7 @@ class PythonCodeParser(AbstractCodeParser):
             parent_sym
         ]
 
-    def _handle_if_statement(self, node: ts.Node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+    def _handle_if_statement(self, node: ts.Node, parent: Optional[ParsedNode]=None) -> List[ParsedNode]:
         if_symbol = self._make_symbol(node, kind=NodeKind.IF)
 
         def _process_block_children(block_node, parent_symbol):
@@ -248,7 +248,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         return [if_symbol]
 
-    def _handle_import_statement(self, node: ts.Node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+    def _handle_import_statement(self, node: ts.Node, parent: Optional[ParsedNode]=None) -> List[ParsedNode]:
         raw_stmt = get_node_text(node)
 
         # Defaults
@@ -602,8 +602,8 @@ class PythonCodeParser(AbstractCodeParser):
         self,
         name: str,
         node: ts.Node,
-        parent: Optional[ParsedSymbol] = None,
-    ) -> ParsedSymbol:
+        parent: Optional[ParsedNode] = None,
+    ) -> ParsedNode:
         base_name = name.rsplit(".", 1)[-1]
         base_name = base_name.split("[", 1)[0]
         kind = NodeKind.CONSTANT if self._is_constant_name(base_name) else NodeKind.VARIABLE
@@ -721,7 +721,7 @@ class PythonCodeParser(AbstractCodeParser):
             symbol
         ]
 
-    def _create_function_symbol(self, node: ts.Node, parent=None) -> ParsedSymbol:
+    def _create_function_symbol(self, node: ts.Node, parent=None) -> ParsedNode:
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
@@ -738,7 +738,7 @@ class PythonCodeParser(AbstractCodeParser):
             comment=self._get_preceding_comment(node),
         )
 
-    def _handle_expression_statement(self, node: ts.Node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+    def _handle_expression_statement(self, node: ts.Node, parent: Optional[ParsedNode]=None) -> List[ParsedNode]:
         expr: str = get_node_text(node).strip()
 
         return [
@@ -803,13 +803,13 @@ class PythonCodeParser(AbstractCodeParser):
         return self._locate_module_path(import_path) is not None
 
     # Outgoing symbol-reference (call) collector
-    def _collect_symbol_refs(self, root: ts.Node) -> List[ParsedSymbolRef]:
+    def _collect_symbol_refs(self, root: ts.Node) -> List[ParsedNodeRef]:
         """
         Walk *root* recursively, record every call-expression as
-        ParsedSymbolRef(… type=SymbolRefType.CALL …) and try to map the call
+        ParsedNodeRef(… type=SymbolRefType.CALL …) and try to map the call
         to an imported package via `self.parsed_file.imports`.
         """
-        refs: list[ParsedSymbolRef] = []
+        refs: list[ParsedNodeRef] = []
 
         def visit(node: ts.Node) -> None:
             if node.type == "call":
@@ -831,7 +831,7 @@ class PythonCodeParser(AbstractCodeParser):
                             break
 
                     refs.append(
-                        ParsedSymbolRef(
+                        ParsedNodeRef(
                             name=simple_name,          # store only the plain symbol name
                             raw=raw,                   # keep full expression here
                             type=SymbolRefType.CALL,

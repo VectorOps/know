@@ -54,7 +54,7 @@ class ParsedPackage(BaseModel):
         }
 
 
-class ParsedSymbolRef(BaseModel):
+class ParsedNodeRef(BaseModel):
     name: str
     raw: str
     type: SymbolRefType
@@ -69,7 +69,7 @@ class ParsedSymbolRef(BaseModel):
         }
 
 
-class ParsedSymbol(BaseModel):
+class ParsedNode(BaseModel):
     name: Optional[str] = None
     fqn: Optional[str] = None
     body: str
@@ -87,7 +87,7 @@ class ParsedSymbol(BaseModel):
     comment: Optional[str] = None
     exported: Optional[bool] = None
 
-    children: List['ParsedSymbol'] = Field(default_factory=list)
+    children: List['ParsedNode'] = Field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -117,9 +117,9 @@ class ParsedFile(BaseModel):
     file_hash: Optional[str] = None
     last_updated: Optional[float] = None
 
-    symbols: List[ParsedSymbol] = Field(default_factory=list)
+    symbols: List[ParsedNode] = Field(default_factory=list)
     imports: List[ParsedImportEdge] = Field(default_factory=list)
-    symbol_refs: List[ParsedSymbolRef] = Field(default_factory=list)
+    symbol_refs: List[ParsedNodeRef] = Field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -154,11 +154,11 @@ class AbstractCodeParser(ABC):
         ...
 
     @abstractmethod
-    def _process_node(self, node: Any, parent: Optional[ParsedSymbol] = None) -> List[ParsedSymbol]:
+    def _process_node(self, node: Any, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
         ...
 
     @abstractmethod
-    def _collect_symbol_refs(self, root_node: Any) -> List[ParsedSymbolRef]:
+    def _collect_symbol_refs(self, root_node: Any) -> List[ParsedNodeRef]:
         ...
 
     def _handle_file(self, root_node: Any) -> None:
@@ -231,7 +231,7 @@ class AbstractCodeParser(ABC):
 
     def _make_fqn(self,
                   name: str | None,
-                  parent: ParsedSymbol | None = None) -> str | None:
+                  parent: ParsedNode | None = None) -> str | None:
         """
         Build a fully–qualified name for *name*.
 
@@ -257,16 +257,16 @@ class AbstractCodeParser(ABC):
         signature: SymbolSignature | None = None,
         docstring: str | None = None,
         comment: str | None = None,
-        children: list[ParsedSymbol] | None = None,
+        children: list[ParsedNode] | None = None,
         exported: bool | None = None,
-    ) -> ParsedSymbol:
+    ) -> ParsedNode:
         """
-        Build a ParsedSymbol and pre-populate all generic fields that can be
+        Build a ParsedNode and pre-populate all generic fields that can be
         derived directly from *node*.  Callers may override any value via the
         keyword arguments.
         """
         body = body if body is not None else get_node_text(node).strip()
-        return ParsedSymbol(
+        return ParsedNode(
             name=name,
             fqn=fqn,
             body=body,

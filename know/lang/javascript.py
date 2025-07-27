@@ -6,7 +6,7 @@ import tree_sitter_javascript as tsjs
 
 from know.parsers import (
     AbstractCodeParser, AbstractLanguageHelper, ParsedFile,
-    ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef,
+    ParsedPackage, ParsedNode, ParsedImportEdge, ParsedNodeRef,
     CodeParserRegistry, get_node_text
 )
 from know.models import (
@@ -75,7 +75,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         p = Path(rel_path)
         return ".".join(p.with_suffix("").parts)
 
-    def _process_node(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> List[ParsedSymbol]:
+    def _process_node(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
         if node.type == "import_statement":
             return self._handle_import(node, parent)
         elif node.type == "export_statement":
@@ -125,7 +125,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             node = obj
         return False, None
 
-    def _handle_generic_statement(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_generic_statement(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         return [self._create_literal_symbol(node)]
 
     def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
@@ -145,7 +145,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return physical, virtual, False
         return None, module, True
 
-    def _handle_import(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_import(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         raw = get_node_text(node)
         spec_node = next((c for c in node.children if c.type == "string"), None)
         if spec_node is None:
@@ -174,7 +174,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 visibility=Visibility.PUBLIC,
             )]
 
-    def _handle_export_clause(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_export_clause(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         exported_names: set[str] = set()
         for spec in (c for c in node.named_children if c.type == "export_specifier"):
             name_node  = spec.child_by_field_name("name") \
@@ -209,7 +209,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     visibility=Visibility.PUBLIC,
                     exported=True)]
 
-    def _handle_export(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_export(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         decl_handled   = False
         default_seen = False
         sym = self._make_symbol(
@@ -257,8 +257,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
             sym
         ]
 
-    def _handle_expression(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
-        children: list[ParsedSymbol] = []
+    def _handle_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        children: list[ParsedNode] = []
         for ch in node.named_children:
             if ch.type == "assignment_expression":
                 lhs = ch.child_by_field_name("left")
@@ -368,9 +368,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
         self,
         holder_node: ts.Node,
         arrow_node: ts.Node,
-        parent: Optional[ParsedSymbol] = None,
+        parent: Optional[ParsedNode] = None,
         exported: bool = False,
-    ) -> Optional[ParsedSymbol]:
+    ) -> Optional[ParsedNode]:
         name = self._resolve_arrow_function_name(holder_node)
         if not name:
             return None
@@ -428,9 +428,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
         self,
         holder_node: ts.Node,
         class_node: ts.Node,
-        parent: Optional[ParsedSymbol] = None,
+        parent: Optional[ParsedNode] = None,
         exported: bool = False,
-    ) -> Optional[ParsedSymbol]:
+    ) -> Optional[ParsedNode]:
         name = self._resolve_class_expression_name(holder_node)
         if not name:
             return None
@@ -472,7 +472,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                         sym.children.append(v)
         return sym
 
-    def _handle_lexical(self, node: ts.Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+    def _handle_lexical(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         lexical_kw = get_node_text(node).lstrip().split()[0] if get_node_text(node).lstrip() else ""
         is_const_decl = node.text is not None and node.text.lstrip().startswith(b"const")
         base_kind = NodeKind.CONSTANT if is_const_decl else NodeKind.VARIABLE
@@ -529,7 +529,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             sym
         ]
 
-    def _create_literal_symbol(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> ParsedSymbol:
+    def _create_literal_symbol(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> ParsedNode:
         txt  = get_node_text(node).strip()
         return self._make_symbol(
             node,
@@ -563,8 +563,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     )
                 )
 
-    def _collect_symbol_refs(self, root: ts.Node) -> list[ParsedSymbolRef]:
-        refs: list[ParsedSymbolRef] = []
+    def _collect_symbol_refs(self, root: ts.Node) -> list[ParsedNodeRef]:
+        refs: list[ParsedNodeRef] = []
         for _, match in self._JS_REF_QUERY.matches(root):
             node_call = node_ctor = node_type = None
             node_target: Optional[ts.Node] = None
@@ -601,7 +601,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     to_pkg_path = imp.virtual_path
                     break
             refs.append(
-                ParsedSymbolRef(
+                ParsedNodeRef(
                     name=simple_name,
                     raw=raw,
                     type=ref_type,
@@ -619,7 +619,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 return ident
         return None
 
-    def _create_variable_symbol(self, node: ts.Node, parent: ParsedSymbol | None = None, exported: bool = False) -> Optional[ParsedSymbol]:
+    def _create_variable_symbol(self, node: ts.Node, parent: ParsedNode | None = None, exported: bool = False) -> Optional[ParsedNode]:
         ident = next(
             (c for c in node.children
              if c.type in ("identifier", "property_identifier")),
@@ -641,7 +641,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             exported=exported,
         )
 
-    def _create_method_symbol(self, node: ts.Node, parent: ParsedSymbol | None) -> ParsedSymbol:
+    def _create_method_symbol(self, node: ts.Node, parent: ParsedNode | None) -> ParsedNode:
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node) or "anonymous"
         sig = self._build_signature(node, name, prefix="")
@@ -657,7 +657,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             modifiers=mods,
         )
 
-    def _handle_method(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_method(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         return self._handle_function(node, parent=parent)
 
     def _build_signature(self, node: ts.Node, name: str, prefix: str = "") -> SymbolSignature:
@@ -697,7 +697,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             type_parameters=type_params,
         )
 
-    def _handle_function(self, node: ts.Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+    def _handle_function(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
         if name_node is None:
             return []
@@ -720,7 +720,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_class(self, node: ts.Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+    def _handle_class(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
         if name_node is None:
             return []
@@ -729,7 +729,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         tp = None  # JS does not have type parameters
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
         mods: list[Modifier] = []
-        children: list[ParsedSymbol] = []
+        children: list[ParsedNode] = []
         sym = self._make_symbol(
             node,
             kind=NodeKind.CLASS,
@@ -777,7 +777,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             sym
         ]
 
-    def _handle_comment(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_comment(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         return [
             self._make_symbol(
                 node,

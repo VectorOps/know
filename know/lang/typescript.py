@@ -8,7 +8,7 @@ import tree_sitter_typescript as tsts
 
 from know.parsers import (
     AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage,
-    ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
+    ParsedNode, ParsedImportEdge, ParsedNodeRef, get_node_text
 )
 from know.models import (
     ProgrammingLanguage, NodeKind, Visibility, Modifier,
@@ -94,7 +94,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         parts = p.with_suffix("").parts
         return ".".join(parts)
 
-    def _process_node(self, node, parent=None) -> List[ParsedSymbol]:
+    def _process_node(self, node, parent=None) -> List[ParsedNode]:
         if node.type == "import_statement":
             return self._handle_import(node, parent=parent)
         elif node.type == "import_equals_declaration":
@@ -168,7 +168,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return False, None
 
     # ------------------------------------------------------------------ #
-    def _handle_generic_statement(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_generic_statement(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         return [self._create_literal_symbol(node)]
 
     def _resolve_module(self, module: str) -> tuple[Optional[str], str, bool]:
@@ -194,7 +194,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # external package (npm, built-in, etc.)
         return None, module, True
 
-    def _handle_import(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_import(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         raw = get_node_text(node)
 
         # ── find module specifier ───────────────────────────────────────
@@ -237,7 +237,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 visibility=Visibility.PUBLIC,
             )]
 
-    def _handle_export(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_export(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         """
         Handle `export …` statements.
 
@@ -312,7 +312,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             sym
         ]
 
-    def _handle_export_clause(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+    def _handle_export_clause(self, node, parent: Optional[ParsedNode]=None) -> List[ParsedNode]:
         exported_names: set[str] = set()
         for spec in (c for c in node.named_children if c.type == "export_specifier"):
             # local/original identifier
@@ -439,7 +439,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             type_parameters=type_params,
         )
 
-    def _handle_function(self, node: ts.Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+    def _handle_function(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node)
         if not name:
@@ -467,7 +467,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_class(self, node: ts.Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+    def _handle_class(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node)
         if not name:
@@ -538,9 +538,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
         ]
 
     # ------------------------------------------------------------------ #
-    def _handle_interface(self, node: ts.Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+    def _handle_interface(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         """
-        Build a ParsedSymbol for a TypeScript interface and its members.
+        Build a ParsedNode for a TypeScript interface and its members.
         """
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node)
@@ -556,7 +556,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if tp is not None:
             mods.append(Modifier.GENERIC)
 
-        children: list[ParsedSymbol] = []
+        children: list[ParsedNode] = []
         body = next((c for c in node.children if c.type == "interface_body"), None)
         if body:
             for ch in body.named_children:
@@ -605,7 +605,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         ]
 
     # helpers reused by class + top level
-    def _create_method_symbol(self, node: ts.Node, parent: Optional[ParsedSymbol] | None) -> ParsedSymbol:
+    def _create_method_symbol(self, node: ts.Node, parent: Optional[ParsedNode] | None) -> ParsedNode:
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node) or "anonymous"
         sig = self._build_signature(node, name, prefix="")
@@ -635,7 +635,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 return ident
         return None
 
-    def _create_variable_symbol(self, node, parent: ParsedSymbol | None = None, exported: bool = False):
+    def _create_variable_symbol(self, node, parent: ParsedNode | None = None, exported: bool = False):
         # 1st-level search (as before)
         ident = next(
             (c for c in node.children
@@ -660,11 +660,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
             exported=exported,
         )
 
-    def _handle_method(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_method(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         # top-level method_definition is unusual; treat like function
         return self._handle_function(node, parent=parent)
 
-    def _handle_comment(self, node: ts.Node, parent: Optional[ParsedSymbol] = None):
+    def _handle_comment(self, node: ts.Node, parent: Optional[ParsedNode] = None):
         return [
             self._make_symbol(
                 node,
@@ -673,9 +673,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_type_alias(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_type_alias(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         """
-        Build a ParsedSymbol for a TypeScript `type Foo = …` alias.
+        Build a ParsedNode for a TypeScript `type Foo = …` alias.
         """
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node)
@@ -706,7 +706,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_enum(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_enum(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node)
         if not name:
@@ -715,7 +715,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         raw_header = get_node_text(node).split("{", 1)[0].strip()
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
-        children: list[ParsedSymbol] = []
+        children: list[ParsedNode] = []
 
         body = next((c for c in node.children if c.type == "enum_body"), None)
         if body is None:
@@ -751,7 +751,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
                 if not m_name:
                     continue
-                # build ParsedSymbol for the valid member (cases 1 & 2)
+                # build ParsedNode for the valid member (cases 1 & 2)
                 children.append(
                     self._make_symbol(
                         member,
@@ -773,8 +773,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_expression(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
-        children: list[ParsedSymbol] = []
+    def _handle_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        children: list[ParsedNode] = []
 
         for ch in node.named_children:
             if ch.type in self._NAMESPACE_NODES:
@@ -919,11 +919,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
         self,
         holder_node: ts.Node,
         arrow_node: ts.Node,
-        parent: Optional[ParsedSymbol] = None,
+        parent: Optional[ParsedNode] = None,
         exported: bool = False,
-    ) -> Optional[ParsedSymbol]:
+    ) -> Optional[ParsedNode]:
         """
-        Create a ParsedSymbol for one arrow-function found inside *holder_node*.
+        Create a ParsedNode for one arrow-function found inside *holder_node*.
         """
         # ---------- name resolution -----------------------------------
         name = self._resolve_arrow_function_name(holder_node)
@@ -991,9 +991,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
         self,
         holder_node: ts.Node,
         class_node: ts.Node,
-        parent: Optional[ParsedSymbol] = None,
+        parent: Optional[ParsedNode] = None,
         exported: bool = False,
-    ) -> Optional[ParsedSymbol]:
+    ) -> Optional[ParsedNode]:
         name = self._resolve_class_expression_name(holder_node)
         if not name:
             return None
@@ -1044,7 +1044,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         sym.children.append(v)
         return sym
 
-    def _handle_lexical(self, node: ts.Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+    def _handle_lexical(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         node_text = get_node_text(node).lstrip()
         if not node_text:
             return []
@@ -1113,7 +1113,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             sym
         ]
 
-    def _create_literal_symbol(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> ParsedSymbol:
+    def _create_literal_symbol(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> ParsedNode:
         """
         Fallback symbol for nodes that did not yield a real symbol.
         Produces a NodeKind.LITERAL with a best-effort name.
@@ -1152,7 +1152,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     )
                 )
 
-    def _handle_namespace(self, node: ts.Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+    def _handle_namespace(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name") or \
                     next((c for c in node.named_children
                             if c.type in ("identifier", "property_identifier")), None)
@@ -1160,7 +1160,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if not name:
             return []
 
-        children: list[ParsedSymbol] = []
+        children: list[ParsedNode] = []
 
         # body container
         # TODO: Warn if we found non statement_block node
@@ -1202,7 +1202,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             sym,
         ]
 
-    def _handle_import_equals(self, node: ts.Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
+    def _handle_import_equals(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         alias_node = node.child_by_field_name("name")
         req_node   = node.child_by_field_name("module")    # external_module_reference
         str_node   = next((c for c in req_node.children if c.type == "string"), None) if req_node else None
@@ -1229,7 +1229,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                                   kind=NodeKind.IMPORT,
                                   visibility=Visibility.PUBLIC)]
 
-    def _collect_symbol_refs(self, root) -> list[ParsedSymbolRef]:
+    def _collect_symbol_refs(self, root) -> list[ParsedNodeRef]:
         """
         Extract outgoing references using a pre-compiled tree-sitter query.
 
@@ -1237,7 +1237,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         • new_expression    → SymbolRefType.TYPE
         • type identifiers  → SymbolRefType.TYPE
         """
-        refs: list[ParsedSymbolRef] = []
+        refs: list[ParsedNodeRef] = []
 
         for _, match in self._TS_REF_QUERY.matches(root):
             # initialise
@@ -1284,7 +1284,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     break
 
             refs.append(
-                ParsedSymbolRef(
+                ParsedNodeRef(
                     name=simple_name,
                     raw=raw,
                     type=ref_type,
