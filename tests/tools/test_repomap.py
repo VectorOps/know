@@ -9,14 +9,8 @@ from know.models import (
 from know.project import Project
 from know.stores.memory import InMemoryDataRepository
 from know.scanner import ScanResult
+from know.settings import ProjectSettings
 from know.tools.repomap import RepoMap, RepoMapTool, RepoMapReq
-
-
-class _DummySettings:
-    # the Project instance only stores this object – none of the attrs are
-    # used by RepoMap – so keep it minimal.
-    repository_backend = "memory"
-    project_path = None
 
 
 def _create_file(repo_id: str, pkg_id: str, path: str):
@@ -79,7 +73,8 @@ def _build_project():
     # so edge-weight boosting on “beta” can dominate the distribution.
     dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "func"))
 
-    project = Project(_DummySettings(), dr, dr.repo.get_by_id(repo_id))
+    settings = ProjectSettings(project_path="/dummy")
+    project = Project(settings, dr, dr.repo.get_by_id(repo_id))
     return project, f_a.path, f_b.path, f_c.path, f_d.path
 
 
@@ -109,7 +104,8 @@ def test_repo_map_build_and_refresh():
     dr.symbolref.create(r1)
 
     # build project + graph
-    project = Project(_DummySettings(), dr, dr.repo.get_by_id(repo_id))
+    settings = ProjectSettings(project_path="/dummy")
+    project = Project(settings, dr, dr.repo.get_by_id(repo_id))
     rm = RepoMap(project)
     rm.initialize()                       # RepoMap now builds itself via `initialize`
 
