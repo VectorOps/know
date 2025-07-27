@@ -33,6 +33,7 @@ def _build_cache_backend(
     name: str | None,
     path: str | None,
     size: int | None,
+    trim_batch_size: int,
 ) -> EmbeddingCacheBackend | None:
     if name is None:
         return None
@@ -42,7 +43,7 @@ def _build_cache_backend(
     }
     if name not in backend_map:
         raise ValueError(f"Unknown cache backend: {name}")
-    return backend_map[name](path, max_size=size)
+    return backend_map[name](path, max_size=size, trim_batch_size=trim_batch_size)
 
 
 class EmbeddingWorker:
@@ -64,6 +65,7 @@ class EmbeddingWorker:
         cache_backend: str | None = None,
         cache_path: str | None = None,
         cache_size: int | None = None,
+        cache_trim_batch_size: int = 100,
         batch_size: int = 1,
         batch_wait_ms: float = 50,
         calc_kwargs: any = None,
@@ -73,7 +75,7 @@ class EmbeddingWorker:
         self._device = device
         self._calc_kwargs = calc_kwargs
         self._cache_manager: EmbeddingCacheBackend | None = _build_cache_backend(
-            cache_backend, cache_path, cache_size
+            cache_backend, cache_path, cache_size, cache_trim_batch_size
         )
         self._calc: Optional[EmbeddingCalculator] = None  # lazy – initialised in worker thread
 

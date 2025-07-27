@@ -52,7 +52,14 @@ class BaseSQLCacheBackend(EmbeddingCacheBackend):
     def set_vector(self, model: str, hash_: bytes, vector: Vector) -> None:
         self._insert_vector_into_db(model, hash_, vector)
         if self._max_size is not None and self._max_size > 0:
-            self._trim_db(model)
+            self._insert_counts[model] += 1
+            if (
+                self._needs_startup_trim[model]
+                or self._insert_counts[model] >= self.TRIM_CHECK_INTERVAL
+            ):
+                self._trim_db(model)
+                self._insert_counts[model] = 0
+                self._needs_startup_trim[model] = False
 
     def flush(self) -> None:
         with self._lock:
