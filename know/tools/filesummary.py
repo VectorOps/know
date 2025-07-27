@@ -16,8 +16,6 @@ class SummarizeFilesReq(BaseModel):
 
 class SummarizeFilesTool(BaseTool):
     tool_name = "vectorops_summarize_files"
-    tool_input = SummarizeFilesReq
-    tool_output = List[FileSummary]
 
     def execute(
         self,
@@ -25,7 +23,7 @@ class SummarizeFilesTool(BaseTool):
         req: SummarizeFilesReq,
     ) -> List[FileSummary]:
         summary_mode = req.summary_mode
-        if summary_mode is str:
+        if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)
 
         summaries: list[FileSummary] = []
