@@ -4,7 +4,7 @@ import re
 import logging
 from pathlib import Path
 from typing import Optional, cast, List
-from tree_sitter import Parser, Language
+from tree_sitter import Parser, Language, Node
 import tree_sitter_python as tspython
 from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
 from know.models import (
@@ -808,7 +808,7 @@ class PythonCodeParser(AbstractCodeParser):
         return self._locate_module_path(import_path) is not None
 
     # Outgoing symbol-reference (call) collector
-    def _collect_symbol_refs(self, root) -> List[ParsedSymbolRef]:
+    def _collect_symbol_refs(self, root: Node) -> List[ParsedSymbolRef]:
         """
         Walk *root* recursively, record every call-expression as
         ParsedSymbolRef(… type=SymbolRefType.CALL …) and try to map the call
@@ -816,7 +816,7 @@ class PythonCodeParser(AbstractCodeParser):
         """
         refs: list[ParsedSymbolRef] = []
 
-        def visit(node):
+        def visit(node: Node) -> None:
             if node.type == "call":
                 fn_node = node.child_by_field_name("function")
                 if fn_node is not None:
