@@ -1,7 +1,7 @@
 import fnmatch
 from typing import Sequence, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from know.project import Project
 from know.models import ProgrammingLanguage
@@ -11,13 +11,15 @@ from .base import BaseTool, MCPToolDefinition
 
 class ListFilesReq(BaseModel):
     """Request model for listing files."""
-    patterns: Sequence[str]
+    patterns: Sequence[str] = Field(description="List of fnmatch-style glob patterns to match against file paths.")
 
 
 class FileListItem(BaseModel):
     """Represents a file in the project for listing."""
-    path: str
-    language: Optional[ProgrammingLanguage] = None
+    path: str = Field(description="The path of the file relative to the project root.")
+    language: Optional[ProgrammingLanguage] = Field(
+        default=None, description="The programming language of the file, if identified."
+    )
 
 
 class ListFilesTool(BaseTool):
