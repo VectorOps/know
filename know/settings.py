@@ -82,6 +82,10 @@ class PythonSettings(LanguageSettings):
     )
 
 
+def _get_default_languages() -> dict[str, LanguageSettings]:
+    return {"python": PythonSettings()}
+
+
 class ProjectSettings(BaseSettings):
     """Top-level settings for a project."""
 
@@ -127,7 +131,7 @@ class ProjectSettings(BaseSettings):
     )
     sync_embeddings: bool = Field(False, description="If True, embeddings will be synchronized.")
     embedding: EmbeddingSettings = Field(
-        default_factory=EmbeddingSettings,
+        default_factory=lambda: EmbeddingSettings(),
         description="An `EmbeddingSettings` object with embedding-specific configurations.",
     )
     tools: ToolSettings = Field(
@@ -135,9 +139,7 @@ class ProjectSettings(BaseSettings):
         description="A `ToolSettings` object with tool-specific configurations.",
     )
     languages: dict[str, LanguageSettings] = Field(
-        default_factory=lambda: {
-            "python": PythonSettings(),
-        },
+        default_factory=_get_default_languages,
         description="A dictionary of language-specific settings, keyed by language name.",
     )
 
@@ -218,7 +220,7 @@ def iter_settings(
                 if isinstance(field.validation_alias, str):
                     choices.append(field.validation_alias)
                 elif hasattr(field.validation_alias, 'choices'):  # AliasChoices
-                    choices.extend(field.validation_alias.choices)
+                    choices.extend(map(str, field.validation_alias.choices))
 
             if choices:
                 for choice in choices:
@@ -263,10 +265,13 @@ def iter_settings(
 
             # recurse into nested models
             ann = field.annotation
-            if (
-                hasattr(ann, "__pydantic_generic_metadata__")  # parametrised generics
-                or isinstance(ann, type) and issubclass(ann, BaseModel)
-            ):
+            if hasattr(ann, "__pydantic_generic_metadata__"):  # parametrised generics
+                metadata = getattr(ann, "__pydantic_generic_metadata__")
+                # for List[SomeModel], Dict[str, SomeModel], etc., recurse into SomeModel
+                for arg in metadata[1]:
+                    if isinstance(arg, type) and issubclass(arg, BaseModel):
+                        _walk(arg, path)
+            elif isinstance(ann, type) and issubclass(ann, BaseModel):
                 _walk(ann, path)
 
     _walk(model)
