@@ -36,7 +36,7 @@ _GO_PKG_SUFFIXES: tuple[str, ...] = (
     "_netbsd", "_dragonfly", "_plan9", "_solaris",
 )
 
-_parser: Parser = None
+_parser: Optional[Parser] = None
 def _get_parser():
     global _parser
     if not _parser:
@@ -52,8 +52,8 @@ class GolangCodeParser(AbstractCodeParser):
         self.rel_path = rel_path
         self.project = project
         self.source_bytes: bytes = b""
-        self.module_path: str | None = None
-        self.module_root_abs_path: str | None = None
+        self.module_path: Optional[str] = None
+        self.module_root_abs_path: Optional[str] = None
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
@@ -90,7 +90,9 @@ class GolangCodeParser(AbstractCodeParser):
     def _process_node(
         self,
         node,
+        parent: Optional[ParsedSymbol] = None,
     ) -> List[ParsedSymbol]:
+        assert self.parsed_file is not None
         if node.type == "comment":
             return [self._make_symbol(node, kind=SymbolKind.COMMENT)]
         elif node.type == "package_clause":
@@ -248,18 +250,19 @@ class GolangCodeParser(AbstractCodeParser):
 
             full_path_with_suffix = f"{full_path}{suffix}" if suffix else full_path
             return full_path_with_suffix or pkg_ident or self._rel_to_virtual_path(self.rel_path)
+        else:
+            # no go.mod
+            rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
 
-        # no go.mod
-        rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
+            expected_pkg = rel_dir.split("/")[-1] if rel_dir else None
+            suffix: str = ""
+            if pkg_ident and expected_pkg and self._matches_with_allowed_suffix(pkg_ident, expected_pkg):
+                suffix = pkg_ident[len(expected_pkg):]
+            if suffix:
+                assert pkg_ident is not None
+                return f"{rel_dir}{suffix}" if rel_dir else pkg_ident
 
-        expected_pkg = rel_dir.split("/")[-1] if rel_dir else None
-        suffix: str = ""
-        if pkg_ident and expected_pkg and self._matches_with_allowed_suffix(pkg_ident, expected_pkg):
-            suffix = pkg_ident[len(expected_pkg):]
-        if suffix:
-            return f"{rel_dir}{suffix}" if rel_dir else pkg_ident
-
-        return rel_dir or "."
+            return rel_dir or "."
 
     # ---------------------------------------------------------------------  
     def _extract_preceding_comment(self, node) -> Optional[str]:
@@ -319,6 +322,7 @@ class GolangCodeParser(AbstractCodeParser):
         Translate a single `import_spec` tree-sitter node into a ParsedImportEdge
         and add it to *parsed_file.imports*.
         """
+        assert self.parsed_file is not None
         # raw text of the spec (e.g. `alias "foo/bar"` or `"fmt"`)
         raw_str: str = get_node_text(spec_node).strip()
 
@@ -623,6 +627,7 @@ class GolangCodeParser(AbstractCodeParser):
         struct_node,
         parent=None,
     ) -> None:
+        assert self.parsed_file is not None
         # locate field_declaration_list
         fld_list = next((c for c in struct_node.children if c.type == "field_declaration_list"), None)
         if fld_list is None:
@@ -905,6 +910,7 @@ class GolangCodeParser(AbstractCodeParser):
         A best-effort import–resolution maps the reference to an imported
         package via self.parsed_file.imports.
         """
+        assert self.parsed_file is not None
         refs: list[ParsedSymbolRef] = []
 
         def _resolve_pkg(full_name: str) -> str | None:
