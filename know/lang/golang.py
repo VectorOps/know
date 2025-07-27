@@ -145,8 +145,8 @@ class GolangCodeParser(AbstractCodeParser):
                                 if ln.startswith("module"):
                                     parts = ln.split()
                                     if len(parts) >= 2:
-                                        module_path = parts[1]
-                                        gomods_map[os.path.normpath(root)] = module_path
+                                        found_module_path = parts[1]
+                                        gomods_map[os.path.normpath(root)] = found_module_path
                                     break
                     except OSError:
                         pass
@@ -249,18 +249,23 @@ class GolangCodeParser(AbstractCodeParser):
                 suffix = pkg_ident[len(expected_pkg):]
 
             full_path_with_suffix = f"{full_path}{suffix}" if suffix else full_path
-            return full_path_with_suffix or pkg_ident or self._rel_to_virtual_path(self.rel_path)
+            
+            if full_path_with_suffix:
+                return full_path_with_suffix
+            if pkg_ident:
+                return pkg_ident
+            return self._rel_to_virtual_path(self.rel_path)
         else:
             # no go.mod
             rel_dir = os.path.dirname(self.rel_path).replace(os.sep, "/").strip("/")
 
             expected_pkg = rel_dir.split("/")[-1] if rel_dir else None
-            suffix: str = ""
+            pkg_suffix: str = ""
             if pkg_ident and expected_pkg and self._matches_with_allowed_suffix(pkg_ident, expected_pkg):
-                suffix = pkg_ident[len(expected_pkg):]
-            if suffix:
+                pkg_suffix = pkg_ident[len(expected_pkg):]
+            if pkg_suffix:
                 assert pkg_ident is not None
-                return f"{rel_dir}{suffix}" if rel_dir else pkg_ident
+                return f"{rel_dir}{pkg_suffix}" if rel_dir else pkg_ident
 
             return rel_dir or "."
 
@@ -912,9 +917,10 @@ class GolangCodeParser(AbstractCodeParser):
         """
         assert self.parsed_file is not None
         refs: list[ParsedSymbolRef] = []
+        imports = self.parsed_file.imports
 
         def _resolve_pkg(full_name: str) -> str | None:
-            for imp in self.parsed_file.imports:
+            for imp in imports:
                 # Case 1: Explicit alias (e.g., `import f "fmt"`)
                 # This includes blank imports `_ "..."` which do not expose symbols.
                 if imp.alias and imp.alias != "_":
