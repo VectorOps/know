@@ -67,7 +67,7 @@ def main() -> None:
     search_tool = ToolRegistry.get("vectorops_search_symbols")
 
     print("Interactive symbol search.  Type '/exit' or Ctrl-D to quit.")
-    session = PromptSession(history=FileHistory(".symbol_search_history"))
+    session: PromptSession = PromptSession(history=FileHistory(".symbol_search_history"))
     with patch_stdout():
         while True:
             try:

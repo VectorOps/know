@@ -77,7 +77,7 @@ def main() -> None:
     summary_mode: SummaryMode = SummaryMode.ShortSummary
 
     print("RepoMap interactive CLI.  Type '/help' for commands, '/exit' to quit.")
-    session = PromptSession(history=FileHistory(".repomap_history"))
+    session: PromptSession = PromptSession(history=FileHistory(".repomap_history"))
     with patch_stdout():
         while True:
             try:
