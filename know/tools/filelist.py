@@ -10,15 +10,18 @@ from .base import BaseTool, MCPToolDefinition
 
 
 class ListFilesReq(BaseModel):
+    """Request model for listing files."""
     patterns: Sequence[str]
 
 
 class FileListItem(BaseModel):
+    """Represents a file in the project for listing."""
     path: str
     language: Optional[ProgrammingLanguage] = None
 
 
 class ListFilesTool(BaseTool):
+    """Tool to list files in the project matching glob patterns."""
     tool_name = "vectorops_list_files"
     tool_input = ListFilesReq
     tool_output = List[FileListItem]
@@ -29,20 +32,10 @@ class ListFilesTool(BaseTool):
         req: ListFilesReq,
     ) -> List[FileListItem]:
         """
-        Return all project files whose *path* matches at least one of the
-        supplied glob *patterns* (fnmatch-style).
-        If *patterns* is None / empty → return an empty list.
+        Return project files whose path matches any of the supplied glob patterns.
 
-        Parameters
-        ----------
-        project:
-            The active Project instance.
-        req:
-            Request object.
-
-        Returns
-        -------
-        List[FileListItem]
+        If `patterns` is None or empty, return an empty list. The matching is
+        done fnmatch-style.
         """
         repo_id = project.get_repo().id
         file_repo = project.data_repository.file
@@ -62,6 +55,7 @@ class ListFilesTool(BaseTool):
         ]
 
     def get_openai_schema(self) -> dict:
+        """Return the OpenAI schema for this tool."""
         return {
             "name": self.tool_name,
             "description": (
@@ -85,7 +79,9 @@ class ListFilesTool(BaseTool):
         }
 
     def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+        """Return the MCP tool definition for this tool."""
         def filelist(req: ListFilesReq) -> List[FileListItem]:
+            """List files in the project matching glob patterns."""
             return self.execute(project, req)
 
         schema = self.get_openai_schema()
