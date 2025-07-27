@@ -3,7 +3,7 @@ import math
 
 from know.stores.duckdb import DuckDBDataRepository
 from know.stores.memory import InMemoryDataRepository
-from know.models import RepoMetadata, FileMetadata, SymbolMetadata
+from know.models import RepoMetadata, FileMetadata, Node
 from know.data import SymbolSearchQuery
 
 pytest.importorskip("sentence_transformers")
@@ -77,7 +77,7 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
         if theme not in ids_by_theme:
             ids_by_theme[theme] = []
         ids_by_theme[theme].append(sid)
-        sym_repo.create(SymbolMetadata(
+        sym_repo.create(Node(
             id=sid, name=f"{theme}{i}", repo_id=rid, file_id=fid,
             body=body, docstring=docstring,
             embedding_doc_vec=vec,

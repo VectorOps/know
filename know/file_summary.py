@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from know.logger import logger
 from know.parsers import CodeParserRegistry, AbstractLanguageHelper
 from know.project import Project
-from know.models import ImportEdge, Visibility, SymbolMetadata, SymbolKind
+from know.models import ImportEdge, Visibility, Node, SymbolKind
 from know.data import ImportEdgeFilter, SymbolFilter
 
 
@@ -23,7 +23,7 @@ class FileSummary(BaseModel):
     content: str = Field(..., description="The generated summary content of the file.")
 
 
-def _symbol_to_text(sym: SymbolMetadata, include_docs: bool = False) -> str:
+def _symbol_to_text(sym: Node, include_docs: bool = False) -> str:
     """Generate a simple text representation of a symbol."""
     parts: list[str] = []
     if sym.signature and sym.signature.raw:

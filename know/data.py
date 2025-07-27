@@ -4,7 +4,7 @@ from know.models import (
     RepoMetadata,
     PackageMetadata,
     FileMetadata,
-    SymbolMetadata,
+    Node,
     ImportEdge,
     SymbolRef,
     SymbolKind,
@@ -161,37 +161,37 @@ class SymbolSearchQuery:
     offset: Optional[int] = None
 
 
-class AbstractSymbolMetadataRepository(ABC):
+class AbstractNodeRepository(ABC):
     @abstractmethod
-    def get_by_id(self, symbol_id: str) -> Optional[SymbolMetadata]:
+    def get_by_id(self, symbol_id: str) -> Optional[Node]:
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, item_ids: List[str]) -> List[SymbolMetadata]:
+    def get_list_by_ids(self, item_ids: List[str]) -> List[Node]:
         pass
 
     @abstractmethod
     def delete_by_file_id(self, file_id: str) -> None:
         """
-        Delete every SymbolMetadata whose ``file_id`` equals *file_id*.
+        Delete every Node whose ``file_id`` equals *file_id*.
         Return number of deleted rows.
         """
         pass
 
     @abstractmethod
-    def get_list(self, flt: SymbolFilter) -> List[SymbolMetadata]:
+    def get_list(self, flt: SymbolFilter) -> List[Node]:
         pass
 
     @abstractmethod
-    def search(self, repo_id: str, query: SymbolSearchQuery) -> List[SymbolMetadata]:
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> List[Node]:
         pass
 
     @abstractmethod
-    def create(self, symbol: SymbolMetadata) -> SymbolMetadata:
+    def create(self, symbol: Node) -> Node:
         pass
 
     @abstractmethod
-    def update(self, symbol_id: str, data: Dict[str, Any]) -> Optional[SymbolMetadata]:
+    def update(self, symbol_id: str, data: Dict[str, Any]) -> Optional[Node]:
         pass
 
     @abstractmethod
@@ -295,7 +295,7 @@ class AbstractDataRepository(ABC):
 
     @property
     @abstractmethod
-    def symbol(self) -> AbstractSymbolMetadataRepository:
+    def symbol(self) -> AbstractNodeRepository:
         pass
 
     @property
@@ -315,19 +315,19 @@ class AbstractDataRepository(ABC):
 
 
 # Helpers
-def resolve_symbol_hierarchy(symbols: List[SymbolMetadata]) -> None:
+def resolve_symbol_hierarchy(symbols: List[Node]) -> None:
     """
     Populate in-memory parent/child links inside *symbols* **in-place**.
 
-    • parent_ref   ↔  points to the parent SymbolMetadata instance
-    • children     ↔  list with direct child SymbolMetadata instances
+    • parent_ref   ↔  points to the parent Node instance
+    • children     ↔  list with direct child Node instances
 
     Function is no-op when list is empty.
     """
     if not symbols:
         return
 
-    id_map: dict[str | None, SymbolMetadata] = {s.id: s for s in symbols if s.id}
+    id_map: dict[str | None, Node] = {s.id: s for s in symbols if s.id}
     # clear any previous links to avoid duplicates on repeated invocations
     for s in symbols:
         s.children.clear()
@@ -341,9 +341,9 @@ def resolve_symbol_hierarchy(symbols: List[SymbolMetadata]) -> None:
 
 
 def include_parents(
-    repo: AbstractSymbolMetadataRepository,
-    symbols: List[SymbolMetadata],
-) -> List[SymbolMetadata]:
+    repo: AbstractNodeRepository,
+    symbols: List[Node],
+) -> List[Node]:
     """
     Traverse all symbol parents and include them to in the tree.
     """
@@ -374,9 +374,9 @@ def include_parents(
 
 
 def include_direct_descendants(
-    repo: AbstractSymbolMetadataRepository,    # repository to fetch children
-    symbols: List[SymbolMetadata],             # initial search results
-) -> List[SymbolMetadata]:
+    repo: AbstractNodeRepository,    # repository to fetch children
+    symbols: List[Node],             # initial search results
+) -> List[Node]:
     """
     Ensure every symbol in *symbols* has its direct descendants attached.
     After resolving the hierarchy, any symbol that became a child of another

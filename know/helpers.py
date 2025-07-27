@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from typing import Union
 import pathspec
-from know.models import SymbolMetadata, Visibility
+from know.models import Visibility
 
 def compute_file_hash(abs_path: str) -> str:
     """Compute SHA256 hash of a file's contents."""

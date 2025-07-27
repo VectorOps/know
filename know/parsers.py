@@ -10,7 +10,7 @@ from know.models import (
     SymbolSignature,
     PackageMetadata,
     FileMetadata,
-    SymbolMetadata,
+    Node,
     ImportEdge,
     SymbolRefType,
 )
@@ -291,7 +291,7 @@ class AbstractLanguageHelper:
     """
     @abstractmethod
     def get_symbol_summary(self,
-                           sym: SymbolMetadata,
+                           sym: Node,
                            indent: int = 0,
                            include_comments: bool = False,
                            include_docs: bool = False,

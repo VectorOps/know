@@ -11,7 +11,7 @@ from know.parsers import (
 )
 from know.models import (
     ProgrammingLanguage, SymbolKind, Visibility, Modifier,
-    SymbolSignature, SymbolParameter, SymbolMetadata, ImportEdge,
+    SymbolSignature, SymbolParameter, Node, ImportEdge,
     SymbolRefType, FileMetadata,
 )
 from know.project import Project, ProjectCache
@@ -796,12 +796,12 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
 
     def get_symbol_summary(
         self,
-        sym: SymbolMetadata,
+        sym: Node,
         indent: int = 0,
         include_comments: bool = False,
         include_docs: bool = False,
         include_parents: bool = False,
-        child_stack: Optional[List[List[SymbolMetadata]]] = None,
+        child_stack: Optional[List[List[Node]]] = None,
     ) -> str:
         # ── optionally climb to the root and recurse back ──────────────
         if include_parents and sym.parent_ref:

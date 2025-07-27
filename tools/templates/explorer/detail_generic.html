@@ -11,7 +11,7 @@
     <pre><code>{{ summary | e }}</code></pre>
   {% endif %}
   {# Symbol body (pretty-printed with highlight.js)              #}
-  {% if item.__class__.__name__ == "SymbolMetadata" and item.body %}
+  {% if item.__class__.__name__ == "Node" and item.body %}
     <h2>Body</h2>
     <pre><code>{{ item.body | e }}</code></pre>
   {% endif %}

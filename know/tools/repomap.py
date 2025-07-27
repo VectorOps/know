@@ -10,7 +10,7 @@ import networkx as nx  # type: ignore
 from pydantic import BaseModel, Field
 from know.logger import logger
 from know.project import Project, ScanResult, ProjectComponent
-from know.models import SymbolMetadata, Visibility
+from know.models import Node, Visibility
 from know.file_summary import SummaryMode, build_file_summary
 from know.data import FileFilter, SymbolFilter, SymbolRefFilter
 
@@ -103,7 +103,7 @@ class RepoMap(ProjectComponent):
         # final descriptiveness
         return round((word_score + length_score) / 2.0, 4)
 
-    def _make_props(self, sym: SymbolMetadata) -> NameProps:
+    def _make_props(self, sym: Node) -> NameProps:
         assert sym.name is not None
         vis = (
             sym.visibility.value

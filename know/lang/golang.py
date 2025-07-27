@@ -13,7 +13,7 @@ from know.models import (
     Modifier,
     SymbolSignature,
     SymbolParameter,
-    SymbolMetadata,
+    Node,
     ImportEdge,
     SymbolRefType,
     FileMetadata,
@@ -1017,12 +1017,12 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         return f'import "{path}"'.strip()
 
     def get_symbol_summary(self,
-                           sym: SymbolMetadata,
+                           sym: Node,
                            indent: int = 0,
                            include_comments: bool = False,
                            include_docs: bool = False,
                            include_parents: bool = False,
-                           child_stack: Optional[List[List[SymbolMetadata]]] = None,
+                           child_stack: Optional[List[List[Node]]] = None,
                            ) -> str:
         """
         Produce a human-readable summary for *sym* (Go flavour).

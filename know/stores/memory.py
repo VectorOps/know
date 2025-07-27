@@ -5,7 +5,7 @@ from know.models import (
     RepoMetadata,
     PackageMetadata,
     FileMetadata,
-    SymbolMetadata,
+    Node,
     ImportEdge,
     SymbolRef,
 )
@@ -13,7 +13,7 @@ from know.data import (
     AbstractRepoMetadataRepository,
     AbstractPackageMetadataRepository,
     AbstractFileMetadataRepository,
-    AbstractSymbolMetadataRepository,
+    AbstractNodeRepository,
     AbstractImportEdgeRepository,
     AbstractSymbolRefRepository,
     AbstractDataRepository,
@@ -46,7 +46,7 @@ class _MemoryTables:
     repos:      dict[str, RepoMetadata]   = field(default_factory=dict)
     packages:   dict[str, PackageMetadata]= field(default_factory=dict)
     files:      dict[str, FileMetadata]   = field(default_factory=dict)
-    symbols:    dict[str, SymbolMetadata] = field(default_factory=dict)
+    symbols:    dict[str, Node] = field(default_factory=dict)
     edges:      dict[str, ImportEdge]     = field(default_factory=dict)
     symbolrefs: dict[str, SymbolRef]      = field(default_factory=dict)
     lock:       threading.RLock           = field(
@@ -184,7 +184,7 @@ class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata],
                 and (not flt.package_id or f.package_id == flt.package_id)
             ]
 
-class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], AbstractSymbolMetadataRepository):
+class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepository):
     RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
     RRF_CODE_WEIGHT: float = 0.7
     RRF_FTS_WEIGHT:  float = 0.3
@@ -209,7 +209,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         n = np.linalg.norm(a)
         return a / n if n else a
 
-    def _index_upsert(self, sym: SymbolMetadata) -> None:
+    def _index_upsert(self, sym: Node) -> None:
         if not sym.embedding_code_vec:
             return
 
@@ -220,12 +220,12 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         with self._lock:
             self._embeddings.pop(sid, None)
 
-    def create(self, item: SymbolMetadata) -> SymbolMetadata:
+    def create(self, item: Node) -> Node:
         res = super().create(item)
         self._index_upsert(item)
         return res
 
-    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[SymbolMetadata]:
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[Node]:
         res = super().update(item_id, data)
         if res:
             if res.embedding_code_vec:
@@ -240,14 +240,14 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             self._index_remove(item_id)
         return ok
 
-    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
+    def get_list_by_ids(self, symbol_ids: list[str]) -> list[Node]:
         syms = super().get_list_by_ids(symbol_ids)
         resolve_symbol_hierarchy(syms)
         return syms
 
-    def get_list(self, flt: SymbolFilter) -> list[SymbolMetadata]:
+    def get_list(self, flt: SymbolFilter) -> list[Node]:
         """
-        Return all SymbolMetadata objects that satisfy *flt*.
+        Return all Node objects that satisfy *flt*.
         Supports ids, parent_ids, file_id and/or package_id.
         """
         with self._lock:
@@ -281,7 +281,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
     def _bm25_ranks(
         self,
-        docs: list[tuple[SymbolMetadata, list[str]]],
+        docs: list[tuple[Node, list[str]]],
         query_tokens: list[str],
     ) -> dict[str, int]:
         """
@@ -314,10 +314,10 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
         scored.sort(key=lambda p: p[1], reverse=True)            # best first
         return {sid: rank + 1 for rank, (sid, _) in enumerate(scored)}
 
-    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[Node]:
         with self._lock:
             # candidate set: repo + scalar filters
-            candidates: list[SymbolMetadata] = [
+            candidates: list[Node] = [
                 s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
             ]
 
@@ -361,7 +361,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             if has_embedding:
                 qvec = self._norm(query.embedding_query) # type: ignore
                 id_candidates = {c.id for c in candidates}
-                sims: list[tuple[SymbolMetadata, float]] = []
+                sims: list[tuple[Node, float]] = []
                 for sid in id_candidates:
                     vec = self._embeddings.get(sid)
                     if vec is None:
@@ -455,7 +455,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         self._repo = InMemoryRepoMetadataRepository(tables)
         self._file = InMemoryFileMetadataRepository(tables)
         self._package = InMemoryPackageMetadataRepository(tables)
-        self._symbol = InMemorySymbolMetadataRepository(tables)
+        self._symbol = InMemoryNodeRepository(tables)
         self._importedge = InMemoryImportEdgeRepository(tables)
         self._symbolref  = InMemorySymbolRefRepository(tables)
 
@@ -478,7 +478,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         return self._file
 
     @property
-    def symbol(self) -> AbstractSymbolMetadataRepository:
+    def symbol(self) -> AbstractNodeRepository:
         """Access the symbol metadata repository."""
         return self._symbol
 

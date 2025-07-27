@@ -16,7 +16,7 @@ from know.logger import logger
 from know.models import (
     FileMetadata,
     PackageMetadata,
-    SymbolMetadata,
+    Node,
     ImportEdge,
     SymbolKind,
     SymbolRef,
@@ -384,7 +384,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             return f"{docstring}\n{body}"
         return body
 
-    _old_by_content: dict[str, SymbolMetadata] = {
+    _old_by_content: dict[str, Node] = {
         _get_embedding_text(s.body, s.docstring): s for s in existing_symbols
     }
 
@@ -393,7 +393,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     def _insert_symbol(psym: ParsedSymbol,
                        parent_id: str | None = None) -> str:
         """
-        Insert *psym* as SymbolMetadata (recursively handles its children).
+        Insert *psym* as Node (recursively handles its children).
         When an old symbol with identical body exists, its embedding vector
         (and model name) are copied instead of re-computing.
         """
@@ -417,7 +417,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         else:
             schedule_emb = emb_calc is not None
 
-        sm = SymbolMetadata(**sm_data)
+        sm = Node(**sm_data)
         symbol_repo.create(sm)
 
         if schedule_emb:
@@ -479,7 +479,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     repo_id = project.get_repo().id
 
     PAGE_SIZE = 1_000
-    orphan_methods: list[SymbolMetadata] = []
+    orphan_methods: list[Node] = []
     offset = 0
     while True:
         page = symbol_repo.get_list(
@@ -500,7 +500,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
         return
 
     # group methods by package for efficient lookup
-    by_pkg: dict[str | None, list[SymbolMetadata]] = {}
+    by_pkg: dict[str | None, list[Node]] = {}
     for m in orphan_methods:
         by_pkg.setdefault(m.package_id, []).append(m)
 

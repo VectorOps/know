@@ -116,7 +116,7 @@ class FileMetadata(BaseModel):
 
     # Runtime links
     package: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
-    symbols: List["SymbolMetadata"] = Field(default_factory=list, exclude=True, repr=False)
+    symbols: List["Node"] = Field(default_factory=list, exclude=True, repr=False)
 
 
 class SymbolParameter(BaseModel):
@@ -136,7 +136,7 @@ class SymbolSignature(BaseModel):
     type_parameters: Optional[str] = None   # raw "[T any, U comparable]" etc.
 
 
-class SymbolMetadata(BaseModel):
+class Node(BaseModel):
     id: str
     repo_id: str
     file_id: Optional[str] = None
@@ -173,8 +173,8 @@ class SymbolMetadata(BaseModel):
 
     # Runtime links
     file_ref: Optional[FileMetadata] = Field(default=None, exclude=True, repr=False)
-    parent_ref: Optional["SymbolMetadata"] = Field(default=None, exclude=True, repr=False)
-    children: List["SymbolMetadata"] = Field(default_factory=list, exclude=True, repr=False)
+    parent_ref: Optional["Node"] = Field(default=None, exclude=True, repr=False)
+    children: List["Node"] = Field(default_factory=list, exclude=True, repr=False)
 
 
 class ImportEdge(BaseModel):

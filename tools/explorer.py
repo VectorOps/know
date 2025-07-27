@@ -12,7 +12,7 @@ from know.tools.symbolsearch import SearchSymbolsTool
 from know.models import SymbolKind, Visibility
 from know.data     import (
     AbstractDataRepository, RepoMetadata, PackageMetadata, FileMetadata,
-    SymbolMetadata, ImportEdge, SymbolRef, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter, SymbolRefFilter
+    Node, ImportEdge, SymbolRef, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter, SymbolRefFilter
 )
 from know.file_summary import SummaryMode, build_file_summary
 
@@ -231,7 +231,7 @@ def create_app(project) -> Flask:
 
     def _link_to(obj):
         mapping = {RepoMetadata:"repo", PackageMetadata:"package", FileMetadata:"file",
-                   SymbolMetadata:"symbol", ImportEdge:"importedge", SymbolRef:"symbolref"}
+                   Node:"symbol", ImportEdge:"importedge", SymbolRef:"symbolref"}
         return url_for(f"{mapping[type(obj)]}_detail", **{f"{mapping[type(obj)]}_id": obj.id})
 
     app.jinja_env.globals["_link_to"] = _link_to

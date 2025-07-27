@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 from know.models import (
-    RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata,
+    RepoMetadata, FileMetadata, PackageMetadata, Node,
     ImportEdge, Vector, SymbolKind
 )
 from know.data import AbstractDataRepository, SymbolSearchQuery

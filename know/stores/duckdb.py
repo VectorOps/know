@@ -20,7 +20,7 @@ from know.models import (
     RepoMetadata,
     PackageMetadata,
     FileMetadata,
-    SymbolMetadata,
+    Node,
     SymbolSignature,
     ImportEdge,
     SymbolRef,
@@ -30,7 +30,7 @@ from know.data import (
     AbstractRepoMetadataRepository,
     AbstractPackageMetadataRepository,
     AbstractFileMetadataRepository,
-    AbstractSymbolMetadataRepository,
+    AbstractNodeRepository,
     AbstractImportEdgeRepository,
     AbstractSymbolRefRepository,
     AbstractDataRepository,
@@ -367,9 +367,9 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
         return [FileMetadata(**r) for r in rows]
 
 
-class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMetadataRepository):
+class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     table = "symbols"
-    model = SymbolMetadata
+    model = Node
 
     _json_fields = {"signature", "modifiers"}
     _compress_fields = {"body"}
@@ -382,7 +382,7 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
     RRF_CODE_WEIGHT: float = 0.7
     RRF_FTS_WEIGHT:  float = 0.3
 
-    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[Node]:
         q = Query.from_(self._table)
 
         # Candidates
@@ -539,12 +539,12 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
         self._execute(q)
 
-    def get_list_by_ids(self, symbol_ids: list[str]) -> list[SymbolMetadata]:
+    def get_list_by_ids(self, symbol_ids: list[str]) -> list[Node]:
         syms = super().get_list_by_ids(symbol_ids)
         resolve_symbol_hierarchy(syms)
         return syms
 
-    def get_list(self, flt: SymbolFilter) -> list[SymbolMetadata]:
+    def get_list(self, flt: SymbolFilter) -> list[Node]:
         q = Query.from_(self._table).select("*")
 
         if flt.parent_ids:
@@ -644,7 +644,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._file_repo    = DuckDBFileMetadataRepo(self._conn)
         self._package_repo = DuckDBPackageMetadataRepo(self._conn, self._file_repo)
         self._repo_repo    = DuckDBRepoMetadataRepo(self._conn)
-        self._symbol_repo  = DuckDBSymbolMetadataRepo(self._conn)
+        self._symbol_repo  = DuckDBNodeRepo(self._conn)
         self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
         self._symbolref_repo = DuckDBSymbolRefRepo(self._conn)
 
@@ -664,7 +664,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         return self._file_repo
 
     @property
-    def symbol(self) -> AbstractSymbolMetadataRepository:
+    def symbol(self) -> AbstractNodeRepository:
         return self._symbol_repo
 
     @property

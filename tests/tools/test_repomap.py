@@ -3,7 +3,7 @@ import pytest
 from know.helpers import generate_id
 from know.models import (
     RepoMetadata, PackageMetadata, FileMetadata,
-    SymbolMetadata, SymbolKind,
+    Node, SymbolKind,
     SymbolRef, SymbolRefType,
 )
 from know.project import Project
@@ -23,7 +23,7 @@ def _create_file(repo_id: str, pkg_id: str, path: str):
 
 
 def _create_symbol(repo_id: str, file_id: str, pkg_id: str, name="func"):
-    return SymbolMetadata(
+    return Node(
         id=generate_id(),
         repo_id=repo_id,
         file_id=file_id,

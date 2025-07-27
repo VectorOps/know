@@ -5,7 +5,7 @@ from know.models import (
     RepoMetadata,
     PackageMetadata,
     FileMetadata,
-    SymbolMetadata,
+    Node,
     ImportEdge,
     SymbolSignature,
     SymbolParameter,
@@ -100,7 +100,7 @@ def test_symbol_metadata_repository(data_repo):
 
     # create with signature
     sym_repo.create(
-        SymbolMetadata(
+        Node(
             id=sid,
             name="sym",
             file_id=fid,
@@ -144,19 +144,19 @@ def test_symbol_search(data_repo):
     file_repo.create(FileMetadata(id=fid, repo_id=rid, path="src/a.py"))
 
     # ---------- seed three symbols ----------
-    sym_repo.create(SymbolMetadata(
+    sym_repo.create(Node(
         id=make_id(), name="Alpha", repo_id=rid, file_id=fid,
         body='def Alpha(): pass',
         kind="function", visibility="public",
         docstring="Compute foo and bar."
     ))
-    sym_repo.create(SymbolMetadata(
+    sym_repo.create(Node(
         id=make_id(), name="Beta", repo_id=rid, file_id=fid,
         body='class Beta(): pass',
         kind="class", visibility="private",
         docstring="Baz qux docs."
     ))
-    sym_repo.create(SymbolMetadata(
+    sym_repo.create(Node(
         id=make_id(), name="Gamma", repo_id=rid, file_id=fid,
         body='Gamma = 10',
         kind="variable", visibility="public",
@@ -198,15 +198,15 @@ def test_symbol_embedding_search(data_repo):
     file_repo.create(FileMetadata(id=fid, repo_id=rid, path="src/vec.py"))
 
     # seed three symbols with simple, orthogonal 3-d vectors
-    sym_repo.create(SymbolMetadata(
+    sym_repo.create(Node(
         id=make_id(), name="VecA", repo_id=rid, file_id=fid,
         body="def VecA(): pass", embedding_code_vec=[1.0, 0.0, 0.0] + [0] * 1021
     ))
-    sym_repo.create(SymbolMetadata(
+    sym_repo.create(Node(
         id=make_id(), name="VecB", repo_id=rid, file_id=fid,
         body="def VecB(): pass", embedding_code_vec=[0.0, 1.0, 0.0] + [0] * 1021
     ))
-    sym_repo.create(SymbolMetadata(
+    sym_repo.create(Node(
         id=make_id(), name="VecC", repo_id=rid, file_id=fid,
         body="def VecC(): pass", embedding_code_vec=[0.0, 0.0, 1.0] + [0] * 1021
     ))
