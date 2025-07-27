@@ -63,6 +63,19 @@ class ToolSettings(BaseSettings):
     )
 
 
+class RepoMapSettings(BaseModel):
+    """Settings for the RepoMap tool."""
+
+    restart_prob: float = Field(
+        default=0.15,
+        description="Probability of restarting the random walk from a seed node. Lower values explore further from the seeds.",
+    )
+    min_symbol_len: int = Field(
+        default=3,
+        description="Minimum length of a token from the prompt to be considered a symbol.",
+    )
+
+
 class LanguageSettings(BaseModel):
     """Base class for language-specific settings."""
 
@@ -133,6 +146,10 @@ class ProjectSettings(BaseSettings):
     tools: ToolSettings = Field(
         default_factory=ToolSettings,
         description="A `ToolSettings` object with tool-specific configurations.",
+    )
+    repomap: RepoMapSettings = Field(
+        default_factory=RepoMapSettings,
+        description="Settings for the RepoMap tool."
     )
     languages: dict[str, LanguageSettings] = Field(
         default_factory=_get_default_languages,

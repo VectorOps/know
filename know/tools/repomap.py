@@ -15,7 +15,6 @@ from know.file_summary import SummaryMode, build_file_summary
 from know.data import FileFilter, SymbolFilter, SymbolRefFilter
 
 
-RESTART_PROB           = 0.15
 EDGE_W_DEF             = 3.0
 EDGE_W_REF             = 1.0
 EDGE_W_IMPORT          = 0.5
@@ -279,19 +278,9 @@ class RepoMapReq(BaseModel):
     limit: int = Field(
         default=LIMIT_DEFAULT, description="The maximum number of files to return."
     )
-    # TODO: Move to config
-    restart_prob: float = Field(
-        default=RESTART_PROB,
-        description="Probability of restarting the random walk from a seed node. Lower values explore further from the seeds.",
-    )
     summary_mode: SummaryMode | str = Field(
         default=SummaryMode.ShortSummary,
         description="The level of detail for the summary of each file.",
-    )
-    # TODO: Move to config
-    min_symbol_len: int = Field(
-        default=3,
-        description="Minimum length of a token from the prompt to be considered a symbol.",
     )
     skip_mentioned_summary: bool = Field(
         default=False,
@@ -378,7 +367,7 @@ class RepoMapTool(BaseTool):
                     tok = tok[:-1]
                 if not tok:
                     continue
-                if len(tok) < req.min_symbol_len:
+                if len(tok) < project.settings.repomap.min_symbol_len:
                     continue
 
                 last = tok.rsplit(".", 1)[-1]
@@ -387,7 +376,7 @@ class RepoMapTool(BaseTool):
                     for s in known_syms_lower_map[tok]:
                         symbol_names_set.add(s)
 
-                if len(last) >= req.min_symbol_len and last in known_syms_lower_map:
+                if len(last) >= project.settings.repomap.min_symbol_len and last in known_syms_lower_map:
                     for s in known_syms_lower_map[last]:
                         symbol_names_set.add(s)
 
@@ -426,7 +415,7 @@ class RepoMapTool(BaseTool):
         #  2. Run Random-Walk-with-Restart (= personalised PageRank)
         pr = nx.pagerank(
             G,
-            alpha=(1.0 - req.restart_prob),
+            alpha=(1.0 - project.settings.repomap.restart_prob),
             personalization=personalization,
             weight="weight",
         )
@@ -507,11 +496,6 @@ class RepoMapTool(BaseTool):
                         "default": LIMIT_DEFAULT,
                         "description": "The maximum number of files to return.",
                     },
-                    "restart_prob": {
-                        "type": "number",
-                        "default": RESTART_PROB,
-                        "description": "Probability of restarting the random walk from a seed node. Lower values explore further from the seeds.",
-                    },
                     "summary_mode": {
                         "type": "string",
                         "enum": summary_enum,
@@ -520,11 +504,6 @@ class RepoMapTool(BaseTool):
                             "The level of detail for the summary of each file "
                             "(`skip`/`summary_short`/`summary_full`/`full`)."
                         ),
-                    },
-                    "min_symbol_len": {
-                        "type": "integer",
-                        "default": 3,
-                        "description": "Minimum length of a token from the prompt to be considered a symbol.",
                     },
                     "skip_mentioned_summary": {
                         "type": "boolean",
