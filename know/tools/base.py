@@ -1,14 +1,25 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from know.project import Project
 from know.settings import ProjectSettings
-from typing import Dict, Type, Any
+from typing import Dict, Type, Any, List
 import inspect
 from enum import Enum
 from pydantic import BaseModel
 
 
+@dataclass
+class MCPToolDefinition:
+    name: str
+    title: str | None = None
+    description: str | None = None
+    structured_output: bool | None = None
+
+
 class BaseTool(ABC):
     tool_name: str
+    tool_input: BaseModel
+    tool_output: BaseModel | List[BaseModel]
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -19,6 +30,13 @@ class BaseTool(ABC):
     def get_openai_schema(self) -> dict:
         """
         Returns OpenAI function calling schema.
+        """
+        pass
+
+    @abstractmethod
+    def get_mcp_definition(self) -> MCPToolDefinition:
+        """
+        Returns MCP tool definition.
         """
         pass
 
