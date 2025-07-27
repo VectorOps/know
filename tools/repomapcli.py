@@ -61,9 +61,9 @@ def _print_scores(scores: List[Dict[str, Any]]) -> None:
         print("No results.")
         return
     for r in scores:
-        print(f"{r['file_path']:60}  {r['score']:.6f}")
-        if r.get("summary"):
-            print(f"   {r['summary']}")
+        print(f"{r.file_path:60}  {r.score:.6f}")
+        if r.summary:
+            print(f"   {r.summary}")
     print(f"{len(scores)} file(s).")
 
 

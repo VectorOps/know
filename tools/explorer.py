@@ -177,12 +177,12 @@ def create_app(project) -> Flask:
             
             enriched_results = []
             for r in raw_results:
-                file_obj = data.file.get_by_path(r["file_path"])
+                file_obj = data.file.get_by_path(r.file_path)
                 enriched_results.append({
-                    "file_path": r["file_path"],
+                    "file_path": r.file_path,
                     "file_obj": file_obj,
-                    "score": r['score'],
-                    "summary": r['summary'],
+                    "score": r.score,
+                    "summary": r.summary,
                 })
             results = enriched_results
 
@@ -214,10 +214,10 @@ def create_app(project) -> Flask:
 
             enriched_results = []
             for r in raw_results:
-                if r.get("file_path"):
-                    r["file_obj"] = data.file.get_by_path(r["file_path"])
+                if r.file_path:
+                    r.file_obj = data.file.get_by_path(r.file_path)
                 else:
-                    r["file_obj"] = None
+                    r.file_obj = None
                 enriched_results.append(r)
             results = enriched_results
 

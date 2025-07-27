@@ -63,8 +63,8 @@ def main() -> None:
     )
 
     for s in summaries:
-        print(f"── {s['path']}")
-        print(s["content"])
+        print(f"── {s.path}")
+        print(s.content)
         print()
 
 if __name__ == "__main__":
