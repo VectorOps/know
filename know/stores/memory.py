@@ -253,13 +253,13 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
         with self._lock:
             syms = [
                 s for s in self._items.values()
-                if (not flt.parent_ids or s.parent_symbol_id in flt.parent_ids)
+                if (not flt.parent_ids or s.parent_node_id in flt.parent_ids)
                 and (not flt.repo_id    or s.repo_id == flt.repo_id)
                 and (not flt.file_id    or s.file_id == flt.file_id)
                 and (not flt.package_id or s.package_id == flt.package_id)
                 and (not flt.symbol_kind or s.kind == flt.symbol_kind)
                 and (not flt.symbol_visibility or s.visibility == flt.symbol_visibility)
-                and (not flt.top_level_only or s.parent_symbol_id is None)
+                and (not flt.top_level_only or s.parent_node_id is None)
                 and (
                     flt.has_embedding is None
                     or (flt.has_embedding is True  and s.embedding_code_vec is not None)

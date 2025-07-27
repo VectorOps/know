@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS files (
     metrics_cyclomatic_complexity INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS symbols (
+CREATE TABLE IF NOT EXISTS nodes (
     id TEXT PRIMARY KEY,
     repo_id TEXT,
     file_id TEXT,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS symbols (
     fqn TEXT,
     body BLOB,
     kind TEXT,
-    parent_symbol_id TEXT,
+    parent_node_id TEXT,
     start_line INTEGER,
     start_col INTEGER,
     end_line INTEGER,
@@ -76,4 +76,15 @@ CREATE TABLE IF NOT EXISTS import_edges (
     dot BOOLEAN,
     external BOOLEAN,
     raw TEXT
+);
+
+CREATE TABLE IF NOT EXISTS node_refs (
+    id TEXT PRIMARY KEY,
+    repo_id TEXT NOT NULL,
+    package_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    raw TEXT NOT NULL,
+    type TEXT NOT NULL,
+    to_package_id TEXT
 );

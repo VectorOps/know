@@ -334,7 +334,7 @@ def resolve_symbol_hierarchy(symbols: List[Node]) -> None:
         s.parent_ref = None
 
     for s in symbols:
-        pid = s.parent_symbol_id
+        pid = s.parent_node_id
         if pid and (parent := id_map.get(pid)):
             s.parent_ref = parent
             parent.children.append(s)
@@ -350,15 +350,15 @@ def include_parents(
     source = symbols
 
     while source:
-        parent_ids = {s.parent_symbol_id for s in source if s.parent_symbol_id}
+        parent_ids = {s.parent_node_id for s in source if s.parent_node_id}
         if not parent_ids:
             break
 
         parents = {s.id: s for s in repo.get_list_by_ids(list(parent_ids))}
 
         for s in source:
-            if s.parent_symbol_id:
-                parent = parents[s.parent_symbol_id]
+            if s.parent_node_id:
+                parent = parents[s.parent_node_id]
                 s.parent_ref = parent
 
                 for i, c in enumerate(parent.children):
@@ -398,7 +398,7 @@ def include_direct_descendants(
     resolve_symbol_hierarchy(symbols)
 
     parent_id_set = set(parent_ids)
-    result = [s for s in symbols if s.parent_symbol_id not in parent_id_set]
+    result = [s for s in symbols if s.parent_node_id not in parent_id_set]
 
     result = include_parents(repo, result)
 

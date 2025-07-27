@@ -45,7 +45,7 @@ from know.data import NodeRefFilter
 
 T = TypeVar("T", bound=BaseModel)
 
-MatchBM25Fn = CustomFunction('fts_main_symbols.match_bm25', ['id', 'query'])
+MatchBM25Fn = CustomFunction('fts_main_nodes.match_bm25', ['id', 'query'])
 ArrayCosineSimilarityFn = CustomFunction("array_cosine_similarity", ["vec", "param"])
 
 
@@ -368,7 +368,7 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
 
 
 class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
-    table = "symbols"
+    table = "nodes"
     model = Node
 
     _json_fields = {"signature", "modifiers"}
@@ -548,7 +548,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         q = Query.from_(self._table).select("*")
 
         if flt.parent_ids:
-            q = q.where(self._table.parent_symbol_id.isin(flt.parent_ids))
+            q = q.where(self._table.parent_node_id.isin(flt.parent_ids))
         if flt.repo_id:
             q = q.where(self._table.repo_id == flt.repo_id)
         if flt.file_id:
@@ -564,7 +564,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         elif flt.has_embedding is False:
             q = q.where(self._table.embedding_code_vec.isnull())
         if flt.top_level_only:
-            q = q.where(self._table.parent_symbol_id.isnull())
+            q = q.where(self._table.parent_node_id.isnull())
 
         if flt.offset:
             q = q.offset(flt.offset)
@@ -596,7 +596,7 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
 
 
 class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
-    table = "symbol_refs"
+    table = "node_refs"
     model = NodeRef
 
     def get_list(self, flt: NodeRefFilter) -> list[NodeRef]:
@@ -677,9 +677,9 @@ class DuckDBDataRepository(AbstractDataRepository):
 
     def refresh_full_text_indexes(self) -> None:
         try:
-            self._conn.execute("PRAGMA drop_fts_index('symbols');")
+            self._conn.execute("PRAGMA drop_fts_index('nodes');")
             self._conn.execute(
-                "PRAGMA create_fts_index('symbols', "
+                "PRAGMA create_fts_index('nodes', "
                 "'id', 'name', 'fqn', 'docstring', 'comment');"
             )
         except Exception as ex:

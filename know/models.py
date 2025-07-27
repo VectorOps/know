@@ -143,7 +143,7 @@ class Node(BaseModel):
     fqn: Optional[str] = None
     body: str
     kind: Optional[NodeKind] = None
-    parent_symbol_id: Optional[str] = None
+    parent_node_id: Optional[str] = None
 
     start_line: int = 0
     start_col: int = 0

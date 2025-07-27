@@ -404,7 +404,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             "repo_id": project.get_repo().id,
             "file_id": file_meta.id,
             "package_id": pkg_meta.id,
-            "parent_symbol_id": parent_id,
+            "parent_node_id": parent_id,
         })
 
         # reuse embedding if we had an identical symbol earlier
@@ -528,7 +528,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
                 if meth.fqn.startswith(pref) and len(cand.fqn) > best_len:
                     best_parent, best_len = cand, len(cand.fqn)
             if best_parent:
-                symbol_repo.update(meth.id, {"parent_symbol_id": best_parent.id})
+                symbol_repo.update(meth.id, {"parent_node_id": best_parent.id})
 
 
 def resolve_pending_import_edges(project: Project, state: ParsingState) -> None:

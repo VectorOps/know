@@ -37,4 +37,4 @@ def test_python_project_scan_populates_repositories():
     # method should reference struct
     method = next(s for s in symbols if s.name == "foobar")
     struct = next(s for s in symbols if s.name == "M")
-    assert method.parent_symbol_id == struct.id
+    assert method.parent_node_id == struct.id

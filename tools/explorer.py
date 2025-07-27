@@ -248,7 +248,7 @@ def create_app(project) -> Flask:
             "package_id":        "package",
             "file_id":           "file",
             "symbol_id":         "symbol",
-            "parent_symbol_id":  "symbol",
+            "parent_node_id":    "symbol",
             "from_package_id":   "package",
             "from_file_id":      "file",
             "to_package_id":     "package",

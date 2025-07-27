@@ -1,6 +1,5 @@
--- Indexes frequently used by repository read-operations
--- (all guarded with IF NOT EXISTS for repeated runs)
-
+-- 002_indexes.sql - create indexes
+-- Create indexes
 -- repos
 CREATE UNIQUE INDEX IF NOT EXISTS idx_repos_id          ON repos(id);
 CREATE        INDEX IF NOT EXISTS idx_repos_root_path   ON repos(root_path);
@@ -16,9 +15,21 @@ CREATE        INDEX IF NOT EXISTS idx_files_repo_id     ON files(repo_id);
 CREATE        INDEX IF NOT EXISTS idx_files_package_id  ON files(package_id);
 
 -- symbols
-CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_id        ON symbols(id);
-CREATE        INDEX IF NOT EXISTS idx_symbols_file_id   ON symbols(file_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nodes_id          ON nodes(id);
+CREATE        INDEX IF NOT EXISTS idx_nodes_file_id     ON nodes(file_id);
 
 -- import_edges
 CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_id          ON import_edges(id);
 CREATE        INDEX IF NOT EXISTS idx_edges_from_pkg_id ON import_edges(from_package_id);
+
+-- node_refs
+CREATE UNIQUE INDEX IF NOT EXISTS idx_node_refs_id      ON node_refs(id);
+CREATE        INDEX IF NOT EXISTS idx_node_refs_repo_id ON node_refs(repo_id);
+
+-- Create vector indexes
+SET hnsw_enable_experimental_persistence = true;
+
+CREATE INDEX IF NOT EXISTS idx_nodes_code_vec ON nodes USING HNSW (embedding_code_vec) WITH (metric = 'cosine');;
+
+-- Create FTS index
+PRAGMA create_fts_index('nodes', 'id', 'docstring', 'comment');
