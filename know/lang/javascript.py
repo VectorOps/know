@@ -68,14 +68,14 @@ class JavaScriptCodeParser(AbstractCodeParser):
         self.package     : ParsedPackage | None = None
         self.parsed_file : ParsedFile  | None = None
 
-    def _handle_file(self, root_node):
+    def _handle_file(self, root_node: Node) -> None:
         pass
 
     def _rel_to_virtual_path(self, rel_path: str) -> str:
         p = Path(rel_path)
         return ".".join(p.with_suffix("").parts)
 
-    def _process_node(self, node, parent=None) -> List[ParsedSymbol]:
+    def _process_node(self, node: Node, parent: Optional[ParsedSymbol] = None) -> List[ParsedSymbol]:
         if node.type == "import_statement":
             return self._handle_import(node, parent)
         elif node.type == "export_statement":
