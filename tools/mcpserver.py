@@ -60,28 +60,26 @@ class Settings(ProjectSettings):
     mcp_auth_token: str | None = Field(None, description="MCP server auth token (optional).")
 
 
-def main() -> None:
-    if "--help" in sys.argv or "-h" in sys.argv:
-        print_help(Settings, "mcpserver.py")
-        sys.exit(0)
+try:
+    settings = Settings()
+except Exception as e:
+    print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
+    sys.exit(1)
 
+
+@asynccontextmanager
+async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
+    """Manage application lifecycle with type-safe context."""
+    # Initialize on startup
+    project = init_project(settings)
     try:
-        settings = Settings()
-    except Exception as e:
-        print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
-        sys.exit(1)
+        yield AppContext(project=project)
+    finally:
+        # Cleanup on shutdown (if any)
+        project.destroy()
 
-    @asynccontextmanager
-    async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
-        """Manage application lifecycle with type-safe context."""
-        # Initialize on startup
-        project = init_project(settings)
-        try:
-            yield AppContext(project=project)
-        finally:
-            # Cleanup on shutdown (if any)
-            pass
 
+def init():
     token_verifier = None
     auth_settings = None
     if settings.mcp_auth_token:
@@ -117,9 +115,10 @@ def main() -> None:
         # MCP server and passes the project to the tool.
         mcp.add_tool(schema=schema, func=create_handler(tool))
 
-    # run the server
-    uvicorn.run(mcp, app_dir=".", host=settings.mcp_host, port=settings.mcp_port)
+    return mcp
 
+
+mcp = init()
 
 if __name__ == "__main__":
-    main()
+    mcp.run(transport="streamable-http", host=settings.mcp_host, port=settings.mcp_port)
