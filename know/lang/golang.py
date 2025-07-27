@@ -15,7 +15,7 @@ from know.models import (
     SymbolParameter,
     Node,
     ImportEdge,
-    SymbolRefType,
+    NodeRefType,
     FileMetadata,
 )
 from know.project import Project, ProjectCache
@@ -910,8 +910,8 @@ class GolangCodeParser(AbstractCodeParser):
     def _collect_symbol_refs(self, root) -> list[ParsedNodeRef]:
         """
         Walk *root* recursively and return a list of ParsedNodeRef objects.
-        • Collect call-expressions  -> SymbolRefType.CALL
-        • Collect type usages       -> SymbolRefType.TYPE
+        • Collect call-expressions  -> NodeRefType.CALL
+        • Collect type usages       -> NodeRefType.TYPE
         A best-effort import–resolution maps the reference to an imported
         package via self.parsed_file.imports.
         """
@@ -944,7 +944,7 @@ class GolangCodeParser(AbstractCodeParser):
                 ParsedNodeRef(
                     name=simple,
                     raw=full_name,
-                    type=SymbolRefType.TYPE,
+                    type=NodeRefType.TYPE,
                     to_package_virtual_path=_resolve_pkg(full_name),
                 )
             )
@@ -961,7 +961,7 @@ class GolangCodeParser(AbstractCodeParser):
                         ParsedNodeRef(
                             name=simple,
                             raw=raw_expr,
-                            type=SymbolRefType.CALL,
+                            type=NodeRefType.CALL,
                             to_package_virtual_path=_resolve_pkg(full_name),
                         )
                     )

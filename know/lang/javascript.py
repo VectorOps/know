@@ -12,7 +12,7 @@ from know.parsers import (
 from know.models import (
     ProgrammingLanguage, NodeKind, Visibility, Modifier,
     SymbolSignature, SymbolParameter, Node, ImportEdge,
-    SymbolRefType, FileMetadata,
+    NodeRefType, FileMetadata,
 )
 from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash
@@ -572,11 +572,11 @@ class JavaScriptCodeParser(AbstractCodeParser):
             for cap, nodes in match.items():
                 for node in nodes:
                     if cap == "call":
-                        ref_type, node_call = SymbolRefType.CALL, node
+                        ref_type, node_call = NodeRefType.CALL, node
                     elif cap == "callee":
                         node_target = node
                     elif cap == "new":
-                        ref_type, node_ctor = SymbolRefType.TYPE, node
+                        ref_type, node_ctor = NodeRefType.TYPE, node
                     elif cap == "ctor":
                         node_target = node
             if node_target is None or ref_type is None:

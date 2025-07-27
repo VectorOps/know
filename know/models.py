@@ -65,7 +65,7 @@ class EdgeType(str, Enum):
     DATA_FLOW = "data_flow"
 
 
-class SymbolRefType(str, Enum):
+class NodeRefType(str, Enum):
     CALL = "call"
     TYPE = "type"
 
@@ -195,14 +195,14 @@ class ImportEdge(BaseModel):
     to_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
 
 
-class SymbolRef(BaseModel):
+class NodeRef(BaseModel):
     id: str
     repo_id: str
     package_id: str
     file_id: str
     name: str
     raw: str
-    type: SymbolRefType
+    type: NodeRefType
     to_package_id: Optional[str] = None
 
     to_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)

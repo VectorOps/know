@@ -7,7 +7,7 @@ from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.golang import GolangCodeParser
 from know.models import ProgrammingLanguage, NodeKind
-from know.models import SymbolRefType
+from know.models import NodeRefType
 from devtools import pprint
 
 
@@ -120,11 +120,11 @@ def test_golang_parser_on_sample_file():
 
     ref_set = {(r.name, r.type) for r in refs}
 
-    assert ("foobar", SymbolRefType.CALL) in ref_set
-    assert ("m",      SymbolRefType.CALL) in ref_set
-    assert ("S",      SymbolRefType.TYPE) in ref_set
+    assert ("foobar", NodeRefType.CALL) in ref_set
+    assert ("m",      NodeRefType.CALL) in ref_set
+    assert ("S",      NodeRefType.TYPE) in ref_set
 
     # verify package-resolution for the aliased k.foobar() call
     foobar_ref = next(r for r in refs
-                      if r.name == "foobar" and r.type == SymbolRefType.CALL)
+                      if r.name == "foobar" and r.type == NodeRefType.CALL)
     assert foobar_ref.to_package_virtual_path == "example.com/m"

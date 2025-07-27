@@ -12,7 +12,7 @@ from know.logger import logger
 from know.project import Project, ScanResult, ProjectComponent
 from know.models import Node, Visibility
 from know.file_summary import SummaryMode, build_file_summary
-from know.data import FileFilter, SymbolFilter, SymbolRefFilter
+from know.data import FileFilter, SymbolFilter, NodeRefFilter
 
 
 EDGE_W_DEF             = 3.0
@@ -202,7 +202,7 @@ class RepoMap(ProjectComponent):
                     self._name_props[sym.name] = self._make_props(sym)
 
             # refs
-            for ref in symbolref_repo.get_list(SymbolRefFilter(file_id=fid)):
+            for ref in symbolref_repo.get_list(NodeRefFilter(file_id=fid)):
                 if ref.name:
                     self._refs[ref.name].add(path)
 
@@ -253,7 +253,7 @@ class RepoMap(ProjectComponent):
                     self._defs[sym.name].add(path)
                     self._name_props[sym.name] = self._make_props(sym)
 
-            for ref in symbolref_repo.get_list(SymbolRefFilter(file_id=fid)):
+            for ref in symbolref_repo.get_list(NodeRefFilter(file_id=fid)):
                 if ref.name:
                     self._refs[ref.name].add(path)
 

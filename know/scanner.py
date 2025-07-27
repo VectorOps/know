@@ -19,7 +19,7 @@ from know.models import (
     Node,
     ImportEdge,
     NodeKind,
-    SymbolRef,
+    NodeRef,
 )
 from know.data import SymbolSearchQuery, SymbolFilter, ImportEdgeFilter
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedNode, ParsedImportEdge
@@ -466,7 +466,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
                 "to_package_id": to_pkg_id,
             }
         )
-        symbolref_repo.create(SymbolRef(id=generate_id(), **ref_data))
+        symbolref_repo.create(NodeRef(id=generate_id(), **ref_data))
 
 
 def assign_parents_to_orphan_methods(project: Project) -> None:

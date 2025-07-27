@@ -16,7 +16,7 @@ from know.models import (
     SymbolParameter,
     Node,
     ImportEdge,
-    SymbolRefType,
+    NodeRefType,
     FileMetadata,
 )
 from know.project import Project, ProjectCache
@@ -806,7 +806,7 @@ class PythonCodeParser(AbstractCodeParser):
     def _collect_symbol_refs(self, root: ts.Node) -> List[ParsedNodeRef]:
         """
         Walk *root* recursively, record every call-expression as
-        ParsedNodeRef(… type=SymbolRefType.CALL …) and try to map the call
+        ParsedNodeRef(… type=NodeRefType.CALL …) and try to map the call
         to an imported package via `self.parsed_file.imports`.
         """
         refs: list[ParsedNodeRef] = []
@@ -834,7 +834,7 @@ class PythonCodeParser(AbstractCodeParser):
                         ParsedNodeRef(
                             name=simple_name,          # store only the plain symbol name
                             raw=raw,                   # keep full expression here
-                            type=SymbolRefType.CALL,
+                            type=NodeRefType.CALL,
                             to_package_virtual_path=to_pkg_path,
                         )
                     )

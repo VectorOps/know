@@ -5,7 +5,7 @@ from devtools import pprint
 from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.python import PythonCodeParser
-from know.models import ProgrammingLanguage, NodeKind, Modifier, SymbolRefType
+from know.models import ProgrammingLanguage, NodeKind, Modifier, NodeRefType
 
 # Helpers
 def _make_dummy_project(root_dir: Path):
@@ -129,12 +129,12 @@ def test_python_parser_on_simple_file():
 
     ref_d = refs_by_name.get("d")
     assert ref_d is not None
-    assert ref_d.type == SymbolRefType.CALL
+    assert ref_d.type == NodeRefType.CALL
     assert ref_d.to_package_virtual_path == ".foobuz"
 
     ref_ellipsis_fn = refs_by_name.get("ellipsis_fn")
     assert ref_ellipsis_fn is not None
-    assert ref_ellipsis_fn.type == SymbolRefType.CALL
+    assert ref_ellipsis_fn.type == NodeRefType.CALL
     if hasattr(ref_ellipsis_fn, "to_symbol_id") and hasattr(top_level["ellipsis_fn"], "id"):
         assert ref_ellipsis_fn.to_symbol_id == top_level["ellipsis_fn"].id
     else:

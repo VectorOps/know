@@ -4,7 +4,7 @@ from know.helpers import generate_id
 from know.models import (
     RepoMetadata, PackageMetadata, FileMetadata,
     Node, NodeKind,
-    SymbolRef, SymbolRefType,
+    NodeRef, NodeRefType,
 )
 from know.project import Project
 from know.stores.memory import InMemoryDataRepository
@@ -35,14 +35,14 @@ def _create_symbol(repo_id: str, file_id: str, pkg_id: str, name="func"):
 
 
 def _create_ref(repo_id: str, file_id: str, pkg_id: str, name="func"):
-    return SymbolRef(
+    return NodeRef(
         id=generate_id(),
         repo_id=repo_id,
         package_id=pkg_id,
         file_id=file_id,
         name=name,
         raw=f"{name}()",
-        type=SymbolRefType.CALL,
+        type=NodeRefType.CALL,
     )
 
 # ---------- helpers for RepoMapTool test ----------  # NEW

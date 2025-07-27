@@ -13,7 +13,7 @@ from know.parsers import (
 from know.models import (
     ProgrammingLanguage, NodeKind, Visibility, Modifier,
     SymbolSignature, SymbolParameter, Node, ImportEdge,
-    SymbolRefType, FileMetadata
+    NodeRefType, FileMetadata
 )
 from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash
@@ -1233,9 +1233,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
         """
         Extract outgoing references using a pre-compiled tree-sitter query.
 
-        • call_expression   → SymbolRefType.CALL
-        • new_expression    → SymbolRefType.TYPE
-        • type identifiers  → SymbolRefType.TYPE
+        • call_expression   → NodeRefType.CALL
+        • new_expression    → NodeRefType.TYPE
+        • type identifiers  → NodeRefType.TYPE
         """
         refs: list[ParsedNodeRef] = []
 
@@ -1249,15 +1249,15 @@ class TypeScriptCodeParser(AbstractCodeParser):
             for cap, nodes in match.items():
                 for node in nodes:
                     if cap == "call":
-                        ref_type, node_call = SymbolRefType.CALL, node
+                        ref_type, node_call = NodeRefType.CALL, node
                     elif cap == "callee":
                         node_target = node
                     elif cap == "new":
-                        ref_type, node_ctor = SymbolRefType.TYPE, node
+                        ref_type, node_ctor = NodeRefType.TYPE, node
                     elif cap == "ctor":
                         node_target = node
                     elif cap == "typeid":
-                        ref_type, node_type = SymbolRefType.TYPE, node
+                        ref_type, node_type = NodeRefType.TYPE, node
                         node_target = node
 
             # ensure we have something to work with

@@ -7,7 +7,7 @@ from know.models import (
     FileMetadata,
     Node,
     ImportEdge,
-    SymbolRef,
+    NodeRef,
 )
 from know.data import (
     AbstractRepoMetadataRepository,
@@ -15,7 +15,7 @@ from know.data import (
     AbstractFileMetadataRepository,
     AbstractNodeRepository,
     AbstractImportEdgeRepository,
-    AbstractSymbolRefRepository,
+    AbstractNodeRefRepository,
     AbstractDataRepository,
     SymbolSearchQuery,
     PackageFilter,
@@ -25,7 +25,7 @@ from know.data import (
     include_direct_descendants,
     resolve_symbol_hierarchy,
 )
-from know.data import SymbolRefFilter
+from know.data import NodeRefFilter
 from dataclasses import dataclass, field
 import math
 import numpy as np
@@ -48,7 +48,7 @@ class _MemoryTables:
     files:      dict[str, FileMetadata]   = field(default_factory=dict)
     symbols:    dict[str, Node] = field(default_factory=dict)
     edges:      dict[str, ImportEdge]     = field(default_factory=dict)
-    symbolrefs: dict[str, SymbolRef]      = field(default_factory=dict)
+    symbolrefs: dict[str, NodeRef]      = field(default_factory=dict)
     lock:       threading.RLock           = field(
         default_factory=threading.RLock, repr=False, compare=False
     )
@@ -428,12 +428,12 @@ class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractI
             ]
 
 
-class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
-                                  AbstractSymbolRefRepository):
+class InMemoryNodeRefRepository(InMemoryBaseRepository[NodeRef],
+                                  AbstractNodeRefRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.symbolrefs, tables.lock)
 
-    def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
+    def get_list(self, flt: NodeRefFilter) -> list[NodeRef]:
         with self._lock:
             return [
                 r for r in self._items.values()
@@ -457,7 +457,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         self._package = InMemoryPackageMetadataRepository(tables)
         self._symbol = InMemoryNodeRepository(tables)
         self._importedge = InMemoryImportEdgeRepository(tables)
-        self._symbolref  = InMemorySymbolRefRepository(tables)
+        self._symbolref  = InMemoryNodeRefRepository(tables)
 
     def close(self):
         pass
@@ -488,7 +488,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         return self._importedge
 
     @property
-    def symbolref(self) -> AbstractSymbolRefRepository:
+    def symbolref(self) -> AbstractNodeRefRepository:
         return self._symbolref
 
     def refresh_full_text_indexes(self) -> None:  # new – required by interface

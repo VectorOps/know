@@ -12,7 +12,7 @@ from know.models import (
     FileMetadata,
     Node,
     ImportEdge,
-    SymbolRefType,
+    NodeRefType,
 )
 from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash
@@ -57,7 +57,7 @@ class ParsedPackage(BaseModel):
 class ParsedNodeRef(BaseModel):
     name: str
     raw: str
-    type: SymbolRefType
+    type: NodeRefType
     to_package_virtual_path: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:

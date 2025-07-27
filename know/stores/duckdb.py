@@ -23,7 +23,7 @@ from know.models import (
     Node,
     SymbolSignature,
     ImportEdge,
-    SymbolRef,
+    NodeRef,
     Modifier,
 )
 from know.data import (
@@ -32,7 +32,7 @@ from know.data import (
     AbstractFileMetadataRepository,
     AbstractNodeRepository,
     AbstractImportEdgeRepository,
-    AbstractSymbolRefRepository,
+    AbstractNodeRefRepository,
     AbstractDataRepository,
     SymbolSearchQuery,
     PackageFilter,
@@ -41,7 +41,7 @@ from know.data import (
     SymbolFilter,
     ImportEdgeFilter,
 )
-from know.data import SymbolRefFilter
+from know.data import NodeRefFilter
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -595,11 +595,11 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
         return [ImportEdge(**r) for r in rows]
 
 
-class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepository):
+class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
     table = "symbol_refs"
-    model = SymbolRef
+    model = NodeRef
 
-    def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
+    def get_list(self, flt: NodeRefFilter) -> list[NodeRef]:
         q = Query.from_(self._table).select("*")
 
         if flt.file_id:
@@ -610,7 +610,7 @@ class DuckDBSymbolRefRepo(_DuckDBBaseRepo[SymbolRef], AbstractSymbolRefRepositor
             q = q.where(self._table.repo_id == flt.repo_id)
 
         rows = self._execute(q)
-        return [SymbolRef(**r) for r in rows]
+        return [NodeRef(**r) for r in rows]
 
     def delete_by_file_id(self, file_id: str) -> None:
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
@@ -646,7 +646,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._repo_repo    = DuckDBRepoMetadataRepo(self._conn)
         self._symbol_repo  = DuckDBNodeRepo(self._conn)
         self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
-        self._symbolref_repo = DuckDBSymbolRefRepo(self._conn)
+        self._symbolref_repo = DuckDBNodeRefRepo(self._conn)
 
     def close(self):
         self._conn.close()
@@ -672,7 +672,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         return self._edge_repo
 
     @property
-    def symbolref(self) -> AbstractSymbolRefRepository:
+    def symbolref(self) -> AbstractNodeRefRepository:
         return self._symbolref_repo
 
     def refresh_full_text_indexes(self) -> None:

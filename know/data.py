@@ -6,7 +6,7 @@ from know.models import (
     FileMetadata,
     Node,
     ImportEdge,
-    SymbolRef,
+    NodeRef,
     NodeKind,
     Visibility,
     Vector,
@@ -233,31 +233,31 @@ class AbstractImportEdgeRepository(ABC):
 
 
 @dataclass
-class SymbolRefFilter:
+class NodeRefFilter:
     file_id: Optional[str] = None
     package_id: Optional[str] = None
     repo_id: Optional[str] = None
 
 
-class AbstractSymbolRefRepository(ABC):
+class AbstractNodeRefRepository(ABC):
     @abstractmethod
-    def get_by_id(self, ref_id: str) -> Optional[SymbolRef]:
+    def get_by_id(self, ref_id: str) -> Optional[NodeRef]:
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, ref_ids: List[str]) -> List[SymbolRef]:
+    def get_list_by_ids(self, ref_ids: List[str]) -> List[NodeRef]:
         pass
 
     @abstractmethod
-    def get_list(self, flt: SymbolRefFilter) -> List[SymbolRef]:
+    def get_list(self, flt: NodeRefFilter) -> List[NodeRef]:
         pass
 
     @abstractmethod
-    def create(self, ref: SymbolRef) -> SymbolRef:
+    def create(self, ref: NodeRef) -> NodeRef:
         pass
 
     @abstractmethod
-    def update(self, ref_id: str, data: Dict[str, Any]) -> Optional[SymbolRef]:
+    def update(self, ref_id: str, data: Dict[str, Any]) -> Optional[NodeRef]:
         pass
 
     @abstractmethod
@@ -267,7 +267,7 @@ class AbstractSymbolRefRepository(ABC):
     @abstractmethod
     def delete_by_file_id(self, file_id: str) -> None:
         """
-        Delete every SymbolRef whose ``file_id`` equals *file_id*.
+        Delete every NodeRef whose ``file_id`` equals *file_id*.
         Returns the number of deleted rows.
         """
         pass
@@ -305,7 +305,7 @@ class AbstractDataRepository(ABC):
 
     @property
     @abstractmethod
-    def symbolref(self) -> AbstractSymbolRefRepository:
+    def symbolref(self) -> AbstractNodeRefRepository:
         pass
 
     @abstractmethod
