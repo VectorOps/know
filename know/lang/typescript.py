@@ -160,12 +160,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
         while node and node.type == "member_expression":
             prop = node.child_by_field_name("property")
             obj  = node.child_by_field_name("object")
-            if prop and prop.type in ("property_identifier", "identifier"):
+            if prop and prop.type in ("property_identifier", "identifier") and prop.text:
                 prop_name = prop.text.decode("utf8")
-            if obj and obj.type == "identifier":
+            if obj and obj.type == "identifier" and obj.text:
                 if obj.text == b"exports":
                     return True, prop_name            # exports / exports.foo
-                if obj.text == b"module" and prop and prop.text == b"exports":
+                if obj.text == b"module" and prop and prop.text and prop.text == b"exports":
                     return True, None                 # module.exports
             node = obj
         return False, None
@@ -198,11 +198,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return None, module, True
 
     def _handle_import(self, node: Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
-        raw = node.text.decode("utf8")
+        raw = node.text.decode("utf8") if node.text else ""
 
         # ── find module specifier ───────────────────────────────────────
         spec_node = next((c for c in node.children if c.type == "string"), None)
-        if spec_node is None:
+        if spec_node is None or not spec_node.text:
             return []  # defensive – malformed import
         module = spec_node.text.decode("utf8").strip("\"'")
 
@@ -216,11 +216,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
                             if c.type == "namespace_import"), None)
             if ns_node is not None:
                 alias_ident = ns_node.child_by_field_name("name")
-                if alias_ident:
+                if alias_ident and alias_ident.text:
                     alias = alias_ident.text.decode("utf8")
-        else:
+        elif name_node.text:
             alias = name_node.text.decode("utf8")
 
+        assert self.parsed_file is not None
         self.parsed_file.imports.append(
             ParsedImportEdge(
                 physical_path=physical,
@@ -304,7 +305,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 "TS parser: unhandled export statement",
                 path=self.rel_path,
                 line=node.start_point[0] + 1,
-                raw=node.text.decode("utf8", errors="replace"),
+                raw=node.text.decode("utf8", errors="replace") if node.text else "",
             )
 
         if not decl_handled and not parent:
@@ -325,9 +326,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
             # identifier after “as” (alias), if any
             alias_node = spec.child_by_field_name("alias")
 
-            if name_node:
+            if name_node and name_node.text:
                 exported_names.add(name_node.text.decode("utf8"))
-            if alias_node:
+            if alias_node and alias_node.text:
                 exported_names.add(alias_node.text.decode("utf8"))
 
         def _mark_exported(sym):
@@ -340,6 +341,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         # TODO: Go over parent?
         if exported_names:
+            assert self.parsed_file is not None
             for sym in self.parsed_file.symbols:
                 _mark_exported(sym)
 
@@ -368,9 +370,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         )
         if tp_node:
-            return tp_node.text.decode("utf8").strip()
+            return tp_node.text.decode("utf8").strip() if tp_node.text else None
 
         # ─ fallback: scan header slice for `<…>` between name and `(`/`{`
+        if not node.text:
+            return None
         hdr = node.text.decode("utf8").split("{", 1)[0]
         lt = hdr.find("<")
         gt = hdr.find(">", lt + 1)
@@ -403,15 +407,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     name_node = prm
 
                 # last-chance fallback – entire slice
-                p_name = (
-                    name_node.text.decode("utf8")
-                    if name_node is not None
-                    else prm.text.decode("utf8")
-                )
+                p_name_bytes = name_node.text if name_node else prm.text
+                p_name = p_name_bytes.decode("utf8") if p_name_bytes else ""
                 # (optional) type annotation
                 t_node   = (prm.child_by_field_name("type")
                             or prm.child_by_field_name("type_annotation"))
-                if t_node:
+                if t_node and t_node.text:
                     p_type = t_node.text.decode("utf8").lstrip(":").strip()
                     params_raw.append(f"{p_name}: {p_type}")
                 else:
@@ -422,10 +423,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # ---- return type ------------------------------------------------
         rt_node   = node.child_by_field_name("return_type")
         return_ty = (rt_node.text.decode("utf8").lstrip(":").strip()
-                     if rt_node else None)
+                     if rt_node and rt_node.text else None)
 
         # --- raw header taken verbatim from source -----------------
-        raw_header = node.text.decode("utf8")
+        raw_header = node.text.decode("utf8") if node.text else ""
         # keep only the declaration header part (before the body “{”)
         raw_header = raw_header.split("{", 1)[0].strip()
 
@@ -440,7 +441,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     def _handle_function(self, node: Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
         name_node = node.child_by_field_name("name")
-        if name_node is None:
+        if name_node is None or not name_node.text:
             return []
 
         name = name_node.text.decode("utf8")
@@ -473,7 +474,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         name = name_node.text.decode("utf8")
         # take full node text and truncate at the opening brace → drop the body
-        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        raw_header = (node.text.decode("utf8") if node.text else "").split("{", 1)[0].strip()
         tp = self._extract_type_parameters(node)
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
 
@@ -547,7 +548,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name = name_node.text.decode("utf8")
 
         # header without body
-        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        raw_header = (node.text.decode("utf8") if node.text else "").split("{", 1)[0].strip()
         tp = self._extract_type_parameters(node)
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
 
@@ -562,7 +563,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 if ch.type == "method_signature":
                     m_name_node = ch.child_by_field_name("name") or \
                                    ch.child_by_field_name("property")
-                    if not m_name_node:
+                    if not m_name_node or not m_name_node.text:
                         continue
                     m_name = m_name_node.text.decode("utf8")
                     m_sig  = self._build_signature(ch, m_name, prefix="")
@@ -578,7 +579,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 elif ch.type == "property_signature":
                     p_name_node = ch.child_by_field_name("name") or \
                                    ch.child_by_field_name("property")
-                    if not p_name_node:
+                    if not p_name_node or not p_name_node.text:
                         continue
                     p_name = p_name_node.text.decode("utf8")
                     children.append(
@@ -607,7 +608,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _create_method_symbol(self, node: Node, parent: Optional[ParsedSymbol] | None) -> ParsedSymbol:
         name_node = node.child_by_field_name("name")
         # TODO: Anonymous?
-        name = name_node.text.decode("utf8") if name_node else "anonymous"
+        name = name_node.text.decode("utf8") if name_node and name_node.text else "anonymous"
         sig = self._build_signature(node, name, prefix="")
 
         mods: list[Modifier] = []
@@ -645,7 +646,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # deep fallback – walk the subtree until we hit the first identifier
         if ident is None:
             ident = self._find_first_identifier(node)
-        if ident is None:
+        if ident is None or not ident.text:
             return None
 
         name = ident.text.decode("utf8")
@@ -685,7 +686,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         # take the full alias declaration text; drop a single trailing
         # “;” token emitted by the parser when present
-        raw_header = node.text.decode("utf8").strip()
+        raw_header = (node.text.decode("utf8") if node.text else "").strip()
         if raw_header.endswith(";"):
             raw_header = raw_header[:-1].rstrip()
 
@@ -714,7 +715,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name = name_node.text.decode("utf8")
 
         # drop the body – keep only the declaration header
-        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        raw_header = (node.text.decode("utf8") if node.text else "").split("{", 1)[0].strip()
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
         children: list[ParsedSymbol] = []
@@ -735,11 +736,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         or next((c for c in member.named_children
                                  if c.type in ("identifier", "property_identifier")), None)
                     )
-                    if not m_name_node:
+                    if not m_name_node or not m_name_node.text:
                         continue
                     m_name = m_name_node.text.decode("utf8")
 
-                elif member.type in ("property_identifier", "identifier"):
+                elif member.type in ("property_identifier", "identifier") and member.text:
                     m_name = member.text.decode("utf8")
 
                 else:
@@ -849,7 +850,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 elif rhs and rhs.type == "call_expression":
                     alias_node = lhs.child_by_field_name("identifier") or \
                                  next((c for c in lhs.children if c.type == "identifier"), None)
-                    alias = alias_node.text.decode("utf8") if alias_node else None
+                    alias = alias_node.text.decode("utf8") if alias_node and alias_node.text else None
                     self._collect_require_calls(rhs, alias=alias)
 
                 # simple assignment – create variable / constant symbol
@@ -890,13 +891,13 @@ class TypeScriptCodeParser(AbstractCodeParser):
         """
         # direct “name” field (e.g. variable_declarator name)
         name_node = holder_node.child_by_field_name("name")
-        if name_node:
+        if name_node and name_node.text:
             return name_node.text.decode("utf8").split(".")[-1]
 
         # assignment / declarator – inspect the LHS
         lhs_node = holder_node.child_by_field_name("left") \
                    or holder_node.child_by_field_name("name")
-        if lhs_node:
+        if lhs_node and lhs_node.text:
             lhs_txt = lhs_node.text.decode("utf8")
             if lhs_txt:
                 return lhs_txt.split(".")[-1]
@@ -908,7 +909,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             ident_node = self._find_first_identifier(holder_node)
 
         return (ident_node.text.decode("utf8").split(".")[-1]
-                if ident_node else None)
+                if ident_node and ident_node.text else None)
 
     def _handle_arrow_function(
         self,
@@ -928,7 +929,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # build signature
         sig_base = self._build_signature(arrow_node, name, prefix="")
         # include the *left-hand side* in the raw header for better context
-        raw_header = holder_node.text.decode("utf8").split("{", 1)[0].strip().rstrip(";")
+        raw_header = (holder_node.text.decode("utf8") if holder_node.text else "").split("{", 1)[0].strip().rstrip(";")
         sig = SymbolSignature(
             raw         = raw_header,
             parameters  = sig_base.parameters,
@@ -937,7 +938,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         # async?
         mods: list[Modifier] = []
-        if arrow_node.text.lstrip().startswith(b"async"):
+        if arrow_node.text and arrow_node.text.lstrip().startswith(b"async"):
             mods.append(Modifier.ASYNC)
         if sig_base.type_parameters:
             mods.append(Modifier.GENERIC)
@@ -958,12 +959,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
         Mirrors _resolve_arrow_function_name but for anonymous `class` RHS.
         """
         name_node = holder_node.child_by_field_name("name")
-        if name_node:
+        if name_node and name_node.text:
             return name_node.text.decode("utf8").split(".")[-1]
 
         lhs_node = holder_node.child_by_field_name("left") \
                    or holder_node.child_by_field_name("name")
-        if lhs_node:
+        if lhs_node and lhs_node.text:
             lhs_txt = lhs_node.text.decode("utf8")
             if lhs_txt:
                 return lhs_txt.split(".")[-1]
@@ -973,7 +974,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if ident_node is None:
             ident_node = self._find_first_identifier(holder_node)
 
-        return ident_node.text.decode("utf8").split(".")[-1] if ident_node else None
+        return ident_node.text.decode("utf8").split(".")[-1] if ident_node and ident_node.text else None
 
 
     def _handle_class_expression(
@@ -988,7 +989,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return None
 
         # keep the declarator header (without body) for the signature
-        raw_header = holder_node.text.decode("utf8").split("{", 1)[0].strip().rstrip(";")
+        raw_header = (holder_node.text.decode("utf8") if holder_node.text else "").split("{", 1)[0].strip().rstrip(";")
         tp         = self._extract_type_parameters(class_node)
         sig        = SymbolSignature(raw=raw_header,
                                      parameters=[],
@@ -1034,6 +1035,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return sym
 
     def _handle_lexical(self, node: Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
+        if not node.text:
+            return []
         lexical_kw = node.text.decode("utf8").lstrip().split()[0]
         is_const_decl = node.text.lstrip().startswith(b"const")
         base_kind = SymbolKind.CONSTANT if is_const_decl else SymbolKind.VARIABLE
@@ -1087,7 +1090,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     )
                     if ident is None:
                         ident = self._find_first_identifier(ch)
-                    if ident is not None:
+                    if ident is not None and ident.text:
                         alias = ident.text.decode("utf8")
                     self._collect_require_calls(value_node, alias=alias)
 
@@ -1104,7 +1107,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         Fallback symbol for nodes that did not yield a real symbol.
         Produces a SymbolKind.LITERAL with a best-effort name.
         """
-        txt  = node.text.decode("utf8", errors="replace").strip()
+        txt  = (node.text.decode("utf8", errors="replace") if node.text else "").strip()
         return self._make_symbol(
             node,
             kind=SymbolKind.LITERAL,
@@ -1116,13 +1119,17 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return
         fn = node.child_by_field_name("function")
         if fn and fn.type == "identifier" and fn.text == b"require":
+            arguments = node.child_by_field_name("arguments")
+            if not arguments:
+                return
             arg_node = next(
-                (c for c in node.child_by_field_name("arguments").children
+                (c for c in arguments.children
                  if c.type == "string"), None)
-            if arg_node:
+            if arg_node and arg_node.text:
                 module = arg_node.text.decode("utf8").strip("\"'")
 
                 phys, virt, ext = self._resolve_module(module)
+                assert self.parsed_file is not None
                 self.parsed_file.imports.append(
                     ParsedImportEdge(
                         physical_path=phys,
@@ -1130,7 +1137,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         alias=alias,
                         dot=False,
                         external=ext,
-                        raw=node.text.decode("utf8"),
+                        raw=node.text.decode("utf8") if node.text else "",
                     )
                 )
 
@@ -1138,7 +1145,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name_node = node.child_by_field_name("name") or \
                     next((c for c in node.named_children
                             if c.type in ("identifier", "property_identifier")), None)
-        if name_node is None:
+        if name_node is None or not name_node.text:
             return []
         name = name_node.text.decode("utf8")
 
@@ -1148,7 +1155,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # TODO: Warn if we found non statement_block node
         body = next((c for c in node.children if c.type == "statement_block"), None)
 
-        raw_header = node.text.decode("utf8").split("{", 1)[0].strip()
+        raw_header = (node.text.decode("utf8") if node.text else "").split("{", 1)[0].strip()
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
         sym = self._make_symbol(
@@ -1188,13 +1195,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
         alias_node = node.child_by_field_name("name")
         req_node   = node.child_by_field_name("module")    # external_module_reference
         str_node   = next((c for c in req_node.children if c.type == "string"), None) if req_node else None
-        if not (alias_node and str_node):
+        if not (alias_node and alias_node.text and str_node and str_node.text):
             return []
 
         alias  = alias_node.text.decode("utf8")
         module = str_node.text.decode("utf8").strip("\"'")
         phys, virt, ext = self._resolve_module(module)
 
+        assert self.parsed_file is not None
         self.parsed_file.imports.append(
             ParsedImportEdge(
                 physical_path=phys,
@@ -1202,7 +1210,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 alias=alias,
                 dot=False,
                 external=ext,
-                raw=node.text.decode("utf8"),
+                raw=node.text.decode("utf8") if node.text else "",
             )
         )
         return [self._make_symbol(node,
@@ -1244,6 +1252,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             if node_target is None or ref_type is None:
                 continue
 
+            if not node_target.text:
+                continue
             full_name = node_target.text.decode("utf8")
             simple_name = full_name.split(".")[-1]
             raw_node = node_call or node_ctor or node_type
@@ -1255,6 +1265,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
             # best-effort import resolution – re-use logic from _collect_require_calls
             to_pkg_path: str | None = None
+            assert self.parsed_file is not None
             for imp in self.parsed_file.imports:
                 if imp.alias and (full_name == imp.alias or full_name.startswith(f"{imp.alias}.")):
                     to_pkg_path = imp.virtual_path
@@ -1443,4 +1454,4 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
         return IND + header
 
     def get_import_summary(self, imp: ImportEdge) -> str:
-        return imp.raw.strip() if imp.raw else f"import {imp.to_package_virtual_path}"
+        return imp.raw.strip() if imp.raw else f"import ... from \"{imp.virtual_path}\""
