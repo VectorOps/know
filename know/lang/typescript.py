@@ -794,7 +794,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             exported=exported,
         )
 
-    def _handle_method(self, node, parent=None):
+    def _handle_method(self, node: Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
         # top-level method_definition is unusual; treat like function
         return self._handle_function(node, parent=parent)
 
@@ -1268,7 +1268,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     )
                 )
 
-    def _handle_namespace(self, node, parent=None, exported: bool = False):
+    def _handle_namespace(self, node: Node, parent: Optional[ParsedSymbol] = None, exported: bool = False) -> list[ParsedSymbol]:
         name_node = node.child_by_field_name("name") or \
                     next((c for c in node.named_children
                             if c.type in ("identifier", "property_identifier")), None)
