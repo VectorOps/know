@@ -240,7 +240,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 visibility=Visibility.PUBLIC,
             )]
 
-    def _handle_export(self, node, parent=None):
+    def _handle_export(self, node: Node, parent: Optional[ParsedSymbol] = None) -> list[ParsedSymbol]:
         """
         Handle `export …` statements.
 
@@ -408,7 +408,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
                 # last-chance fallback – entire slice
                 p_name_bytes = name_node.text if name_node else prm.text
-                p_name = p_name_bytes.decode("utf8") if p_name_bytes else ""
+                p_name = p_name_bytes.decode("utf8") if p_name_bytes is not None else ""
                 # (optional) type annotation
                 t_node   = (prm.child_by_field_name("type")
                             or prm.child_by_field_name("type_annotation"))
@@ -608,7 +608,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
     def _create_method_symbol(self, node: Node, parent: Optional[ParsedSymbol] | None) -> ParsedSymbol:
         name_node = node.child_by_field_name("name")
         # TODO: Anonymous?
-        name = name_node.text.decode("utf8") if name_node and name_node.text else "anonymous"
+        name = "anonymous"
+        if name_node and name_node.text:
+            name = name_node.text.decode("utf8")
         sig = self._build_signature(node, name, prefix="")
 
         mods: list[Modifier] = []
@@ -686,7 +688,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         # take the full alias declaration text; drop a single trailing
         # “;” token emitted by the parser when present
-        raw_header = (node.text.decode("utf8") if node.text else "").strip()
+        raw_header = (node.text.decode("utf8") if node.text is not None else "").strip()
         if raw_header.endswith(";"):
             raw_header = raw_header[:-1].rstrip()
 
@@ -715,7 +717,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         name = name_node.text.decode("utf8")
 
         # drop the body – keep only the declaration header
-        raw_header = (node.text.decode("utf8") if node.text else "").split("{", 1)[0].strip()
+        raw_header = (node.text.decode("utf8") if node.text is not None else "").split("{", 1)[0].strip()
         sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
 
         children: list[ParsedSymbol] = []
@@ -824,6 +826,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
                     # mark already-known symbol exported
                     if member:
+                        assert self.parsed_file is not None
                         for s in self.parsed_file.symbols:
                             if s.name == member:
                                 s.exported = True
@@ -1454,4 +1457,4 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
         return IND + header
 
     def get_import_summary(self, imp: ImportEdge) -> str:
-        return imp.raw.strip() if imp.raw else f"import ... from \"{imp.virtual_path}\""
+        return imp.raw.strip() if imp.raw else f"import ... from \"{imp.to_package_virtual_path}\""
