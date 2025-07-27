@@ -13,6 +13,9 @@ from datetime import datetime, timezone
 from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order
 from pypika.terms import ValueWrapper, LiteralValue
 
+from pydantic import BaseModel
+from know.logger import logger
+
 from know.models import (
     RepoMetadata,
     PackageMetadata,
@@ -40,7 +43,7 @@ from know.data import (
 )
 from know.data import SymbolRefFilter
 
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
 MatchBM25Fn = CustomFunction('fts_main_symbols.match_bm25', ['id', 'query'])
 ArrayCosineSimilarityFn = CustomFunction("array_cosine_similarity", ["vec", "param"])
@@ -105,7 +108,7 @@ class DuckDBThreadWrapper:
     with cursor.
     """
     def __init__(self, db_path: Optional[str] = None):
-        self._queue = queue.Queue()
+        self._queue: queue.Queue[Optional[tuple[str, Any, Future]]] = queue.Queue()
         self._db_path = db_path
         self._conn = None
         self._thread = None
@@ -196,7 +199,7 @@ class _DuckDBBaseRepo(Generic[T]):
     _field_parsers: dict[str, Callable[[Any], Any]] = {}
     _compress_fields: set[str] = set()
 
-    def __init__(self, conn: duckdb.DuckDBPyConnection):
+    def __init__(self, conn: "DuckDBThreadWrapper"):
         self.conn = conn
         self._table = Table(self.table)
 
@@ -313,12 +316,12 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         super().__init__(conn)
         self._file_repo = file_repo
 
-    def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
+    def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:  # type: ignore[override]
         q = Query.from_(self._table).select("*").where(self._table.physical_path == path)
         rows = self._execute(q)
         return PackageMetadata(**rows[0]) if rows else None
 
-    def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:
+    def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:  # type: ignore[override]
         q = Query.from_(self._table).select("*").where(self._table.virtual_path == path)
         rows = self._execute(q)
         return PackageMetadata(**rows[0]) if rows else None
@@ -485,7 +488,7 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
             rrf_scores = union_parts[0]
             for p in union_parts[1:]:
-                rrf_scores = rrf_scores.union_all(p)
+                rrf_scores = rrf_scores.union_all(p)  # type: ignore[assignment]
 
             aliased = AliasedQuery("rrf_scores")
 
