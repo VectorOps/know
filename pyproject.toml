@@ -25,6 +25,11 @@ dependencies = [
     "pydantic-settings>=2.10.1",
 ]
 
+[project.optional-dependencies]
+mcp = [
+    "fastmcp>=2.10.6",
+]
+
 [tool.uv]
 package = true
 
@@ -34,7 +39,6 @@ pypika = { git = "https://github.com/VectorOps/pypika.git", rev = "v0.49.4-dev" 
 [dependency-groups]
 dev = [
     "pytest>=8.4.0",
-    "fastmcp>=2.10.6",
     "flask>=3.1.1",
     "google-auth>=2.40.3",
     "litellm>=1.74.8",
