@@ -60,7 +60,7 @@ class EmbeddingWorker:
         self,
         calc_type: str,
         model_name: str,
-        device: str | none = None,
+        device: str | None = None,
         cache_backend: str | None = None,
         cache_path: str | None = None,
         cache_size: int | None = None,
