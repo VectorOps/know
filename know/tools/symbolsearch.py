@@ -34,8 +34,6 @@ class SymbolSearchResult(BaseModel):
 
 class SearchSymbolsTool(BaseTool):
     tool_name = "vectorops_search_symbols"
-    tool_input = SymbolSearchReq
-    tool_output = List[SymbolSearchResult]
 
     def execute(
         self,
@@ -54,7 +52,7 @@ class SearchSymbolsTool(BaseTool):
         # symbol_visibility
         vis = None
         if isinstance(req.symbol_visibility, Visibility):
-            vis = symbol_visibility
+            vis = req.symbol_visibility
         elif isinstance(req.symbol_visibility, str):
             if req.symbol_visibility.lower() == "all":
                 vis = None
@@ -96,7 +94,7 @@ class SearchSymbolsTool(BaseTool):
                 fm = file_repo.get_by_id(s.file_id)
                 file_path = fm.path if fm else None
 
-                if fm.language:
+                if fm and fm.language:
                     helper = CodeParserRegistry.get_helper(fm.language)
 
             sym_summary: Optional[str] = None
@@ -112,7 +110,7 @@ class SearchSymbolsTool(BaseTool):
                     sym_body  = helper.get_symbol_summary(s,
                                                           include_comments=include_comments,
                                                           include_docs=include_docs,
-                                                          include_parents=True)
+                                                          include_parents=True)  # type: ignore[call-arg]
 
             results.append(
                 SymbolSearchResult(
