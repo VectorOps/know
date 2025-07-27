@@ -23,7 +23,7 @@ class AbstractRepoMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, repo_ids: list[str]) -> list[RepoMetadata]:
+    def get_list_by_ids(self, repo_ids: List[str]) -> List[RepoMetadata]:
         pass
 
     @abstractmethod
@@ -55,11 +55,11 @@ class AbstractPackageMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, package_ids: list[str]) -> list[PackageMetadata]:
+    def get_list_by_ids(self, package_ids: List[str]) -> List[PackageMetadata]:
         pass
 
     @abstractmethod
-    def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
+    def get_list(self, flt: PackageFilter) -> List[PackageMetadata]:
         pass
 
     @abstractmethod
@@ -101,7 +101,7 @@ class AbstractFileMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, file_ids: list[str]) -> list[FileMetadata]:
+    def get_list_by_ids(self, file_ids: List[str]) -> List[FileMetadata]:
         pass
 
     @abstractmethod
@@ -122,7 +122,7 @@ class AbstractFileMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list(self, flt: FileFilter) -> list[FileMetadata]:
+    def get_list(self, flt: FileFilter) -> List[FileMetadata]:
         pass
 
 
@@ -167,7 +167,7 @@ class AbstractSymbolMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, item_ids: list[str]) -> list[SymbolMetadata]:
+    def get_list_by_ids(self, item_ids: List[str]) -> List[SymbolMetadata]:
         pass
 
     @abstractmethod
@@ -179,11 +179,11 @@ class AbstractSymbolMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list(self, flt: SymbolFilter) -> list[SymbolMetadata]:
+    def get_list(self, flt: SymbolFilter) -> List[SymbolMetadata]:
         pass
 
     @abstractmethod
-    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[SymbolMetadata]:
+    def search(self, repo_id: str, query: SymbolSearchQuery) -> List[SymbolMetadata]:
         pass
 
     @abstractmethod
@@ -212,11 +212,11 @@ class AbstractImportEdgeRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, edge_ids: list[str]) -> list[ImportEdge]:
+    def get_list_by_ids(self, edge_ids: List[str]) -> List[ImportEdge]:
         pass
 
     @abstractmethod
-    def get_list(self, flt: ImportEdgeFilter) -> list[ImportEdge]:
+    def get_list(self, flt: ImportEdgeFilter) -> List[ImportEdge]:
         pass
 
     @abstractmethod
@@ -245,11 +245,11 @@ class AbstractSymbolRefRepository(ABC):
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, ref_ids: list[str]) -> list[SymbolRef]:
+    def get_list_by_ids(self, ref_ids: List[str]) -> List[SymbolRef]:
         pass
 
     @abstractmethod
-    def get_list(self, flt: SymbolRefFilter) -> list[SymbolRef]:
+    def get_list(self, flt: SymbolRefFilter) -> List[SymbolRef]:
         pass
 
     @abstractmethod
@@ -315,7 +315,7 @@ class AbstractDataRepository(ABC):
 
 
 # Helpers
-def resolve_symbol_hierarchy(symbols: list[SymbolMetadata]) -> None:
+def resolve_symbol_hierarchy(symbols: List[SymbolMetadata]) -> None:
     """
     Populate in-memory parent/child links inside *symbols* **in-place**.
 
@@ -342,8 +342,8 @@ def resolve_symbol_hierarchy(symbols: list[SymbolMetadata]) -> None:
 
 def include_parents(
     repo: AbstractSymbolMetadataRepository,
-    symbols: list[SymbolMetadata],
-) -> list[SymbolMetadata]:
+    symbols: List[SymbolMetadata],
+) -> List[SymbolMetadata]:
     """
     Traverse all symbol parents and include them to in the tree.
     """
@@ -354,7 +354,7 @@ def include_parents(
         if not parent_ids:
             break
 
-        parents = {s.id: s for s in repo.get_list_by_ids(parent_ids)}
+        parents = {s.id: s for s in repo.get_list_by_ids(list(parent_ids))}
 
         for s in source:
             if s.parent_symbol_id:
@@ -368,15 +368,15 @@ def include_parents(
                 else:
                     parent.children.append(s)
 
-        source = parents.values()
+        source = list(parents.values())
 
     return symbols
 
 
 def include_direct_descendants(
     repo: AbstractSymbolMetadataRepository,    # repository to fetch children
-    symbols: list[SymbolMetadata],             # initial search results
-) -> list[SymbolMetadata]:
+    symbols: List[SymbolMetadata],             # initial search results
+) -> List[SymbolMetadata]:
     """
     Ensure every symbol in *symbols* has its direct descendants attached.
     After resolving the hierarchy, any symbol that became a child of another
