@@ -45,6 +45,10 @@ class EmbeddingSettings(BaseSettings):
             'The backend to use for caching embeddings. Options are "duckdb", "sqlite", or "none".'
         ),
     )
+    cache_size: Optional[int] = Field(
+        None,
+        description="The maximum number of records to keep in the embedding cache (LRU eviction).",
+    )
 
 
 class ToolSettings(BaseSettings):

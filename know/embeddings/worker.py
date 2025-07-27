@@ -32,6 +32,7 @@ class _QueueItem:
 def _build_cache_backend(
     name: str | None,
     path: str | None,
+    size: int | None,
 ) -> EmbeddingCacheBackend | None:
     if name is None:
         return None
@@ -41,7 +42,7 @@ def _build_cache_backend(
     }
     if name not in backend_map:
         raise ValueError(f"Unknown cache backend: {name}")
-    return backend_map[name](path)
+    return backend_map[name](path, max_size=size)
 
 
 class EmbeddingWorker:
@@ -62,6 +63,7 @@ class EmbeddingWorker:
         device: str | none = None,
         cache_backend: str | None = None,
         cache_path: str | None = None,
+        cache_size: int | None = None,
         batch_size: int = 1,
         batch_wait_ms: float = 50,
         calc_kwargs: any = None,
@@ -71,7 +73,7 @@ class EmbeddingWorker:
         self._device = device
         self._calc_kwargs = calc_kwargs
         self._cache_manager: EmbeddingCacheBackend | None = _build_cache_backend(
-            cache_backend, cache_path
+            cache_backend, cache_path, cache_size
         )
         self._calc: Optional[EmbeddingCalculator] = None  # lazy – initialised in worker thread
 
@@ -197,78 +199,82 @@ class EmbeddingWorker:
         """Continuously process items from the queue."""
         self._calc = self._create_calculator()
 
-        while not self._stop_event.is_set():
-            # collect up to batch worth of events
-            with self._cv:
-                while not self._queue and not self._stop_event.is_set():
-                    self._cv.wait()
+        try:
+            while not self._stop_event.is_set():
+                # collect up to batch worth of events
+                with self._cv:
+                    while not self._queue and not self._stop_event.is_set():
+                        self._cv.wait()
 
-                if self._stop_event.is_set():
-                    break
-
-                first_item = self._queue.popleft()
-
-                # collect extra items up to batch_size, waiting briefly
-                batch: list[_QueueItem] = [first_item]
-
-                deadline = time.monotonic() + self._batch_wait
-                while len(batch) < self._batch_size:
-                    timeout = deadline - time.monotonic()
-                    if timeout <= 0:
+                    if self._stop_event.is_set():
                         break
 
-                    if not self._queue:
-                        self._cv.wait(timeout=timeout)
+                    first_item = self._queue.popleft()
 
-                        if self._stop_event.is_set():
+                    # collect extra items up to batch_size, waiting briefly
+                    batch: list[_QueueItem] = [first_item]
+
+                    deadline = time.monotonic() + self._batch_wait
+                    while len(batch) < self._batch_size:
+                        timeout = deadline - time.monotonic()
+                        if timeout <= 0:
                             break
 
                         if not self._queue:
-                            continue
+                            self._cv.wait(timeout=timeout)
 
-                    batch.append(self._queue.popleft())
+                            if self._stop_event.is_set():
+                                break
 
-            # outside lock from here
-            texts = [it.text for it in batch]
+                            if not self._queue:
+                                continue
 
-            try:
-                vectors = self._calc.get_embedding_list(texts)
-            except Exception as exc:
-                logger.error("Embedding computation failed", exc=exc)
+                        batch.append(self._queue.popleft())
 
-                for it in batch:
+                # outside lock from here
+                texts = [it.text for it in batch]
+
+                try:
+                    vectors = self._calc.get_embedding_list(texts)
+                except Exception as exc:
+                    logger.error("Embedding computation failed", exc=exc)
+
+                    for it in batch:
+                        for fut in it.sync_futs:
+                            if not fut.done():
+                                fut.set_exception(exc)
+                        for afut in it.async_futs:
+                            if not afut.done():
+                                loop = afut.get_loop()
+                                loop.call_soon_threadsafe(afut.set_exception, exc)
+
+                        with self._cv:
+                            self._pending.pop(it.text, None)
+
+                    continue
+
+                # deliver successful results
+                for it, vector in zip(batch, vectors):
                     for fut in it.sync_futs:
                         if not fut.done():
-                            fut.set_exception(exc)
+                            fut.set_result(vector)
+
                     for afut in it.async_futs:
                         if not afut.done():
                             loop = afut.get_loop()
-                            loop.call_soon_threadsafe(afut.set_exception, exc)
+                            loop.call_soon_threadsafe(afut.set_result, vector)
 
-                    with self._cv:
+                    for cb in it.callbacks:
+                        try:
+                            cb(vector)
+                        except Exception as exc:
+                            logger.debug("Failed to call callback function", exc=exc)
+
+                with self._cv:
+                    for it in batch:
                         self._pending.pop(it.text, None)
 
-                continue
-
-            # deliver successful results
-            for it, vector in zip(batch, vectors):
-                for fut in it.sync_futs:
-                    if not fut.done():
-                        fut.set_result(vector)
-
-                for afut in it.async_futs:
-                    if not afut.done():
-                        loop = afut.get_loop()
-                        loop.call_soon_threadsafe(afut.set_result, vector)
-
-                for cb in it.callbacks:
-                    try:
-                        cb(vector)
-                    except Exception as exc:
-                        logger.debug("Failed to call callback function", exc=exc)
-
-            with self._cv:
-                for it in batch:
-                    self._pending.pop(it.text, None)
-
-            logger.debug("embedding queue length", len=self.get_queue_size())
+                logger.debug("embedding queue length", len=self.get_queue_size())
+        finally:
+            if self._cache_manager:
+                self._cache_manager.close()
