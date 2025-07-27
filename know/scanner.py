@@ -341,7 +341,6 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         return pkg.id if pkg else None
 
     new_keys: set[tuple[str | None, str | None, bool]] = set()
-    pending_edges = []
 
     for imp in parsed_file.imports:
         key = (imp.virtual_path, imp.alias, imp.dot)
