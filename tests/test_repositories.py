@@ -12,7 +12,7 @@ from know.models import (
 )
 from typing import Dict, Any
 import uuid
-from know.data import SymbolSearchQuery, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter
+from know.data import NodeSearchQuery, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter
 
 
 def make_id() -> str:
@@ -165,24 +165,24 @@ def test_symbol_search(data_repo):
     data_repo.refresh_full_text_indexes()
 
     # ---------- no-filter search: default ordering (name ASC) ----------
-    res = sym_repo.search(rid, SymbolSearchQuery())
+    res = sym_repo.search(rid, NodeSearchQuery())
     assert [s.name for s in res] == ["Alpha", "Beta", "Gamma"]
 
     # ---------- name substring (case-insensitive) ----------
-    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_name="alpha"))] == ["Alpha"]
+    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(symbol_name="alpha"))] == ["Alpha"]
 
     # ---------- kind filter ----------
-    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_kind="class"))] == ["Beta"]
+    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(symbol_kind="class"))] == ["Beta"]
 
     # ---------- visibility filter ----------
-    assert {s.name for s in sym_repo.search(rid, SymbolSearchQuery(symbol_visibility="public"))} == {"Alpha", "Gamma"}
+    assert {s.name for s in sym_repo.search(rid, NodeSearchQuery(symbol_visibility="public"))} == {"Alpha", "Gamma"}
 
     # ---------- docstring / comment full-text search ----------
-    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(doc_needle="foo"))] == ["Alpha"]
+    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(doc_needle="foo"))] == ["Alpha"]
 
     # ---------- pagination ----------
-    assert len(sym_repo.search(rid, SymbolSearchQuery(limit=2))) == 2
-    assert [s.name for s in sym_repo.search(rid, SymbolSearchQuery(limit=2, offset=2))] == ["Gamma"]
+    assert len(sym_repo.search(rid, NodeSearchQuery(limit=2))) == 2
+    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(limit=2, offset=2))] == ["Gamma"]
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ def test_symbol_embedding_search(data_repo):
     # query vector identical to VecA  ->  VecA must rank first
     res = sym_repo.search(
         rid,
-        SymbolSearchQuery(embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3),
+        NodeSearchQuery(embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3),
     )
 
     assert res[0].name == "VecA"

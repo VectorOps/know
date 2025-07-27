@@ -34,7 +34,7 @@ from know.data import (
     AbstractImportEdgeRepository,
     AbstractNodeRefRepository,
     AbstractDataRepository,
-    SymbolSearchQuery,
+    NodeSearchQuery,
     PackageFilter,
     include_direct_descendants,
     resolve_symbol_hierarchy,
@@ -382,7 +382,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     RRF_CODE_WEIGHT: float = 0.7
     RRF_FTS_WEIGHT:  float = 0.3
 
-    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[Node]:
+    def search(self, repo_id: str, query: NodeSearchQuery) -> list[Node]:
         q = Query.from_(self._table)
 
         # Candidates

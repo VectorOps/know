@@ -2,7 +2,7 @@ from typing import List, Sequence, Optional
 
 from pydantic import BaseModel, Field
 
-from know.data import SymbolSearchQuery
+from know.data import NodeSearchQuery
 from know.models import NodeKind, Visibility
 from know.project import Project
 from .base import BaseTool, MCPToolDefinition
@@ -114,7 +114,7 @@ class SearchSymbolsTool(BaseTool):
             embedding_vec = project.compute_embedding(req.query)
 
         repo_id = project.get_repo().id
-        query   = SymbolSearchQuery(
+        query   = NodeSearchQuery(
             symbol_name       = req.symbol_name,
             symbol_fqn        = req.symbol_fqn,
             symbol_kind       = kind,

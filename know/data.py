@@ -142,7 +142,7 @@ class SymbolFilter:
 
 
 @dataclass
-class SymbolSearchQuery:
+class NodeSearchQuery:
     # Filter by symbol name
     symbol_name: Optional[str] = None
     # Filter by symbol fully qualified name
@@ -183,7 +183,7 @@ class AbstractNodeRepository(ABC):
         pass
 
     @abstractmethod
-    def search(self, repo_id: str, query: SymbolSearchQuery) -> List[Node]:
+    def search(self, repo_id: str, query: NodeSearchQuery) -> List[Node]:
         pass
 
     @abstractmethod

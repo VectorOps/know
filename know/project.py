@@ -7,7 +7,7 @@ from know.models import (
     RepoMetadata, FileMetadata, PackageMetadata, Node,
     ImportEdge, Vector, NodeKind
 )
-from know.data import AbstractDataRepository, SymbolSearchQuery
+from know.data import AbstractDataRepository, NodeSearchQuery
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
 from know.logger import logger

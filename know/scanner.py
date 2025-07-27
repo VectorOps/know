@@ -21,7 +21,7 @@ from know.models import (
     NodeKind,
     NodeRef,
 )
-from know.data import SymbolSearchQuery, SymbolFilter, ImportEdgeFilter
+from know.data import NodeSearchQuery, SymbolFilter, ImportEdgeFilter
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedNode, ParsedImportEdge
 from know.project import Project, ProjectCache
 from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings, schedule_symbol_embedding

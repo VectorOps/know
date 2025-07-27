@@ -4,7 +4,7 @@ import math
 from know.stores.duckdb import DuckDBDataRepository
 from know.stores.memory import InMemoryDataRepository
 from know.models import RepoMetadata, FileMetadata, Node
-from know.data import SymbolSearchQuery
+from know.data import NodeSearchQuery
 
 pytest.importorskip("sentence_transformers")
 
@@ -88,30 +88,30 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
 
     # BM25 Search tests
     # Query for 'sort'; should rank sorting-related symbols at the top.
-    res_bm25 = sym_repo.search(rid, SymbolSearchQuery(doc_needle="sort", limit=5))
+    res_bm25 = sym_repo.search(rid, NodeSearchQuery(doc_needle="sort", limit=5))
     top_names = [s.name for s in res_bm25]
 
     # The top 3 should be Sorting-related
     assert any("Sorting" in n for n in top_names[:3]), f"Top 3: {top_names[:3]}"
 
     # Query for 'date'; the date-related symbols should rank highest
-    res_date = sym_repo.search(rid, SymbolSearchQuery(doc_needle="date", limit=3))
+    res_date = sym_repo.search(rid, NodeSearchQuery(doc_needle="date", limit=3))
     assert all("Date" in s.name for s in res_date), f"Top date results: {[s.name for s in res_date]}"
 
     # Query for 'HTTP'; network symbols
-    res_net = sym_repo.search(rid, SymbolSearchQuery(doc_needle="HTTP", limit=2))
+    res_net = sym_repo.search(rid, NodeSearchQuery(doc_needle="HTTP", limit=2))
     assert any("Network" in s.name for s in res_net), f"Top network/HTTP: {[s.name for s in res_net]}"
 
     # Embedding search: retrieve all 'Sorting' (clustered), using first Sorting docstring as query
     sort_vec = emb_calc.get_embedding(themes[0][1])
-    emb_sort = sym_repo.search(rid, SymbolSearchQuery(embedding_query=sort_vec, limit=5))
+    emb_sort = sym_repo.search(rid, NodeSearchQuery(embedding_query=sort_vec, limit=5))
     sort_names = [s.name for s in emb_sort]
     # At least 2/3 of the top 3 should be 'Sorting' related
     assert sum("Sorting" in n for n in sort_names[:3]) >= 2, f"Top emb: {sort_names[:3]}"
 
     # Embedding search: retrieve all 'Math' symbols
     math_vec = emb_calc.get_embedding(themes[5][1])
-    emb_math = sym_repo.search(rid, SymbolSearchQuery(embedding_query=math_vec, limit=5))
+    emb_math = sym_repo.search(rid, NodeSearchQuery(embedding_query=math_vec, limit=5))
     math_names = [s.name for s in emb_math]
     assert sum("Math" in n for n in math_names[:3]) >= 1, f"Top math: {math_names[:3]}"
 
@@ -120,7 +120,7 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
     # ------------------------------------------------------------------
     comb = sym_repo.search(
         rid,
-        SymbolSearchQuery(doc_needle="sort", embedding_query=sort_vec, limit=5)
+        NodeSearchQuery(doc_needle="sort", embedding_query=sort_vec, limit=5)
     )
     comb_names = [s.name for s in comb]
 
@@ -138,4 +138,4 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
 
     # Ensures sorted (BM25 or embedding score) and relevant
     # Also covers at least 21 data entries
-    assert sym_repo.search(rid, SymbolSearchQuery(limit=25))  # total exists
+    assert sym_repo.search(rid, NodeSearchQuery(limit=25))  # total exists

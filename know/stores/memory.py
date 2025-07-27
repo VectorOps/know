@@ -17,7 +17,7 @@ from know.data import (
     AbstractImportEdgeRepository,
     AbstractNodeRefRepository,
     AbstractDataRepository,
-    SymbolSearchQuery,
+    NodeSearchQuery,
     PackageFilter,
     FileFilter,
     SymbolFilter,
@@ -314,7 +314,7 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
         scored.sort(key=lambda p: p[1], reverse=True)            # best first
         return {sid: rank + 1 for rank, (sid, _) in enumerate(scored)}
 
-    def search(self, repo_id: str, query: SymbolSearchQuery) -> list[Node]:
+    def search(self, repo_id: str, query: NodeSearchQuery) -> list[Node]:
         with self._lock:
             # candidate set: repo + scalar filters
             candidates: list[Node] = [
