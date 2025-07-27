@@ -1,21 +1,14 @@
 #+title: Todo
-* [ ] Add dedicated single-thread worker for DuckDB to work around its thread handling.
 * [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
-* [ ] Cache improvements
-** [ ] Collect and mass-update embeddings that were recently used
-** [ ] Add lifecycle rules to cleanup old unused embeddings
-* [X] Embedding calculation should include docstring and prior comment
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols?
-** [ ] Why this found nothing?
-Tool call request vectorops_search_symbols
-{
-    'query': 'def _handle_file(self, root_node)',
-    'symbol_kind': 'method',
-    'limit': 20,
-}
+** [X] Make tool search all symbols, not just public by default
 ** [ ] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
-* [ ] Update chat example to use litellm instead of OpenAI API directly
+* [X] Update chat example to use litellm instead of OpenAI API directly
+* [X] Cache improvements
+** [X] Collect and mass-update embeddings that were recently used
+** [X] Add lifecycle rules to cleanup old unused embeddings
+* [X] Embedding calculation should include docstring and prior comment
 * [ ] Refactor symbols
 ** [X] Everything is a symbol
 ** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
@@ -25,6 +18,7 @@ Tool call request vectorops_search_symbols
 * [ ] Add a inherits field to symbols and use for classes
 ** [ ] Update SymbolRef to use these too
 * [ ] When parsing references from files, skip duplicate names?
+* [X] Add dedicated single-thread worker for DuckDB to work around its thread handling.
 * [X] Define the meaning of to_package_path for ParsedSymbolRef (virtual path, physical path, etc)
 * [ ] Language support
 ** [-] Python

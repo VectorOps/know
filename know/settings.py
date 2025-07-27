@@ -50,7 +50,7 @@ class EmbeddingSettings(BaseSettings):
         description="The maximum number of records to keep in the embedding cache (LRU eviction).",
     )
     cache_trim_batch_size: int = Field(
-        100,
+        128,
         description="The number of records to delete at once when the embedding cache exceeds its max size.",
     )
 

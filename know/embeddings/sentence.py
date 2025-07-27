@@ -25,20 +25,6 @@ from know.logger import logger
 class LocalEmbeddingCalculator(EmbeddingCalculator):
     """
     EmbeddingsCalculator implementation backed by `sentence-transformers`.
-
-    Parameters
-    ----------
-    model_name:
-        HuggingFace hub model name or local path.
-    normalize_embeddings:
-        Whether to L2-normalize vectors returned by the model.
-    device:
-        Torch device string (e.g. "cuda", "cpu", "cuda:0").  If ``None`` the
-        underlying library chooses automatically.
-    batch_size:
-        Number of texts to encode per batch.
-    **model_kwargs:
-        Arbitrary keyword arguments forwarded to ``SentenceTransformer``.
     """
 
     def __init__(
@@ -77,9 +63,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
 
         self._cache: EmbeddingCacheBackend | None = cache
 
-    # --------------------------------------------------------------------- #
     # Internal helpers
-    # --------------------------------------------------------------------- #
     def _get_model(self) -> SentenceTransformer:
         if self._model is None:
             logger.debug(
@@ -229,9 +213,7 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
 
         return result
 
-    # --------------------------------------------------------------------- #
     # Public API required by EmbeddingsCalculator
-    # --------------------------------------------------------------------- #
     def get_model_name(self):
         return self._model_name
 

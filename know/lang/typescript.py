@@ -332,13 +332,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             if alias_node:
                 exported_names.add(alias_node.text.decode("utf8"))
 
-            if name_node or alias_node:
-                logger.debug(
-                    "TS parser: export clause identifier",
-                    path=self.rel_path,
-                    name=(alias_node or name_node).text.decode("utf8"),
-                )
-
         def _mark_exported(sym):
             if sym.name and sym.name in exported_names:
                 sym.exported = True

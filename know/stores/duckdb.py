@@ -154,7 +154,7 @@ class DuckDBThreadWrapper:
         if self._conn:
             self._conn.close()
 
-    def execute(self, sql, params):
+    def execute(self, sql, params=None):
         fut = Future()
         self._queue.put((sql, params, fut))
         return fut.result()
@@ -528,9 +528,6 @@ class DuckDBSymbolMetadataRepo(_DuckDBBaseRepo[SymbolMetadata], AbstractSymbolMe
 
         q = q.limit(limit).offset(offset)
 
-        parameter = QmarkParameter()
-        sql = q.get_sql(parameter=parameter)
-
         rows = self._execute(q)
         syms = [self.model(**self._deserialize_data(r)) for r in rows]
         syms = include_direct_descendants(self, syms)
@@ -684,5 +681,4 @@ class DuckDBDataRepository(AbstractDataRepository):
                 "'id', 'name', 'fqn', 'docstring', 'comment');"
             )
         except Exception as ex:
-            # index absent or extension unavailable – ignore
-            pass
+            logger.debug("Failed to refresh DuckDB FTS index", ex=ex)

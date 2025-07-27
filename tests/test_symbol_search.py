@@ -90,6 +90,7 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
     # Query for 'sort'; should rank sorting-related symbols at the top.
     res_bm25 = sym_repo.search(rid, SymbolSearchQuery(doc_needle="sort", limit=5))
     top_names = [s.name for s in res_bm25]
+
     # The top 3 should be Sorting-related
     assert any("Sorting" in n for n in top_names[:3]), f"Top 3: {top_names[:3]}"
 

@@ -185,13 +185,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
             if alias_node:
                 exported_names.add(alias_node.text.decode("utf8"))
 
-            if name_node or alias_node:
-                logger.debug(
-                    "JS parser: export clause identifier",
-                    path=self.rel_path,
-                    name=(alias_node or name_node).text.decode("utf8"),
-                )
-
         # mark already-parsed symbols as exported
         if exported_names:
             def _mark(sym):
