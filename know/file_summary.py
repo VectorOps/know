@@ -1,7 +1,7 @@
 import os
 from typing import Sequence, Optional, List
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from know.logger import logger
 from know.parsers import CodeParserRegistry, AbstractLanguageHelper
@@ -18,11 +18,13 @@ class SummaryMode(str, Enum):
 
 
 class FileSummary(BaseModel):
-    path: str
-    content: str
+    """Represents the summary of a single file."""
+    path: str = Field(..., description="The project-relative path of the file.")
+    content: str = Field(..., description="The generated summary content of the file.")
 
 
 def _symbol_to_text(sym: SymbolMetadata, include_docs: bool = False) -> str:
+    """Generate a simple text representation of a symbol."""
     parts: list[str] = []
     if sym.signature and sym.signature.raw:
         parts.append(sym.signature.raw.strip())
