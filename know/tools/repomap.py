@@ -7,7 +7,7 @@ from litellm import token_counter
 
 from .base import BaseTool, MCPToolDefinition
 import networkx as nx  # type: ignore
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from know.logger import logger
 from know.project import Project, ScanResult, ProjectComponent
 from know.models import SymbolMetadata, Visibility
@@ -29,19 +29,19 @@ POLYDEF_MULTIPLIER     = 0.1
 ISOLATED_SELF_WEIGHT   = 0.3
 
 
-#  Helpers
 def _sym_node(name: str) -> str:
-    """Canonical node id for a symbol."""
+    """Return the canonical node ID for a symbol."""
     return f"sym::{name}"
 
 
-# ----------- token helper -------------------------------------------
 def _count_tokens(text: str, model: str) -> int:
+    """Count tokens in a string using a specified model."""
     return token_counter(text=text, model=model)
 
 
 @dataclass(slots=True)
 class NameProps:
+    """Properties of a symbol name relevant for weighting."""
     name: str
     visibility: Optional[str]
     descriptiveness: float
@@ -49,15 +49,16 @@ class NameProps:
 
 @dataclass(slots=True)
 class _NodeAttr:
+    """Graph node attributes."""
     kind: str  # "file" | "sym"
 
 
-#  Component that **maintains** the heterograph
 class RepoMap(ProjectComponent):
+    """Component that maintains the heterograph of files and symbols."""
     component_name = "repomap"
 
-    # ---------- lifecycle ------------------------------------------------
     def __init__(self, project: Project):
+        """Initialize the RepoMap component."""
         super().__init__(project)
         self.G = nx.MultiDiGraph()
         self._path_to_fid: Dict[str, str] = {}
@@ -68,16 +69,17 @@ class RepoMap(ProjectComponent):
         self._name_props: Dict[str, NameProps] = {}
 
     def destroy(self):
+        """Clean up resources used by the component."""
         pass
 
-    # ---------- public helpers ------------------------------------------
     def sym_node(self, name: str) -> str:
+        """Return the canonical node ID for a symbol."""
         return _sym_node(name)
 
     def get_name_properties(self, name: str) -> Optional[NameProps]:
+        """Return the cached properties for a symbol name."""
         return self._name_props.get(name)
 
-    # ---------- edge-weight helpers -------------------------------------
     @staticmethod
     def _calc_descriptiveness(name: str) -> float:
         """
@@ -262,24 +264,59 @@ class RepoMap(ProjectComponent):
 
 #  Tool
 class RepoMapReq(BaseModel):
-    symbol_names: Optional[Sequence[str]] = None
-    file_paths:   Optional[Sequence[str]] = None
-    prompt:       Optional[str] = None
-    limit:        int   = LIMIT_DEFAULT
+    symbol_names: Optional[Sequence[str]] = Field(
+        default=None,
+        description="Symbol names to use as high-priority seeds for the random walk.",
+    )
+    file_paths: Optional[Sequence[str]] = Field(
+        default=None,
+        description="File paths to use as high-priority seeds for the random walk.",
+    )
+    prompt: Optional[str] = Field(
+        default=None,
+        description="A free-text prompt from which to extract additional symbol and file names to use as seeds.",
+    )
+    limit: int = Field(
+        default=LIMIT_DEFAULT, description="The maximum number of files to return."
+    )
     # TODO: Move to config
-    restart_prob: float = RESTART_PROB
-    summary_mode: SummaryMode | str = SummaryMode.ShortSummary
+    restart_prob: float = Field(
+        default=RESTART_PROB,
+        description="Probability of restarting the random walk from a seed node. Lower values explore further from the seeds.",
+    )
+    summary_mode: SummaryMode | str = Field(
+        default=SummaryMode.ShortSummary,
+        description="The level of detail for the summary of each file.",
+    )
     # TODO: Move to config
-    min_symbol_len: int = 3
-    skip_mentioned_summary: bool = False
-    token_limit_count: Optional[int] = None
-    token_limit_model: Optional[str] = None
+    min_symbol_len: int = Field(
+        default=3,
+        description="Minimum length of a token from the prompt to be considered a symbol.",
+    )
+    skip_mentioned_summary: bool = Field(
+        default=False,
+        description="If true, do not generate summaries for files that were explicitly provided in `file_paths`.",
+    )
+    token_limit_count: Optional[int] = Field(
+        default=None,
+        description="A token budget for the total size of all returned summaries. The tool will stop adding summaries once this limit is exceeded.",
+    )
+    token_limit_model: Optional[str] = Field(
+        default=None,
+        description="The model to use for counting tokens for `token_limit_count`. Required if `token_limit_count` is set.",
+    )
 
 
 class RepoMapScore(BaseModel):
-    file_path: str
-    score:     float
-    summary:   Optional[str] = None
+    file_path: str = Field(
+        description="The path of the ranked file, relative to the project root."
+    )
+    score: float = Field(
+        description="The relevance score of the file, as determined by the random walk."
+    )
+    summary: Optional[str] = Field(
+        default=None, description="The generated summary of the file, if one was requested."
+    )
 
 
 class RepoMapTool(BaseTool):
@@ -437,7 +474,7 @@ class RepoMapTool(BaseTool):
 
         return results
 
-    # ---------- OpenAI schema (unchanged aside from defaults) ----------
+    # ---------- OpenAI schema ----------
     def get_openai_schema(self) -> dict:
         summary_enum = [m.value for m in SummaryMode]
 
@@ -453,34 +490,54 @@ class RepoMapTool(BaseTool):
                     "symbol_names": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Symbol names mentioned in the user request.",
+                        "description": "Symbol names to use as high-priority seeds for the random walk.",
                     },
                     "file_paths": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "File paths explicitly mentioned in the user request.",
+                        "description": "File paths to use as high-priority seeds for the random walk.",
                     },
                     "prompt": {
                         "type": "string",
-                        "description": (
-                            "Arbitrary free-text. Any symbol or file names mentioned here "
-                            "will be detected and used as additional boost seeds."
-                        ),
+                        "description": "A free-text prompt from which to extract additional symbol and file names to use as seeds.",
                     },
                     "limit": {
                         "type": "integer",
                         "minimum": 1,
                         "default": LIMIT_DEFAULT,
-                        "description": "Number of top files to return.",
+                        "description": "The maximum number of files to return.",
+                    },
+                    "restart_prob": {
+                        "type": "number",
+                        "default": RESTART_PROB,
+                        "description": "Probability of restarting the random walk from a seed node. Lower values explore further from the seeds.",
                     },
                     "summary_mode": {
                         "type": "string",
                         "enum": summary_enum,
                         "default": SummaryMode.ShortSummary.value,
                         "description": (
-                            "Level of detail for file summaries that may accompany "
-                            "each result (`skip`/`summary_short`/`summary_full`/`full`)."
+                            "The level of detail for the summary of each file "
+                            "(`skip`/`summary_short`/`summary_full`/`full`)."
                         ),
+                    },
+                    "min_symbol_len": {
+                        "type": "integer",
+                        "default": 3,
+                        "description": "Minimum length of a token from the prompt to be considered a symbol.",
+                    },
+                    "skip_mentioned_summary": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "If true, do not generate summaries for files that were explicitly provided in `file_paths`.",
+                    },
+                    "token_limit_count": {
+                        "type": "integer",
+                        "description": "A token budget for the total size of all returned summaries. The tool will stop adding summaries once this limit is exceeded.",
+                    },
+                    "token_limit_model": {
+                        "type": "string",
+                        "description": "The model to use for counting tokens for `token_limit_count`. Required if `token_limit_count` is set.",
                     },
                 },
             },
