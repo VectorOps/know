@@ -1,5 +1,5 @@
 #+title: Todo
-* [ ] Fix mypy warnings
+* [X] Fix mypy warnings
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols?
 ** [X] Make tool search all symbols, not just public by default
