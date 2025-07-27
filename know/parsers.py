@@ -141,6 +141,7 @@ class AbstractCodeParser(ABC):
     source_bytes: bytes
     package: ParsedPackage
     parsed_file: ParsedFile
+    parser: Any
 
     def __init__(self, project: Project, rel_path: str) -> None:
         self.project = project
@@ -150,8 +151,24 @@ class AbstractCodeParser(ABC):
     def _rel_to_virtual_path(self, rel_path: str) -> str:
         ...
 
+    @abstractmethod
+    def _process_node(self, node: Any, parent: Optional[ParsedSymbol] = None) -> List[ParsedSymbol]:
+        ...
+
+    @abstractmethod
+    def _collect_symbol_refs(self, root_node: Any) -> List[ParsedSymbolRef]:
+        ...
+
+    def _handle_file(self, root_node: Any) -> None:
+        """
+        Optional hook for language-specific post-processing at file-level.
+        """
+        pass
+
     # Helpers
     def parse(self, cache: ProjectCache) -> ParsedFile:
+        if not self.project.settings.project_path:
+            raise ValueError("project_path must be set to parse files")
         file_path = os.path.join(self.project.settings.project_path, self.rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
