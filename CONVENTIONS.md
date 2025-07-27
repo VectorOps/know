@@ -52,6 +52,8 @@ def calculate_area(length: float, width: float) -> float:
     return length * width
 ```
 
+When fixing typing errors, avoid adding type ignore hints. 
+
 ### Best Practices
 
 1. Use `TypeAlias` for type aliases:

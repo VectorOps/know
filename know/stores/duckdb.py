@@ -316,12 +316,12 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
         super().__init__(conn)
         self._file_repo = file_repo
 
-    def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:  # type: ignore[override]
+    def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
         q = Query.from_(self._table).select("*").where(self._table.physical_path == path)
         rows = self._execute(q)
         return PackageMetadata(**rows[0]) if rows else None
 
-    def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:  # type: ignore[override]
+    def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:
         q = Query.from_(self._table).select("*").where(self._table.virtual_path == path)
         rows = self._execute(q)
         return PackageMetadata(**rows[0]) if rows else None

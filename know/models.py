@@ -76,7 +76,7 @@ Vector = List[float]  # alias for clarity when embedding
 # Core data containers
 # ---------------------------------------------------------------------------
 class RepoMetadata(BaseModel):
-    id: Optional[str]
+    id: str
     name: Optional[str] = None
     root_path: Optional[str] = ""  # changed to optional with default
     remote_url: Optional[str] = None
@@ -85,7 +85,7 @@ class RepoMetadata(BaseModel):
 
 
 class PackageMetadata(BaseModel):
-    id: Optional[str]
+    id: str
     name: Optional[str] = None
     repo_id: Optional[str] = None
     language: Optional[ProgrammingLanguage] = None
@@ -99,7 +99,7 @@ class PackageMetadata(BaseModel):
 
 
 class FileMetadata(BaseModel):
-    id: Optional[str]
+    id: str
     repo_id: Optional[str] = None
     package_id: Optional[str] = None
     path: str # project relative path
@@ -137,7 +137,7 @@ class SymbolSignature(BaseModel):
 
 
 class SymbolMetadata(BaseModel):
-    id: Optional[str]
+    id: str
     repo_id: str
     file_id: Optional[str] = None
     package_id: Optional[str] = None
@@ -178,7 +178,7 @@ class SymbolMetadata(BaseModel):
 
 
 class ImportEdge(BaseModel):
-    id: Optional[str]
+    id: str
     repo_id: str # related repository
     from_package_id: str  # importing package
     from_file_id: str # importing file
@@ -196,7 +196,7 @@ class ImportEdge(BaseModel):
 
 
 class SymbolRef(BaseModel):
-    id: Optional[str]
+    id: str
     repo_id: str
     package_id: str
     file_id: str

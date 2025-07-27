@@ -86,8 +86,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         self.project = project
         self.rel_path = rel_path
         self.source_bytes: bytes = b""
-        self.package: ParsedPackage = ParsedPackage()
-        self.parsed_file: ParsedFile = ParsedFile()
 
     # Required methods
     def _handle_file(self, root_node):

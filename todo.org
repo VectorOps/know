@@ -1,5 +1,5 @@
 #+title: Todo
-* [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
+* [ ] Fix mypy warnings
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols?
 ** [X] Make tool search all symbols, not just public by default
@@ -20,6 +20,7 @@
 * [ ] When parsing references from files, skip duplicate names?
 * [X] Add dedicated single-thread worker for DuckDB to work around its thread handling.
 * [X] Define the meaning of to_package_path for ParsedSymbolRef (virtual path, physical path, etc)
+* [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
 * [ ] Language support
 ** [-] Python
 *** [X] Test module path resolution
@@ -46,9 +47,9 @@
 ** [ ] C#
 ** [ ] Java
 ** [ ] PHP
-* [ ] MCP server
+* [X] MCP server
 * [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
-* [ ] Add support for Python del_statement, if statement, etc.
+* [X] Add support for Python del_statement, if statement, etc.
 * [ ] Documentation generator
 * [ ] CI/CD pipeline
 * [ ] Do not refresh DuckDB index if project did not change

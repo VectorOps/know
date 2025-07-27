@@ -139,13 +139,15 @@ class AbstractCodeParser(ABC):
     project: Project
     rel_path: str
     source_bytes: bytes
-    package: ParsedPackage
-    parsed_file: ParsedFile
+    package: ParsedPackage | None
+    parsed_file: ParsedFile | None
     parser: Any
 
     def __init__(self, project: Project, rel_path: str) -> None:
         self.project = project
         self.rel_path = rel_path
+        self.package = None
+        self.parsed_file = None
     
     @abstractmethod
     def _rel_to_virtual_path(self, rel_path: str) -> str:

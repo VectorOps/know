@@ -73,7 +73,7 @@ class InMemoryBaseRepository(Generic[T]):
     def create(self, item: T) -> T:
         """Create a new item entry."""
         with self._lock:
-            self._items[item.id] = item
+            self._items[item.id] = item # type: ignore
         return item
 
     def update(self, item_id: str, data: Dict[str, Any]) -> Optional[T]:
@@ -82,13 +82,8 @@ class InMemoryBaseRepository(Generic[T]):
             item = self._items.get(item_id)
             if not item:
                 return None
-            # Pydantic v2: use `model_copy`, fall back to legacy `copy`.
-            if hasattr(item, "model_copy"):              # Pydantic >= 2
+            if hasattr(item, "model_copy"):
                 updated = item.model_copy(update=data)
-                self._items[item_id] = updated
-                return updated
-            if hasattr(item, "copy"):                    # Pydantic < 2
-                updated = item.copy(update=data)
                 self._items[item_id] = updated
                 return updated
             # For dataclasses, update fields in place
@@ -152,19 +147,16 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
 
     def delete_orphaned(
         self,
-    ) -> int:
+    ):
         """
         Delete every PackageMetadata that is not referenced by any
         FileMetadata in *file_repo*.  Returns the number of deletions.
         """
         with self._lock:
             used_pkg_ids = {f.package_id for f in self._file_items.values() if f.package_id}
-            removed = 0
             for pkg_id in list(self._items):
                 if pkg_id not in used_pkg_ids:
                     self.delete(pkg_id)
-                    removed += 1
-            return removed
 
 
 class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata],
@@ -353,7 +345,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
             # FTS ranks
             if has_fts:
-                q_tokens = self._tokenize(query.doc_needle)
+                q_tokens = self._tokenize(query.doc_needle) # type: ignore
                 docs = [
                     (
                         s,
@@ -367,7 +359,7 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
 
             # embedding ranks
             if has_embedding:
-                qvec = self._norm(query.embedding_query)
+                qvec = self._norm(query.embedding_query) # type: ignore
                 id_candidates = {c.id for c in candidates}
                 sims: list[tuple[SymbolMetadata, float]] = []
                 for sid in id_candidates:
@@ -420,7 +412,6 @@ class InMemorySymbolMetadataRepository(InMemoryBaseRepository[SymbolMetadata], A
             for sid in to_delete:
                 self._items.pop(sid, None)
                 self._index_remove(sid)
-        return len(to_delete)
 
 
 class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractImportEdgeRepository):
@@ -456,7 +447,7 @@ class InMemorySymbolRefRepository(InMemoryBaseRepository[SymbolRef],
             to_delete = [rid for rid, ref in self._items.items() if ref.file_id == file_id]
             for rid in to_delete:
                 self._items.pop(rid, None)
-        return len(to_delete)
+
 
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):

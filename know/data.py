@@ -63,12 +63,12 @@ class AbstractPackageMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_physical_path(self, root_path: str) -> Optional[RepoMetadata]:
+    def get_by_physical_path(self, root_path: str) -> Optional[PackageMetadata]:
         """Get a repo by its root path."""
         pass
 
     @abstractmethod
-    def get_by_virtual_path(self, root_path: str) -> Optional[RepoMetadata]:
+    def get_by_virtual_path(self, root_path: str) -> Optional[PackageMetadata]:
         """Get a repo by its root path."""
         pass
 
