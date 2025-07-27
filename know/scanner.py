@@ -29,7 +29,7 @@ from know.embedding_helpers import schedule_missing_embeddings, schedule_outdate
 
 
 class ParsingState:
-    def __init__(self):
+    def __init__(self) -> None:
         self.pending_import_edges: list[ImportEdge] = []
 
 
@@ -133,7 +133,7 @@ def scan_project_directory(project: Project) -> ScanResult:
 
     cache = ProjectCache()
     state = ParsingState()
-    timing_stats = defaultdict(lambda: {"count": 0, "total_time": 0.0})
+    timing_stats: defaultdict[str, dict[str, int | float]] = defaultdict(lambda: {"count": 0, "total_time": 0.0})
     timing_stats_lock = threading.Lock()
 
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
@@ -144,8 +144,12 @@ def scan_project_directory(project: Project) -> ScanResult:
     num_workers = project.settings.scanner_num_workers
     if num_workers is None:
         try:
-            num_workers = max(1, os.cpu_count() - 1)
-        except (NotImplementedError, TypeError):
+            cpus = os.cpu_count()
+            if cpus:
+                num_workers = max(1, cpus - 1)
+            else:
+                num_workers = 4
+        except NotImplementedError:
             num_workers = 4  # A reasonable default
 
     logger.debug("number of workers", count=num_workers)
@@ -187,8 +191,11 @@ def scan_project_directory(project: Project) -> ScanResult:
                 continue
 
             if res.status == ProcessFileStatus.BARE_FILE:
+                assert res.rel_path is not None
                 logger.debug("No parser registered for path – storing bare FileMetadata.", path=res.rel_path)
                 if res.existing_meta is None:
+                    assert res.file_hash is not None
+                    assert res.mod_time is not None
                     fm = FileMetadata(
                         id=generate_id(),
                         repo_id=project.get_repo().id,
@@ -210,6 +217,7 @@ def scan_project_directory(project: Project) -> ScanResult:
                     result.files_updated.append(res.rel_path)
 
             elif res.status == ProcessFileStatus.PARSED_FILE:
+                assert res.parsed_file is not None
                 upsert_parsed_file(project, state, res.parsed_file)
                 if res.existing_meta is None:
                     result.files_added.append(res.parsed_file.path)
@@ -516,6 +524,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
             best_parent = None
             best_len = -1
             for cand in candidates:
+                assert cand.fqn is not None
                 pref = f"{cand.fqn}."
                 if meth.fqn.startswith(pref) and len(cand.fqn) > best_len:
                     best_parent, best_len = cand, len(cand.fqn)
