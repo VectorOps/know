@@ -66,7 +66,7 @@ class EmbeddingWorker:
         cache_trim_batch_size: int = 100,
         batch_size: int = 1,
         batch_wait_ms: float = 50,
-        calc_kwargs: any = None,
+        calc_kwargs: Any = None,
     ):
         self._calc_type = calc_type
         self._model_name = model_name

@@ -36,6 +36,9 @@ class BaseSQLCacheBackend(EmbeddingCacheBackend):
     TOUCH_BATCH_SIZE = 100
     TRIM_CHECK_INTERVAL = 100
 
+    _insert_counts: defaultdict[str, int]
+    _needs_startup_trim: defaultdict[str, bool]
+
     def __init__(self, max_size: Optional[int], trim_batch_size: int):
         super().__init__(max_size, trim_batch_size)
 
