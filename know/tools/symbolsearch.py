@@ -52,7 +52,7 @@ class SearchSymbolsTool(BaseTool):
         if isinstance(symbol_visibility, Visibility):
             vis = symbol_visibility
         elif isinstance(symbol_visibility, str):
-            if lower(symbol_visibility) == "all":
+            if str.lower(symbol_visibility) == "all":
                 vis = None
             else:
                 vis = Visibility(symbol_visibility)
