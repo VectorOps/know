@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Any, Optional, Type, Dict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
-import pandas
 from abc import ABC, abstractmethod
 from know.models import (
     RepoMetadata, FileMetadata, PackageMetadata, SymbolMetadata,
@@ -62,6 +61,10 @@ class Project:
     @classmethod
     def register_component(cls, comp_cls: Type[ProjectComponent], 
                            name: str | None = None) -> None:
+        if comp_cls.component_name is None:
+            raise ValueError(
+                f"Cannot register component {comp_cls.__name__} without a `component_name`."
+            )
         cls._component_registry[comp_cls.component_name] = comp_cls
 
     def __init__(
@@ -161,16 +164,16 @@ class ProjectCache:
     Mutable project-wide cache for expensive/invariant information
     that code parsers may want to re-use (ex: go.mod content).
     """
-    def __init__(self):
+    def __init__(self) -> None:
         self._cache: dict[str, Any] = {}
 
-    def get(self, key: str, default=None):
+    def get(self, key: str, default: Any = None) -> Any:
         return self._cache.get(key, default)
 
-    def set(self, key: str, value: Any):
+    def set(self, key: str, value: Any) -> None:
         self._cache[key] = value
 
-    def clear(self):
+    def clear(self) -> None:
         self._cache.clear()
 
 
@@ -182,6 +185,7 @@ def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
     Finally, kicks off a function to recursively scan the project directory.
     """
     backend = settings.repository_backend or "memory"
+    data_repository: AbstractDataRepository
     if backend == "duckdb":
         data_repository = DuckDBDataRepository(db_path=settings.repository_connection)
     elif backend == "memory":
