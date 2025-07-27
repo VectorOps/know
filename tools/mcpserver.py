@@ -29,7 +29,7 @@ class Settings(ProjectSettings):
     mcp_auth_token: str | None = Field(None, description="MCP server auth token (optional).")
 
 
-mcp = FastMCP(
+mcp: FastMCP = FastMCP(
     "vectorops",
 )
 
@@ -38,8 +38,6 @@ def init():
     settings = Settings()
     print(settings)
     project = init_project(settings)
-
-    print("project parsing done...")
 
     # register all enabled tools with the MCP server
     tools = ToolRegistry.get_enabled_tools(settings)
