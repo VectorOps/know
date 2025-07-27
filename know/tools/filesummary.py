@@ -10,11 +10,13 @@ from know.models import Visibility
 
 
 class SummarizeFilesReq(BaseModel):
+    """Request model for the SummarizeFilesTool."""
     paths: Sequence[str]
     summary_mode: SummaryMode | str = SummaryMode.ShortSummary
 
 
 class SummarizeFilesTool(BaseTool):
+    """Tool to generate summaries for a list of files."""
     tool_name = "vectorops_summarize_files"
     tool_input = SummarizeFilesReq
     tool_output = List[FileSummary]
@@ -24,6 +26,7 @@ class SummarizeFilesTool(BaseTool):
         project: Project,
         req: SummarizeFilesReq,
     ) -> List[FileSummary]:
+        """Generate summaries for the requested files."""
         summary_mode = req.summary_mode
         if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)
@@ -37,16 +40,16 @@ class SummarizeFilesTool(BaseTool):
         return summaries
 
     def get_openai_schema(self) -> dict:
-        visibility_enum = [v.value for v in Visibility] + ["all"]
+        """Return the OpenAI schema for the tool."""
         summary_enum = [m.value for m in SummaryMode]
 
         return {
             "name": self.tool_name,
             "description": (
-                "Return a text summary for each supplied file consisting "
-                "of its import statements and top-level symbol definitions."
-                "Use this tool to find overview of the interesting files. Prefer "
-                "the default summary_short mode, but request full file if needed."
+                "Return a text summary for each supplied file, consisting of its "
+                "import statements and top-level symbol definitions. Use this tool "
+                "to get an overview of interesting files. Prefer the default "
+                "`summary_short` mode, but request `full` if needed."
             ),
             "parameters": {
                 "type": "object",
@@ -54,10 +57,7 @@ class SummarizeFilesTool(BaseTool):
                     "paths": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": (
-                            "Project-relative paths of the files to be "
-                            "summarized."
-                        ),
+                        "description": "Project-relative paths of the files to be summarized.",
                     },
                     "summary_mode": {
                         "type": "string",
@@ -65,7 +65,7 @@ class SummarizeFilesTool(BaseTool):
                         "default": SummaryMode.ShortSummary.value,
                         "description": (
                             "Level of detail for the generated summary "
-                            "(`skip`/`summary_short`/`summary_full`/`full`)."
+                            "(`skip`, `summary_short`, or `full`)."
                         ),
                     },
                 },
@@ -74,6 +74,7 @@ class SummarizeFilesTool(BaseTool):
         }
 
     def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+        """Return the MCP definition for the tool."""
         def filesummary(req: SummarizeFilesReq) -> List[FileSummary]:
             return self.execute(project, req)
 
