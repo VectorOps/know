@@ -7,7 +7,7 @@ import uvicorn
 from pydantic import Field, AliasChoices
 from pydantic_settings import SettingsConfigDict
 
-from fastmcp.server import FastMCP
+from fastmcp.server import Auth, FastMCP
 
 from know.project import init_project
 from know.settings import ProjectSettings, print_help
@@ -31,7 +31,6 @@ class Settings(ProjectSettings):
     )
 
     project_path: str = Field(
-        ...,
         description="Root directory of the project to analyse/assist with.",
         validation_alias=AliasChoices("project-path", "p", "path"),
     )
@@ -56,7 +55,7 @@ def main() -> None:
 
     # authentication token can be set via --mcp-auth-token or KNOW_MCP_AUTH_TOKEN
     mcp = FastMCP(
-        auth_token=settings.mcp_auth_token,
+        auth=Auth(token=settings.mcp_auth_token) if settings.mcp_auth_token else None,
     )
 
     # register all enabled tools with the MCP server
