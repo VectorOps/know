@@ -1,6 +1,6 @@
 import os
 from typing import Optional, List, Dict, Any, Type
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 from know.models import (
     ProgrammingLanguage,
@@ -131,27 +131,24 @@ class ParsedFile(BaseModel):
 
 
 # Abstract base parser class
-class AbstractCodeParser:
+class AbstractCodeParser(ABC):
     """
     Abstract base class for code parsers.
     """
+    language: ProgrammingLanguage
+    project: Project
+    rel_path: str
+    source_bytes: bytes
+    package: ParsedPackage
+    parsed_file: ParsedFile
 
-    @abstractmethod
     def __init__(self, project: Project, rel_path: str) -> None:
-        pass
-
+        self.project = project
+        self.rel_path = rel_path
+    
     @abstractmethod
-    def parse(self, cache: ProjectCache) -> ParsedFile:
-        """
-        Parse the file at the given relative path within the project.
-
-        Args:
-            cache: The ProjectCache instance
-
-        Returns:
-            ParsedFile: The parsed file metadata.
-        """
-        pass
+    def _rel_to_virtual_path(self, rel_path: str) -> str:
+        ...
 
     # Helpers
     def parse(self, cache: ProjectCache) -> ParsedFile:
@@ -301,7 +298,7 @@ class CodeParserRegistry:
     """
     _instance = None
     _parsers: Dict[str, Type[AbstractCodeParser]] = {}
-    _lang_helpers: Dict[ProgrammingLanguage, AbstractCodeParser] = {}
+    _lang_helpers: Dict[ProgrammingLanguage, AbstractLanguageHelper] = {}
 
     def __new__(cls):
         if cls._instance is None:
@@ -314,7 +311,7 @@ class CodeParserRegistry:
 
     @classmethod
     def get_helper(cls, lang: ProgrammingLanguage) -> Optional[AbstractLanguageHelper]:
-        return cls._lang_helpers[lang]
+        return cls._lang_helpers.get(lang)
 
     @classmethod
     def register_parser(cls, ext: str, parser: Type[AbstractCodeParser]) -> None:
