@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import sys
-from functools import partial
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
 import uvicorn
 from pydantic import Field, AliasChoices, AnyHttpUrl
 from pydantic_settings import SettingsConfigDict
 
-from fastmcp.server import AccessToken, AuthSettings, FastMCP, TokenVerifier
+from fastmcp.server import AccessToken, AuthSettings, Context, FastMCP, TokenVerifier
 
-from know.project import init_project
+from know.project import Project, init_project
 from know.settings import ProjectSettings, print_help
 from know.tools.base import ToolRegistry
 
@@ -18,6 +20,13 @@ from know.tools import filelist  # noqa: F401
 from know.tools import filesummary  # noqa: F401
 from know.tools import repomap  # noqa: F401
 from know.tools import symbolsearch  # noqa: F401
+
+
+@dataclass
+class AppContext:
+    """Application context with typed dependencies."""
+
+    project: Project
 
 
 class StaticTokenVerifier(TokenVerifier):
@@ -62,7 +71,16 @@ def main() -> None:
         print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
         sys.exit(1)
 
-    project = init_project(settings)
+    @asynccontextmanager
+    async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
+        """Manage application lifecycle with type-safe context."""
+        # Initialize on startup
+        project = init_project(settings)
+        try:
+            yield AppContext(project=project)
+        finally:
+            # Cleanup on shutdown (if any)
+            pass
 
     token_verifier = None
     auth_settings = None
@@ -78,19 +96,26 @@ def main() -> None:
     # authentication token can be set via --mcp-auth-token or KNOW_MCP_AUTH_TOKEN
     mcp = FastMCP(
         "Know MCP Server",
+        lifespan=app_lifespan,
         token_verifier=token_verifier,
         auth=auth_settings,
     )
 
     # register all enabled tools with the MCP server
     tools = ToolRegistry.get_enabled_tools(settings)
+
+    def create_handler(tool_instance):
+        def handler(ctx: Context, **kwargs):
+            project = ctx.request_context.lifespan_context.project
+            return tool_instance.execute(project, **kwargs)
+        return handler
+
     for tool in tools:
         schema = tool.get_openai_schema()
         # The tool's execute method has `project` as its first argument.
-        # We use functools.partial to curry it, so the MCP framework can
-        # call the tool with only the arguments from the tool-use request.
-        handler = partial(tool.execute, project)
-        mcp.add_tool(schema=schema, func=handler)
+        # We create a handler that receives the lifespan context from the
+        # MCP server and passes the project to the tool.
+        mcp.add_tool(schema=schema, func=create_handler(tool))
 
     # run the server
     uvicorn.run(mcp, app_dir=".", host=settings.mcp_host, port=settings.mcp_port)
