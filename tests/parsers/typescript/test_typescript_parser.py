@@ -4,7 +4,7 @@ from pathlib import Path
 from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.typescript import TypeScriptCodeParser
-from know.models import ProgrammingLanguage, SymbolKind
+from know.models import ProgrammingLanguage, NodeKind
 from devtools import pprint
 
 # --------------------------------------------------------------------------- #
@@ -81,9 +81,9 @@ def test_typescript_parser_on_simple_file():
 
     flat_map = {s.name: s for s in _flatten(parsed_file.symbols)}
 
-    assert flat_map["fn"].kind   == SymbolKind.FUNCTION
-    assert flat_map["Test"].kind == SymbolKind.CLASS
-    assert flat_map["Foo"].kind == SymbolKind.CLASS
+    assert flat_map["fn"].kind   == NodeKind.FUNCTION
+    assert flat_map["Test"].kind == NodeKind.CLASS
+    assert flat_map["Foo"].kind == NodeKind.CLASS
 
     # variable & function names introduced by the sample that were
     # previously untested
@@ -99,19 +99,19 @@ def test_typescript_parser_on_simple_file():
     assert nested_expected.issubset(flat_map.keys())
 
     # additional sanity checks for the two moved symbols
-    assert flat_map["CONST"].kind in (SymbolKind.CONSTANT, SymbolKind.VARIABLE)
-    assert flat_map["z"].kind == SymbolKind.VARIABLE
+    assert flat_map["CONST"].kind in (NodeKind.CONSTANT, NodeKind.VARIABLE)
+    assert flat_map["z"].kind == NodeKind.VARIABLE
     assert flat_map["z"].exported is True
 
     # kind sanity-checks for a representative subset
-    assert flat_map["j1"].kind == SymbolKind.VARIABLE
-    assert flat_map["f1"].kind == SymbolKind.FUNCTION
-    assert flat_map["Point"].kind == SymbolKind.TYPE_ALIAS
-    assert flat_map["Direction"].kind == SymbolKind.ENUM
-    assert flat_map["LabeledValue"].kind == SymbolKind.INTERFACE
-    assert flat_map["Base"].kind == SymbolKind.CLASS
+    assert flat_map["j1"].kind == NodeKind.VARIABLE
+    assert flat_map["f1"].kind == NodeKind.FUNCTION
+    assert flat_map["Point"].kind == NodeKind.TYPE_ALIAS
+    assert flat_map["Direction"].kind == NodeKind.ENUM
+    assert flat_map["LabeledValue"].kind == NodeKind.INTERFACE
+    assert flat_map["Base"].kind == NodeKind.CLASS
 
     # class children (method + possible variable)
     test_cls_children = _to_map(flat_map["Test"].children)
     assert "method" in test_cls_children
-    assert test_cls_children["method"].kind == SymbolKind.METHOD
+    assert test_cls_children["method"].kind == NodeKind.METHOD

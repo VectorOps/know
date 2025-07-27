@@ -18,7 +18,7 @@ from know.models import (
     PackageMetadata,
     Node,
     ImportEdge,
-    SymbolKind,
+    NodeKind,
     SymbolRef,
 )
 from know.data import SymbolSearchQuery, SymbolFilter, ImportEdgeFilter
@@ -485,7 +485,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
         page = symbol_repo.get_list(
             SymbolFilter(
                 repo_id=repo_id,
-                symbol_kind=SymbolKind.METHOD,
+                symbol_kind=NodeKind.METHOD,
                 top_level_only=True,
                 limit=PAGE_SIZE,
                 offset=offset,
@@ -504,7 +504,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     for m in orphan_methods:
         by_pkg.setdefault(m.package_id, []).append(m)
 
-    parent_kinds = {SymbolKind.CLASS, SymbolKind.INTERFACE}
+    parent_kinds = {NodeKind.CLASS, NodeKind.INTERFACE}
 
     # per-package candidate parents & assignment
     for pkg_id, methods in by_pkg.items():

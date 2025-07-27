@@ -4,12 +4,12 @@ import re
 import logging
 from pathlib import Path
 from typing import Optional, cast, List
-from tree_sitter import Parser, Language, Node
+import tree_sitter as ts
 import tree_sitter_python as tspython
 from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
 from know.models import (
     ProgrammingLanguage,
-    SymbolKind,
+    NodeKind,
     Visibility,
     Modifier,
     SymbolSignature,
@@ -27,14 +27,14 @@ from know.helpers import compute_file_hash
 
 
 
-PY_LANGUAGE = Language(tspython.language())
+PY_LANGUAGE = ts.Language(tspython.language())
 
 
-_parser: Parser | None = None
+_parser: ts.Parser | None = None
 def _get_parser():
     global _parser
     if not _parser:
-        _parser = Parser(PY_LANGUAGE)
+        _parser = ts.Parser(PY_LANGUAGE)
     return _parser
 
 
@@ -79,7 +79,7 @@ class PythonCodeParser(AbstractCodeParser):
 
     def _process_node(
         self,
-        node,
+        node: ts.Node,
         parent=None,
     ) -> List[ParsedSymbol]:
         if node.type in ("import_statement", "import_from_statement", "future_import_statement"):
@@ -120,31 +120,31 @@ class PythonCodeParser(AbstractCodeParser):
         return [self._create_literal_symbol(node, parent=parent)]
 
     # Symbol helpers
-    def _create_import_symbol(self, node, import_path: str | None, alias: str | None) -> ParsedSymbol:
+    def _create_import_symbol(self, node: ts.Node, import_path: str | None, alias: str | None) -> ParsedSymbol:
         return self._make_symbol(
             node,
-            kind=SymbolKind.IMPORT,
+            kind=NodeKind.IMPORT,
             comment=self._get_preceding_comment(node),
         )
 
-    def _handle_comment_symbol(self, node, parent=None):
+    def _handle_comment_symbol(self, node: ts.Node, parent=None):
         return [
             self._make_symbol(
                 node,
-                kind=SymbolKind.COMMENT,
+                kind=NodeKind.COMMENT,
             )
         ]
 
     #  generic “literal” helper – used everywhere a fallback symbol is needed
-    def _create_literal_symbol(self, node, parent=None):
+    def _create_literal_symbol(self, node: ts.Node, parent=None):
         return self._make_symbol(
             node,
-            kind=SymbolKind.LITERAL,
+            kind=NodeKind.LITERAL,
         )
 
     def _handle_decorated_definition(
         self,
-        node,
+        node: ts.Node,
         parent=None,
     ):
         # Find the real definition wrapped by the decorators
@@ -160,16 +160,16 @@ class PythonCodeParser(AbstractCodeParser):
         elif inner.type == "class_definition":
             return self._handle_class_definition(inner, parent=parent)
 
-    def _handle_try_statement(self, node, parent=None):
+    def _handle_try_statement(self, node: ts.Node, parent=None):
         parent_sym = self._make_symbol(
             node,
-            kind=SymbolKind.TRYCATCH,
+            kind=NodeKind.TRYCATCH,
         )
 
         def _build_block_symbol(block_node, block_name: str) -> ParsedSymbol:
             return self._make_symbol(
                 block_node,
-                kind=SymbolKind.LITERAL,
+                kind=NodeKind.LITERAL,
                 name=block_name,
             )
 
@@ -193,8 +193,8 @@ class PythonCodeParser(AbstractCodeParser):
             parent_sym
         ]
 
-    def _handle_if_statement(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
-        if_symbol = self._make_symbol(node, kind=SymbolKind.IF)
+    def _handle_if_statement(self, node: ts.Node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+        if_symbol = self._make_symbol(node, kind=NodeKind.IF)
 
         def _process_block_children(block_node, parent_symbol):
             if block_node:
@@ -211,7 +211,7 @@ class PythonCodeParser(AbstractCodeParser):
 
             if_block_symbol = self._make_symbol(
                 consequence,
-                kind=SymbolKind.BLOCK,
+                kind=NodeKind.BLOCK,
                 signature=SymbolSignature(raw=raw_sig, lexical_type="if"),
             )
             _process_block_children(consequence, if_block_symbol)
@@ -228,7 +228,7 @@ class PythonCodeParser(AbstractCodeParser):
                     raw_sig = f"elif {condition_text}:"
                     elif_block_symbol = self._make_symbol(
                         block_node,
-                        kind=SymbolKind.BLOCK,
+                        kind=NodeKind.BLOCK,
                         name="elif",
                         signature=SymbolSignature(raw=raw_sig, lexical_type="elif"),
                     )
@@ -239,7 +239,7 @@ class PythonCodeParser(AbstractCodeParser):
                 if block_node:
                     else_block_symbol = self._make_symbol(
                         block_node,
-                        kind=SymbolKind.BLOCK,
+                        kind=NodeKind.BLOCK,
                         name="else",
                         signature=SymbolSignature(raw="else:", lexical_type="else"),
                     )
@@ -248,7 +248,7 @@ class PythonCodeParser(AbstractCodeParser):
 
         return [if_symbol]
 
-    def _handle_import_statement(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+    def _handle_import_statement(self, node: ts.Node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
         raw_stmt = get_node_text(node)
 
         # Defaults
@@ -315,7 +315,7 @@ class PythonCodeParser(AbstractCodeParser):
     def _clean_docstring(self, doc: str) -> str:
         return ('\n'.join((s.strip() for s in doc.split('\n')))).strip()
 
-    def _extract_docstring(self, node) -> Optional[str]:
+    def _extract_docstring(self, node: ts.Node) -> Optional[str]:
         """
         Extract a Python docstring from the given Tree-sitter node if it is
         present as the first statement in the node’s body.
@@ -346,7 +346,7 @@ class PythonCodeParser(AbstractCodeParser):
         return None
 
     # Comment helpers
-    def _get_preceding_comment(self, node) -> Optional[str]:
+    def _get_preceding_comment(self, node: ts.Node) -> Optional[str]:
         """
         Return the contiguous block of `# …` line-comments that immediately
         precedes *node* in the same parent scope (Tree-sitter siblings).
@@ -374,7 +374,7 @@ class PythonCodeParser(AbstractCodeParser):
 
     # Function-signature raw text helper
     @staticmethod
-    def _extract_signature_raw(node) -> str:
+    def _extract_signature_raw(node: ts.Node) -> str:
         """
         Build the raw header of a function / method directly from the
         Tree-sitter node.  Accepts a *function_definition*,
@@ -421,7 +421,7 @@ class PythonCodeParser(AbstractCodeParser):
                 return code[cls_idx:i+1].rstrip()
         return code[cls_idx:].rstrip()
 
-    def _build_class_signature(self, node) -> SymbolSignature:
+    def _build_class_signature(self, node: ts.Node) -> SymbolSignature:
         """
         Build a SymbolSignature for a class, extracting decorators directly
         from Tree-sitter nodes (no std-lib ast).
@@ -453,7 +453,7 @@ class PythonCodeParser(AbstractCodeParser):
             decorators=decorators,
         )
 
-    def _build_function_signature(self, node) -> SymbolSignature:
+    def _build_function_signature(self, node: ts.Node) -> SymbolSignature:
         """
         Build a SymbolSignature for a (async) function / method **without**
         falling back to the std-lib `ast` module.  All information is taken
@@ -497,7 +497,7 @@ class PythonCodeParser(AbstractCodeParser):
 
                 # Typed parameter: def f(a: int)
                 elif ch.type == "typed_parameter":
-                    name_node = ch.children[0]
+                    name_node: ts.Node | None = ch.children[0]
                     param_name = get_node_text(name_node)
                     type_node = ch.child_by_field_name("type")
                     param_type = get_node_text(type_node) or None
@@ -552,11 +552,9 @@ class PythonCodeParser(AbstractCodeParser):
     # Constant helpers
     _CONST_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
-    # ------------------------------------------------------------------
     #  helpers
-    # ------------------------------------------------------------------
     @staticmethod
-    def _is_async_function(node) -> bool:
+    def _is_async_function(node: ts.Node) -> bool:
         """
         Robust async detection.
 
@@ -603,12 +601,12 @@ class PythonCodeParser(AbstractCodeParser):
     def _create_assignment_symbol(
         self,
         name: str,
-        node,
+        node: ts.Node,
         parent: Optional[ParsedSymbol] = None,
     ) -> ParsedSymbol:
         base_name = name.rsplit(".", 1)[-1]
         base_name = base_name.split("[", 1)[0]
-        kind = SymbolKind.CONSTANT if self._is_constant_name(base_name) else SymbolKind.VARIABLE
+        kind = NodeKind.CONSTANT if self._is_constant_name(base_name) else NodeKind.VARIABLE
         # Fully-qualified name: use parent’s FQN when available,
         # otherwise fall back to <package-virtual-path>.<name>.
         fqn = self._make_fqn(name, parent)
@@ -624,7 +622,7 @@ class PythonCodeParser(AbstractCodeParser):
 
     def _handle_assignment(
         self,
-        node,
+        node: ts.Node,
         parent=None,
     ):
         target_node = node.child_by_field_name("left") or node.children[0]
@@ -645,7 +643,7 @@ class PythonCodeParser(AbstractCodeParser):
             assign_symbol
         ]
 
-    def _handle_function_definition(self, node, parent=None):
+    def _handle_function_definition(self, node: ts.Node, parent=None):
         # pick decorated wrapper when present
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
 
@@ -658,7 +656,7 @@ class PythonCodeParser(AbstractCodeParser):
         return [
             self._make_symbol(
                 wrapper,
-                kind=SymbolKind.FUNCTION,
+                kind=NodeKind.FUNCTION,
                 name=func_name,
                 fqn=self._make_fqn(func_name),
                 body=get_node_text(wrapper),
@@ -670,14 +668,14 @@ class PythonCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_class_definition(self, node, parent=None):
+    def _handle_class_definition(self, node: ts.Node, parent=None):
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Handle class definitions
         class_name = get_node_text(node.child_by_field_name('name'))
         symbol = self._make_symbol(
             wrapper,
-            kind=SymbolKind.CLASS,
+            kind=NodeKind.CLASS,
             name=class_name,
             fqn=self._make_fqn(class_name, parent),
             visibility=self._infer_visibility(class_name),
@@ -723,14 +721,14 @@ class PythonCodeParser(AbstractCodeParser):
             symbol
         ]
 
-    def _create_function_symbol(self, node, parent=None) -> ParsedSymbol:
+    def _create_function_symbol(self, node: ts.Node, parent=None) -> ParsedSymbol:
         # Utility: determine decorated wrapper
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
         method_name = get_node_text(node.child_by_field_name('name'))
         return self._make_symbol(
             wrapper,
-            kind=SymbolKind.METHOD,
+            kind=NodeKind.METHOD,
             name=method_name,
             fqn=self._make_fqn(method_name, parent),
             visibility=self._infer_visibility(method_name),
@@ -740,13 +738,13 @@ class PythonCodeParser(AbstractCodeParser):
             comment=self._get_preceding_comment(node),
         )
 
-    def _handle_expression_statement(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
+    def _handle_expression_statement(self, node: ts.Node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
         expr: str = get_node_text(node).strip()
 
         return [
             self._make_symbol(
                 node,
-                kind=SymbolKind.LITERAL,
+                kind=NodeKind.LITERAL,
                 body=expr,
                 comment=self._get_preceding_comment(node),
             )
@@ -805,7 +803,7 @@ class PythonCodeParser(AbstractCodeParser):
         return self._locate_module_path(import_path) is not None
 
     # Outgoing symbol-reference (call) collector
-    def _collect_symbol_refs(self, root: Node) -> List[ParsedSymbolRef]:
+    def _collect_symbol_refs(self, root: ts.Node) -> List[ParsedSymbolRef]:
         """
         Walk *root* recursively, record every call-expression as
         ParsedSymbolRef(… type=SymbolRefType.CALL …) and try to map the call
@@ -813,7 +811,7 @@ class PythonCodeParser(AbstractCodeParser):
         """
         refs: list[ParsedSymbolRef] = []
 
-        def visit(node: Node) -> None:
+        def visit(node: ts.Node) -> None:
             if node.type == "call":
                 fn_node = node.child_by_field_name("function")
                 if fn_node is not None:
@@ -895,26 +893,26 @@ class PythonLanguageHelper(AbstractLanguageHelper):
         if sym.signature and sym.signature.raw:
             header = sym.signature.raw.rstrip()
         else:
-            if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+            if sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD):
                 header = f"def {sym.name}():"
-            elif sym.kind == SymbolKind.CLASS:
+            elif sym.kind == NodeKind.CLASS:
                 header = f"class {sym.name}:"
 
-        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD, SymbolKind.CLASS) and not header.endswith(":"):
+        if sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD, NodeKind.CLASS) and not header.endswith(":"):
             header += ":"
 
-        if header and sym.kind not in (SymbolKind.LITERAL, SymbolKind.IF):
+        if header and sym.kind not in (NodeKind.LITERAL, NodeKind.IF):
             lines.append(f"{IND}{header}")
 
         # For simple statements (constants, variables, etc.) include all
         # remaining body lines so multi-line statements are not truncated.
         if sym.kind not in (
-            SymbolKind.FUNCTION,
-            SymbolKind.METHOD,
-            SymbolKind.CLASS,
-            SymbolKind.TRYCATCH,
-            SymbolKind.IF,
-            SymbolKind.BLOCK,
+            NodeKind.FUNCTION,
+            NodeKind.METHOD,
+            NodeKind.CLASS,
+            NodeKind.TRYCATCH,
+            NodeKind.IF,
+            NodeKind.BLOCK,
         ):
             for ln in (sym.body or "").splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
@@ -928,12 +926,12 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             for l in ds_lines:
                 lines.append(f"{base_indent}{l}")
 
-        if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+        if sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD):
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
             lines.append(f"{IND}    ...")
 
-        elif sym.kind == SymbolKind.CLASS:
+        elif sym.kind == NodeKind.CLASS:
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
 
@@ -946,7 +944,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                 if only_children and child not in only_children:
                     continue
 
-                if not include_comments and child.kind == SymbolKind.COMMENT:
+                if not include_comments and child.kind == NodeKind.COMMENT:
                     continue
 
                 child_summary = self.get_symbol_summary(
@@ -963,7 +961,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             if not body_symbols_added:
                 lines.append(f"{IND}    ...")
 
-        elif sym.kind == SymbolKind.IF:
+        elif sym.kind == NodeKind.IF:
             for child in sym.children:
                 if only_children and child not in only_children:
                     continue
@@ -975,7 +973,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                     include_docs=include_docs,
                     child_stack=child_stack))
 
-        elif sym.kind == SymbolKind.BLOCK:
+        elif sym.kind == NodeKind.BLOCK:
             if only_children:
                 lines.append(f"{IND}    ...")
 
@@ -999,7 +997,7 @@ class PythonLanguageHelper(AbstractLanguageHelper):
             if not body_symbols_added:
                 lines.append(f"{IND}    ...")
 
-        elif sym.kind == SymbolKind.TRYCATCH:
+        elif sym.kind == NodeKind.TRYCATCH:
             if include_docs and sym.docstring:
                 _emit_docstring(sym.docstring, IND + "    ")
 

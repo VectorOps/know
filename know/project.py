@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 from know.models import (
     RepoMetadata, FileMetadata, PackageMetadata, Node,
-    ImportEdge, Vector, SymbolKind
+    ImportEdge, Vector, NodeKind
 )
 from know.data import AbstractDataRepository, SymbolSearchQuery
 from know.stores.memory import InMemoryDataRepository

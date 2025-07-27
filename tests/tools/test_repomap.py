@@ -3,7 +3,7 @@ import pytest
 from know.helpers import generate_id
 from know.models import (
     RepoMetadata, PackageMetadata, FileMetadata,
-    Node, SymbolKind,
+    Node, NodeKind,
     SymbolRef, SymbolRefType,
 )
 from know.project import Project
@@ -30,7 +30,7 @@ def _create_symbol(repo_id: str, file_id: str, pkg_id: str, name="func"):
         package_id=pkg_id,
         name=name,
         body="",
-        kind=SymbolKind.FUNCTION,
+        kind=NodeKind.FUNCTION,
     )
 
 

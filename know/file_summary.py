@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from know.logger import logger
 from know.parsers import CodeParserRegistry, AbstractLanguageHelper
 from know.project import Project
-from know.models import ImportEdge, Visibility, Node, SymbolKind
+from know.models import ImportEdge, Visibility, Node, NodeKind
 from know.data import ImportEdgeFilter, SymbolFilter
 
 
@@ -72,7 +72,7 @@ def build_file_summary(
     top_level.sort(key=lambda s: (s.start_line, s.start_col))
 
     if not include_docs:
-        top_level = [s for s in top_level if s.kind != SymbolKind.COMMENT]
+        top_level = [s for s in top_level if s.kind != NodeKind.COMMENT]
 
     # TODO: Figure out if we return anything or return nothing
     sections = (

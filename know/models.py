@@ -14,7 +14,7 @@ class ProgrammingLanguage(str, Enum):
     JAVASCRIPT = "javascript"
 
 
-class SymbolKind(str, Enum):
+class NodeKind(str, Enum):
     MODULE = "module"
     CLASS = "class"
     FUNCTION = "function"
@@ -144,7 +144,7 @@ class Node(BaseModel):
     name: Optional[str] = None
     fqn: Optional[str] = None
     body: str
-    kind: Optional[SymbolKind] = None
+    kind: Optional[NodeKind] = None
     parent_symbol_id: Optional[str] = None
 
     start_line: int = 0

@@ -7,7 +7,7 @@ from know.models import (
     Node,
     ImportEdge,
     SymbolRef,
-    SymbolKind,
+    NodeKind,
     Visibility,
     Vector,
 )
@@ -133,7 +133,7 @@ class SymbolFilter:
     repo_id: Optional[str] = None
     file_id: Optional[str] = None
     package_id: Optional[str] = None
-    symbol_kind: Optional[SymbolKind] = None
+    symbol_kind: Optional[NodeKind] = None
     symbol_visibility: Optional[Visibility] = None
     has_embedding: Optional[bool] = None
     top_level_only: Optional[bool] = False
@@ -148,7 +148,7 @@ class SymbolSearchQuery:
     # Filter by symbol fully qualified name
     symbol_fqn: Optional[str] = None
     # Filter by symbol kind
-    symbol_kind: Optional[SymbolKind] = None
+    symbol_kind: Optional[NodeKind] = None
     # Filter by symbol visiblity
     symbol_visibility: Optional[Visibility] = None
     # Full-text search on symbol documentation or comment

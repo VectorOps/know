@@ -8,7 +8,7 @@ import tree_sitter_go as tsgo
 from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedSymbol, ParsedImportEdge, ParsedSymbolRef, get_node_text
 from know.models import (
     ProgrammingLanguage,
-    SymbolKind,
+    NodeKind,
     Visibility,
     Modifier,
     SymbolSignature,
@@ -94,12 +94,12 @@ class GolangCodeParser(AbstractCodeParser):
     ) -> List[ParsedSymbol]:
         assert self.parsed_file is not None
         if node.type == "comment":
-            return [self._make_symbol(node, kind=SymbolKind.COMMENT)]
+            return [self._make_symbol(node, kind=NodeKind.COMMENT)]
         elif node.type == "package_clause":
-            return [self._make_symbol(node, kind=SymbolKind.MODULE)]
+            return [self._make_symbol(node, kind=NodeKind.MODULE)]
         elif node.type == "import_declaration":
             self._handle_import_declaration(node)
-            return [self._make_symbol(node, kind=SymbolKind.IMPORT)]
+            return [self._make_symbol(node, kind=NodeKind.IMPORT)]
         elif node.type == "function_declaration":
             return self._handle_function_declaration(node)
         elif node.type == "method_declaration":
@@ -119,7 +119,7 @@ class GolangCodeParser(AbstractCodeParser):
             byte_offset=node.start_byte,
             raw=get_node_text(node),
         )
-        return [self._make_symbol(node, kind=SymbolKind.LITERAL)]
+        return [self._make_symbol(node, kind=NodeKind.LITERAL)]
 
     def _load_module_path(self, cache: ProjectCache) -> None:
         """
@@ -530,7 +530,7 @@ class GolangCodeParser(AbstractCodeParser):
         return [
             self._make_symbol(
                 node,
-                kind=SymbolKind.FUNCTION,
+                kind=NodeKind.FUNCTION,
                 name=name,
                 fqn=fqn,
                 signature=signature_obj,
@@ -618,7 +618,7 @@ class GolangCodeParser(AbstractCodeParser):
         return [
             self._make_symbol(
                 node,
-                kind=SymbolKind.METHOD,
+                kind=NodeKind.METHOD,
                 name=name,
                 fqn=fqn,
                 signature=signature_obj,
@@ -675,7 +675,7 @@ class GolangCodeParser(AbstractCodeParser):
 
                 child = self._make_symbol(
                     fld,
-                    kind=SymbolKind.PROPERTY,
+                    kind=NodeKind.PROPERTY,
                     name=fname,
                     fqn=self._make_fqn(fname, parent),
                     docstring=self._extract_preceding_comment(fld),
@@ -702,7 +702,7 @@ class GolangCodeParser(AbstractCodeParser):
                 fname = get_node_text(idn)
                 child = self._make_symbol(
                     fld,
-                    kind=SymbolKind.PROPERTY,
+                    kind=NodeKind.PROPERTY,
                     name=fname,
                     fqn=self._make_fqn(fname, parent),
                     docstring=self._extract_preceding_comment(fld),
@@ -749,7 +749,7 @@ class GolangCodeParser(AbstractCodeParser):
             m,
             name=mname,
             fqn=self._make_fqn(mname, parent),
-            kind=SymbolKind.METHOD_DEF,
+            kind=NodeKind.METHOD_DEF,
             visibility=infer_visibility(mname),
             docstring=self._extract_preceding_comment(m),
             signature=signature_obj,
@@ -786,12 +786,12 @@ class GolangCodeParser(AbstractCodeParser):
                 if c is ident:
                     after_ident = True
 
-            kind = SymbolKind.CLASS
+            kind = NodeKind.CLASS
             if type_node:
                 if type_node.type == "struct_type":
-                    kind = SymbolKind.CLASS
+                    kind = NodeKind.CLASS
                 elif type_node.type == "interface_type":
-                    kind = SymbolKind.INTERFACE
+                    kind = NodeKind.INTERFACE
 
             sym = self._make_symbol(
                 spec,
@@ -849,7 +849,7 @@ class GolangCodeParser(AbstractCodeParser):
 
                 sym = self._make_symbol(
                     spec,
-                    kind=SymbolKind.CONSTANT,   # or VARIABLE in var handler
+                    kind=NodeKind.CONSTANT,   # or VARIABLE in var handler
                     name=name,
                     fqn=fqn,
                     docstring=docstring,
@@ -899,7 +899,7 @@ class GolangCodeParser(AbstractCodeParser):
                 sym = self._make_symbol(spec,
                                         name=name,
                                         fqn=fqn,
-                                        kind=SymbolKind.VARIABLE,
+                                        kind=NodeKind.VARIABLE,
                                         visibility=infer_visibility(name),
                                         docstring=docstring,
                                         )
@@ -1046,7 +1046,7 @@ class GolangLanguageHelper(AbstractLanguageHelper):
         only_children = child_stack.pop() if child_stack else None
 
         # special-case: keep full multi-line import blocks
-        if sym.kind == SymbolKind.IMPORT:
+        if sym.kind == NodeKind.IMPORT:
             body = sym.body or ""
             for ln in body.splitlines():
                 lines.append(f"{IND}{ln.rstrip()}")
@@ -1059,14 +1059,14 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
         # header line
         header: str
-        if sym.kind == SymbolKind.METHOD_DEF:
+        if sym.kind == NodeKind.METHOD_DEF:
             sig = "()"
             if sym.signature and sym.signature.raw:
                 sig = sym.signature.raw.strip()
             header = f"{sym.name}{sig}"
             lines.append(f"{IND}{header}")
             return "\n".join(lines)
-        if sym.kind == SymbolKind.METHOD:
+        if sym.kind == NodeKind.METHOD:
             sig = sym.signature.raw.strip() if sym.signature and sym.signature.raw else "()"
             header = f"func {sig}"
             if not header.endswith("{"):
@@ -1074,7 +1074,7 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}{header}")
             lines.append(f"{IND}    ...")
             lines.append(f"{IND}}}")
-        elif sym.kind == SymbolKind.FUNCTION:
+        elif sym.kind == NodeKind.FUNCTION:
             sig = "()"
             if sym.signature and sym.signature.raw:
                 sig = sym.signature.raw.strip()
@@ -1084,11 +1084,11 @@ class GolangLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}{header}")
             lines.append(f"{IND}    ...")
             lines.append(f"{IND}}}")
-        elif sym.kind == SymbolKind.CLASS:
+        elif sym.kind == NodeKind.CLASS:
             header = f"type {sym.name} struct {{"
             lines.append(f"{IND}{header}")
-            in_body = [c for c in sym.children if c.kind != SymbolKind.METHOD]
-            methods = [c for c in sym.children if c.kind == SymbolKind.METHOD]
+            in_body = [c for c in sym.children if c.kind != NodeKind.METHOD]
+            methods = [c for c in sym.children if c.kind == NodeKind.METHOD]
 
             for child in in_body:
                 if only_children and child not in only_children:
@@ -1116,7 +1116,7 @@ class GolangLanguageHelper(AbstractLanguageHelper):
                     child_stack=child_stack,
                 ))
             return "\n".join(lines)
-        elif sym.kind == SymbolKind.INTERFACE:
+        elif sym.kind == NodeKind.INTERFACE:
             if sym.children:
                 header = f"type {sym.name} interface {{"
                 lines.append(f"{IND}{header}")
@@ -1144,9 +1144,9 @@ class GolangLanguageHelper(AbstractLanguageHelper):
 
             # adjust first line for const/var helpers
             first = body_lines[0].rstrip()
-            if sym.kind == SymbolKind.CONSTANT and not first.startswith("const"):
+            if sym.kind == NodeKind.CONSTANT and not first.startswith("const"):
                 first = f"const {first}"
-            elif sym.kind == SymbolKind.VARIABLE and not first.startswith("var"):
+            elif sym.kind == NodeKind.VARIABLE and not first.startswith("var"):
                 first = f"var {first}"
 
             # emit first + remaining lines

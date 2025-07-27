@@ -9,7 +9,7 @@ from know.settings import ProjectSettings, EmbeddingSettings, print_help
 from know.project  import init_project, Project
 from know.tools.repomap import RepoMapTool
 from know.tools.symbolsearch import SearchSymbolsTool
-from know.models import SymbolKind, Visibility
+from know.models import NodeKind, Visibility
 from know.data     import (
     AbstractDataRepository, RepoMetadata, PackageMetadata, FileMetadata,
     Node, ImportEdge, SymbolRef, PackageFilter, FileFilter, SymbolFilter, ImportEdgeFilter, SymbolRefFilter
@@ -225,7 +225,7 @@ def create_app(project) -> Flask:
                                title="Symbol Search Tool",
                                results=results,
                                form_values=form_data,
-                               symbol_kinds=[k.value for k in SymbolKind],
+                               symbol_kinds=[k.value for k in NodeKind],
                                visibilities=[v.value for v in Visibility] + ["all"],
                                summary_modes=[e.value for e in SummaryMode])
 

@@ -5,7 +5,7 @@ from devtools import pprint
 from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.python import PythonCodeParser
-from know.models import ProgrammingLanguage, SymbolKind, Modifier, SymbolRefType
+from know.models import ProgrammingLanguage, NodeKind, Modifier, SymbolRefType
 
 # Helpers
 def _make_dummy_project(root_dir: Path):
@@ -59,7 +59,7 @@ def test_python_parser_on_simple_file():
     def symbols_to_map(symbols):
         # ignore literals and any symbol that has no name (e.g. comments)
         return {sym.name: sym for sym in symbols
-                if sym.kind != SymbolKind.LITERAL and sym.name}
+                if sym.kind != NodeKind.LITERAL and sym.name}
 
     top_level = symbols_to_map(parsed_file.symbols)
 
@@ -70,11 +70,11 @@ def test_python_parser_on_simple_file():
     assert set(top_level.keys()) == expected_top_level_names
 
     # Kinds
-    assert top_level["CONST"].kind == SymbolKind.CONSTANT
+    assert top_level["CONST"].kind == NodeKind.CONSTANT
     for fn_name in ("fn", "_foo", "decorated", "double_decorated", "ellipsis_fn", "async_fn"):
-        assert top_level[fn_name].kind == SymbolKind.FUNCTION
+        assert top_level[fn_name].kind == NodeKind.FUNCTION
     for cls_name in ("Test", "Foobar"):
-        assert top_level[cls_name].kind == SymbolKind.CLASS
+        assert top_level[cls_name].kind == NodeKind.CLASS
 
     # Decorators on top-level symbols
     assert top_level["decorated"].signature is not None
@@ -97,15 +97,15 @@ def test_python_parser_on_simple_file():
     assert set(children_map.keys()) == expected_test_children
 
     # Kinds of children
-    assert children_map["ABC"].kind == SymbolKind.CONSTANT
+    assert children_map["ABC"].kind == NodeKind.CONSTANT
 
     method_kinds = {
         "__init__", "method", "async_method", "multi_decorated", "ellipsis_method"
     }
     for m in method_kinds:
-        assert children_map[m].kind == SymbolKind.METHOD
+        assert children_map[m].kind == NodeKind.METHOD
 
-    assert children_map["get"].kind == SymbolKind.METHOD
+    assert children_map["get"].kind == NodeKind.METHOD
 
     # Decorators on multi_decorated method
     multi_decorated_sym = children_map["multi_decorated"]
@@ -146,6 +146,6 @@ def test_python_parser_on_simple_file():
         assert foobar_cls.signature.bases == ["Foo", "Bar", "Buzz"]
 
     # Comment symbols                                                    #
-    comment_syms = [s for s in parsed_file.symbols if s.kind == SymbolKind.COMMENT]
+    comment_syms = [s for s in parsed_file.symbols if s.kind == NodeKind.COMMENT]
     assert any("Comment" in (s.body or "") for s in comment_syms), \
         "Expected comment symbol '# Comment' not found"

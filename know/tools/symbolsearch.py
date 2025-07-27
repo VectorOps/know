@@ -3,7 +3,7 @@ from typing import List, Sequence, Optional
 from pydantic import BaseModel, Field
 
 from know.data import SymbolSearchQuery
-from know.models import SymbolKind, Visibility
+from know.models import NodeKind, Visibility
 from know.project import Project
 from .base import BaseTool, MCPToolDefinition
 from know.file_summary import SummaryMode
@@ -19,7 +19,7 @@ class SymbolSearchReq(BaseModel):
         default=None,
         description="Substring match against the fully-qualified name (e.g. `package.module.Class.method`).",
     )
-    symbol_kind: Optional[SymbolKind | str] = Field(
+    symbol_kind: Optional[NodeKind | str] = Field(
         default=None, description="Restrict results to a specific kind of symbol."
     )
     symbol_visibility: Optional[Visibility | str] = Field(
@@ -73,16 +73,16 @@ class SearchSymbolsTool(BaseTool):
         req: SymbolSearchReq,
     ) -> List[SymbolSearchResult]:
         # normalise string / enum inputs
-        kind: SymbolKind | None = None
+        kind: NodeKind | None = None
         if req.symbol_kind is None:
             pass
-        elif isinstance(req.symbol_kind, SymbolKind):
+        elif isinstance(req.symbol_kind, NodeKind):
             kind = req.symbol_kind
         else:
             try:
-                kind = SymbolKind(req.symbol_kind)
+                kind = NodeKind(req.symbol_kind)
             except ValueError:
-                valid_kinds = [k.value for k in SymbolKind]
+                valid_kinds = [k.value for k in NodeKind]
                 raise ValueError(f"Invalid symbol_kind '{req.symbol_kind}'. Valid values are: {valid_kinds}")
 
         # symbol_visibility
@@ -170,7 +170,7 @@ class SearchSymbolsTool(BaseTool):
         return results
 
     def get_openai_schema(self) -> dict:
-        kind_enum        = [k.value for k in SymbolKind]
+        kind_enum        = [k.value for k in NodeKind]
         visibility_enum  = [v.value for v in Visibility] + ["all"]
         summary_enum = [m.value for m in SummaryMode]
 

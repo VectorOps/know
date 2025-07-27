@@ -6,7 +6,7 @@ from devtools import pprint
 from know.settings import ProjectSettings
 from know.project import init_project, ProjectCache
 from know.lang.golang import GolangCodeParser
-from know.models import ProgrammingLanguage, SymbolKind
+from know.models import ProgrammingLanguage, NodeKind
 from know.models import SymbolRefType
 from devtools import pprint
 
@@ -70,27 +70,27 @@ def test_golang_parser_on_sample_file():
 
     # Constant
     assert "A" in symbols
-    assert symbols["A"].kind == SymbolKind.CONSTANT
+    assert symbols["A"].kind == NodeKind.CONSTANT
 
     # Struct with children
     assert "S" in symbols
     struct_s = symbols["S"]
-    assert struct_s.kind == SymbolKind.CLASS
+    assert struct_s.kind == NodeKind.CLASS
     assert {c.name for c in struct_s.children if c.name} == {"a", "b", "c", "E"}
 
     # Method `m` attached to S (registered as top-level method symbol)
     assert "m" in symbols
-    assert symbols["m"].kind == SymbolKind.METHOD
+    assert symbols["m"].kind == NodeKind.METHOD
 
     # Function `main` with preceding comment as docstring
     assert "main" in symbols
-    assert symbols["main"].kind == SymbolKind.FUNCTION
+    assert symbols["main"].kind == NodeKind.FUNCTION
     assert symbols["main"].docstring is not None
     assert "Test comment" in symbols["main"].docstring
 
     # Extra top-level function
     assert "dummy" in symbols
-    assert symbols["dummy"].kind == SymbolKind.FUNCTION
+    assert symbols["dummy"].kind == NodeKind.FUNCTION
     assert symbols["dummy"].docstring is not None
     assert "Just a comment" in symbols["dummy"].docstring
 
@@ -112,7 +112,7 @@ def test_golang_parser_on_sample_file():
 
     # Child symbols of struct S should all be properties
     for child in struct_s.children:
-        assert child.kind == SymbolKind.PROPERTY
+        assert child.kind == NodeKind.PROPERTY
 
     # Symbol references
     refs = parsed_file.symbol_refs

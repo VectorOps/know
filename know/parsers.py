@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 from know.models import (
     ProgrammingLanguage,
-    SymbolKind,
+    NodeKind,
     Visibility,
     Modifier,
     SymbolSignature,
@@ -73,7 +73,7 @@ class ParsedSymbol(BaseModel):
     name: Optional[str] = None
     fqn: Optional[str] = None
     body: str
-    kind: SymbolKind
+    kind: NodeKind
 
     start_line: int
     end_line: int
@@ -248,7 +248,7 @@ class AbstractCodeParser(ABC):
     def _make_symbol(
         self,
         node,
-        kind: SymbolKind,
+        kind: NodeKind,
         name: str | None = None,
         fqn: str | None = None,
         body: str | None = None,
