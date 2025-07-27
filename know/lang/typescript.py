@@ -1002,7 +1002,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return None
 
         # keep the declarator header (without body) for the signature
-        raw_header = (holder_node.text.decode("utf8") if holder_node.text else "").split("{", 1)[0].strip().rstrip(";")
+        raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
         tp         = self._extract_type_parameters(class_node)
         sig        = SymbolSignature(raw=raw_header,
                                      parameters=[],
@@ -1139,8 +1139,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             arg_node = next(
                 (c for c in arguments.children
                  if c.type == "string"), None)
-            if arg_node and arg_node.text:
-                module = arg_node.text.decode("utf8").strip("\"'")
+            if arg_node:
+                module = get_node_text(arg_node).strip("\"'")
 
                 phys, virt, ext = self._resolve_module(module)
                 assert self.parsed_file is not None
@@ -1151,7 +1151,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         alias=alias,
                         dot=False,
                         external=ext,
-                        raw=node.text.decode("utf8") if node.text else "",
+                        raw=get_node_text(node),
                     )
                 )
 
