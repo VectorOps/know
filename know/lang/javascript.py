@@ -582,9 +582,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
                         node_target = node
             if node_target is None or ref_type is None:
                 continue
-            if not node_target.text:
+            full_name = get_node_text(node_target)
+            if not full_name:
                 continue
-            full_name = node_target.text.decode("utf8")
             simple_name = full_name.split(".")[-1]
             raw_node = node_call or node_ctor or node_type
             raw = ""
