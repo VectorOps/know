@@ -1,6 +1,6 @@
 from typing import List, Sequence, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from know.data import SymbolSearchQuery
 from know.models import SymbolKind, Visibility
@@ -12,24 +12,54 @@ from know.models import FileMetadata
 
 
 class SymbolSearchReq(BaseModel):
-    symbol_name: Optional[str] = None
-    symbol_fqn: Optional[str] = None
-    symbol_kind: Optional[SymbolKind | str] = None
-    symbol_visibility: Optional[Visibility | str] = None
-    query: Optional[str] = None
-    limit: int | None = 20
-    offset: int | None = 0
-    summary_mode: SummaryMode | str = SummaryMode.ShortSummary
+    symbol_name: Optional[str] = Field(
+        default=None, description="Exact, case-sensitive match on the symbol’s short name."
+    )
+    symbol_fqn: Optional[str] = Field(
+        default=None,
+        description="Substring match against the fully-qualified name (e.g. `package.module.Class.method`).",
+    )
+    symbol_kind: Optional[SymbolKind | str] = Field(
+        default=None, description="Restrict results to a specific kind of symbol."
+    )
+    symbol_visibility: Optional[Visibility | str] = Field(
+        default=None,
+        description=(
+            "Restrict by visibility modifier (`public`, `protected`, `private`) or use `all` to include "
+            "every symbol. Defaults to `public`."
+        ),
+    )
+    query: Optional[str] = Field(
+        default=None,
+        description=(
+            "Natural-language search string evaluated against docstrings, comments, and code with both "
+            "full-text and vector search. Use when you don’t know the exact name."
+        ),
+    )
+    limit: int | None = Field(default=20, description="Maximum number of results to return.")
+    offset: int | None = Field(default=0, description="Number of results to skip. Used for pagination.")
+    summary_mode: SummaryMode | str = Field(
+        default=SummaryMode.ShortSummary,
+        description="Amount of source code to include with each match",
+    )
 
 
 class SymbolSearchResult(BaseModel):
-    symbol_id: str
-    fqn:       Optional[str] = None
-    name:      Optional[str] = None
-    kind:      Optional[str] = None
-    visibility:Optional[str] = None
-    file_path: Optional[str] = None
-    body:      Optional[str] = None
+    symbol_id: str = Field(description="Unique identifier for the symbol.")
+    fqn: Optional[str] = Field(default=None, description="The fully-qualified name of the symbol.")
+    name: Optional[str] = Field(default=None, description="The short name of the symbol.")
+    kind: Optional[str] = Field(
+        default=None, description="The kind of symbol (e.g., 'function', 'class')."
+    )
+    visibility: Optional[str] = Field(
+        default=None, description="The visibility of the symbol (e.g., 'public', 'private')."
+    )
+    file_path: Optional[str] = Field(
+        default=None, description="The path to the file containing the symbol."
+    )
+    body: Optional[str] = Field(
+        default=None, description="The summary or body of the symbol, depending on the summary_mode."
+    )
 
 
 class SearchSymbolsTool(BaseTool):
@@ -190,6 +220,12 @@ class SearchSymbolsTool(BaseTool):
                         "minimum": 1,
                         "default": 20,
                         "description": "Maximum number of results to return."
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 0,
+                        "description": "Number of results to skip. Used for pagination."
                     },
                     "summary_mode": {
                         "type": "string",
