@@ -36,7 +36,6 @@ mcp: FastMCP = FastMCP(
 
 def init():
     settings = Settings()
-    print(settings)
     project = init_project(settings)
 
     # register all enabled tools with the MCP server

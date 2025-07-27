@@ -24,7 +24,6 @@ from know.settings import PythonSettings
 from know.parsers import CodeParserRegistry
 from know.logger import logger
 from know.helpers import compute_file_hash
-from devtools import pprint
 
 
 
@@ -743,8 +742,6 @@ class PythonCodeParser(AbstractCodeParser):
 
     def _handle_expression_statement(self, node, parent: Optional[ParsedSymbol]=None) -> List[ParsedSymbol]:
         expr: str = get_node_text(node).strip()
-        if not expr:
-            return []
 
         return [
             self._make_symbol(

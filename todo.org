@@ -1,32 +1,39 @@
 #+title: Todo
-* [X] Fix mypy warnings
-* [ ] Search tool
-** [ ] Lower weight of comment symbols?
-** [X] Make tool search all symbols, not just public by default
-** [ ] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
-* [X] Update chat example to use litellm instead of OpenAI API directly
-* [X] Cache improvements
-** [X] Collect and mass-update embeddings that were recently used
-** [X] Add lifecycle rules to cleanup old unused embeddings
-* [X] Embedding calculation should include docstring and prior comment
+* [ ] Introduce concept of project which is a collection of repositories
+** [ ] Create project behind the scenes if not provided when initializing repo
+** [ ] Change code to work with projects instead of repos
 * [ ] Refactor symbols
 ** [X] Everything is a symbol
 ** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
 ** [X] Do insert/delete instead of update?
 ** [ ] Rename to Node
-* [ ] Fix summary generator to not include module docstring if level is short summary
+* [ ] Add a way to initialize project, but only scan and work from a subpath
+** [ ] Search should be scoped to files in subdirectories
+* [ ] Generic helper to find references using ts query in a generic way
+* [X] Fix mypy warnings
+* [ ] Search tool
+** [ ] Lower weight of comment symbols?
+** [X] Make tool search all symbols, not just public by default
+** [X] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
+* [X] Update chat example to use litellm instead of OpenAI API directly
+* [X] Cache improvements
+** [X] Collect and mass-update embeddings that were recently used
+** [X] Add lifecycle rules to cleanup old unused embeddings
+* [X] Embedding calculation should include docstring and prior comment
 * [ ] Add a inherits field to symbols and use for classes
 ** [ ] Update SymbolRef to use these too
 * [ ] When parsing references from files, skip duplicate names?
 * [X] Add dedicated single-thread worker for DuckDB to work around its thread handling.
 * [X] Define the meaning of to_package_path for ParsedSymbolRef (virtual path, physical path, etc)
 * [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
+* [ ] Move some tool parameters to project settings
 * [ ] Language support
 ** [-] Python
 *** [X] Test module path resolution
 *** [X] Fix to_package_path for python
         to_package_path='os', for 'os.path.join'
-** [ ] Golang
+*** [ ] Fix summary generator to not include module docstring if level is short summary - add special handling to _handle_expression_string
+** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
 *** [X] Refactror node parser to return nodes like python and typescript parsers
 *** [X] Generics
@@ -61,10 +68,8 @@
 * [ ] Search to support exclude. For example - tests
 * [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
 * [ ] Figure out lockup in filelist tool
-* [ ] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
-* [ ] Only include mentioned symbols in repomap instead of file summary?
-* [ ] Add a way to initialize project, but only scan and work from a subpath
-** [ ] Search should be scoped to files in subdirectories
+* [X] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
+* [X] Only include mentioned symbols in repomap instead of file summary?
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
 * [ ] Cross-repo symbol search
 * [ ] Non-programming languages parsers (rst/md/text). Figure out chunking.

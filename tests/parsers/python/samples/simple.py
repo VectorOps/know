@@ -1,4 +1,7 @@
-#!/usr/bin/env python3
+"""
+Hello World
+"""
+#/usr/bin/env python3
 from os import getcwd
 import foobar
 from .foobuz import abc as d
