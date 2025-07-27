@@ -49,7 +49,11 @@ class SearchSymbolsTool(BaseTool):
         elif isinstance(req.symbol_kind, SymbolKind):
             kind = req.symbol_kind
         else:
-            kind = SymbolKind(req.symbol_kind)
+            try:
+                kind = SymbolKind(req.symbol_kind)
+            except ValueError:
+                valid_kinds = [k.value for k in SymbolKind]
+                raise ValueError(f"Invalid symbol_kind '{req.symbol_kind}'. Valid values are: {valid_kinds}")
 
         # symbol_visibility
         vis = None
@@ -59,12 +63,20 @@ class SearchSymbolsTool(BaseTool):
             if req.symbol_visibility.lower() == "all":
                 vis = None
             else:
-                vis = Visibility(req.symbol_visibility)
+                try:
+                    vis = Visibility(req.symbol_visibility)
+                except ValueError:
+                    valid_vis = [v.value for v in Visibility] + ["all"]
+                    raise ValueError(f"Invalid symbol_visibility '{req.symbol_visibility}'. Valid values are: {valid_vis}")
 
         # summary_mode
         summary_mode = req.summary_mode
         if isinstance(summary_mode, str):
-            summary_mode = SummaryMode(summary_mode)
+            try:
+                summary_mode = SummaryMode(summary_mode)
+            except ValueError:
+                valid_modes = [m.value for m in SummaryMode]
+                raise ValueError(f"Invalid summary_mode '{req.summary_mode}'. Valid values are: {valid_modes}")
 
         # transform free-text query -> embedding vector (if requested)
         embedding_vec = None
