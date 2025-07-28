@@ -5,7 +5,7 @@
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Generic helper to find references using ts query in a generic way
-* [ ] Figure out occasional DuckDB lockups
+* [ ] Add query timeouts to DuckDB to detect lockups
 * [X] Fix mypy warnings
 * [ ] Repomap tool
 ** [ ] Should only look for exported symbols

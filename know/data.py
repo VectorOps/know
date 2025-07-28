@@ -315,7 +315,7 @@ class AbstractDataRepository(ABC):
 
 
 # Helpers
-def resolve_symbol_hierarchy(symbols: List[Node]) -> None:
+def resolve_node_hierarchy(symbols: List[Node]) -> None:
     """
     Populate in-memory parent/child links inside *symbols* **in-place**.
 
@@ -395,7 +395,7 @@ def include_direct_descendants(
                 symbols.append(c)
                 seen_ids.add(c.id)
 
-    resolve_symbol_hierarchy(symbols)
+    resolve_node_hierarchy(symbols)
 
     parent_id_set = set(parent_ids)
     result = [s for s in symbols if s.parent_node_id not in parent_id_set]

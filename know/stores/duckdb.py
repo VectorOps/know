@@ -37,7 +37,7 @@ from know.data import (
     NodeSearchQuery,
     PackageFilter,
     include_direct_descendants,
-    resolve_symbol_hierarchy,
+    resolve_node_hierarchy,
     NodeFilter,
     ImportEdgeFilter,
 )
@@ -541,7 +541,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[Node]:
         syms = super().get_list_by_ids(symbol_ids)
-        resolve_symbol_hierarchy(syms)
+        resolve_node_hierarchy(syms)
         return syms
 
     def get_list(self, flt: NodeFilter) -> list[Node]:
@@ -573,7 +573,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
         rows = self._execute(q)
         syms = [self.model(**self._deserialize_data(r)) for r in rows]
-        resolve_symbol_hierarchy(syms)
+        resolve_node_hierarchy(syms)
         return syms
 
 

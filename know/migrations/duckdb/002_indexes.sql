@@ -27,6 +27,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_node_refs_id      ON node_refs(id);
 CREATE        INDEX IF NOT EXISTS idx_node_refs_repo_id ON node_refs(repo_id);
 
 -- Create vector indexes
+SET hnsw_enable_experimental_persistence = true;
+
 CREATE INDEX IF NOT EXISTS idx_nodes_code_vec ON nodes USING HNSW (embedding_code_vec) WITH (metric = 'cosine');;
 
 -- Create FTS index

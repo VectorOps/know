@@ -23,7 +23,7 @@ from know.data import (
     NodeFilter,
     ImportEdgeFilter,
     include_direct_descendants,
-    resolve_symbol_hierarchy,
+    resolve_node_hierarchy,
 )
 from know.data import NodeRefFilter
 from dataclasses import dataclass, field
@@ -242,7 +242,7 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[Node]:
         syms = super().get_list_by_ids(symbol_ids)
-        resolve_symbol_hierarchy(syms)
+        resolve_node_hierarchy(syms)
         return syms
 
     def get_list(self, flt: NodeFilter) -> list[Node]:
@@ -270,7 +270,7 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
         limit  = flt.limit  or len(syms)
         syms   = syms[offset : offset + limit]
 
-        resolve_symbol_hierarchy(syms)
+        resolve_node_hierarchy(syms)
 
         return syms
 
