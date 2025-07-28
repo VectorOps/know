@@ -1,6 +1,7 @@
 import os
 from typing import Optional, List, Dict, Any, Type
 from abc import ABC, abstractmethod
+import inspect
 from pydantic import BaseModel, Field
 from know.models import (
     ProgrammingLanguage,
@@ -137,12 +138,21 @@ class AbstractCodeParser(ABC):
     Abstract base class for code parsers.
     """
     language: ProgrammingLanguage
+    extensions: List[str]
     project: Project
     rel_path: str
     source_bytes: bytes
     package: ParsedPackage | None
     parsed_file: ParsedFile | None
     parser: Any
+
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        if not inspect.isabstract(cls):
+            if not hasattr(cls, "extensions") or not cls.extensions:
+                raise ValueError(f"{cls.__name__} missing `extensions`")
+            for ext in cls.extensions:
+                CodeParserRegistry.register_parser(ext, cls)
 
     def __init__(self, project: Project, rel_path: str) -> None:
         self.project = project
@@ -290,6 +300,15 @@ class AbstractLanguageHelper:
     """
     Abstract base language helper class
     """
+    language: ProgrammingLanguage
+
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        if not inspect.isabstract(cls):
+            if not hasattr(cls, "language"):
+                raise ValueError(f"{cls.__name__} missing `language`")
+            CodeParserRegistry.register_helper(cls.language, cls())
+
     @abstractmethod
     def get_symbol_summary(self,
                            sym: Node,

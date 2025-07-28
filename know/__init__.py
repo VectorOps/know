@@ -1,4 +1,4 @@
 from . import parsers
 from . import lang
 
-lang.register_parsers()
+# Language parsers and helpers are registered automatically on import.
