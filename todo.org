@@ -2,14 +2,10 @@
 * [ ] Introduce concept of project which is a collection of repositories
 ** [ ] Create project behind the scenes if not provided when initializing repo
 ** [ ] Change code to work with projects instead of repos
-* [ ] Refactor symbols
-** [X] Everything is a symbol
-** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
-** [X] Do insert/delete instead of update?
-** [ ] Rename to Node
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Generic helper to find references using ts query in a generic way
+* [ ] Figure out occasional DuckDB lockups
 * [X] Fix mypy warnings
 * [ ] Repomap tool
 ** [ ] Should only look for exported symbols
@@ -56,6 +52,11 @@
 ** [ ] C#
 ** [ ] Java
 ** [ ] PHP
+* [X] Refactor symbols
+** [X] Everything is a symbol
+** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
+** [X] Do insert/delete instead of update?
+** [X] Rename to Node
 * [X] MCP server
 * [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
 * [X] Add support for Python del_statement, if statement, etc.
@@ -69,7 +70,7 @@
 * [ ] Validate traversal logic to ensure we can not go outside of the project directory.
 * [ ] Search to support exclude. For example - tests
 * [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
-* [ ] Figure out lockup in filelist tool
+* [X] Figure out lockup in filelist tool
 * [X] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
 * [X] Only include mentioned symbols in repomap instead of file summary?
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.

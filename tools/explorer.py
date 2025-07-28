@@ -1,4 +1,6 @@
 import sys
+import faulthandler
+import signal
 import pathlib
 from flask import Flask, render_template, url_for, redirect, abort
 from markupsafe import Markup
@@ -267,6 +269,8 @@ def main():
     if "--help" in sys.argv or "-h" in sys.argv:
         print_help(Settings, "explorer.py")
         sys.exit(0)
+
+    faulthandler.register(signal.SIGHUP)
 
     try:
         settings = Settings()
