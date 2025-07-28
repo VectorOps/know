@@ -2,16 +2,18 @@
 * [ ] Introduce concept of project which is a collection of repositories
 ** [ ] Create project behind the scenes if not provided when initializing repo
 ** [ ] Change code to work with projects instead of repos
+** [ ] Non-programming languages parsers (rst/md/text). Figure out chunking.
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
-* [ ] Generic helper to find references using ts query in a generic way
+* [ ] Generic helper to find references using tree sitter query in a generic way
 * [ ] Add query timeouts to DuckDB to detect lockups
 * [X] Fix mypy warnings
 * [ ] Repomap tool
 ** [ ] Should only look for exported symbols
+* [ ] PostgreSQL store engine
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols?
-** [X] Make tool search all symbols, not just public by default
+** [ ] Make tool search all symbols, not just public by default
 ** [X] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
 * [X] Update chat example to use litellm instead of OpenAI API directly
 * [X] Cache improvements
@@ -30,7 +32,7 @@
 *** [X] Test module path resolution
 *** [X] Fix to_package_path for python
         to_package_path='os', for 'os.path.join'
-*** [ ] Fix summary generator to not include module docstring if level is short summary - add special handling to _handle_expression_string
+*** [ ] Fix summary generator to not include module docstring if level is short summary - add special handling to _handle_expression_string and new node type for documentation
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
 *** [X] Refactror node parser to return nodes like python and typescript parsers
@@ -63,21 +65,19 @@
 * [ ] Documentation generator
 * [ ] CI/CD pipeline
 * [ ] Do not refresh DuckDB index if project did not change
-* [ ] Improve symbol search
+* [ ] Improve node search
 ** [ ] Add reranking model support
-* [-] Add infra to maintain in-memory tools like RepoMap
-** [ ] Enable/Disable tools configuration flag
+* [X] Add infra to maintain in-memory tools like RepoMap
+** [X] Enable/Disable tools configuration flag
 * [ ] Validate traversal logic to ensure we can not go outside of the project directory.
 * [ ] Search to support exclude. For example - tests
 * [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
+* [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
+* [ ] Add git support
+** [ ]  Use git to quickly find what files have changed?
 * [X] Figure out lockup in filelist tool
 * [X] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
 * [X] Only include mentioned symbols in repomap instead of file summary?
-* [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
-* [ ] Cross-repo symbol search
-* [ ] Non-programming languages parsers (rst/md/text). Figure out chunking.
-* [ ] Add git support
-** [ ]  Use git to quickly find what files have changed?
 * [X] Configuration object
 * [X] Measure startup time
 * [X] Measure time it takes to process file, a batch of files, etc
