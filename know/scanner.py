@@ -485,7 +485,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
         page = symbol_repo.get_list(
             NodeFilter(
                 repo_id=repo_id,
-                symbol_kind=NodeKind.METHOD,
+                kind=NodeKind.METHOD,
                 top_level_only=True,
                 limit=PAGE_SIZE,
                 offset=offset,

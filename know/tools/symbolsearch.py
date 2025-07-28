@@ -19,10 +19,10 @@ class SymbolSearchReq(BaseModel):
         default=None,
         description="Substring match against the fully-qualified name (e.g. `package.module.Class.method`).",
     )
-    symbol_kind: Optional[NodeKind | str] = Field(
-        default=None, description="Restrict results to a specific kind of symbol."
+    kind: Optional[NodeKind | str] = Field(
+        default=None, description="Restrict results to a specific kind of node or a symbol."
     )
-    symbol_visibility: Optional[Visibility | str] = Field(
+    visibility: Optional[Visibility | str] = Field(
         default=None,
         description=(
             "Restrict by visibility modifier (`public`, `protected`, `private`) or use `all` to include "
@@ -74,30 +74,30 @@ class SearchSymbolsTool(BaseTool):
     ) -> List[SymbolSearchResult]:
         # normalise string / enum inputs
         kind: NodeKind | None = None
-        if req.symbol_kind is None:
+        if req.kind is None:
             pass
-        elif isinstance(req.symbol_kind, NodeKind):
-            kind = req.symbol_kind
+        elif isinstance(req.kind, NodeKind):
+            kind = req.kind
         else:
             try:
-                kind = NodeKind(req.symbol_kind)
+                kind = NodeKind(req.kind)
             except ValueError:
                 valid_kinds = [k.value for k in NodeKind]
-                raise ValueError(f"Invalid symbol_kind '{req.symbol_kind}'. Valid values are: {valid_kinds}")
+                raise ValueError(f"Invalid kind '{req.kind}'. Valid values are: {valid_kinds}")
 
-        # symbol_visibility
+        # visibility
         vis = None
-        if isinstance(req.symbol_visibility, Visibility):
-            vis = req.symbol_visibility
-        elif isinstance(req.symbol_visibility, str):
-            if req.symbol_visibility.lower() == "all":
+        if isinstance(req.visibility, Visibility):
+            vis = req.visibility
+        elif isinstance(req.visibility, str):
+            if req.visibility.lower() == "all":
                 vis = None
             else:
                 try:
-                    vis = Visibility(req.symbol_visibility)
+                    vis = Visibility(req.visibility)
                 except ValueError:
                     valid_vis = [v.value for v in Visibility] + ["all"]
-                    raise ValueError(f"Invalid symbol_visibility '{req.symbol_visibility}'. Valid values are: {valid_vis}")
+                    raise ValueError(f"Invalid visibility '{req.visibility}'. Valid values are: {valid_vis}")
 
         # summary_mode
         summary_mode = req.summary_mode
@@ -117,8 +117,8 @@ class SearchSymbolsTool(BaseTool):
         query   = NodeSearchQuery(
             symbol_name       = req.symbol_name,
             symbol_fqn        = req.symbol_fqn,
-            symbol_kind       = kind,
-            symbol_visibility = vis,
+            kind       = kind,
+            visibility = vis,
             doc_needle        = req.query,
             embedding_query   = embedding_vec,
             limit             = req.limit or 20,
@@ -195,12 +195,12 @@ class SearchSymbolsTool(BaseTool):
                             "(e.g. `package.module.Class.method`)."
                         )
                     },
-                    "symbol_kind": {
+                    "kind": {
                         "type": "string",
                         "enum": kind_enum,
                         "description": "Restrict results to a specific kind of symbol."
                     },
-                    "symbol_visibility": {
+                    "visibility": {
                         "type": "string",
                         "enum": visibility_enum,
                         "description": (

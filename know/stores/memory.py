@@ -257,8 +257,8 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
                 and (not flt.repo_id    or s.repo_id == flt.repo_id)
                 and (not flt.file_id    or s.file_id == flt.file_id)
                 and (not flt.package_id or s.package_id == flt.package_id)
-                and (not flt.symbol_kind or s.kind == flt.symbol_kind)
-                and (not flt.symbol_visibility or s.visibility == flt.symbol_visibility)
+                and (not flt.kind or s.kind == flt.kind)
+                and (not flt.visibility or s.visibility == flt.visibility)
                 and (not flt.top_level_only or s.parent_node_id is None)
                 and (
                     flt.has_embedding is None
@@ -330,11 +330,11 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
                 needle = query.symbol_name.lower()
                 candidates = [s for s in candidates if needle in (s.name or "").lower()]
 
-            if query.symbol_kind:
-                candidates = [s for s in candidates if s.kind == query.symbol_kind]
+            if query.kind:
+                candidates = [s for s in candidates if s.kind == query.kind]
 
-            if query.symbol_visibility:
-                candidates = [s for s in candidates if s.visibility == query.symbol_visibility]
+            if query.visibility:
+                candidates = [s for s in candidates if s.visibility == query.visibility]
 
             has_fts       = bool(query.doc_needle)
             has_embedding = bool(query.embedding_query)

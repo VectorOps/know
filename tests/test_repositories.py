@@ -172,10 +172,10 @@ def test_symbol_search(data_repo):
     assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(symbol_name="alpha"))] == ["Alpha"]
 
     # ---------- kind filter ----------
-    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(symbol_kind="class"))] == ["Beta"]
+    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(kind="class"))] == ["Beta"]
 
     # ---------- visibility filter ----------
-    assert {s.name for s in sym_repo.search(rid, NodeSearchQuery(symbol_visibility="public"))} == {"Alpha", "Gamma"}
+    assert {s.name for s in sym_repo.search(rid, NodeSearchQuery(visibility="public"))} == {"Alpha", "Gamma"}
 
     # ---------- docstring / comment full-text search ----------
     assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(doc_needle="foo"))] == ["Alpha"]

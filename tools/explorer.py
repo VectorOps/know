@@ -204,8 +204,8 @@ def create_app(project) -> Flask:
                 tool.tool_input(
                     symbol_name=form_data.get("symbol_name") or None,
                     symbol_fqn=form_data.get("symbol_fqn") or None,
-                    symbol_kind=form_data.get("symbol_kind") or None,
-                    symbol_visibility=form_data.get("symbol_visibility") or "public",
+                    kind=form_data.get("kind") or None,
+                    visibility=form_data.get("visibility") or "public",
                     query=form_data.get("query") or None,
                     limit=int(form_data.get("limit") or 20),
                     summary_mode=SummaryMode(form_data.get("summary_mode", SummaryMode.ShortSummary.value)),
@@ -225,7 +225,7 @@ def create_app(project) -> Flask:
                                title="Symbol Search Tool",
                                results=results,
                                form_values=form_data,
-                               symbol_kinds=[k.value for k in NodeKind],
+                               node_kinds=[k.value for k in NodeKind],
                                visibilities=[v.value for v in Visibility] + ["all"],
                                summary_modes=[e.value for e in SummaryMode])
 

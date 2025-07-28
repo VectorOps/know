@@ -20,19 +20,19 @@
 
   <div class="row g-3 align-items-center mb-3">
     <div class="col-auto">
-      <label for="symbol_kind" class="form-label">Symbol Kind</label>
-      <select class="form-select" id="symbol_kind" name="symbol_kind">
-        <option value="" {% if not form_values.get('symbol_kind') %}selected{% endif %}>Any</option>
-        {% for kind in symbol_kinds %}
-          <option value="{{ kind }}" {% if form_values.get('symbol_kind') == kind %}selected{% endif %}>{{ kind }}</option>
+      <label for="kind" class="form-label">Symbol Kind</label>
+      <select class="form-select" id="kind" name="kind">
+        <option value="" {% if not form_values.get('kind') %}selected{% endif %}>Any</option>
+        {% for kind in node_kinds %}
+          <option value="{{ kind }}" {% if form_values.get('kind') == kind %}selected{% endif %}>{{ kind }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="col-auto">
-      <label for="symbol_visibility" class="form-label">Symbol Visibility</label>
-      <select class="form-select" id="symbol_visibility" name="symbol_visibility">
+      <label for="visibility" class="form-label">Symbol Visibility</label>
+      <select class="form-select" id="visibility" name="visibility">
         {% for vis in visibilities %}
-          <option value="{{ vis }}" {% if (not form_values.get('symbol_visibility') and vis == 'public') or (form_values.get('symbol_visibility') == vis) %}selected{% endif %}>{{ vis }}</option>
+          <option value="{{ vis }}" {% if (not form_values.get('visibility') and vis == 'public') or (form_values.get('visibility') == vis) %}selected{% endif %}>{{ vis }}</option>
         {% endfor %}
       </select>
     </div>

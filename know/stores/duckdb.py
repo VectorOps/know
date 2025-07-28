@@ -399,11 +399,11 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         if query.symbol_fqn:
             q = q.where(functions.Lower(self._table.fqn).like(f"%{query.symbol_fqn.lower()}%"))
 
-        if query.symbol_kind:
-            q = q.where(self._table.kind == query.symbol_kind)
+        if query.kind:
+            q = q.where(self._table.kind == query.kind)
 
-        if query.symbol_visibility:
-            q = q.where(self._table.visibility == query.symbol_visibility)
+        if query.visibility:
+            q = q.where(self._table.visibility == query.visibility)
 
         # Determine which search dimensions are provided
         has_fts = bool(query.doc_needle)
@@ -555,10 +555,10 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             q = q.where(self._table.file_id == flt.file_id)
         if flt.package_id:
             q = q.where(self._table.package_id == flt.package_id)
-        if flt.symbol_kind:
-            q = q.where(self._table.kind == flt.symbol_kind)
-        if flt.symbol_visibility:
-            q = q.where(self._table.visibility == flt.symbol_visibility)
+        if flt.kind:
+            q = q.where(self._table.kind == flt.kind)
+        if flt.visibility:
+            q = q.where(self._table.visibility == flt.visibility)
         if flt.has_embedding is True:
             q = q.where(self._table.embedding_code_vec.notnull())
         elif flt.has_embedding is False:
