@@ -121,7 +121,7 @@ class PythonCodeParser(AbstractCodeParser):
 
     # Symbol helpers
     def _create_import_symbol(self, node: ts.Node, import_path: str | None, alias: str | None) -> ParsedNode:
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=NodeKind.IMPORT,
             comment=self._get_preceding_comment(node),
@@ -129,7 +129,7 @@ class PythonCodeParser(AbstractCodeParser):
 
     def _handle_comment_symbol(self, node: ts.Node, parent=None):
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.COMMENT,
             )
@@ -137,7 +137,7 @@ class PythonCodeParser(AbstractCodeParser):
 
     #  generic “literal” helper – used everywhere a fallback symbol is needed
     def _create_literal_symbol(self, node: ts.Node, parent=None):
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=NodeKind.LITERAL,
         )
@@ -161,13 +161,13 @@ class PythonCodeParser(AbstractCodeParser):
             return self._handle_class_definition(inner, parent=parent)
 
     def _handle_try_statement(self, node: ts.Node, parent=None):
-        parent_sym = self._make_symbol(
+        parent_sym = self._make_node(
             node,
             kind=NodeKind.TRYCATCH,
         )
 
         def _build_block_symbol(block_node, block_name: str) -> ParsedNode:
-            return self._make_symbol(
+            return self._make_node(
                 block_node,
                 kind=NodeKind.LITERAL,
                 name=block_name,
@@ -194,7 +194,7 @@ class PythonCodeParser(AbstractCodeParser):
         ]
 
     def _handle_if_statement(self, node: ts.Node, parent: Optional[ParsedNode]=None) -> List[ParsedNode]:
-        if_symbol = self._make_symbol(node, kind=NodeKind.IF)
+        if_symbol = self._make_node(node, kind=NodeKind.IF)
 
         def _process_block_children(block_node, parent_symbol):
             if block_node:
@@ -209,7 +209,7 @@ class PythonCodeParser(AbstractCodeParser):
             condition_text = get_node_text(condition_node)
             raw_sig = f"if {condition_text}:"
 
-            if_block_symbol = self._make_symbol(
+            if_block_symbol = self._make_node(
                 consequence,
                 kind=NodeKind.BLOCK,
                 signature=NodeSignature(raw=raw_sig, lexical_type="if"),
@@ -226,7 +226,7 @@ class PythonCodeParser(AbstractCodeParser):
                     condition_node = alt_node.child_by_field_name("condition")
                     condition_text = get_node_text(condition_node)
                     raw_sig = f"elif {condition_text}:"
-                    elif_block_symbol = self._make_symbol(
+                    elif_block_symbol = self._make_node(
                         block_node,
                         kind=NodeKind.BLOCK,
                         name="elif",
@@ -237,7 +237,7 @@ class PythonCodeParser(AbstractCodeParser):
             elif alt_node.type == "else_clause":
                 block_node = alt_node.child_by_field_name("consequence")
                 if block_node:
-                    else_block_symbol = self._make_symbol(
+                    else_block_symbol = self._make_node(
                         block_node,
                         kind=NodeKind.BLOCK,
                         name="else",
@@ -611,7 +611,7 @@ class PythonCodeParser(AbstractCodeParser):
         # otherwise fall back to <package-virtual-path>.<name>.
         fqn = self._make_fqn(name, parent)
         wrapper = node.parent if node.parent and node.parent.type == "expression_statement" else node
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=kind,
             name=name,
@@ -654,7 +654,7 @@ class PythonCodeParser(AbstractCodeParser):
         func_name = get_node_text(name_node)
 
         return [
-            self._make_symbol(
+            self._make_node(
                 wrapper,
                 kind=NodeKind.FUNCTION,
                 name=func_name,
@@ -673,7 +673,7 @@ class PythonCodeParser(AbstractCodeParser):
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Handle class definitions
         class_name = get_node_text(node.child_by_field_name('name'))
-        symbol = self._make_symbol(
+        symbol = self._make_node(
             wrapper,
             kind=NodeKind.CLASS,
             name=class_name,
@@ -726,7 +726,7 @@ class PythonCodeParser(AbstractCodeParser):
         wrapper = node.parent if node.parent and node.parent.type == "decorated_definition" else node
         # Create a symbol for a function or method
         method_name = get_node_text(node.child_by_field_name('name'))
-        return self._make_symbol(
+        return self._make_node(
             wrapper,
             kind=NodeKind.METHOD,
             name=method_name,
@@ -742,7 +742,7 @@ class PythonCodeParser(AbstractCodeParser):
         expr: str = get_node_text(node).strip()
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.LITERAL,
                 body=expr,

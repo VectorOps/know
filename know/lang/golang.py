@@ -94,12 +94,12 @@ class GolangCodeParser(AbstractCodeParser):
     ) -> List[ParsedNode]:
         assert self.parsed_file is not None
         if node.type == "comment":
-            return [self._make_symbol(node, kind=NodeKind.COMMENT)]
+            return [self._make_node(node, kind=NodeKind.COMMENT)]
         elif node.type == "package_clause":
-            return [self._make_symbol(node, kind=NodeKind.MODULE)]
+            return [self._make_node(node, kind=NodeKind.MODULE)]
         elif node.type == "import_declaration":
             self._handle_import_declaration(node)
-            return [self._make_symbol(node, kind=NodeKind.IMPORT)]
+            return [self._make_node(node, kind=NodeKind.IMPORT)]
         elif node.type == "function_declaration":
             return self._handle_function_declaration(node)
         elif node.type == "method_declaration":
@@ -119,7 +119,7 @@ class GolangCodeParser(AbstractCodeParser):
             byte_offset=node.start_byte,
             raw=get_node_text(node),
         )
-        return [self._make_symbol(node, kind=NodeKind.LITERAL)]
+        return [self._make_node(node, kind=NodeKind.LITERAL)]
 
     def _load_module_path(self, cache: ProjectCache) -> None:
         """
@@ -528,7 +528,7 @@ class GolangCodeParser(AbstractCodeParser):
         fqn = self._make_fqn(name)
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.FUNCTION,
                 name=name,
@@ -616,7 +616,7 @@ class GolangCodeParser(AbstractCodeParser):
         visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.METHOD,
                 name=name,
@@ -673,7 +673,7 @@ class GolangCodeParser(AbstractCodeParser):
                     )
                     continue
 
-                child = self._make_symbol(
+                child = self._make_node(
                     fld,
                     kind=NodeKind.PROPERTY,
                     name=fname,
@@ -700,7 +700,7 @@ class GolangCodeParser(AbstractCodeParser):
 
             for idn in id_nodes:
                 fname = get_node_text(idn)
-                child = self._make_symbol(
+                child = self._make_node(
                     fld,
                     kind=NodeKind.PROPERTY,
                     name=fname,
@@ -745,7 +745,7 @@ class GolangCodeParser(AbstractCodeParser):
             else None
         )
 
-        child = self._make_symbol(
+        child = self._make_node(
             m,
             name=mname,
             fqn=self._make_fqn(mname, parent),
@@ -793,7 +793,7 @@ class GolangCodeParser(AbstractCodeParser):
                 elif type_node.type == "interface_type":
                     kind = NodeKind.INTERFACE
 
-            sym = self._make_symbol(
+            sym = self._make_node(
                 spec,
                 kind=kind,
                 name=name,
@@ -847,7 +847,7 @@ class GolangCodeParser(AbstractCodeParser):
                 name = get_node_text(idn)
                 fqn = self._make_fqn(name)
 
-                sym = self._make_symbol(
+                sym = self._make_node(
                     spec,
                     kind=NodeKind.CONSTANT,   # or VARIABLE in var handler
                     name=name,
@@ -896,7 +896,7 @@ class GolangCodeParser(AbstractCodeParser):
                 name = get_node_text(idn)
                 fqn = self._make_fqn(name)
 
-                sym = self._make_symbol(spec,
+                sym = self._make_node(spec,
                                         name=name,
                                         fqn=fqn,
                                         kind=NodeKind.VARIABLE,

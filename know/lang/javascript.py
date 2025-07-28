@@ -168,7 +168,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             )
         )
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.IMPORT,
                 visibility=Visibility.PUBLIC,
@@ -203,7 +203,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             for s in self.parsed_file.symbols:
                 _mark(s)
 
-        return [self._make_symbol(
+        return [self._make_node(
                     node,
                     kind=NodeKind.LITERAL,
                     visibility=Visibility.PUBLIC,
@@ -212,7 +212,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
     def _handle_export(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         decl_handled   = False
         default_seen = False
-        sym = self._make_symbol(
+        sym = self._make_node(
             node,
             kind=NodeKind.EXPORT,
             visibility=Visibility.PUBLIC,
@@ -238,7 +238,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     decl_handled = True
         if default_seen and not decl_handled:
             sym.children.append(
-                self._make_symbol(
+                self._make_node(
                     node,
                     kind=NodeKind.LITERAL,
                     visibility=Visibility.PUBLIC,
@@ -266,7 +266,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 is_exp, member = self._is_commonjs_export(lhs)
                 if is_exp:
                     assert self.parsed_file is not None
-                    export_sym = self._make_symbol(
+                    export_sym = self._make_node(
                         ch,
                         kind=NodeKind.EXPORT,
                         visibility=Visibility.PUBLIC,
@@ -334,7 +334,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     line=ch.start_point[0] + 1,
                 )
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.ASSIGNMENT,
                 visibility=Visibility.PUBLIC,
@@ -386,7 +386,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             mods.append(Modifier.ASYNC)
         if sig_base.type_parameters:
             mods.append(Modifier.GENERIC)
-        return self._make_symbol(
+        return self._make_node(
             arrow_node,
             kind       = NodeKind.FUNCTION,
             name       = name,
@@ -438,7 +438,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
         sig        = NodeSignature(raw=raw_header, parameters=[], return_type=None)
 
-        sym = self._make_symbol(
+        sym = self._make_node(
             class_node,
             kind=NodeKind.CLASS,
             name=name,
@@ -476,7 +476,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         lexical_kw = get_node_text(node).lstrip().split()[0] if get_node_text(node).lstrip() else ""
         is_const_decl = node.text is not None and node.text.lstrip().startswith(b"const")
         base_kind = NodeKind.CONSTANT if is_const_decl else NodeKind.VARIABLE
-        sym = self._make_symbol(
+        sym = self._make_node(
             node,
             kind=base_kind,
             visibility=Visibility.PUBLIC,
@@ -531,7 +531,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
 
     def _create_literal_symbol(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> ParsedNode:
         txt  = get_node_text(node).strip()
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=NodeKind.LITERAL,
             visibility=Visibility.PUBLIC,
@@ -632,7 +632,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         name = get_node_text(ident)
         kind = NodeKind.CONSTANT if name.isupper() else NodeKind.VARIABLE
         fqn = self._make_fqn(name, parent)
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=kind,
             name=name,
@@ -648,7 +648,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         mods: list[Modifier] = []
         if sig.type_parameters:
             mods.append(Modifier.GENERIC)
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=NodeKind.METHOD,
             name=name,
@@ -709,7 +709,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         if sig.type_parameters:
             mods.append(Modifier.GENERIC)
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.FUNCTION,
                 name=name,
@@ -730,7 +730,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         sig = NodeSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
         mods: list[Modifier] = []
         children: list[ParsedNode] = []
-        sym = self._make_symbol(
+        sym = self._make_node(
             node,
             kind=NodeKind.CLASS,
             name=name,
@@ -779,7 +779,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
 
     def _handle_comment(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.COMMENT,
                 visibility=Visibility.PUBLIC,

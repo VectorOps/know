@@ -231,7 +231,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         )
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.IMPORT,
                 visibility=Visibility.PUBLIC,
@@ -251,7 +251,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # detect:  export default …
         default_seen = False
 
-        sym = self._make_symbol(
+        sym = self._make_node(
             node,
             kind=NodeKind.EXPORT,
             visibility=Visibility.PUBLIC,
@@ -288,7 +288,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # default-export without an inner declaration → treat as literal
         if default_seen and not decl_handled:
             sym.children.append(
-                self._make_symbol(
+                self._make_node(
                     node,
                     kind=NodeKind.LITERAL,
                     visibility=Visibility.PUBLIC,
@@ -347,7 +347,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 _mark_exported(sym)
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.LITERAL,
                 visibility=Visibility.PUBLIC,
@@ -456,7 +456,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             mods.append(Modifier.GENERIC)
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.FUNCTION,
                 name=name,
@@ -484,7 +484,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if tp is not None:
             mods.append(Modifier.GENERIC)
 
-        sym = self._make_symbol(
+        sym = self._make_node(
             node,
             kind=NodeKind.CLASS,
             name=name,
@@ -568,7 +568,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         continue
                     m_sig  = self._build_signature(ch, m_name, prefix="")
                     children.append(
-                        self._make_symbol(
+                        self._make_node(
                             ch,
                             kind=NodeKind.METHOD_DEF,
                             name=m_name,
@@ -583,7 +583,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     if not p_name:
                         continue
                     children.append(
-                        self._make_symbol(
+                        self._make_node(
                             ch,
                             kind=NodeKind.PROPERTY,
                             name=p_name,
@@ -592,7 +592,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     )
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.INTERFACE,
                 name=name,
@@ -617,7 +617,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if sig.type_parameters:
             mods.append(Modifier.GENERIC)
 
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=NodeKind.METHOD,
             name=name,
@@ -651,7 +651,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         kind = NodeKind.CONSTANT if name.isupper() else NodeKind.VARIABLE
         fqn = self._make_fqn(name, parent)
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=kind,
             name=name,
@@ -666,7 +666,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     def _handle_comment(self, node: ts.Node, parent: Optional[ParsedNode] = None):
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.COMMENT,
                 visibility=Visibility.PUBLIC,
@@ -696,7 +696,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             mods.append(Modifier.GENERIC)
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.TYPE_ALIAS,
                 name=name,
@@ -753,7 +753,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     continue
                 # build ParsedNode for the valid member (cases 1 & 2)
                 children.append(
-                    self._make_symbol(
+                    self._make_node(
                         member,
                         kind=NodeKind.CONSTANT,
                         name=m_name,
@@ -763,7 +763,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 )
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.ENUM,
                 name=name,
@@ -789,7 +789,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 # CommonJS export?
                 is_exp, member = self._is_commonjs_export(lhs)
                 if is_exp:
-                    export_sym = self._make_symbol(
+                    export_sym = self._make_node(
                         ch,
                         kind=NodeKind.EXPORT,
                         visibility=Visibility.PUBLIC,
@@ -870,7 +870,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 )
 
         return [
-            self._make_symbol(
+            self._make_node(
                 node,
                 kind=NodeKind.ASSIGNMENT,
                 visibility=Visibility.PUBLIC,
@@ -947,7 +947,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if sig_base.type_parameters:
             mods.append(Modifier.GENERIC)
 
-        return self._make_symbol(
+        return self._make_node(
             arrow_node,
             kind       = NodeKind.FUNCTION,
             name       = name,
@@ -1010,7 +1010,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         if tp:
             mods.append(Modifier.GENERIC)
 
-        sym = self._make_symbol(
+        sym = self._make_node(
             class_node,
             kind=NodeKind.CLASS,
             name=name,
@@ -1052,7 +1052,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         is_const_decl = node_text.startswith("const")
         base_kind = NodeKind.CONSTANT if is_const_decl else NodeKind.VARIABLE
 
-        sym = self._make_symbol(
+        sym = self._make_node(
             node,
             kind=base_kind,
             visibility=Visibility.PUBLIC,
@@ -1119,7 +1119,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         Produces a NodeKind.LITERAL with a best-effort name.
         """
         txt  = get_node_text(node).strip()
-        return self._make_symbol(
+        return self._make_node(
             node,
             kind=NodeKind.LITERAL,
             visibility=Visibility.PUBLIC,
@@ -1169,7 +1169,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         raw_header = get_node_text(node).split("{", 1)[0].strip()
         sig = NodeSignature(raw=raw_header, parameters=[], return_type=None)
 
-        sym = self._make_symbol(
+        sym = self._make_node(
             node,
             kind=NodeKind.NAMESPACE,
             name=name,
@@ -1225,7 +1225,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 raw=get_node_text(node),
             )
         )
-        return [self._make_symbol(node,
+        return [self._make_node(node,
                                   kind=NodeKind.IMPORT,
                                   visibility=Visibility.PUBLIC)]
 

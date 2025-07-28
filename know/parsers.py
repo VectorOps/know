@@ -14,6 +14,7 @@ from know.models import (
     ImportEdge,
     NodeRefType,
 )
+import tree_sitter  as ts
 from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash
 from know.logger import logger
@@ -245,9 +246,9 @@ class AbstractCodeParser(ABC):
         base = self.package.virtual_path if self.package else self._rel_to_virtual_path(self.rel_path)
         return f"{base}.{name}" if base else name
 
-    def _make_symbol(
+    def _make_node(
         self,
-        node,
+        node: ts.Node,
         kind: NodeKind,
         name: str | None = None,
         fqn: str | None = None,

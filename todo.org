@@ -11,6 +11,8 @@
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Generic helper to find references using ts query in a generic way
 * [X] Fix mypy warnings
+* [ ] Repomap tool
+** [ ] Should only look for exported symbols
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols?
 ** [X] Make tool search all symbols, not just public by default
