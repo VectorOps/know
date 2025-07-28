@@ -10,7 +10,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from know.settings import ProjectSettings, print_help
 from know.project import init_project
 from know.tools.base import ToolRegistry
-from know.tools.symbolsearch import SymbolSearchResult
+from know.tools.nodesearch import NodeSearchResult
 from know.logger import logger
 
 import logging
@@ -33,7 +33,7 @@ class Settings(ProjectSettings):
     offset: int = Field(default=0, description="Offset for paginating search results.")
 
 
-def _print_results(results: List[SymbolSearchResult]) -> None:
+def _print_results(results: List[NodeSearchResult]) -> None:
     if not results:
         print("No symbols found.")
         return

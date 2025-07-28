@@ -8,7 +8,7 @@ from pydantic_settings import SettingsConfigDict
 from know.settings import ProjectSettings, EmbeddingSettings, print_help
 from know.project  import init_project, Project
 from know.tools.repomap import RepoMapTool
-from know.tools.symbolsearch import SearchSymbolsTool
+from know.tools.nodesearch import NodeSearchTool
 from know.models import NodeKind, Visibility
 from know.data     import (
     AbstractDataRepository, RepoMetadata, PackageMetadata, FileMetadata,

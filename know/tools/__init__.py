@@ -1,5 +1,5 @@
 from .base import *
 from .filelist import ListFilesTool
 from .filesummary import SummarizeFilesTool
-from .symbolsearch import SearchSymbolsTool
+from .nodesearch import NodeSearchTool
 from .repomap import RepoMapTool

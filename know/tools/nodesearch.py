@@ -11,7 +11,7 @@ from know.parsers import CodeParserRegistry, AbstractCodeParser, AbstractLanguag
 from know.models import FileMetadata
 
 
-class SymbolSearchReq(BaseModel):
+class NodeSearchReq(BaseModel):
     symbol_name: Optional[str] = Field(
         default=None, description="Exact, case-sensitive match on the symbol’s short name."
     )
@@ -44,7 +44,7 @@ class SymbolSearchReq(BaseModel):
     )
 
 
-class SymbolSearchResult(BaseModel):
+class NodeSearchResult(BaseModel):
     symbol_id: str = Field(description="Unique identifier for the symbol.")
     fqn: Optional[str] = Field(default=None, description="The fully-qualified name of the symbol.")
     name: Optional[str] = Field(default=None, description="The short name of the symbol.")
@@ -62,16 +62,16 @@ class SymbolSearchResult(BaseModel):
     )
 
 
-class SearchSymbolsTool(BaseTool):
-    tool_name = "vectorops_search_symbols"
-    tool_input = SymbolSearchReq
-    tool_output = List[SymbolSearchResult]
+class NodeSearchTool(BaseTool):
+    tool_name = "vectorops_search"
+    tool_input = NodeSearchReq
+    tool_output = List[NodeSearchResult]
 
     def execute(
         self,
         project: Project,
-        req: SymbolSearchReq,
-    ) -> List[SymbolSearchResult]:
+        req: NodeSearchReq,
+    ) -> List[NodeSearchResult]:
         # normalise string / enum inputs
         kind: NodeKind | None = None
         if req.kind is None:
@@ -127,7 +127,7 @@ class SearchSymbolsTool(BaseTool):
         syms = project.data_repository.symbol.search(repo_id, query)
         file_repo = project.data_repository.file
 
-        results: list[SymbolSearchResult] = []
+        results: list[NodeSearchResult] = []
         for s in syms:
             helper: AbstractLanguageHelper | None = None
 
@@ -157,7 +157,7 @@ class SearchSymbolsTool(BaseTool):
                                                           include_parents=True)  # type: ignore[call-arg]
 
             results.append(
-                SymbolSearchResult(
+                NodeSearchResult(
                     symbol_id  = s.id,
                     fqn        = s.fqn,
                     name       = s.name,
@@ -177,9 +177,8 @@ class SearchSymbolsTool(BaseTool):
         return {
             "name": self.tool_name,
             "description": (
-                "Search for symbols (functions, classes, variables, etc.) in the current repository. "
-                "All supplied filters are combined with logical **AND**. When both keyword and semantic "
-                "search are available, semantic (vector-based) search is preferred."
+                "Search for code blocks (functions, classes, variables, etc.) in the current repository. "
+                "All supplied filters are combined with logical **AND**."
             ),
             "parameters": {
                 "type": "object",
@@ -240,7 +239,7 @@ class SearchSymbolsTool(BaseTool):
         }
 
     def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
-        def symbolsearch(req: SymbolSearchReq) -> List[SymbolSearchResult]:
+        def symbolsearch(req: NodeSearchReq) -> List[NodeSearchResult]:
             return self.execute(project, req)
 
         schema = self.get_openai_schema()
