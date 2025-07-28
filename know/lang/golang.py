@@ -46,6 +46,7 @@ def _get_parser():
 
 class GolangCodeParser(AbstractCodeParser):
     language = ProgrammingLanguage.GO
+    extensions = (".go",)
 
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
@@ -985,6 +986,8 @@ class GolangCodeParser(AbstractCodeParser):
 
 
 class GolangLanguageHelper(AbstractLanguageHelper):
+    language = ProgrammingLanguage.GO
+
     def get_import_summary(self, imp: ImportEdge) -> str:
         """
         Return a concise, human-readable textual representation of a Go

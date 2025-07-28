@@ -30,9 +30,8 @@ def _get_parser() -> ts.Parser:
 
 class JavaScriptCodeParser(AbstractCodeParser):
     language = ProgrammingLanguage.JAVASCRIPT
+    extensions  = (".js", ".jsx", ".mjs")
 
-    _MODULE_SUFFIXES     = (".js", ".jsx", ".mjs")
-    _RESOLVE_SUFFIXES    = _MODULE_SUFFIXES
     _GENERIC_STATEMENT_NODES = {
         "ambient_declaration",
         "declare_statement",
@@ -132,8 +131,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
         if module.startswith("."):
             base_dir  = os.path.dirname(self.rel_path)
             rel_candidate = os.path.normpath(os.path.join(base_dir, module))
-            if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
-                for suf in self._RESOLVE_SUFFIXES:
+            if not rel_candidate.endswith(self.extensions):
+                for suf in self.extensions:
                     cand = f"{rel_candidate}{suf}"
                     if os.path.exists(
                         os.path.join(self.project.settings.project_path, cand)
@@ -787,12 +786,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         ]
 
 class JavaScriptLanguageHelper(AbstractLanguageHelper):
-    """
-    Build human-readable summaries for JavaScript symbols.
-
-    Implementation is based on the TypeScript helper but kept independent
-    (no cross-module imports) and trimmed to JavaScript-specific constructs.
-    """
+    language = ProgrammingLanguage.TYPESCRIPT
 
     def get_symbol_summary(
         self,

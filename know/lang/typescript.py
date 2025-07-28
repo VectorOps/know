@@ -27,13 +27,11 @@ def _get_parser() -> ts.Parser:
     if _parser is None:
         _parser = ts.Parser(TS_LANGUAGE)
     return _parser
-# ---------------------------------------------------------------------- #
-
-_MODULE_SUFFIXES = (".ts", ".tsx")
-
 
 class TypeScriptCodeParser(AbstractCodeParser):
-    # ------------- generic “statement” kinds we map to LITERAL ---------- #
+    language = ProgrammingLanguage.TYPESCRIPT
+    extensions = [".ts", ".tsx"]
+
     _GENERIC_STATEMENT_NODES: set[str] = {
         # module / namespace level
         "ambient_declaration",
@@ -76,8 +74,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         (generic_type)
     ] @typeid
     """)
-
-    language = ProgrammingLanguage.TYPESCRIPT
 
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
@@ -1296,6 +1292,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
 
 class TypeScriptLanguageHelper(AbstractLanguageHelper):
+    language = ProgrammingLanguage.TYPESCRIPT
+
     def get_symbol_summary(self,
                            sym: Node,
                            indent: int = 0,

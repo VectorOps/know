@@ -40,6 +40,7 @@ def _get_parser():
 
 class PythonCodeParser(AbstractCodeParser):
     language = ProgrammingLanguage.PYTHON
+    extensions = (".py",)
 
     def __init__(self, project: Project, rel_path: str):
         self.parser = _get_parser()
@@ -848,6 +849,8 @@ class PythonCodeParser(AbstractCodeParser):
 
 
 class PythonLanguageHelper(AbstractLanguageHelper):
+    language = ProgrammingLanguage.PYTHON
+
     def get_symbol_summary(self,
                          sym: Node,
                          indent: int = 0,

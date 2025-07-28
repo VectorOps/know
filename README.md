@@ -4,11 +4,11 @@ VectorOps *Know* is an extensible code-intelligence helper library. It scans you
 All functionality is available from the command line, through a clean Python API, or via a lightweight **MCP** (Machine-Comprehension Provider) micro-service for chat/LLM workflows.
 
 ## Key Features
-• Multi-language parsing (Python, TypeScript, Go, …)  
-• Local (in-memory) or DuckDB metadata store  
-• Optional sentence-transformer embeddings for semantic search  
-• Rich tool catalogue automatically exported as OpenAI JSON schemas  
-• Ready-to-run FastMCP server with zero configuration  
+• Multi-language parsing (Python, TypeScript, Go, …)
+• Local (in-memory) or in-memory or on-disk DuckDB metadata store
+• Optional sentence-transformer embeddings for semantic search
+• Rich tool catalogue automatically exported as OpenAI JSON schemas
+• Ready-to-run FastMCP server with zero configuration
 
 ---
 
@@ -20,7 +20,7 @@ pip install -r requirements.txt
 ```
 
 > **Embeddings**  
-> To enable semantic search, install a sentence-transformer model (e.g. `pip install sentence-transformers`) and start tools with `--enable-embeddings`.
+> To enable semantic search, install a sentence-transformer model (e.g. `pip install sentence-transformers`) and start tools with `--embedding.enable true`. Provide model to use via `--embedding.model-name`, such as `--embedding.model-name BAAI/bge-code-v1`.
 
 ---
 
@@ -41,13 +41,13 @@ All tools inherit `BaseTool`.  When the MCP server is started, each tool becomes
 
 ```bash
 # 1 – Search for a class or function
-python tools/searchcli.py --path . "vector search"
+uv run python tools/searchcli.py --project-path .
 
 # 2 – Summarise a file
-python tools/filesummarycli.py --path . know/project.py -m summary_full
+uv run python tools/filesummarycli.py --project-path . know/project.py -m summary_full
 
 # 3 – Generate a repo relevance map
-python tools/repomapcli.py --path . --prompt "authentication token"
+uv run python tools/repomapcli.py --project-path .
 ```
 
 ---
@@ -57,16 +57,14 @@ python tools/repomapcli.py --path . --prompt "authentication token"
 Spin up the FastMCP server and expose every tool via HTTP:
 
 ```bash
-python tools/mcpserver.py \
-    --project-path . \
-    --mcp-host 0.0.0.0 --mcp-port 8080
+KNOW_PROJECT_PATH=. uv run fastmcp run tools/mcpserver.py
 ```
 
 Example request:
 ```bash
 curl -X POST http://localhost:8080/vectorops/vectorops_search \
      -H "Content-Type: application/json" \
-     -d '{"symbol_name":"init_project","limit":5}'
+     -d '{"query":"init_project","limit":5}'
 ```
 If you started the server with `--mcp-auth-token`, include `Authorization: Bearer <token>`.
 

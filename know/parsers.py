@@ -1,5 +1,5 @@
 import os
-from typing import Optional, List, Dict, Any, Type
+from typing import Optional, List, Dict, Any, Type, Tuple
 from abc import ABC, abstractmethod
 import inspect
 from pydantic import BaseModel, Field
@@ -138,7 +138,7 @@ class AbstractCodeParser(ABC):
     Abstract base class for code parsers.
     """
     language: ProgrammingLanguage
-    extensions: List[str]
+    extensions: List[str] | Tuple[str, ...]
     project: Project
     rel_path: str
     source_bytes: bytes
