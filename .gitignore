@@ -10,6 +10,7 @@ wheels/
 *.duckdb.wal
 .symbol_search_history
 .repomap_history
+.mypy_cache
 
 # Virtual environments
 .venv/

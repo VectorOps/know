@@ -53,7 +53,7 @@
         {% if k == "body" %}
         <td><pre><code>{{ v | e }}</code></pre></td>
         {% elif k == "embedding_code_vec" %}
-        <td>{{ v[:4] }}...</td>
+        <td>{{ v and v[:4] }}...</td>
         {% else %}
         <td>{{ v | linkify(k) }}</td>
         {% endif %}

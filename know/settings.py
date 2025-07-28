@@ -132,6 +132,7 @@ class ProjectSettings(BaseSettings):
             ".idea",
             ".vscode",
             ".pytest_cache",
+            ".mypy_cache"
         },
         description="A set of directory names to ignore during project scanning.",
     )
