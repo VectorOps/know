@@ -2,7 +2,7 @@ import pytest
 
 from know.helpers import generate_id
 from know.models import (
-    RepoMetadata, PackageMetadata, FileMetadata,
+    RepoMetadata, PackageMetadata, File,
     Node, NodeKind,
     NodeRef, NodeRefType,
 )
@@ -14,7 +14,7 @@ from know.tools.repomap import RepoMap, RepoMapTool, RepoMapReq
 
 
 def _create_file(repo_id: str, pkg_id: str, path: str):
-    return FileMetadata(
+    return File(
         id=generate_id(),
         repo_id=repo_id,
         package_id=pkg_id,

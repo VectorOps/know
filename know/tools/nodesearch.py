@@ -8,7 +8,7 @@ from know.project import Project
 from .base import BaseTool, MCPToolDefinition
 from know.file_summary import SummaryMode
 from know.parsers import CodeParserRegistry, AbstractCodeParser, AbstractLanguageHelper
-from know.models import FileMetadata
+from know.models import File
 
 
 class NodeSearchReq(BaseModel):
@@ -132,7 +132,7 @@ class NodeSearchTool(BaseTool):
             helper: AbstractLanguageHelper | None = None
 
             # TODO: Optimize to dedupe and get a list of files by ids
-            fm: FileMetadata | None = None
+            fm: File | None = None
             file_path = None
             if s.file_id:
                 fm = file_repo.get_by_id(s.file_id)

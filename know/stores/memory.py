@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List, TypeVar, Generic
 from know.models import (
     RepoMetadata,
     PackageMetadata,
-    FileMetadata,
+    File,
     Node,
     ImportEdge,
     NodeRef,
@@ -12,7 +12,7 @@ from know.models import (
 from know.data import (
     AbstractRepoMetadataRepository,
     AbstractPackageMetadataRepository,
-    AbstractFileMetadataRepository,
+    AbstractFileRepository,
     AbstractNodeRepository,
     AbstractImportEdgeRepository,
     AbstractNodeRefRepository,
@@ -45,7 +45,7 @@ def _cosine(a: list[float], b: list[float]) -> float:
 class _MemoryTables:
     repos:      dict[str, RepoMetadata]   = field(default_factory=dict)
     packages:   dict[str, PackageMetadata]= field(default_factory=dict)
-    files:      dict[str, FileMetadata]   = field(default_factory=dict)
+    files:      dict[str, File]   = field(default_factory=dict)
     symbols:    dict[str, Node] = field(default_factory=dict)
     edges:      dict[str, ImportEdge]     = field(default_factory=dict)
     symbolrefs: dict[str, NodeRef]      = field(default_factory=dict)
@@ -150,7 +150,7 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
     ):
         """
         Delete every PackageMetadata that is not referenced by any
-        FileMetadata in *file_repo*.  Returns the number of deletions.
+        File in *file_repo*.  Returns the number of deletions.
         """
         with self._lock:
             used_pkg_ids = {f.package_id for f in self._file_items.values() if f.package_id}
@@ -159,12 +159,12 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                     self.delete(pkg_id)
 
 
-class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata],
-                                     AbstractFileMetadataRepository):
+class InMemoryFileRepository(InMemoryBaseRepository[File],
+                                     AbstractFileRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.files, tables.lock)
 
-    def get_by_path(self, path: str) -> Optional[FileMetadata]:
+    def get_by_path(self, path: str) -> Optional[File]:
         """Get a file by its project-relative path."""
         with self._lock:
             for file in self._items.values():
@@ -172,9 +172,9 @@ class InMemoryFileMetadataRepository(InMemoryBaseRepository[FileMetadata],
                     return file
         return None
 
-    def get_list(self, flt: FileFilter) -> list[FileMetadata]:
+    def get_list(self, flt: FileFilter) -> list[File]:
         """
-        Return all FileMetadata objects that satisfy *flt*.
+        Return all File objects that satisfy *flt*.
         Supports filtering by repo_id and/or package_id.
         """
         with self._lock:
@@ -453,7 +453,7 @@ class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
         tables = _MemoryTables()
         self._repo = InMemoryRepoMetadataRepository(tables)
-        self._file = InMemoryFileMetadataRepository(tables)
+        self._file = InMemoryFileRepository(tables)
         self._package = InMemoryPackageMetadataRepository(tables)
         self._symbol = InMemoryNodeRepository(tables)
         self._importedge = InMemoryImportEdgeRepository(tables)
@@ -473,7 +473,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         return self._package
 
     @property
-    def file(self) -> AbstractFileMetadataRepository:
+    def file(self) -> AbstractFileRepository:
         """Access the file metadata repository."""
         return self._file
 

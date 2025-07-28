@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from know.models import (
     RepoMetadata,
     PackageMetadata,
-    FileMetadata,
+    File,
     Node,
     ImportEdge,
     NodeRef,
@@ -95,21 +95,21 @@ class FileFilter:
     package_id: Optional[str] = None
 
 
-class AbstractFileMetadataRepository(ABC):
+class AbstractFileRepository(ABC):
     @abstractmethod
-    def get_by_id(self, file_id: str) -> Optional[FileMetadata]:
+    def get_by_id(self, file_id: str) -> Optional[File]:
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, file_ids: List[str]) -> List[FileMetadata]:
+    def get_list_by_ids(self, file_ids: List[str]) -> List[File]:
         pass
 
     @abstractmethod
-    def create(self, file: FileMetadata) -> FileMetadata:
+    def create(self, file: File) -> File:
         pass
 
     @abstractmethod
-    def update(self, file_id: str, data: Dict[str, Any]) -> Optional[FileMetadata]:
+    def update(self, file_id: str, data: Dict[str, Any]) -> Optional[File]:
         pass
 
     @abstractmethod
@@ -117,12 +117,12 @@ class AbstractFileMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_path(self, path: str) -> Optional[FileMetadata]:
+    def get_by_path(self, path: str) -> Optional[File]:
         """Get a file by its project-relative path."""
         pass
 
     @abstractmethod
-    def get_list(self, flt: FileFilter) -> List[FileMetadata]:
+    def get_list(self, flt: FileFilter) -> List[File]:
         pass
 
 
@@ -290,7 +290,7 @@ class AbstractDataRepository(ABC):
 
     @property
     @abstractmethod
-    def file(self) -> AbstractFileMetadataRepository:
+    def file(self) -> AbstractFileRepository:
         pass
 
     @property

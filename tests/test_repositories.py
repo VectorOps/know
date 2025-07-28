@@ -4,7 +4,7 @@ from know.stores.duckdb import DuckDBDataRepository
 from know.models import (
     RepoMetadata,
     PackageMetadata,
-    FileMetadata,
+    File,
     Node,
     ImportEdge,
     NodeSignature,
@@ -54,7 +54,7 @@ def test_package_metadata_repository(data_repo):
     pkg_repo.create(PackageMetadata(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used.go",   repo_id=rid))
 
     # add a file that references the “used” package, leaving the first one orphaned
-    file_repo.create(FileMetadata(id=make_id(), path="pkg/used/a.py", package_id=used_id))
+    file_repo.create(File(id=make_id(), path="pkg/used/a.py", package_id=used_id))
 
     assert pkg_repo.get_by_virtual_path("pkg/used").id == used_id
     assert pkg_repo.get_by_physical_path("pkg/used.go").id == used_id
@@ -73,7 +73,7 @@ def test_package_metadata_repository(data_repo):
 def test_file_metadata_repository(data_repo):
     file_repo = data_repo.file
     rid, pid, fid = make_id(), make_id(), make_id()
-    obj = FileMetadata(id=fid, repo_id=rid, package_id=pid, path="src/file.py")
+    obj = File(id=fid, repo_id=rid, package_id=pid, path="src/file.py")
 
     file_repo.create(obj)
     assert file_repo.get_by_path("src/file.py") == obj
@@ -141,7 +141,7 @@ def test_symbol_search(data_repo):
     rid  = make_id()
     fid  = make_id()
     repo_repo.create(RepoMetadata(id=rid, root_path="/tmp/rid"))
-    file_repo.create(FileMetadata(id=fid, repo_id=rid, path="src/a.py"))
+    file_repo.create(File(id=fid, repo_id=rid, path="src/a.py"))
 
     # ---------- seed three symbols ----------
     sym_repo.create(Node(
@@ -195,7 +195,7 @@ def test_symbol_embedding_search(data_repo):
     fid = make_id()
 
     repo_repo.create(RepoMetadata(id=rid, root_path="/tmp/emb_repo"))
-    file_repo.create(FileMetadata(id=fid, repo_id=rid, path="src/vec.py"))
+    file_repo.create(File(id=fid, repo_id=rid, path="src/vec.py"))
 
     # seed three symbols with simple, orthogonal 3-d vectors
     sym_repo.create(Node(

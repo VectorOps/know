@@ -19,7 +19,7 @@ from know.logger import logger
 from know.models import (
     RepoMetadata,
     PackageMetadata,
-    FileMetadata,
+    File,
     Node,
     NodeSignature,
     ImportEdge,
@@ -29,7 +29,7 @@ from know.models import (
 from know.data import (
     AbstractRepoMetadataRepository,
     AbstractPackageMetadataRepository,
-    AbstractFileMetadataRepository,
+    AbstractFileRepository,
     AbstractNodeRepository,
     AbstractImportEdgeRepository,
     AbstractNodeRefRepository,
@@ -312,7 +312,7 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
     table = "packages"
     model = PackageMetadata
 
-    def __init__(self, conn, file_repo: "DuckDBFileMetadataRepo"):  # type: ignore
+    def __init__(self, conn, file_repo: "DuckDBFileRepo"):  # type: ignore
         super().__init__(conn)
         self._file_repo = file_repo
 
@@ -346,16 +346,16 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
 
 from know.data import FileFilter      # already present – keep / ensure
 
-class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadataRepository):
+class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
     table = "files"
-    model = FileMetadata
+    model = File
 
-    def get_by_path(self, path: str) -> Optional[FileMetadata]:
+    def get_by_path(self, path: str) -> Optional[File]:
         q = Query.from_(self._table).select("*").where(self._table.path == path)
         rows = self._execute(q)
-        return FileMetadata(**rows[0]) if rows else None
+        return File(**rows[0]) if rows else None
 
-    def get_list(self, flt: FileFilter) -> list[FileMetadata]:
+    def get_list(self, flt: FileFilter) -> list[File]:
         q = Query.from_(self._table).select("*")
 
         if flt.repo_id:
@@ -364,7 +364,7 @@ class DuckDBFileMetadataRepo(_DuckDBBaseRepo[FileMetadata], AbstractFileMetadata
             q = q.where(self._table.package_id == flt.package_id)
 
         rows = self._execute(q)
-        return [FileMetadata(**r) for r in rows]
+        return [File(**r) for r in rows]
 
 
 class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
@@ -641,7 +641,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._conn.start()
 
         # build repositories (some need cross-references)
-        self._file_repo    = DuckDBFileMetadataRepo(self._conn)
+        self._file_repo    = DuckDBFileRepo(self._conn)
         self._package_repo = DuckDBPackageMetadataRepo(self._conn, self._file_repo)
         self._repo_repo    = DuckDBRepoMetadataRepo(self._conn)
         self._symbol_repo  = DuckDBNodeRepo(self._conn)
@@ -660,7 +660,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         return self._package_repo
 
     @property
-    def file(self) -> AbstractFileMetadataRepository:
+    def file(self) -> AbstractFileRepository:
         return self._file_repo
 
     @property

@@ -12,7 +12,7 @@ from know.parsers import (
 from know.models import (
     ProgrammingLanguage, NodeKind, Visibility, Modifier,
     NodeSignature, NodeParameter, Node, ImportEdge,
-    NodeRefType, FileMetadata,
+    NodeRefType, File
 )
 from know.project import Project, ProjectCache
 from know.helpers import compute_file_hash

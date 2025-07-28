@@ -10,7 +10,7 @@ from know.models import (
     Modifier,
     NodeSignature,
     PackageMetadata,
-    FileMetadata,
+    File,
     Node,
     ImportEdge,
     NodeRefType,

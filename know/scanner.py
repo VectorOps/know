@@ -14,7 +14,7 @@ from know.project import ScanResult
 from know.helpers import compute_file_hash, generate_id, parse_gitignore
 from know.logger import logger
 from know.models import (
-    FileMetadata,
+    File,
     PackageMetadata,
     Node,
     ImportEdge,
@@ -47,7 +47,7 @@ class ProcessFileResult:
     suffix: str
     rel_path: Optional[str] = None
     parsed_file: Optional[ParsedFile] = None
-    existing_meta: Optional[FileMetadata] = None
+    existing_meta: Optional[File] = None
     file_hash: Optional[str] = None
     mod_time: Optional[float] = None
     exception: Optional[Exception] = None
@@ -192,11 +192,11 @@ def scan_project_directory(project: Project) -> ScanResult:
 
             if res.status == ProcessFileStatus.BARE_FILE:
                 assert res.rel_path is not None
-                logger.debug("No parser registered for path – storing bare FileMetadata.", path=res.rel_path)
+                logger.debug("No parser registered for path – storing bare File.", path=res.rel_path)
                 if res.existing_meta is None:
                     assert res.file_hash is not None
                     assert res.mod_time is not None
-                    fm = FileMetadata(
+                    fm = File(
                         id=generate_id(),
                         repo_id=project.get_repo().id,
                         package_id=None,  # no package context
@@ -230,7 +230,7 @@ def scan_project_directory(project: Project) -> ScanResult:
     symbolref_repo = project.data_repository.symbolref
     repo_id     = project.get_repo().id
 
-    # All FileMetadata currently stored for this repo
+    # All File currently stored for this repo
     from know.data import FileFilter
     existing_files = file_repo.get_list(FileFilter(repo_id=repo_id))
 
@@ -316,7 +316,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     if file_meta:
         file_repo.update(file_meta.id, file_data)
     else:
-        file_meta = FileMetadata(id=generate_id(), **file_data)
+        file_meta = File(id=generate_id(), **file_data)
         file_meta = file_repo.create(file_meta)
 
     # ── Import edges (package-level) ─────────────────────────────────────────

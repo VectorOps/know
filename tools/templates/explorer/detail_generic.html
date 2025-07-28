@@ -6,7 +6,7 @@
       <tr><th>{{ k }}</th><td>{{ v | linkify(k) }}</td></tr>
     {% endfor %}
   </table>
-  {% if item.__class__.__name__ == "FileMetadata" and summary %}
+  {% if item.__class__.__name__ == "File" and summary %}
     <h2>Summary</h2>
     <pre><code>{{ summary | e }}</code></pre>
   {% endif %}

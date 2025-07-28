@@ -96,7 +96,7 @@ class PackageMetadata(BaseModel):
     imported_by: List["ImportEdge"] = Field(default_factory=list, exclude=True, repr=False)
 
 
-class FileMetadata(BaseModel):
+class File(BaseModel):
     id: str
     repo_id: Optional[str] = None
     package_id: Optional[str] = None
@@ -170,7 +170,7 @@ class Node(BaseModel):
     score_security_flags: List[str] = Field(default_factory=list)
 
     # Runtime links
-    file_ref: Optional[FileMetadata] = Field(default=None, exclude=True, repr=False)
+    file_ref: Optional[File] = Field(default=None, exclude=True, repr=False)
     parent_ref: Optional["Node"] = Field(default=None, exclude=True, repr=False)
     children: List["Node"] = Field(default_factory=list, exclude=True, repr=False)
 

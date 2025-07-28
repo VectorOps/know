@@ -17,7 +17,7 @@ from know.models import (
     Node,
     ImportEdge,
     NodeRefType,
-    FileMetadata,
+    File,
 )
 from know.project import Project, ProjectCache
 from know.settings import PythonSettings
