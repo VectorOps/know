@@ -7,8 +7,8 @@ from know.models import (
     FileMetadata,
     Node,
     ImportEdge,
-    SymbolSignature,
-    SymbolParameter,
+    NodeSignature,
+    NodeParameter,
 )
 from typing import Dict, Any
 import uuid
@@ -91,9 +91,9 @@ def test_symbol_metadata_repository(data_repo):
     sym_repo = data_repo.symbol
     fid, sid = make_id(), make_id()
 
-    signature = SymbolSignature(
+    signature = NodeSignature(
         raw="def sym(a: int) -> str",
-        parameters=[SymbolParameter(name="a", type_annotation="int")],
+        parameters=[NodeParameter(name="a", type_annotation="int")],
         return_type="str",
         decorators=["a", "b"],
     )
@@ -115,7 +115,7 @@ def test_symbol_metadata_repository(data_repo):
     assert sym_repo.get_list(NodeFilter(file_id=fid))[0].signature == signature
 
     # update signature
-    new_sig = SymbolSignature(raw="def sym()")
+    new_sig = NodeSignature(raw="def sym()")
     assert sym_repo.update(sid, {"signature": new_sig}).signature == new_sig
 
     # delete

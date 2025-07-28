@@ -21,7 +21,7 @@ from know.models import (
     PackageMetadata,
     FileMetadata,
     Node,
-    SymbolSignature,
+    NodeSignature,
     ImportEdge,
     NodeRef,
     Modifier,
@@ -374,7 +374,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     _json_fields = {"signature", "modifiers"}
     _compress_fields = {"body"}
     _field_parsers = {
-        "signature": lambda v: SymbolSignature(**v) if v is not None else None,
+        "signature": lambda v: NodeSignature(**v) if v is not None else None,
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
 

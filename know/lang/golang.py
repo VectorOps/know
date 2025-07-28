@@ -11,8 +11,8 @@ from know.models import (
     NodeKind,
     Visibility,
     Modifier,
-    SymbolSignature,
-    SymbolParameter,
+    NodeSignature,
+    NodeParameter,
     Node,
     ImportEdge,
     NodeRefType,
@@ -410,9 +410,9 @@ class GolangCodeParser(AbstractCodeParser):
         self,
         param_node,           # tree-sitter “parameter_list” node
         result_node=None,     # optional result node (may be None)
-    ) -> SymbolSignature:
+    ) -> NodeSignature:
         """
-        Build a SymbolSignature from the supplied tree-sitter nodes.
+        Build a NodeSignature from the supplied tree-sitter nodes.
         Very tolerant – it falls back to raw strings when detailed parsing
         fails, but still populates `parameters` / `return_type` whenever
         possible.
@@ -422,7 +422,7 @@ class GolangCodeParser(AbstractCodeParser):
         # ---- parameters -------------------------------------------------
         params_raw = get_node_text(param_node).strip()
 
-        parameters: list[SymbolParameter] = []
+        parameters: list[NodeParameter] = []
 
         # walk every individual parameter_declaration
         for pd in (c for c in param_node.children if c.type == "parameter_declaration"):
@@ -450,7 +450,7 @@ class GolangCodeParser(AbstractCodeParser):
 
             for n in names:
                 parameters.append(
-                    SymbolParameter(
+                    NodeParameter(
                         name=n,
                         type_annotation=("..." if variadic else "") + type_text,
                     )
@@ -470,7 +470,7 @@ class GolangCodeParser(AbstractCodeParser):
 
         # ---- assemble ---------------------------------------------------
         raw_sig = f"{params_raw} {return_raw}".strip()
-        return SymbolSignature(
+        return NodeSignature(
             raw=raw_sig,
             parameters=parameters,
             return_type=return_type,
@@ -513,7 +513,7 @@ class GolangCodeParser(AbstractCodeParser):
         )
         if type_param_node is not None:
             if signature_obj is None:
-                signature_obj = SymbolSignature(raw="")
+                signature_obj = NodeSignature(raw="")
             
             type_param_raw = get_node_text(type_param_node).strip()
 
@@ -589,7 +589,7 @@ class GolangCodeParser(AbstractCodeParser):
         signature_obj = (
             self._build_function_signature(param_node, result_node)
             if param_node is not None
-            else SymbolSignature(raw="")
+            else NodeSignature(raw="")
         )
 
         # prepend "(recv) <Name>" to the raw signature and remember the receiver

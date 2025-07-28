@@ -12,7 +12,7 @@ from know.parsers import (
 )
 from know.models import (
     ProgrammingLanguage, NodeKind, Visibility, Modifier,
-    SymbolSignature, SymbolParameter, Node, ImportEdge,
+    NodeSignature, NodeParameter, Node, ImportEdge,
     NodeRefType, FileMetadata
 )
 from know.project import Project, ProjectCache
@@ -255,7 +255,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             node,
             kind=NodeKind.EXPORT,
             visibility=Visibility.PUBLIC,
-            signature=SymbolSignature(raw="export", lexical_type="export"),
+            signature=NodeSignature(raw="export", lexical_type="export"),
             children=[],
         )
 
@@ -382,14 +382,14 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return None
 
     # ───────────────── signature helpers ────────────────────────────
-    def _build_signature(self, node: ts.Node, name: str, prefix: str = "") -> SymbolSignature:
+    def _build_signature(self, node: ts.Node, name: str, prefix: str = "") -> NodeSignature:
         """
         Extract (very lightly) the parameter-list and the optional
         return-type from a *function_declaration* / *method_definition* node.
         """
         # ---- parameters -------------------------------------------------
         params_node   = node.child_by_field_name("parameters")
-        params_objs   : list[SymbolParameter] = []
+        params_objs   : list[NodeParameter] = []
         params_raw    : list[str]             = []
         if params_node:
             # only *named* children – this automatically ignores punctuation
@@ -418,7 +418,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
                 if p_type is None:
                     params_raw.append(p_name)
-                params_objs.append(SymbolParameter(name=p_name, type_annotation=p_type))
+                params_objs.append(NodeParameter(name=p_name, type_annotation=p_type))
 
         # ---- return type ------------------------------------------------
         rt_node   = node.child_by_field_name("return_type")
@@ -432,7 +432,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
         type_params = self._extract_type_parameters(node)
 
-        return SymbolSignature(
+        return NodeSignature(
             raw         = raw_header,
             parameters  = params_objs,
             return_type = return_ty,
@@ -476,7 +476,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # take full node text and truncate at the opening brace → drop the body
         raw_header = get_node_text(node).split("{", 1)[0].strip()
         tp = self._extract_type_parameters(node)
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
+        sig = NodeSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
 
         mods: list[Modifier] = []
         if node.type == "abstract_class_declaration" or self._has_modifier(node, "abstract"):
@@ -550,7 +550,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # header without body
         raw_header = get_node_text(node).split("{", 1)[0].strip()
         tp = self._extract_type_parameters(node)
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
+        sig = NodeSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
 
         mods: list[Modifier] = []
         if tp is not None:
@@ -689,7 +689,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             raw_header = raw_header[:-1].rstrip()
 
         tp = self._extract_type_parameters(node)
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
+        sig = NodeSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
 
         mods: list[Modifier] = []
         if tp is not None:
@@ -713,7 +713,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return []
         # drop the body – keep only the declaration header
         raw_header = get_node_text(node).split("{", 1)[0].strip()
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+        sig = NodeSignature(raw=raw_header, parameters=[], return_type=None)
 
         children: list[ParsedNode] = []
 
@@ -793,7 +793,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                         ch,
                         kind=NodeKind.EXPORT,
                         visibility=Visibility.PUBLIC,
-                        signature=SymbolSignature(raw="module.exports" if member is None else f"exports.{member}",
+                        signature=NodeSignature(raw="module.exports" if member is None else f"exports.{member}",
                                                  lexical_type="export"),
                         exported=True,
                         children=[],
@@ -934,7 +934,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         sig_base = self._build_signature(arrow_node, name, prefix="")
         # include the *left-hand side* in the raw header for better context
         raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
-        sig = SymbolSignature(
+        sig = NodeSignature(
             raw         = raw_header,
             parameters  = sig_base.parameters,
             return_type = sig_base.return_type,
@@ -1001,7 +1001,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # keep the declarator header (without body) for the signature
         raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
         tp         = self._extract_type_parameters(class_node)
-        sig        = SymbolSignature(raw=raw_header,
+        sig        = NodeSignature(raw=raw_header,
                                      parameters=[],
                                      return_type=None,
                                      type_parameters=tp)
@@ -1056,7 +1056,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             node,
             kind=base_kind,
             visibility=Visibility.PUBLIC,
-            signature=SymbolSignature(
+            signature=NodeSignature(
                 raw=lexical_kw,
                 lexical_type=lexical_kw,
             ),
@@ -1167,7 +1167,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         body = next((c for c in node.children if c.type == "statement_block"), None)
 
         raw_header = get_node_text(node).split("{", 1)[0].strip()
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+        sig = NodeSignature(raw=raw_header, parameters=[], return_type=None)
 
         sym = self._make_symbol(
             node,

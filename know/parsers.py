@@ -7,7 +7,7 @@ from know.models import (
     NodeKind,
     Visibility,
     Modifier,
-    SymbolSignature,
+    NodeSignature,
     PackageMetadata,
     FileMetadata,
     Node,
@@ -83,7 +83,7 @@ class ParsedNode(BaseModel):
     visibility: Optional[Visibility] = None
     modifiers: List[Modifier] = Field(default_factory=list)
     docstring: Optional[str] = None
-    signature: Optional[SymbolSignature] = None
+    signature: Optional[NodeSignature] = None
     comment: Optional[str] = None
     exported: Optional[bool] = None
 
@@ -254,7 +254,7 @@ class AbstractCodeParser(ABC):
         body: str | None = None,
         visibility: Visibility = Visibility.PUBLIC,
         modifiers: list[Modifier] | None = None,
-        signature: SymbolSignature | None = None,
+        signature: NodeSignature | None = None,
         docstring: str | None = None,
         comment: str | None = None,
         children: list[ParsedNode] | None = None,

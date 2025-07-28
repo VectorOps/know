@@ -12,8 +12,8 @@ from know.models import (
     NodeKind,
     Visibility,
     Modifier,
-    SymbolSignature,
-    SymbolParameter,
+    NodeSignature,
+    NodeParameter,
     Node,
     ImportEdge,
     NodeRefType,
@@ -212,7 +212,7 @@ class PythonCodeParser(AbstractCodeParser):
             if_block_symbol = self._make_symbol(
                 consequence,
                 kind=NodeKind.BLOCK,
-                signature=SymbolSignature(raw=raw_sig, lexical_type="if"),
+                signature=NodeSignature(raw=raw_sig, lexical_type="if"),
             )
             _process_block_children(consequence, if_block_symbol)
             if_symbol.children.append(if_block_symbol)
@@ -230,7 +230,7 @@ class PythonCodeParser(AbstractCodeParser):
                         block_node,
                         kind=NodeKind.BLOCK,
                         name="elif",
-                        signature=SymbolSignature(raw=raw_sig, lexical_type="elif"),
+                        signature=NodeSignature(raw=raw_sig, lexical_type="elif"),
                     )
                     _process_block_children(block_node, elif_block_symbol)
                     if_symbol.children.append(elif_block_symbol)
@@ -241,7 +241,7 @@ class PythonCodeParser(AbstractCodeParser):
                         block_node,
                         kind=NodeKind.BLOCK,
                         name="else",
-                        signature=SymbolSignature(raw="else:", lexical_type="else"),
+                        signature=NodeSignature(raw="else:", lexical_type="else"),
                     )
                     _process_block_children(block_node, else_block_symbol)
                     if_symbol.children.append(else_block_symbol)
@@ -421,9 +421,9 @@ class PythonCodeParser(AbstractCodeParser):
                 return code[cls_idx:i+1].rstrip()
         return code[cls_idx:].rstrip()
 
-    def _build_class_signature(self, node: ts.Node) -> SymbolSignature:
+    def _build_class_signature(self, node: ts.Node) -> NodeSignature:
         """
-        Build a SymbolSignature for a class, extracting decorators directly
+        Build a NodeSignature for a class, extracting decorators directly
         from Tree-sitter nodes (no std-lib ast).
         `node` may be either a `class_definition` or its surrounding
         `decorated_definition` wrapper.
@@ -446,16 +446,16 @@ class PythonCodeParser(AbstractCodeParser):
                         txt = txt[1:]
                     decorators.append(txt)
 
-        return SymbolSignature(
+        return NodeSignature(
             raw=raw_sig,
             parameters=[],
             return_type=None,
             decorators=decorators,
         )
 
-    def _build_function_signature(self, node: ts.Node) -> SymbolSignature:
+    def _build_function_signature(self, node: ts.Node) -> NodeSignature:
         """
-        Build a SymbolSignature for a (async) function / method **without**
+        Build a NodeSignature for a (async) function / method **without**
         falling back to the std-lib `ast` module.  All information is taken
         directly from the Tree-sitter nodes.
         """
@@ -483,7 +483,7 @@ class PythonCodeParser(AbstractCodeParser):
             )
 
         # Parameters                                                         #
-        parameters: list[SymbolParameter] = []
+        parameters: list[NodeParameter] = []
         param_node = node.child_by_field_name("parameters")
         if param_node is not None:
             for ch in param_node.children:
@@ -528,7 +528,7 @@ class PythonCodeParser(AbstractCodeParser):
 
                 if param_name:
                     parameters.append(
-                        SymbolParameter(
+                        NodeParameter(
                             name=param_name,
                             type_annotation=param_type,
                             default=param_default,
@@ -542,7 +542,7 @@ class PythonCodeParser(AbstractCodeParser):
         ret_node = node.child_by_field_name("return_type")
         return_type = get_node_text(ret_node).strip() or None
 
-        return SymbolSignature(
+        return NodeSignature(
             raw=raw_sig,
             parameters=parameters,
             return_type=return_type,

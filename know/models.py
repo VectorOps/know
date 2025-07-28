@@ -117,16 +117,16 @@ class FileMetadata(BaseModel):
     symbols: List["Node"] = Field(default_factory=list, exclude=True, repr=False)
 
 
-class SymbolParameter(BaseModel):
+class NodeParameter(BaseModel):
     name: str
     type_annotation: Optional[str] = None
     default: Optional[str] = None
     doc: Optional[str] = None
 
 
-class SymbolSignature(BaseModel):
+class NodeSignature(BaseModel):
     raw: str
-    parameters: List[SymbolParameter] = Field(default_factory=list)
+    parameters: List[NodeParameter] = Field(default_factory=list)
     return_type: Optional[str] = None
     decorators: List[str] = Field(default_factory=list)
     receiver: Optional[str] = None
@@ -155,7 +155,7 @@ class Node(BaseModel):
     visibility: Optional[Visibility] = None
     modifiers: List[Modifier] = Field(default_factory=list)
     docstring: Optional[str] = None
-    signature: Optional[SymbolSignature] = None
+    signature: Optional[NodeSignature] = None
     comment: Optional[str] = None
     exported: Optional[bool] = None
 

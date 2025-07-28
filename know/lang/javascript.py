@@ -11,7 +11,7 @@ from know.parsers import (
 )
 from know.models import (
     ProgrammingLanguage, NodeKind, Visibility, Modifier,
-    SymbolSignature, SymbolParameter, Node, ImportEdge,
+    NodeSignature, NodeParameter, Node, ImportEdge,
     NodeRefType, FileMetadata,
 )
 from know.project import Project, ProjectCache
@@ -216,7 +216,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             node,
             kind=NodeKind.EXPORT,
             visibility=Visibility.PUBLIC,
-            signature=SymbolSignature(raw="export", lexical_type="export"),
+            signature=NodeSignature(raw="export", lexical_type="export"),
             children=[],
         )
         for child in node.children:
@@ -270,7 +270,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                         ch,
                         kind=NodeKind.EXPORT,
                         visibility=Visibility.PUBLIC,
-                        signature=SymbolSignature(raw="module.exports" if member is None else f"exports.{member}",
+                        signature=NodeSignature(raw="module.exports" if member is None else f"exports.{member}",
                                                  lexical_type="export"),
                         exported=True,
                         children=[],
@@ -376,7 +376,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return None
         sig_base = self._build_signature(arrow_node, name, prefix="")
         raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
-        sig = SymbolSignature(
+        sig = NodeSignature(
             raw         = raw_header,
             parameters  = sig_base.parameters,
             return_type = sig_base.return_type,
@@ -436,7 +436,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return None
 
         raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
-        sig        = SymbolSignature(raw=raw_header, parameters=[], return_type=None)
+        sig        = NodeSignature(raw=raw_header, parameters=[], return_type=None)
 
         sym = self._make_symbol(
             class_node,
@@ -480,7 +480,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             node,
             kind=base_kind,
             visibility=Visibility.PUBLIC,
-            signature=SymbolSignature(
+            signature=NodeSignature(
                 raw=lexical_kw,
                 lexical_type=lexical_kw,
             ),
@@ -660,9 +660,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
     def _handle_method(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         return self._handle_function(node, parent=parent)
 
-    def _build_signature(self, node: ts.Node, name: str, prefix: str = "") -> SymbolSignature:
+    def _build_signature(self, node: ts.Node, name: str, prefix: str = "") -> NodeSignature:
         params_node   = node.child_by_field_name("parameters")
-        params_objs   : list[SymbolParameter] = []
+        params_objs   : list[NodeParameter] = []
         params_raw    : list[str]             = []
         if params_node:
             for prm in params_node.named_children:
@@ -683,14 +683,14 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 else:
                     p_type = None
                     params_raw.append(p_name)
-                params_objs.append(SymbolParameter(name=p_name, type_annotation=p_type))
+                params_objs.append(NodeParameter(name=p_name, type_annotation=p_type))
         rt_node   = node.child_by_field_name("return_type")
         return_ty = (get_node_text(rt_node).lstrip(":").strip()
                      if rt_node else None)
         raw_header = get_node_text(node)
         raw_header = raw_header.split("{", 1)[0].strip()
         type_params = None  # JS does not have type parameters
-        return SymbolSignature(
+        return NodeSignature(
             raw         = raw_header,
             parameters  = params_objs,
             return_type = return_ty,
@@ -727,7 +727,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         name = get_node_text(name_node)
         raw_header = get_node_text(node).split("{", 1)[0].strip()
         tp = None  # JS does not have type parameters
-        sig = SymbolSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
+        sig = NodeSignature(raw=raw_header, parameters=[], return_type=None, type_parameters=tp)
         mods: list[Modifier] = []
         children: list[ParsedNode] = []
         sym = self._make_symbol(
