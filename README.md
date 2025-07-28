@@ -1,118 +1,123 @@
+# VectorOps – *Know*
 
-# VectorOps Know
+VectorOps **Know** is an extensible code-intelligence helper library and collection of tools.
+It scans your repository, builds a language-aware graph of files / packages / symbols and exposes high-level tooling for search, summarisation, ranking and graph analysis.
+All functionality is available from the command line, through a clean Python API, or via a lightweight **MCP** (Machine-Comprehension Provider) micro-service for chat/LLM workflows.
 
-**VectorOps Know** is an advanced toolkit for semantic codebase analysis and developer productivity. It provides utilities for symbol search, file summarization, repository relationship mapping, and more—leveraging code embeddings and structural parsing for actionable insights in projects of significant scale and complexity.
+## Key Features
+• Multi-language parsing (Python, TypeScript, Go, …)  
+• Local (in-memory) or DuckDB metadata store  
+• Optional sentence-transformer embeddings for semantic search  
+• Rich tool catalogue automatically exported as OpenAI JSON schemas  
+• Ready-to-run FastMCP server with zero configuration  
 
-## Features
-
-- Semantic code and symbol search
-- File and project summarization using embeddings
-- Relationship and impact analysis via code graph traversal
-- Pluggable architecture for multiple languages and extensions
-- User-friendly command-line tools and Python API
+---
 
 ## Installation
-
-Clone the repository and install dependencies:
-
-```shell
-git clone <repository_url>
-cd <repository_dir>
+```bash
+git clone https://github.com/<you>/vectorops.git
+cd vectorops
 pip install -r requirements.txt
 ```
 
-## Example CLI Usage
+> **Embeddings**  
+> To enable semantic search, install a sentence-transformer model (e.g. `pip install sentence-transformers`) and start tools with `--enable-embeddings`.
 
-### 1. Symbol Search CLI
+---
 
-Interactively search for symbols with text or natural-language queries:
+## Built-in Tools
 
-```sh
-python tools/searchcli.py --path .
+| Tool name (API)          | Python class                                    | CLI helper                 | Purpose |
+|--------------------------|-------------------------------------------------|----------------------------|---------|
+| `vectorops_list_files`   | `know.tools.filelist.ListFilesTool`             | – *(used via API/MCP)*     | Return files whose paths match glob patterns |
+| `vectorops_summarize_files` | `know.tools.filesummary.SummarizeFilesTool` | `tools/filesummarycli.py`  | Create import & symbol summaries for files |
+| `vectorops_search`       | `know.tools.nodesearch.NodeSearchTool`          | `tools/searchcli.py`       | Hybrid (text + vector) symbol search |
+| `vectorops_repomap`      | `know.tools.repomap.RepoMapTool`                | `tools/repomapcli.py`      | Rank files with Random-Walk-with-Restart on the code graph |
+
+All tools inherit `BaseTool`.  When the MCP server is started, each tool becomes an HTTP endpoint and is also advertised through an OpenAI‐compatible schema at `/openai.json`.
+
+---
+
+## Quick CLI Examples
+
+```bash
+# 1 – Search for a class or function
+python tools/searchcli.py --path . "vector search"
+
+# 2 – Summarise a file
+python tools/filesummarycli.py --path . know/project.py -m summary_full
+
+# 3 – Generate a repo relevance map
+python tools/repomapcli.py --path . --prompt "authentication token"
 ```
 
-- You will enter an interactive prompt.  
-  Type your search (e.g., `authentication` or `def my_function`) and press Enter.
-- Exit the prompt with `/exit` or `Ctrl-D`.
+---
 
-### 2. File Summarization CLI
+## MCP Server
 
-Print a summary for one or more files:
+Spin up the FastMCP server and expose every tool via HTTP:
 
-```sh
-python tools/filesummarycli.py --path . path/to/file1.py path/to/file2.py
+```bash
+python tools/mcpserver.py \
+    --project-path . \
+    --mcp-host 0.0.0.0 --mcp-port 8080
 ```
 
-- Replace `path/to/file1.py`, etc. with one or more files relative to your project root.
-- Optional: Control summary detail level with `-m` (e.g., `-m FullSummary`). Example:
-
-```sh
-python tools/filesummarycli.py --path . -m FullSummary my_module.py
+Example request:
+```bash
+curl -X POST http://localhost:8080/vectorops/vectorops_search \
+     -H "Content-Type: application/json" \
+     -d '{"symbol_name":"init_project","limit":5}'
 ```
+If you started the server with `--mcp-auth-token`, include `Authorization: Bearer <token>`.
 
-### 3. RepoMap CLI (Repository Relationship Explorer)
+---
 
-Launch an interactive repo map tool for exploring file and symbol relationships:
-
-```sh
-python tools/repomapcli.py --path .
-```
-
-- This opens an interactive prompt.
-- Use `/help` for available commands (such as `/sym <name>`, `/file <rel/path.py>`, `/prompt <text>`, `/run`).
-
-**Example session:**
-```
-> /prompt validate my_function user input
-> /run
-```
-
-### 4. Conversational Chat CLI
-
-Launch an LLM-powered chat to ask questions about your codebase:
-
-```sh
-OPENAI_API_KEY=your-key python tools/chatcli.py --path .
-```
-
-- This opens an interactive chat.
-- Type your requests or `/exit` to leave.
-- Use `--model` to select the LLM model (default: `gpt-4.1`).
-
-**Example:**
-```
-> How is database authentication implemented?
-```
-
-**Tips:**
-- For all commands, replace `--path .` with your project’s root directory if not running from the top level.
-- Add `--enable-embeddings` to any command to unlock semantic searching and summarization (if you have embedding models installed).
-
-## Python API Example
-
-You can also use VectorOps Know programmatically:
+## Using the Python API
 
 ```python
 from know.project import init_project, ProjectSettings
-from know.tools.symbolsearch import SearchSymbolsTool
+from know.tools.nodesearch import NodeSearchTool
+from know.tools.repomap   import RepoMapTool
+from know.data import NodeSearchQuery
 
+# 1. bootstrap and scan project
 settings = ProjectSettings(project_path=".")
-project = init_project(settings)
-results = SearchSymbolsTool().execute(project, query="main")
-for r in results:
-    print(r.name, r.fqn, r.kind)
+project  = init_project(settings)      # first run performs a full scan
+
+# 2. run a symbol search
+req  = NodeSearchTool.tool_input(symbol_name="refresh", limit=10)
+hits = NodeSearchTool().execute(project, req)
+for h in hits:
+    print(h.name, h.kind, h.file_path)
+
+# 3. create a repo map seeded via prompt
+map_req = RepoMapTool.tool_input(prompt="database connection pooling", limit=15)
+for item in RepoMapTool().execute(project, map_req):
+    print(f"{item.score:0.4f}", item.file_path)
+
+# 4. low-level access to repositories
+repo_id = project.get_repo().id
+symbols = project.data_repository.symbol.search(
+    repo_id=repo_id,
+    query=NodeSearchQuery(symbol_name="Project")
+)
+print("Found", len(symbols), "symbols named Project")
+
+project.destroy()                      # graceful shutdown
 ```
 
-## Getting Started
+---
 
-- Use the `--help` flag on any CLI tool for further details on arguments and configuration:
+## Extending Know
 
-  ```sh
-  python tools/searchcli.py --help
-  ```
+1. **Parsers** – implement `AbstractCodeParser` and register via `CodeParserRegistry`.  
+2. **Tools**   – subclass `BaseTool`; registration is automatic.  
+3. **Components** – derive from `ProjectComponent` and register with `Project.register_component`.
 
-- The toolkit is extensible: you can add new languages, parsing strategies, or analysis tools by following the established interfaces.
+---
 
 ## License
 
-Apache 2.0 License
+VectorOps Know is released under the **Apache 2.0** license.  
+See `LICENSE.txt` for the full text.

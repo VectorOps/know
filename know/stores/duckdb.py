@@ -677,12 +677,10 @@ class DuckDBDataRepository(AbstractDataRepository):
 
     def refresh_full_text_indexes(self) -> None:
         try:
-            print("HNSW!")
             self._conn.execute("PRAGMA drop_fts_index('nodes');")
             self._conn.execute(
                 "PRAGMA create_fts_index('nodes', "
                 "'id', 'name', 'fqn', 'docstring', 'comment');"
             )
-            print("HNSW$")
         except Exception as ex:
             logger.debug("Failed to refresh DuckDB FTS index", ex=ex)
