@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from know.logger import logger
 
 from know.models import (
-    RepoMetadata,
+    Repo,
     Package,
     File,
     Node,
@@ -27,7 +27,7 @@ from know.models import (
     Modifier,
 )
 from know.data import (
-    AbstractRepoMetadataRepository,
+    AbstractRepoRepository,
     AbstractPackageRepository,
     AbstractFileRepository,
     AbstractNodeRepository,
@@ -298,14 +298,14 @@ class _DuckDBBaseRepo(Generic[T]):
 # concrete repositories
 # ---------------------------------------------------------------------------
 
-class DuckDBRepoMetadataRepo(_DuckDBBaseRepo[RepoMetadata], AbstractRepoMetadataRepository):
+class DuckDBRepoRepo(_DuckDBBaseRepo[Repo], AbstractRepoRepository):
     table = "repos"
-    model = RepoMetadata
+    model = Repo
 
-    def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
+    def get_by_path(self, root_path: str) -> Optional[Repo]:
         q = Query.from_(self._table).select("*").where(self._table.root_path == root_path)
         rows = self._execute(q)
-        return RepoMetadata(**rows[0]) if rows else None
+        return Repo(**rows[0]) if rows else None
 
 
 class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
@@ -643,7 +643,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         # build repositories (some need cross-references)
         self._file_repo    = DuckDBFileRepo(self._conn)
         self._package_repo = DuckDBPackageRepo(self._conn, self._file_repo)
-        self._repo_repo    = DuckDBRepoMetadataRepo(self._conn)
+        self._repo_repo    = DuckDBRepoRepo(self._conn)
         self._symbol_repo  = DuckDBNodeRepo(self._conn)
         self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
         self._symbolref_repo = DuckDBNodeRefRepo(self._conn)
@@ -652,7 +652,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._conn.close()
 
     @property
-    def repo(self) -> AbstractRepoMetadataRepository:
+    def repo(self) -> AbstractRepoRepository:
         return self._repo_repo
 
     @property

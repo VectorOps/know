@@ -73,7 +73,7 @@ class NodeRefType(str, Enum):
 Vector = List[float]  # alias for clarity when embedding
 
 # Core data containers
-class RepoMetadata(BaseModel):
+class Repo(BaseModel):
     id: str
     name: Optional[str] = None
     root_path: Optional[str] = ""  # changed to optional with default

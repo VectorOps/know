@@ -12,7 +12,7 @@ from know.data import (
 )
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
-from know.models import RepoMetadata
+from know.models import Repo
 from know.helpers import generate_id
 from know.lang.python import PythonCodeParser
 from know.parsers import CodeParserRegistry
@@ -49,7 +49,7 @@ def _make_project(root: Path) -> Project:
     #data_repo = InMemoryDataRepository()
     data_repo = DuckDBDataRepository()
     CodeParserRegistry.register_parser(".py", PythonCodeParser)
-    repo_meta = RepoMetadata(id=generate_id(), root_path=str(root))
+    repo_meta = Repo(id=generate_id(), root_path=str(root))
     data_repo.repo.create(repo_meta)        # pre-seed repo table
     return Project(settings, data_repo, repo_meta)   # embeddings = None
 

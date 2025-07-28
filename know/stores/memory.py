@@ -2,7 +2,7 @@ import re      # for tokenisatio/
 import threading
 from typing import Optional, Dict, Any, List, TypeVar, Generic
 from know.models import (
-    RepoMetadata,
+    Repo,
     Package,
     File,
     Node,
@@ -10,7 +10,7 @@ from know.models import (
     NodeRef,
 )
 from know.data import (
-    AbstractRepoMetadataRepository,
+    AbstractRepoRepository,
     AbstractPackageRepository,
     AbstractFileRepository,
     AbstractNodeRepository,
@@ -43,7 +43,7 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 @dataclass
 class _MemoryTables:
-    repos:      dict[str, RepoMetadata]   = field(default_factory=dict)
+    repos:      dict[str, Repo]   = field(default_factory=dict)
     packages:   dict[str, Package]= field(default_factory=dict)
     files:      dict[str, File]   = field(default_factory=dict)
     symbols:    dict[str, Node] = field(default_factory=dict)
@@ -96,11 +96,11 @@ class InMemoryBaseRepository(Generic[T]):
         with self._lock:
             return self._items.pop(item_id, None) is not None
 
-class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], AbstractRepoMetadataRepository):
+class InMemoryRepoRepository(InMemoryBaseRepository[Repo], AbstractRepoRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.repos, tables.lock)
 
-    def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
+    def get_by_path(self, root_path: str) -> Optional[Repo]:
         """Get a repo by its root path."""
         with self._lock:
             for repo in self._items.values():
@@ -452,7 +452,7 @@ class InMemoryNodeRefRepository(InMemoryBaseRepository[NodeRef],
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
         tables = _MemoryTables()
-        self._repo = InMemoryRepoMetadataRepository(tables)
+        self._repo = InMemoryRepoRepository(tables)
         self._file = InMemoryFileRepository(tables)
         self._package = InMemoryPackageRepository(tables)
         self._symbol = InMemoryNodeRepository(tables)
@@ -463,7 +463,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         pass
 
     @property
-    def repo(self) -> AbstractRepoMetadataRepository:
+    def repo(self) -> AbstractRepoRepository:
         """Access the repo metadata repository."""
         return self._repo
 

@@ -13,7 +13,7 @@ from know.tools.repomap import RepoMapTool
 from know.tools.nodesearch import NodeSearchTool
 from know.models import NodeKind, Visibility
 from know.data     import (
-    AbstractDataRepository, RepoMetadata, Package, File,
+    AbstractDataRepository, Repo, Package, File,
     Node, ImportEdge, NodeRef, PackageFilter, FileFilter, NodeFilter, ImportEdgeFilter, NodeRefFilter
 )
 from know.file_summary import SummaryMode, build_file_summary
@@ -232,7 +232,7 @@ def create_app(project) -> Flask:
                                summary_modes=[e.value for e in SummaryMode])
 
     def _link_to(obj):
-        mapping = {RepoMetadata:"repo", Package:"package", File:"file",
+        mapping = {Repo:"repo", Package:"package", File:"file",
                    Node:"symbol", ImportEdge:"importedge", NodeRef:"symbolref"}
         return url_for(f"{mapping[type(obj)]}_detail", **{f"{mapping[type(obj)]}_id": obj.id})
 

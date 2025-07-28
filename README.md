@@ -14,9 +14,9 @@ All functionality is available from the command line, through a clean Python API
 
 ## Installation
 ```bash
-git clone https://github.com/<you>/vectorops.git
-cd vectorops
-pip install -r requirements.txt
+git clone https://github.com/vectorops/know.git
+cd know
+uv sync
 ```
 
 > **Embeddings**  

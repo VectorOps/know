@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
 from know.models import (
-    RepoMetadata,
+    Repo,
     Package,
     File,
     Node,
@@ -14,24 +14,22 @@ from know.models import (
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List
 
-# ---------------------------------------------------------------------------
 # helper: enrich result-set with direct descendants
-# ---------------------------------------------------------------------------
-class AbstractRepoMetadataRepository(ABC):
+class AbstractRepoRepository(ABC):
     @abstractmethod
-    def get_by_id(self, repo_id: str) -> Optional[RepoMetadata]:
+    def get_by_id(self, repo_id: str) -> Optional[Repo]:
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, repo_ids: List[str]) -> List[RepoMetadata]:
+    def get_list_by_ids(self, repo_ids: List[str]) -> List[Repo]:
         pass
 
     @abstractmethod
-    def create(self, repo: RepoMetadata) -> RepoMetadata:
+    def create(self, repo: Repo) -> Repo:
         pass
 
     @abstractmethod
-    def update(self, repo_id: str, data: Dict[str, Any]) -> Optional[RepoMetadata]:
+    def update(self, repo_id: str, data: Dict[str, Any]) -> Optional[Repo]:
         pass
 
     @abstractmethod
@@ -39,7 +37,7 @@ class AbstractRepoMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_path(self, root_path: str) -> Optional[RepoMetadata]:
+    def get_by_path(self, root_path: str) -> Optional[Repo]:
         """Get a repo by its root path."""
         pass
 
@@ -280,7 +278,7 @@ class AbstractDataRepository(ABC):
 
     @property
     @abstractmethod
-    def repo(self) -> AbstractRepoMetadataRepository:
+    def repo(self) -> AbstractRepoRepository:
         pass
 
     @property

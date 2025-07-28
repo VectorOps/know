@@ -3,7 +3,7 @@ import math
 
 from know.stores.duckdb import DuckDBDataRepository
 from know.stores.memory import InMemoryDataRepository
-from know.models import RepoMetadata, File, Node
+from know.models import Repo, File, Node
 from know.data import NodeSearchQuery
 
 pytest.importorskip("sentence_transformers")
@@ -42,7 +42,7 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
 
     rid = "repo-BM25-test"
     fid = "file-f"
-    repo_repo.create(RepoMetadata(id=rid, name="BM25Repo", root_path="/bm25test"))
+    repo_repo.create(Repo(id=rid, name="BM25Repo", root_path="/bm25test"))
     file_repo.create(File(id=fid, repo_id=rid, path="src/bm25.py"))
 
     themes = [

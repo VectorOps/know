@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 from know.models import (
-    RepoMetadata, File, Package, Node,
+    Repo, File, Package, Node,
     ImportEdge, Vector, NodeKind
 )
 from know.data import AbstractDataRepository, NodeSearchQuery
@@ -71,7 +71,7 @@ class Project:
         self,
         settings: ProjectSettings,
         data_repository: AbstractDataRepository,
-        repo_metadata: RepoMetadata,
+        repo_metadata: Repo,
         embeddings: EmbeddingWorker | None = None,
     ):
         self.settings = settings
@@ -101,8 +101,8 @@ class Project:
 
     register_component_instance = add_component
 
-    def get_repo(self) -> RepoMetadata:
-        """Return related RepoMetadata."""
+    def get_repo(self) -> Repo:
+        """Return related Repo."""
         return self._repo_metadata
 
     def __getattr__(self, item: str):
@@ -180,8 +180,8 @@ class ProjectCache:
 def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
     """
     Initializes the project. Settings object contains project path and/or project id.
-    Then init project checks if RepoMetadata exists for the id (if provided) or absolute path.
-    If it does not exist - creates a new RepoMetadata and sets that on Project instance that's returned.
+    Then init project checks if Repo exists for the id (if provided) or absolute path.
+    If it does not exist - creates a new Repo and sets that on Project instance that's returned.
     Finally, kicks off a function to recursively scan the project directory.
     """
     backend = settings.repository_backend or "memory"
@@ -197,8 +197,8 @@ def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
 
     repo_metadata = repo_repository.get_by_path(settings.project_path)
     if not repo_metadata:
-        # Create new RepoMetadata
-        repo_metadata = RepoMetadata(
+        # Create new Repo
+        repo_metadata = Repo(
             id=generate_id(),
             root_path=settings.project_path,
         )

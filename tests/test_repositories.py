@@ -2,7 +2,7 @@ import pytest
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
 from know.models import (
-    RepoMetadata,
+    Repo,
     Package,
     File,
     Node,
@@ -30,7 +30,7 @@ def test_repo_metadata_repository(data_repo):
     repo_repo = data_repo.repo
 
     rid = make_id()
-    obj = RepoMetadata(id=rid, name="repo1", root_path="/tmp/repo1")
+    obj = Repo(id=rid, name="repo1", root_path="/tmp/repo1")
 
     # create / fetch
     assert repo_repo.create(obj) == obj
@@ -86,7 +86,7 @@ def test_file_metadata_repository(data_repo):
 def test_symbol_metadata_repository(data_repo):
     repo_repo = data_repo.repo
     rid = make_id()
-    repo_repo.create(RepoMetadata(id=rid, root_path=f"/tmp/{rid}"))
+    repo_repo.create(Repo(id=rid, root_path=f"/tmp/{rid}"))
 
     sym_repo = data_repo.symbol
     fid, sid = make_id(), make_id()
@@ -140,7 +140,7 @@ def test_symbol_search(data_repo):
     # ---------- minimal repo / file scaffolding ----------
     rid  = make_id()
     fid  = make_id()
-    repo_repo.create(RepoMetadata(id=rid, root_path="/tmp/rid"))
+    repo_repo.create(Repo(id=rid, root_path="/tmp/rid"))
     file_repo.create(File(id=fid, repo_id=rid, path="src/a.py"))
 
     # ---------- seed three symbols ----------
@@ -194,7 +194,7 @@ def test_symbol_embedding_search(data_repo):
     rid = make_id()
     fid = make_id()
 
-    repo_repo.create(RepoMetadata(id=rid, root_path="/tmp/emb_repo"))
+    repo_repo.create(Repo(id=rid, root_path="/tmp/emb_repo"))
     file_repo.create(File(id=fid, repo_id=rid, path="src/vec.py"))
 
     # seed three symbols with simple, orthogonal 3-d vectors
