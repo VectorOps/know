@@ -2,7 +2,7 @@ import pytest
 
 from know.helpers import generate_id
 from know.models import (
-    RepoMetadata, PackageMetadata, File,
+    RepoMetadata, Package, File,
     Node, NodeKind,
     NodeRef, NodeRefType,
 )
@@ -52,7 +52,7 @@ def _build_project():
     pkg_id  = generate_id()
 
     dr.repo.create(RepoMetadata(id=repo_id, root_path=""))
-    dr.package.create(PackageMetadata(id=pkg_id, repo_id=repo_id))
+    dr.package.create(Package(id=pkg_id, repo_id=repo_id))
 
     f_a = _create_file(repo_id, pkg_id, "a.py")      # defines func
     f_b = _create_file(repo_id, pkg_id, "b.py")      # calls   func
@@ -87,7 +87,7 @@ def test_repo_map_build_and_refresh():
 
     # metadata
     dr.repo.create(RepoMetadata(id=repo_id, root_path=""))
-    dr.package.create(PackageMetadata(id=pkg_id, repo_id=repo_id))
+    dr.package.create(Package(id=pkg_id, repo_id=repo_id))
 
     # files a.py, b.py  (c.py will be added later)
     f1 = _create_file(repo_id, pkg_id, "a.py")

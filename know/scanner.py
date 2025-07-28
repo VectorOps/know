@@ -15,7 +15,7 @@ from know.helpers import compute_file_hash, generate_id, parse_gitignore
 from know.logger import logger
 from know.models import (
     File,
-    PackageMetadata,
+    Package,
     Node,
     ImportEdge,
     NodeKind,
@@ -243,7 +243,7 @@ def scan_project_directory(project: Project) -> ScanResult:
             file_repo.delete(fm.id)
             result.files_deleted.append(fm.path)
 
-    #  Remove PackageMetadata entries that lost all their files
+    #  Remove Package entries that lost all their files
     from know.data import PackageFilter
     package_repo = project.data_repository.package
     removed_pkgs = package_repo.delete_orphaned()
@@ -303,7 +303,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     if pkg_meta:
         pkg_repo.update(pkg_meta.id, pkg_data)
     else:
-        pkg_meta = PackageMetadata(id=generate_id(), **pkg_data)
+        pkg_meta = Package(id=generate_id(), **pkg_data)
         pkg_meta = pkg_repo.create(pkg_meta)
 
     # ── File ────────────────────────────────────────────────────────────────
@@ -331,7 +331,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     # Helper: resolve internal package_id if we already know about the target package
     def _resolve_to_package_id(parsed_imp: ParsedImportEdge) -> str | None:
         """
-        Map a ParsedImportEdge to an existing internal PackageMetadata.id
+        Map a ParsedImportEdge to an existing internal Package.id
         (or None when the import is external / unknown).
         """
         if parsed_imp.external or not parsed_imp.virtual_path:

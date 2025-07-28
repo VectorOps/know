@@ -18,7 +18,7 @@ from know.logger import logger
 
 from know.models import (
     RepoMetadata,
-    PackageMetadata,
+    Package,
     File,
     Node,
     NodeSignature,
@@ -28,7 +28,7 @@ from know.models import (
 )
 from know.data import (
     AbstractRepoMetadataRepository,
-    AbstractPackageMetadataRepository,
+    AbstractPackageRepository,
     AbstractFileRepository,
     AbstractNodeRepository,
     AbstractImportEdgeRepository,
@@ -308,25 +308,25 @@ class DuckDBRepoMetadataRepo(_DuckDBBaseRepo[RepoMetadata], AbstractRepoMetadata
         return RepoMetadata(**rows[0]) if rows else None
 
 
-class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackageMetadataRepository):
+class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
     table = "packages"
-    model = PackageMetadata
+    model = Package
 
     def __init__(self, conn, file_repo: "DuckDBFileRepo"):  # type: ignore
         super().__init__(conn)
         self._file_repo = file_repo
 
-    def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
+    def get_by_physical_path(self, path: str) -> Optional[Package]:
         q = Query.from_(self._table).select("*").where(self._table.physical_path == path)
         rows = self._execute(q)
-        return PackageMetadata(**rows[0]) if rows else None
+        return Package(**rows[0]) if rows else None
 
-    def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:
+    def get_by_virtual_path(self, path: str) -> Optional[Package]:
         q = Query.from_(self._table).select("*").where(self._table.virtual_path == path)
         rows = self._execute(q)
-        return PackageMetadata(**rows[0]) if rows else None
+        return Package(**rows[0]) if rows else None
 
-    def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
+    def get_list(self, flt: PackageFilter) -> list[Package]:
         q = Query.from_(self._table).select("*")
 
         if flt.repo_id:
@@ -334,7 +334,7 @@ class DuckDBPackageMetadataRepo(_DuckDBBaseRepo[PackageMetadata], AbstractPackag
 
         rows = self._execute(q)
 
-        return [PackageMetadata(**r) for r in rows]
+        return [Package(**r) for r in rows]
 
     def delete_orphaned(self) -> None:
         files_tbl = Table("files")
@@ -642,7 +642,7 @@ class DuckDBDataRepository(AbstractDataRepository):
 
         # build repositories (some need cross-references)
         self._file_repo    = DuckDBFileRepo(self._conn)
-        self._package_repo = DuckDBPackageMetadataRepo(self._conn, self._file_repo)
+        self._package_repo = DuckDBPackageRepo(self._conn, self._file_repo)
         self._repo_repo    = DuckDBRepoMetadataRepo(self._conn)
         self._symbol_repo  = DuckDBNodeRepo(self._conn)
         self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
@@ -656,7 +656,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         return self._repo_repo
 
     @property
-    def package(self) -> AbstractPackageMetadataRepository:
+    def package(self) -> AbstractPackageRepository:
         return self._package_repo
 
     @property

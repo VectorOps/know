@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
 from know.models import (
     RepoMetadata,
-    PackageMetadata,
+    Package,
     File,
     Node,
     ImportEdge,
@@ -49,26 +49,26 @@ class PackageFilter:
     repo_id: Optional[str] = None
 
 
-class AbstractPackageMetadataRepository(ABC):
+class AbstractPackageRepository(ABC):
     @abstractmethod
-    def get_by_id(self, package_id: str) -> Optional[PackageMetadata]:
+    def get_by_id(self, package_id: str) -> Optional[Package]:
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, package_ids: List[str]) -> List[PackageMetadata]:
+    def get_list_by_ids(self, package_ids: List[str]) -> List[Package]:
         pass
 
     @abstractmethod
-    def get_list(self, flt: PackageFilter) -> List[PackageMetadata]:
+    def get_list(self, flt: PackageFilter) -> List[Package]:
         pass
 
     @abstractmethod
-    def get_by_physical_path(self, root_path: str) -> Optional[PackageMetadata]:
+    def get_by_physical_path(self, root_path: str) -> Optional[Package]:
         """Get a repo by its root path."""
         pass
 
     @abstractmethod
-    def get_by_virtual_path(self, root_path: str) -> Optional[PackageMetadata]:
+    def get_by_virtual_path(self, root_path: str) -> Optional[Package]:
         """Get a repo by its root path."""
         pass
 
@@ -77,11 +77,11 @@ class AbstractPackageMetadataRepository(ABC):
         pass
 
     @abstractmethod
-    def create(self, pkg: PackageMetadata) -> PackageMetadata:
+    def create(self, pkg: Package) -> Package:
         pass
 
     @abstractmethod
-    def update(self, package_id: str, data: Dict[str, Any]) -> Optional[PackageMetadata]:
+    def update(self, package_id: str, data: Dict[str, Any]) -> Optional[Package]:
         pass
 
     @abstractmethod
@@ -285,7 +285,7 @@ class AbstractDataRepository(ABC):
 
     @property
     @abstractmethod
-    def package(self) -> AbstractPackageMetadataRepository:
+    def package(self) -> AbstractPackageRepository:
         pass
 
     @property

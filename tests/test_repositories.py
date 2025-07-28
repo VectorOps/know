@@ -3,7 +3,7 @@ from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
 from know.models import (
     RepoMetadata,
-    PackageMetadata,
+    Package,
     File,
     Node,
     ImportEdge,
@@ -50,8 +50,8 @@ def test_package_metadata_repository(data_repo):
     orphan_id = make_id()
     used_id   = make_id()
     rid = make_id()
-    pkg_repo.create(PackageMetadata(id=orphan_id, name="orphan", virtual_path="pkg/orphan", physical_path="pkg/orphan.py", repo_id=rid))
-    pkg_repo.create(PackageMetadata(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used.go",   repo_id=rid))
+    pkg_repo.create(Package(id=orphan_id, name="orphan", virtual_path="pkg/orphan", physical_path="pkg/orphan.py", repo_id=rid))
+    pkg_repo.create(Package(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used.go",   repo_id=rid))
 
     # add a file that references the “used” package, leaving the first one orphaned
     file_repo.create(File(id=make_id(), path="pkg/used/a.py", package_id=used_id))

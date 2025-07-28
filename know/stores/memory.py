@@ -3,7 +3,7 @@ import threading
 from typing import Optional, Dict, Any, List, TypeVar, Generic
 from know.models import (
     RepoMetadata,
-    PackageMetadata,
+    Package,
     File,
     Node,
     ImportEdge,
@@ -11,7 +11,7 @@ from know.models import (
 )
 from know.data import (
     AbstractRepoMetadataRepository,
-    AbstractPackageMetadataRepository,
+    AbstractPackageRepository,
     AbstractFileRepository,
     AbstractNodeRepository,
     AbstractImportEdgeRepository,
@@ -44,7 +44,7 @@ def _cosine(a: list[float], b: list[float]) -> float:
 @dataclass
 class _MemoryTables:
     repos:      dict[str, RepoMetadata]   = field(default_factory=dict)
-    packages:   dict[str, PackageMetadata]= field(default_factory=dict)
+    packages:   dict[str, Package]= field(default_factory=dict)
     files:      dict[str, File]   = field(default_factory=dict)
     symbols:    dict[str, Node] = field(default_factory=dict)
     edges:      dict[str, ImportEdge]     = field(default_factory=dict)
@@ -108,14 +108,14 @@ class InMemoryRepoMetadataRepository(InMemoryBaseRepository[RepoMetadata], Abstr
                     return repo
         return None
 
-class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata], AbstractPackageMetadataRepository):
+class InMemoryPackageRepository(InMemoryBaseRepository[Package], AbstractPackageRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.packages, tables.lock)
         self._file_items = tables.files
 
-    def get_by_physical_path(self, path: str) -> Optional[PackageMetadata]:
+    def get_by_physical_path(self, path: str) -> Optional[Package]:
         """
-        Return the first PackageMetadata whose physical_path equals *path*.
+        Return the first Package whose physical_path equals *path*.
         """
         with self._lock:
             for pkg in self._items.values():
@@ -123,9 +123,9 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                     return pkg
         return None
 
-    def get_by_virtual_path(self, path: str) -> Optional[PackageMetadata]:
+    def get_by_virtual_path(self, path: str) -> Optional[Package]:
         """
-        Return the first PackageMetadata whose physical_path equals *path*.
+        Return the first Package whose physical_path equals *path*.
         """
         with self._lock:
             for pkg in self._items.values():
@@ -133,9 +133,9 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
                     return pkg
         return None
 
-    def get_list(self, flt: PackageFilter) -> list[PackageMetadata]:
+    def get_list(self, flt: PackageFilter) -> list[Package]:
         """
-        Return all PackageMetadata objects that satisfy *flt*.
+        Return all Package objects that satisfy *flt*.
         Currently only repo_id is supported.
         """
         with self._lock:
@@ -149,7 +149,7 @@ class InMemoryPackageMetadataRepository(InMemoryBaseRepository[PackageMetadata],
         self,
     ):
         """
-        Delete every PackageMetadata that is not referenced by any
+        Delete every Package that is not referenced by any
         File in *file_repo*.  Returns the number of deletions.
         """
         with self._lock:
@@ -454,7 +454,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         tables = _MemoryTables()
         self._repo = InMemoryRepoMetadataRepository(tables)
         self._file = InMemoryFileRepository(tables)
-        self._package = InMemoryPackageMetadataRepository(tables)
+        self._package = InMemoryPackageRepository(tables)
         self._symbol = InMemoryNodeRepository(tables)
         self._importedge = InMemoryImportEdgeRepository(tables)
         self._symbolref  = InMemoryNodeRefRepository(tables)
@@ -468,7 +468,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         return self._repo
 
     @property
-    def package(self) -> AbstractPackageMetadataRepository:
+    def package(self) -> AbstractPackageRepository:
         """Access the package metadata repository."""
         return self._package
 

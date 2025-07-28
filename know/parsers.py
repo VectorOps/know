@@ -9,7 +9,7 @@ from know.models import (
     Visibility,
     Modifier,
     NodeSignature,
-    PackageMetadata,
+    Package,
     File,
     Node,
     ImportEdge,

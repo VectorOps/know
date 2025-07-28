@@ -82,7 +82,7 @@ class RepoMetadata(BaseModel):
     description: Optional[str] = None
 
 
-class PackageMetadata(BaseModel):
+class Package(BaseModel):
     id: str
     name: Optional[str] = None
     repo_id: Optional[str] = None
@@ -113,7 +113,7 @@ class File(BaseModel):
     metrics_cyclomatic_complexity: Optional[int] = None
 
     # Runtime links
-    package: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
+    package: Optional[Package] = Field(default=None, exclude=True, repr=False)
     symbols: List["Node"] = Field(default_factory=list, exclude=True, repr=False)
 
 
@@ -189,8 +189,8 @@ class ImportEdge(BaseModel):
     raw: str
 
     # Runtime links
-    from_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
-    to_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
+    from_package_ref: Optional[Package] = Field(default=None, exclude=True, repr=False)
+    to_package_ref: Optional[Package] = Field(default=None, exclude=True, repr=False)
 
 
 class NodeRef(BaseModel):
@@ -203,4 +203,4 @@ class NodeRef(BaseModel):
     type: NodeRefType
     to_package_id: Optional[str] = None
 
-    to_package_ref: Optional[PackageMetadata] = Field(default=None, exclude=True, repr=False)
+    to_package_ref: Optional[Package] = Field(default=None, exclude=True, repr=False)
