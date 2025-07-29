@@ -8,6 +8,7 @@ from know.models import (
     Node,
     ImportEdge,
     NodeRef,
+    Project,
 )
 from know.data import (
     AbstractRepoRepository,
@@ -24,6 +25,9 @@ from know.data import (
     ImportEdgeFilter,
     include_direct_descendants,
     resolve_node_hierarchy,
+    AbstractProjectRepository,
+    AbstractProjectRepoRepository,
+    RepoFilter,
 )
 from know.data import NodeRefFilter
 from dataclasses import dataclass, field
@@ -43,6 +47,8 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 @dataclass
 class _MemoryTables:
+    projects:   dict[str, Project] = field(default_factory=dict)
+    project_repos: dict[str, set[str]] = field(default_factory=dict)
     repos:      dict[str, Repo]   = field(default_factory=dict)
     packages:   dict[str, Package]= field(default_factory=dict)
     files:      dict[str, File]   = field(default_factory=dict)
@@ -96,9 +102,38 @@ class InMemoryBaseRepository(Generic[T]):
         with self._lock:
             return self._items.pop(item_id, None) is not None
 
+class InMemoryProjectRepository(InMemoryBaseRepository[Project], AbstractProjectRepository):
+    def __init__(self, tables: _MemoryTables):
+        super().__init__(tables.projects, tables.lock)
+
+    def get_by_name(self, name: str) -> Optional[Project]:
+        with self._lock:
+            for project in self._items.values():
+                if project.name == name:
+                    return project
+        return None
+
+
+class InMemoryProjectRepoRepository(AbstractProjectRepoRepository):
+    def __init__(self, tables: _MemoryTables):
+        self._project_repos = tables.project_repos
+        self._lock = tables.lock
+
+    def get_repo_ids(self, project_id: str) -> List[str]:
+        with self._lock:
+            return list(self._project_repos.get(project_id, set()))
+
+    def add_repo_id(self, project_id: str, repo_id: str):
+        with self._lock:
+            if project_id not in self._project_repos:
+                self._project_repos[project_id] = set()
+            self._project_repos[project_id].add(repo_id)
+
+
 class InMemoryRepoRepository(InMemoryBaseRepository[Repo], AbstractRepoRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.repos, tables.lock)
+        self._project_repos = tables.project_repos
 
     def get_by_path(self, root_path: str) -> Optional[Repo]:
         """Get a repo by its root path."""
@@ -108,28 +143,36 @@ class InMemoryRepoRepository(InMemoryBaseRepository[Repo], AbstractRepoRepositor
                     return repo
         return None
 
+    def get_list(self, flt: RepoFilter) -> list[Repo]:
+        with self._lock:
+            repos = list(self._items.values())
+            if flt.project_id:
+                repo_ids = self._project_repos.get(flt.project_id, set())
+                repos = [r for r in repos if r.id in repo_ids]
+            return repos
+
 class InMemoryPackageRepository(InMemoryBaseRepository[Package], AbstractPackageRepository):
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.packages, tables.lock)
         self._file_items = tables.files
 
-    def get_by_physical_path(self, path: str) -> Optional[Package]:
+    def get_by_physical_path(self, repo_id: str, root_path: str) -> Optional[Package]:
         """
         Return the first Package whose physical_path equals *path*.
         """
         with self._lock:
             for pkg in self._items.values():
-                if pkg.physical_path == path:
+                if pkg.repo_id == repo_id and pkg.physical_path == root_path:
                     return pkg
         return None
 
-    def get_by_virtual_path(self, path: str) -> Optional[Package]:
+    def get_by_virtual_path(self, repo_id: str, root_path: str) -> Optional[Package]:
         """
         Return the first Package whose physical_path equals *path*.
         """
         with self._lock:
             for pkg in self._items.values():
-                if pkg.virtual_path == path:
+                if pkg.repo_id == repo_id and pkg.virtual_path == root_path:
                     return pkg
         return None
 
@@ -141,7 +184,7 @@ class InMemoryPackageRepository(InMemoryBaseRepository[Package], AbstractPackage
         with self._lock:
             if flt.repo_id:
                 return [pkg for pkg in self._items.values()
-                        if pkg.repo_id == flt.repo_id]
+                        if pkg.repo_id in flt.repo_id]
             # no filter → return every package
             return list(self._items.values())
 
@@ -164,11 +207,11 @@ class InMemoryFileRepository(InMemoryBaseRepository[File],
     def __init__(self, tables: _MemoryTables):
         super().__init__(tables.files, tables.lock)
 
-    def get_by_path(self, path: str) -> Optional[File]:
+    def get_by_path(self, repo_id: str, path: str) -> Optional[File]:
         """Get a file by its project-relative path."""
         with self._lock:
             for file in self._items.values():
-                if file.path == path:
+                if file.repo_id == repo_id and file.path == path:
                     return file
         return None
 
@@ -180,7 +223,7 @@ class InMemoryFileRepository(InMemoryBaseRepository[File],
         with self._lock:
             return [
                 f for f in self._items.values()
-                if (not flt.repo_id   or f.repo_id   == flt.repo_id)
+                if (not flt.repo_id   or f.repo_id in flt.repo_id)
                 and (not flt.package_id or f.package_id == flt.package_id)
             ]
 
@@ -254,7 +297,7 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
             syms = [
                 s for s in self._items.values()
                 if (not flt.parent_ids or s.parent_node_id in flt.parent_ids)
-                and (not flt.repo_id    or s.repo_id == flt.repo_id)
+                and (not flt.repo_id    or s.repo_id in flt.repo_id)
                 and (not flt.file_id    or s.file_id == flt.file_id)
                 and (not flt.package_id or s.package_id == flt.package_id)
                 and (not flt.kind or s.kind == flt.kind)
@@ -322,13 +365,13 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
             ]
 
             # scalar filters
-            if query.symbol_fqn:
-                needle_fqn = query.symbol_fqn.lower()
-                candidates = [s for s in candidates if (s.fqn or "").lower() == needle_fqn]
-
             if query.symbol_name:
                 needle = query.symbol_name.lower()
-                candidates = [s for s in candidates if needle in (s.name or "").lower()]
+                candidates = [s for s in candidates if (s.name or "").lower() == needle]
+
+            if query.symbol_fqn:
+                needle_fqn = query.symbol_fqn.lower()
+                candidates = [s for s in candidates if needle_fqn in (s.fqn or "").lower()]
 
             if query.kind:
                 candidates = [s for s in candidates if s.kind == query.kind]
@@ -424,7 +467,7 @@ class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractI
                 edge for edge in self._items.values()
                 if (not flt.source_package_id or edge.from_package_id == flt.source_package_id)
                 and (not flt.source_file_id  or edge.from_file_id    == flt.source_file_id)
-                and (not flt.repo_id         or edge.repo_id         == flt.repo_id)
+                and (not flt.repo_id         or edge.repo_id in flt.repo_id)
             ]
 
 
@@ -439,7 +482,7 @@ class InMemoryNodeRefRepository(InMemoryBaseRepository[NodeRef],
                 r for r in self._items.values()
                 if (not flt.file_id    or r.file_id    == flt.file_id)
                 and (not flt.package_id or r.package_id == flt.package_id)
-                and (not flt.repo_id    or r.repo_id    == flt.repo_id)
+                and (not flt.repo_id    or r.repo_id in flt.repo_id)
             ]
 
     def delete_by_file_id(self, file_id: str) -> None:
@@ -452,6 +495,8 @@ class InMemoryNodeRefRepository(InMemoryBaseRepository[NodeRef],
 class InMemoryDataRepository(AbstractDataRepository):
     def __init__(self):
         tables = _MemoryTables()
+        self._project = InMemoryProjectRepository(tables)
+        self._prj_repo = InMemoryProjectRepoRepository(tables)
         self._repo = InMemoryRepoRepository(tables)
         self._file = InMemoryFileRepository(tables)
         self._package = InMemoryPackageRepository(tables)
@@ -463,18 +508,18 @@ class InMemoryDataRepository(AbstractDataRepository):
         pass
 
     @property
+    def project(self) -> AbstractProjectRepository:
+        """Access the project metadata repository."""
+        return self._project
+
+    @property
+    def prj_repo(self) -> AbstractProjectRepoRepository:
+        """Access the project repo link repository."""
+        return self._prj_repo
+
+    @property
     def repo(self) -> AbstractRepoRepository:
         """Access the repo metadata repository."""
-        return self._repo
-
-    @property
-    def package(self) -> AbstractPackageRepository:
-        """Access the package metadata repository."""
-        return self._package
-
-    @property
-    def file(self) -> AbstractFileRepository:
-        """Access the file metadata repository."""
         return self._file
 
     @property
