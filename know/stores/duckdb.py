@@ -7,7 +7,7 @@ import math
 import zlib
 import queue
 from concurrent.futures import Future
-from typing import Optional, Dict, Any, Generic, TypeVar, Type, Callable
+from typing import Optional, Dict, Any, List, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime, timezone
 from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order
