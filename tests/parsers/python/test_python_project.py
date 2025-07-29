@@ -15,9 +15,9 @@ SAMPLES_DIR = Path(__file__).parent / "samples"
 
 def test_project_scan_populates_repositories():
     """Project.init + directory scan should create metadata for every sample file."""
-    project = init_project(ProjectSettings(project_path=str(SAMPLES_DIR)))
-    repo_store = project.data_repository
-    repo_meta = project.get_repo()
+    project = init_project(ProjectSettings(project_name="test", repo_path=str(SAMPLES_DIR)))
+    repo_store = project.data
+    repo_meta = project.default_repo
 
     # ── files ────────────────────────────────────────────────────────────
     expected_files = [p for p in SAMPLES_DIR.glob("*.py")]

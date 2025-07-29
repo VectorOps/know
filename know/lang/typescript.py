@@ -13,9 +13,9 @@ from know.parsers import (
 from know.models import (
     ProgrammingLanguage, NodeKind, Visibility, Modifier,
     NodeSignature, NodeParameter, Node, ImportEdge,
-    NodeRefType, File
+    NodeRefType, File, Repo
 )
-from know.project import Project, ProjectCache
+from know.project import ProjectManager, ProjectCache
 from know.helpers import compute_file_hash
 from know.logger import logger
 
@@ -75,9 +75,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
     ] @typeid
     """)
 
-    def __init__(self, project: Project, rel_path: str):
+    def __init__(self, pm: ProjectManager, repo: Repo, rel_path: str):
         self.parser = _get_parser()
-        self.project = project
+        self.pm = pm
+        self.repo = repo
         self.rel_path = rel_path
         self.source_bytes: bytes = b""
 
@@ -177,8 +178,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             if not rel_candidate.endswith(self._RESOLVE_SUFFIXES):
                 for suf in self._RESOLVE_SUFFIXES:
                     cand = f"{rel_candidate}{suf}"
-                    if self.project.settings.project_path and os.path.exists(
-                        os.path.join(self.project.settings.project_path, cand)
+                    if self.repo.root_path and os.path.exists(
+                        os.path.join(self.repo.root_path, cand)
                     ):
                         rel_candidate = cand
                         break

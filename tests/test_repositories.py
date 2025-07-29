@@ -56,18 +56,18 @@ def test_package_metadata_repository(data_repo):
     # add a file that references the “used” package, leaving the first one orphaned
     file_repo.create(File(id=make_id(), path="pkg/used/a.py", package_id=used_id))
 
-    assert pkg_repo.get_by_virtual_path("pkg/used").id == used_id
-    assert pkg_repo.get_by_physical_path("pkg/used.go").id == used_id
-    assert {p.id for p in pkg_repo.get_list(PackageFilter(repo_id=rid))} == {orphan_id, used_id}
+    assert pkg_repo.get_by_virtual_path(rid, "pkg/used").id == used_id
+    assert pkg_repo.get_by_physical_path(rid, "pkg/used.go").id == used_id
+    assert {p.id for p in pkg_repo.get_list(PackageFilter(repo_id=[rid]))} == {orphan_id, used_id}
     # delete_orphaned should remove only the orphan package
     pkg_repo.delete_orphaned()
     assert pkg_repo.get_by_id(orphan_id) is None
     assert pkg_repo.get_by_id(used_id) is not None
-    assert [p.id for p in pkg_repo.get_list(PackageFilter(repo_id=rid))] == [used_id]
+    assert [p.id for p in pkg_repo.get_list(PackageFilter(repo_id=[rid]))] == [used_id]
     # update / delete
     assert pkg_repo.update(used_id, {"name": "renamed"}).name == "renamed"
     assert pkg_repo.delete(used_id) is True
-    assert pkg_repo.get_list(PackageFilter(repo_id=rid)) == []
+    assert pkg_repo.get_list(PackageFilter(repo_id=[rid])) == []
 
 
 def test_file_metadata_repository(data_repo):
@@ -76,8 +76,8 @@ def test_file_metadata_repository(data_repo):
     obj = File(id=fid, repo_id=rid, package_id=pid, path="src/file.py")
 
     file_repo.create(obj)
-    assert file_repo.get_by_path("src/file.py") == obj
-    assert file_repo.get_list(FileFilter(repo_id=rid)) == [obj]
+    assert file_repo.get_by_path(rid, "src/file.py") == obj
+    assert file_repo.get_list(FileFilter(repo_id=[rid])) == [obj]
     assert file_repo.get_list(FileFilter(package_id=pid)) == [obj]
     assert file_repo.update(fid, {"path": "src/other.py"}).path == "src/other.py"
     assert file_repo.delete(fid) is True
@@ -128,10 +128,10 @@ def test_import_edge_repository(data_repo):
     edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, from_file_id=fid, to_package_physical_path="pkg/other", to_package_virtual_path="pkg/other", raw="import pkg.other", external=False))
 
     assert edge_repo.get_list(ImportEdgeFilter(source_package_id=from_pid))[0].id == eid
-    assert edge_repo.get_list(ImportEdgeFilter(repo_id=rid))[0].id == eid
+    assert edge_repo.get_list(ImportEdgeFilter(repo_id=[rid]))[0].id == eid
     assert edge_repo.update(eid, {"alias": "aliaspkg"}).alias == "aliaspkg"
     assert edge_repo.delete(eid) is True
-    assert edge_repo.get_list(ImportEdgeFilter(repo_id=rid)) == []
+    assert edge_repo.get_list(ImportEdgeFilter(repo_id=[rid])) == []
 
 
 def test_symbol_search(data_repo):

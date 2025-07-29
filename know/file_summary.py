@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field
 
 from know.logger import logger
 from know.parsers import CodeParserRegistry, AbstractLanguageHelper
-from know.project import Project
-from know.models import ImportEdge, Visibility, Node, NodeKind
+from know.project import ProjectManager
+from know.models import ImportEdge, Visibility, Node, NodeKind, Repo
 from know.data import ImportEdgeFilter, NodeFilter
 
 
@@ -35,7 +35,8 @@ def _symbol_to_text(sym: Node, include_docs: bool = False) -> str:
     return "\n".join(parts)
 
 def build_file_summary(
-    project: Project,
+    pm: ProjectManager,
+    repo: Repo,
     rel_path: str,
     summary_mode: SummaryMode = SummaryMode.ShortSummary,
 ) -> Optional[FileSummary]:
@@ -47,7 +48,7 @@ def build_file_summary(
         return None
 
     if summary_mode is SummaryMode.Full:
-        abs_path = os.path.join(project.settings.project_path, rel_path)
+        abs_path = os.path.join(repo.root_path, rel_path)
         try:
             with open(abs_path, "r", encoding="utf-8") as f:
                 return FileSummary(path=rel_path, content=f.read())
@@ -57,11 +58,11 @@ def build_file_summary(
 
     include_docs = summary_mode is SummaryMode.FullSummary
 
-    file_repo   = project.data_repository.file
-    symbol_repo = project.data_repository.symbol
-    edge_repo   = project.data_repository.importedge
+    file_repo   = pm.data.file
+    symbol_repo = pm.data.symbol
+    edge_repo   = pm.data.importedge
 
-    fm = file_repo.get_by_path(rel_path)
+    fm = file_repo.get_by_path(repo.id, rel_path)
     if not fm:
         logger.warning("File not found in repository – skipped.", path=rel_path)
         return None

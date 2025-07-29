@@ -18,7 +18,8 @@ def _make_dummy_project(root_dir: Path):
     parser can access `project.settings.project_path` and other facilities.
     """
     settings = ProjectSettings(
-        project_path=str(root_dir),
+        project_name="test",
+        repo_path=str(root_dir),
         repository_backend="memory",
     )
     return init_project(settings, refresh=False)
@@ -35,7 +36,7 @@ def test_golang_parser_on_sample_file():
     project     = _make_dummy_project(samples_dir)
     cache       = ProjectCache()
 
-    parser      = GolangCodeParser(project, "main.go")
+    parser      = GolangCodeParser(project, project.default_repo, "main.go")
     parsed_file = parser.parse(cache)
 
     #pprint(parsed_file)

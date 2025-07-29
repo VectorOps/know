@@ -3,7 +3,7 @@ from typing import Sequence, List, Optional
 
 from pydantic import BaseModel, Field
 
-from know.project import Project
+from know.project import ProjectManager
 from know.models import ProgrammingLanguage
 from know.data import FileFilter
 from .base import BaseTool, MCPToolDefinition
@@ -30,18 +30,19 @@ class ListFilesTool(BaseTool):
 
     def execute(
         self,
-        project: Project,
+        pm: ProjectManager,
         req: ListFilesReq,
     ) -> List[FileListItem]:
         """
-        Return project files whose path matches any of the supplied glob patterns.
+        Return files whose path matches any of the supplied glob patterns.
 
         If `patterns` is None or empty, return an empty list. The matching is
         done fnmatch-style.
         """
-        repo_id = project.get_repo().id
-        file_repo = project.data_repository.file
-        all_files = file_repo.get_list(FileFilter(repo_id=repo_id))
+        repo_id = pm.default_repo.id
+        file_repo = pm.data.file
+        # TODO: search by pm.repo_ids
+        all_files = file_repo.get_list(FileFilter(repo_id=[repo_id]))
 
         pats = list(req.patterns) if req.patterns else []
         if not pats:
@@ -80,11 +81,11 @@ class ListFilesTool(BaseTool):
             },
         }
 
-    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+    def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP tool definition for this tool."""
         def filelist(req: ListFilesReq) -> List[FileListItem]:
             """List files in the project matching glob patterns."""
-            return self.execute(project, req)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
 

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from know.file_summary import FileSummary, SummaryMode, build_file_summary
 
-from know.project import Project
+from know.project import ProjectManager
 from know.models import Visibility
 
 
@@ -23,7 +23,7 @@ class SummarizeFilesTool(BaseTool):
 
     def execute(
         self,
-        project: Project,
+        pm: ProjectManager,
         req: SummarizeFilesReq,
     ) -> List[FileSummary]:
         """Generate summaries for the requested files."""
@@ -33,7 +33,7 @@ class SummarizeFilesTool(BaseTool):
 
         summaries: list[FileSummary] = []
         for rel_path in req.paths:
-            fs = build_file_summary(project, rel_path, summary_mode=summary_mode)
+            fs = build_file_summary(pm, pm.default_repo, rel_path, summary_mode=summary_mode)
             if fs:
                 summaries.append(fs)
 
@@ -57,7 +57,7 @@ class SummarizeFilesTool(BaseTool):
                     "paths": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Project-relative paths of the files to be summarized.",
+                        "description": "Relative paths of the files to be summarized.",
                     },
                     "summary_mode": {
                         "type": "string",
@@ -73,10 +73,10 @@ class SummarizeFilesTool(BaseTool):
             },
         }
 
-    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+    def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP definition for the tool."""
         def filesummary(req: SummarizeFilesReq) -> List[FileSummary]:
-            return self.execute(project, req)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(

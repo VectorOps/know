@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from know.data import NodeSearchQuery
 from know.models import NodeKind, Visibility
-from know.project import Project
+from know.project import ProjectManager
 from .base import BaseTool, MCPToolDefinition
 from know.file_summary import SummaryMode
 from know.parsers import CodeParserRegistry, AbstractCodeParser, AbstractLanguageHelper
@@ -69,7 +69,7 @@ class NodeSearchTool(BaseTool):
 
     def execute(
         self,
-        project: Project,
+        pm: ProjectManager,
         req: NodeSearchReq,
     ) -> List[NodeSearchResult]:
         # normalise string / enum inputs
@@ -111,21 +111,22 @@ class NodeSearchTool(BaseTool):
         # transform free-text query -> embedding vector (if requested)
         embedding_vec = None
         if req.query:
-            embedding_vec = project.compute_embedding(req.query)
+            embedding_vec = pm.compute_embedding(req.query)
 
-        repo_id = project.get_repo().id
+        repo_id = pm.default_repo.id
         query   = NodeSearchQuery(
-            symbol_name       = req.symbol_name,
-            symbol_fqn        = req.symbol_fqn,
-            kind       = kind,
+            symbol_name = req.symbol_name,
+            symbol_fqn = req.symbol_fqn,
+            kind = kind,
             visibility = vis,
-            doc_needle        = req.query,
-            embedding_query   = embedding_vec,
-            limit             = req.limit or 20,
-            offset            = req.offset,
+            doc_needle = req.query,
+            embedding_query = embedding_vec,
+            limit = req.limit or 20,
+            offset = req.offset,
         )
-        syms = project.data_repository.symbol.search(repo_id, query)
-        file_repo = project.data_repository.file
+        syms = pm.data.symbol.search(repo_id, query)
+
+        file_repo = pm.data.file
 
         results: list[NodeSearchResult] = []
         for s in syms:
@@ -238,9 +239,9 @@ class NodeSearchTool(BaseTool):
             },
         }
 
-    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+    def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         def symbolsearch(req: NodeSearchReq) -> List[NodeSearchResult]:
-            return self.execute(project, req)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(

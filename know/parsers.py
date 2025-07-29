@@ -9,6 +9,7 @@ from know.models import (
     Visibility,
     Modifier,
     NodeSignature,
+    Repo,
     Package,
     File,
     Node,
@@ -16,7 +17,7 @@ from know.models import (
     NodeRefType,
 )
 import tree_sitter  as ts
-from know.project import Project, ProjectCache
+from know.project import ProjectManager, ProjectCache
 from know.helpers import compute_file_hash
 from know.logger import logger
 
@@ -139,7 +140,8 @@ class AbstractCodeParser(ABC):
     """
     language: ProgrammingLanguage
     extensions: List[str] | Tuple[str, ...]
-    project: Project
+    pm: ProjectManager
+    repo: Repo
     rel_path: str
     source_bytes: bytes
     package: ParsedPackage | None
@@ -154,8 +156,9 @@ class AbstractCodeParser(ABC):
             for ext in cls.extensions:
                 CodeParserRegistry.register_parser(ext, cls)
 
-    def __init__(self, project: Project, rel_path: str) -> None:
-        self.project = project
+    def __init__(self, pm: ProjectManager, repo: Repo, rel_path: str) -> None:
+        self.pm = pm
+        self.repo = repo
         self.rel_path = rel_path
         self.package = None
         self.parsed_file = None
@@ -180,9 +183,9 @@ class AbstractCodeParser(ABC):
 
     # Helpers
     def parse(self, cache: ProjectCache) -> ParsedFile:
-        if not self.project.settings.project_path:
-            raise ValueError("project_path must be set to parse files")
-        file_path = os.path.join(self.project.settings.project_path, self.rel_path)
+        if not self.repo.root_path:
+            raise ValueError("repo.root_path must be set to parse files")
+        file_path = os.path.join(self.repo.root_path, self.rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
             self.source_bytes = file.read()

@@ -72,11 +72,23 @@ class NodeRefType(str, Enum):
 
 Vector = List[float]  # alias for clarity when embedding
 
+
 # Core data containers
+class Project(BaseModel):
+    id: str
+    name: str
+
+
+class ProjectRepo(BaseModel):
+    id: str
+    project_id: str
+    repo_id: str
+
+
 class Repo(BaseModel):
     id: str
     name: Optional[str] = None
-    root_path: Optional[str] = ""  # changed to optional with default
+    root_path: str = ""
     remote_url: Optional[str] = None
     default_branch: str = "main"
     description: Optional[str] = None

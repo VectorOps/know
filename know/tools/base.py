@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from know.project import Project
+from know.project import ProjectManager
 from know.settings import ProjectSettings
 from typing import Dict, Type, Any, List, Type
 import inspect
@@ -26,7 +26,7 @@ class BaseTool(ABC):
             ToolRegistry.register_tool(cls)
 
     @abstractmethod
-    def execute(self, project: Project, req: Any) -> Any:
+    def execute(self, pm: ProjectManager, req: Any) -> Any:
         pass
 
     @abstractmethod
@@ -37,7 +37,7 @@ class BaseTool(ABC):
         pass
 
     @abstractmethod
-    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+    def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """
         Returns MCP tool definition.
         """

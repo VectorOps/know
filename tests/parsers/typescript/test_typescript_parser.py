@@ -12,7 +12,8 @@ from devtools import pprint
 # --------------------------------------------------------------------------- #
 def _make_dummy_project(root_dir: Path):
     settings = ProjectSettings(
-        project_path=str(root_dir),
+        project_name="test",
+        repo_path=str(root_dir),
         repository_backend="memory",   # lightweight in-memory backend
     )
     return init_project(settings, refresh=False)
@@ -30,7 +31,7 @@ def test_typescript_parser_on_simple_file():
     project     = _make_dummy_project(samples_dir)
     cache       = ProjectCache()
 
-    parser      = TypeScriptCodeParser(project, "simple.tsx")
+    parser      = TypeScriptCodeParser(project, project.default_repo, "simple.tsx")
     parsed_file = parser.parse(cache)
 
     #pprint(parsed_file)

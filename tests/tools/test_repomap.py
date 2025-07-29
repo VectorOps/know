@@ -6,7 +6,7 @@ from know.models import (
     Node, NodeKind,
     NodeRef, NodeRefType,
 )
-from know.project import Project
+from know.project import ProjectManager
 from know.stores.memory import InMemoryDataRepository
 from know.scanner import ScanResult
 from know.settings import ProjectSettings
@@ -45,13 +45,16 @@ def _create_ref(repo_id: str, file_id: str, pkg_id: str, name="func"):
         type=NodeRefType.CALL,
     )
 
-# ---------- helpers for RepoMapTool test ----------  # NEW
+# helpers for RepoMapTool test
 def _build_project():
     dr = InMemoryDataRepository()
-    repo_id = generate_id()
+
+    settings = ProjectSettings(project_name="test", repo_path="/dummy")
+    project = ProjectManager(settings, dr)
+
+    repo_id = project.default_repo.id
     pkg_id  = generate_id()
 
-    dr.repo.create(Repo(id=repo_id, root_path=""))
     dr.package.create(Package(id=pkg_id, repo_id=repo_id))
 
     f_a = _create_file(repo_id, pkg_id, "a.py")      # defines func
@@ -73,8 +76,10 @@ def _build_project():
     # so edge-weight boosting on “beta” can dominate the distribution.
     dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "func"))
 
-    settings = ProjectSettings(project_path="/dummy")
-    project = Project(settings, dr, dr.repo.get_by_id(repo_id))
+    project.refresh_components(ScanResult(
+        files_added=["a.py", "b.py", "c.py", "d.py"],
+    ))
+
     return project, f_a.path, f_b.path, f_c.path, f_d.path
 
 
@@ -82,11 +87,13 @@ def test_repo_map_build_and_refresh():
     # ── prepare in-memory repo ────────────────────────────────────────────
     dr = InMemoryDataRepository()
 
-    repo_id = generate_id()
+    settings = ProjectSettings(project_name="test", repo_path="/dummy")
+    project = ProjectManager(settings, dr)
+
+    repo_id = project.default_repo.id
     pkg_id = generate_id()
 
     # metadata
-    dr.repo.create(Repo(id=repo_id, root_path=""))
     dr.package.create(Package(id=pkg_id, repo_id=repo_id))
 
     # files a.py, b.py  (c.py will be added later)
@@ -104,8 +111,6 @@ def test_repo_map_build_and_refresh():
     dr.symbolref.create(r1)
 
     # build project + graph
-    settings = ProjectSettings(project_path="/dummy")
-    project = Project(settings, dr, dr.repo.get_by_id(repo_id))
     rm = RepoMap(project)
     rm.initialize()                       # RepoMap now builds itself via `initialize`
 

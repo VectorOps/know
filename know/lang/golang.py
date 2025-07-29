@@ -17,8 +17,9 @@ from know.models import (
     ImportEdge,
     NodeRefType,
     File,
+    Repo,
 )
-from know.project import Project, ProjectCache
+from know.project import ProjectManager, ProjectCache
 from know.parsers import CodeParserRegistry
 from know.logger import logger
 from know.helpers import compute_file_hash, infer_visibility
@@ -48,10 +49,11 @@ class GolangCodeParser(AbstractCodeParser):
     language = ProgrammingLanguage.GO
     extensions = (".go",)
 
-    def __init__(self, project: Project, rel_path: str):
+    def __init__(self, pm: ProjectManager, repo: Repo, rel_path: str):
         self.parser = _get_parser()
         self.rel_path = rel_path
-        self.project = project
+        self.pm = pm
+        self.repo = repo
         self.source_bytes: bytes = b""
         self.module_path: Optional[str] = None
         self.module_root_abs_path: Optional[str] = None
@@ -128,10 +130,10 @@ class GolangCodeParser(AbstractCodeParser):
         from its directory, and cache the module path and its root directory.
         Uses a project-wide cache of all go.mod files for performance.
         """
-        project_path = self.project.settings.project_path
+        project_path = self.repo.root_path
 
         # Get (or build) a map of all go.mod files in the project
-        cache_key = f"go.project.gomods::{self.project.get_repo().id}"
+        cache_key = f"go.project.gomods::{self.repo.id}"
         gomods_map = cache.get(cache_key) if cache is not None else None
 
         if gomods_map is None:
@@ -219,7 +221,7 @@ class GolangCodeParser(AbstractCodeParser):
             return rel_dir or "."
 
         if self.module_path and self.module_root_abs_path:
-            project_path = self.project.settings.project_path
+            project_path = self.repo.root_path
             file_abs_dir = os.path.dirname(os.path.join(project_path, self.rel_path))
 
             rel_dir_from_module_root = os.path.relpath(file_abs_dir, self.module_root_abs_path).replace(os.sep, "/")
@@ -365,13 +367,13 @@ class GolangCodeParser(AbstractCodeParser):
         if import_path.startswith((".", "./", "../")):
             abs_target = os.path.normpath(
                 os.path.join(
-                    os.path.dirname(os.path.join(self.project.settings.project_path, self.parsed_file.path)),
+                    os.path.dirname(os.path.join(self.repo.root_path, self.parsed_file.path)),
                     import_path,
                 )
             )
-            if abs_target.startswith(self.project.settings.project_path) and os.path.isdir(abs_target):
+            if abs_target.startswith(self.repo.root_path) and os.path.isdir(abs_target):
                 physical_path = os.path.relpath(
-                    abs_target, self.project.settings.project_path
+                    abs_target, self.repo.root_path
                 ).replace(os.sep, "/")
                 external = False
 
@@ -384,13 +386,13 @@ class GolangCodeParser(AbstractCodeParser):
             abs_target = os.path.join(self.module_root_abs_path, sub_path)
             if os.path.isdir(abs_target):
                 physical_path = os.path.relpath(
-                    abs_target, self.project.settings.project_path
+                    abs_target, self.repo.root_path
                 ).replace(os.sep, "/")
                 external = False
 
         # 3) plain “path” that maps directly into project directory
         else:
-            abs_target = os.path.join(self.project.settings.project_path, import_path)
+            abs_target = os.path.join(self.repo.root_path, import_path)
             if os.path.isdir(abs_target):
                 physical_path = import_path
                 external = False

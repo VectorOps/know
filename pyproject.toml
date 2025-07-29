@@ -52,4 +52,5 @@ dev = [
     "prompt-toolkit>=3.0.51",
     "mypy>=1.17.0",
     "pandas-stubs>=2.3.0.250703",
+    "types-networkx>=3.5.0.20250728",
 ]

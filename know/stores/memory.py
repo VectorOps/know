@@ -520,6 +520,16 @@ class InMemoryDataRepository(AbstractDataRepository):
     @property
     def repo(self) -> AbstractRepoRepository:
         """Access the repo metadata repository."""
+        return self._repo
+
+    @property
+    def package(self) -> AbstractPackageRepository:
+        """Access the package metadata repository"""
+        return self._package
+
+    @property
+    def file(self) -> AbstractFileRepository:
+        """Access the file metadata repository"""
         return self._file
 
     @property

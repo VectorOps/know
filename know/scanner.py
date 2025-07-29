@@ -10,10 +10,11 @@ import pathspec
 from dataclasses import dataclass, field
 import time
 
-from know.project import ScanResult
+from know.project import ScanResult, ProjectManager, ProjectCache
 from know.helpers import compute_file_hash, generate_id, parse_gitignore
 from know.logger import logger
 from know.models import (
+    Repo,
     File,
     Package,
     Node,
@@ -21,9 +22,8 @@ from know.models import (
     NodeKind,
     NodeRef,
 )
-from know.data import NodeSearchQuery, NodeFilter, ImportEdgeFilter
+from know.data import NodeSearchQuery, NodeFilter, ImportEdgeFilter, PackageFilter
 from know.parsers import CodeParserRegistry, ParsedFile, ParsedNode, ParsedImportEdge
-from know.project import Project, ProjectCache
 from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings, schedule_symbol_embedding
 
 
@@ -54,7 +54,14 @@ class ProcessFileResult:
 
 
 
-def _process_file(project: Project, path: Path, root: Path, gitignore: "pathspec.PathSpec", cache: ProjectCache) -> ProcessFileResult:
+def _process_file(
+    pm: ProjectManager,
+    repo: Repo,
+    path: Path,
+    root: Path,
+    gitignore: "pathspec.PathSpec",
+    cache: ProjectCache,
+) -> ProcessFileResult:
     file_proc_start = time.perf_counter()
     rel_path_str = str(path.relative_to(root))
     suffix = path.suffix or "no_suffix"
@@ -66,8 +73,8 @@ def _process_file(project: Project, path: Path, root: Path, gitignore: "pathspec
             return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
 
         # mtime-based change detection
-        file_repo = project.data_repository.file
-        existing_meta = file_repo.get_by_path(rel_path_str)
+        file_repo = pm.data.file
+        existing_meta = file_repo.get_by_path(repo.id, rel_path_str)
 
         mod_time = path.stat().st_mtime
         if existing_meta and existing_meta.last_updated == mod_time:
@@ -93,7 +100,7 @@ def _process_file(project: Project, path: Path, root: Path, gitignore: "pathspec
                 mod_time=mod_time,
             )
 
-        parser = parser_cls(project, rel_path_str)
+        parser = parser_cls(pm, repo, rel_path_str)
         parsed_file = parser.parse(cache)
         duration = time.perf_counter() - file_proc_start
         return ProcessFileResult(
@@ -115,16 +122,16 @@ def _process_file(project: Project, path: Path, root: Path, gitignore: "pathspec
         )
 
 
-def scan_project_directory(project: Project) -> ScanResult:
+def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
     """
     Recursively walk the project directory, parse every supported source file
     and store parsing results via the project-wide data repository.
     """
     start_time = time.perf_counter()
     result = ScanResult()
-    root_path: str | None = project.settings.project_path
+    root_path: str | None = repo.root_path
     if not root_path:
-        logger.warning("scan_project_directory skipped – project_path is not set.")
+        logger.warning("scan_repo skipped – repo path is not set.")
         return ScanResult()
 
     processed_paths: set[str] = set()
@@ -141,7 +148,7 @@ def scan_project_directory(project: Project) -> ScanResult:
 
     all_files = list(root.rglob("*"))
 
-    num_workers = project.settings.scanner_num_workers
+    num_workers = pm.settings.scanner_num_workers
     if num_workers is None:
         try:
             cpus = os.cpu_count()
@@ -154,7 +161,7 @@ def scan_project_directory(project: Project) -> ScanResult:
 
     logger.debug("number of workers", count=num_workers)
 
-    file_repo = project.data_repository.file
+    file_repo = pm.data.file
 
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = []
@@ -165,11 +172,11 @@ def scan_project_directory(project: Project) -> ScanResult:
                 continue
 
             # Skip ignored directories
-            if any(part in project.settings.ignored_dirs for part in rel_path.parts):
+            if any(part in pm.settings.ignored_dirs for part in rel_path.parts):
                 continue
 
             processed_paths.add(str(rel_path))
-            futures.append(executor.submit(_process_file, project, path, root, gitignore, cache))
+            futures.append(executor.submit(_process_file, pm, repo, path, root, gitignore, cache))
 
         total_tasks = len(futures)
         for idx, future in enumerate(as_completed(futures)):
@@ -198,7 +205,7 @@ def scan_project_directory(project: Project) -> ScanResult:
                     assert res.mod_time is not None
                     fm = File(
                         id=generate_id(),
-                        repo_id=project.get_repo().id,
+                        repo_id=repo.id,
                         package_id=None,  # no package context
                         path=res.rel_path,
                         file_hash=res.file_hash,
@@ -218,21 +225,21 @@ def scan_project_directory(project: Project) -> ScanResult:
 
             elif res.status == ProcessFileStatus.PARSED_FILE:
                 assert res.parsed_file is not None
-                upsert_parsed_file(project, state, res.parsed_file)
+                upsert_parsed_file(pm, repo, state, res.parsed_file)
                 if res.existing_meta is None:
                     result.files_added.append(res.parsed_file.path)
                 else:
                     result.files_updated.append(res.parsed_file.path)
 
     #  Remove stale metadata for files that have disappeared from disk
-    file_repo   = project.data_repository.file
-    symbol_repo   = project.data_repository.symbol
-    symbolref_repo = project.data_repository.symbolref
-    repo_id     = project.get_repo().id
+    file_repo   = pm.data.file
+    symbol_repo   = pm.data.symbol
+    symbolref_repo = pm.data.symbolref
+    repo_id = repo.id
 
     # All File currently stored for this repo
     from know.data import FileFilter
-    existing_files = file_repo.get_list(FileFilter(repo_id=repo_id))
+    existing_files = file_repo.get_list(FileFilter(repo_id=[repo_id]))
 
     for fm in existing_files:
         if fm.path not in processed_paths:
@@ -244,27 +251,26 @@ def scan_project_directory(project: Project) -> ScanResult:
             result.files_deleted.append(fm.path)
 
     #  Remove Package entries that lost all their files
-    from know.data import PackageFilter
-    package_repo = project.data_repository.package
+    package_repo = pm.data.package
     removed_pkgs = package_repo.delete_orphaned()
     if removed_pkgs:
         logger.debug("Deleted orphaned packages.", packages=removed_pkgs)
 
     # Resolve orphaned method symbols → assign missing parent references
-    assign_parents_to_orphan_methods(project)
+    assign_parents_to_orphan_methods(pm, repo)
 
     # Resolve import edges
-    resolve_pending_import_edges(project, state)
+    resolve_pending_import_edges(pm, repo, state)
 
     # Refresh any full text indexes
-    project.data_repository.refresh_full_text_indexes()
+    pm.data.refresh_full_text_indexes()
 
-    schedule_missing_embeddings(project)
-    schedule_outdated_embeddings(project)
+    schedule_missing_embeddings(pm, repo)
+    schedule_outdated_embeddings(pm, repo)
 
     duration = time.perf_counter() - start_time
     logger.debug(
-        "scan_project_directory finished.",
+        "scan_repo finished.",
         duration=f"{duration:.3f}s",
         files_added=len(result.files_added),
         files_updated=len(result.files_updated),
@@ -285,42 +291,38 @@ def scan_project_directory(project: Project) -> ScanResult:
     return result
 
 
-def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: ParsedFile) -> None:
+def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, parsed_file: ParsedFile) -> None:
     """
     Persist *parsed_file* (package → file → symbols) into the
     project's data-repository. If an entity already exists it is
     updated, otherwise it is created (“upsert”).
     """
-    repo_store = project.data_repository
-
-    # ── Package ─────────────────────────────────────────────────────────────
-    pkg_repo = repo_store.package
-    pkg_meta = pkg_repo.get_by_virtual_path(parsed_file.package.virtual_path)
+    # Package
+    pkg_meta = pm.data.package.get_by_virtual_path(repo.id, parsed_file.package.virtual_path)
 
     pkg_data = parsed_file.package.to_dict()
-    pkg_data["repo_id"] = project.get_repo().id
+    pkg_data["repo_id"] = repo.id
 
     if pkg_meta:
-        pkg_repo.update(pkg_meta.id, pkg_data)
+        pm.data.package.update(pkg_meta.id, pkg_data)
     else:
         pkg_meta = Package(id=generate_id(), **pkg_data)
-        pkg_meta = pkg_repo.create(pkg_meta)
+        pkg_meta = pm.data.package.create(pkg_meta)
 
-    # ── File ────────────────────────────────────────────────────────────────
-    file_repo = repo_store.file
-    file_meta = file_repo.get_by_path(parsed_file.path)
+    # File
+    file_meta = pm.data.file.get_by_path(repo.id, parsed_file.path)
 
     file_data = parsed_file.to_dict()
-    file_data.update({"package_id": pkg_meta.id, "repo_id": project.get_repo().id})
+    file_data.update({"package_id": pkg_meta.id, "repo_id": repo.id})
 
     if file_meta:
-        file_repo.update(file_meta.id, file_data)
+        pm.data.file.update(file_meta.id, file_data)
     else:
         file_meta = File(id=generate_id(), **file_data)
-        file_meta = file_repo.create(file_meta)
+        file_meta = pm.data.file.create(file_meta)
 
-    # ── Import edges (package-level) ─────────────────────────────────────────
-    import_repo = repo_store.importedge
+    # Import edges (package-level)
+    import_repo = pm.data.importedge
 
     # Existing edges from this file and package
     existing_edges = import_repo.get_list(ImportEdgeFilter(source_file_id=file_meta.id))
@@ -337,7 +339,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         if parsed_imp.external or not parsed_imp.virtual_path:
             return None
 
-        pkg = repo_store.package.get_by_virtual_path(parsed_imp.virtual_path)
+        pkg = pm.data.package.get_by_virtual_path(repo.id, parsed_imp.virtual_path)
         return pkg.id if pkg else None
 
     new_keys: set[tuple[str | None, str | None, bool]] = set()
@@ -352,7 +354,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         kwargs = imp.to_dict()
         kwargs.update(
             {
-                "repo_id": project.get_repo().id,
+                "repo_id": repo.id,
                 "from_package_id": pkg_meta.id,
                 "from_file_id": file_meta.id,
                 "to_package_id": to_pkg_id,
@@ -374,7 +376,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
             import_repo.delete(edge.id)
 
     # Symbols (re-create)
-    symbol_repo = repo_store.symbol
+    symbol_repo = pm.data.symbol
 
     # collect existing symbols
     existing_symbols = symbol_repo.get_list(NodeFilter(file_id=file_meta.id))
@@ -388,7 +390,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         _get_embedding_text(s.body, s.docstring): s for s in existing_symbols
     }
 
-    emb_calc = project.embeddings
+    emb_calc = pm.embeddings
 
     def _insert_symbol(psym: ParsedNode,
                        parent_id: str | None = None) -> str:
@@ -401,7 +403,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         sm_data: dict[str, Any] = psym.to_dict()
         sm_data.update({
             "id": generate_id(),
-            "repo_id": project.get_repo().id,
+            "repo_id": repo.id,
             "file_id": file_meta.id,
             "package_id": pkg_meta.id,
             "parent_node_id": parent_id,
@@ -426,7 +428,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
                 emb_calc,
                 sym_id=sm.id,
                 body=embedding_text,
-                sync=project.settings.sync_embeddings,
+                sync=pm.settings.sync_embeddings,
             )
 
         # recurse into children
@@ -435,14 +437,12 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
 
         return sm.id
 
-    # TODO: delete by array of ids after inserting
     symbol_repo.delete_by_file_id(file_meta.id)
-
     for sym in parsed_file.symbols:
         _insert_symbol(sym)
 
     # ── Symbol References ───────────────────────────────────────────────────
-    symbolref_repo = repo_store.symbolref
+    symbolref_repo = pm.data.symbolref
 
     # remove all old refs for this file
     symbolref_repo.delete_by_file_id(file_meta.id)
@@ -451,7 +451,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
     def _resolve_pkg_id(virt_path: str | None) -> str | None:
         if not virt_path:
             return None
-        pkg = repo_store.package.get_by_virtual_path(virt_path)
+        pkg = pm.data.package.get_by_virtual_path(repo.id, virt_path)
         return pkg.id if pkg else None
 
     # (re)create refs from the freshly parsed data
@@ -460,7 +460,7 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         to_pkg_id = _resolve_pkg_id(ref_data.pop("to_package_virtual_path"))
         ref_data.update(
             {
-                "repo_id": project.get_repo().id,
+                "repo_id": repo.id,
                 "package_id": pkg_meta.id,
                 "file_id": file_meta.id,
                 "to_package_id": to_pkg_id,
@@ -469,14 +469,14 @@ def upsert_parsed_file(project: Project, state: ParsingState, parsed_file: Parse
         symbolref_repo.create(NodeRef(id=generate_id(), **ref_data))
 
 
-def assign_parents_to_orphan_methods(project: Project) -> None:
+def assign_parents_to_orphan_methods(pm: ProjectManager, repo: Repo) -> None:
     """
     Find method symbols whose parent reference is missing and link them
     to the most specific class / interface (incl. Go struct) in the
     same package, based on FQN prefix matching.
     """
-    symbol_repo = project.data_repository.symbol
-    repo_id = project.get_repo().id
+    symbol_repo = pm.data.symbol
+    repo_id = repo.id
 
     PAGE_SIZE = 1_000
     orphan_methods: list[Node] = []
@@ -484,7 +484,7 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
     while True:
         page = symbol_repo.get_list(
             NodeFilter(
-                repo_id=repo_id,
+                repo_id=[repo_id],
                 kind=NodeKind.METHOD,
                 top_level_only=True,
                 limit=PAGE_SIZE,
@@ -531,16 +531,16 @@ def assign_parents_to_orphan_methods(project: Project) -> None:
                 symbol_repo.update(meth.id, {"parent_node_id": best_parent.id})
 
 
-def resolve_pending_import_edges(project: Project, state: ParsingState) -> None:
-    pkg_repo  = project.data_repository.package
-    imp_repo  = project.data_repository.importedge
+def resolve_pending_import_edges(pm: ProjectManager, repo: Repo, state: ParsingState) -> None:
+    pkg_repo  = pm.data.package
+    imp_repo  = pm.data.importedge
 
     for edge in list(state.pending_import_edges):
         if edge.external or edge.to_package_id is not None:
             continue
         if edge.to_package_physical_path is None:
             continue
-        pkg = pkg_repo.get_by_physical_path(edge.to_package_physical_path)
+        pkg = pkg_repo.get_by_physical_path(repo.id, edge.to_package_physical_path)
         if pkg:
             imp_repo.update(edge.id, {"to_package_id": pkg.id})
             edge.to_package_id = pkg.id

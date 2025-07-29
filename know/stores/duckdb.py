@@ -40,12 +40,13 @@ from know.data import (
     include_direct_descendants,
     resolve_node_hierarchy,
     NodeFilter,
+    NodeRefFilter,
     ImportEdgeFilter,
     AbstractProjectRepository,
     AbstractProjectRepoRepository,
     RepoFilter,
 )
-from know.data import NodeRefFilter
+from know.helpers import generate_id
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -336,8 +337,8 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
     def add_repo_id(self, project_id: str, repo_id: str) -> None:
         q = (
             Query.into(self._table)
-            .columns(self._table.project_id, self._table.repo_id)
-            .insert(project_id, repo_id)
+            .columns(self._table.id, self._table.project_id, self._table.repo_id)
+            .insert(generate_id(), project_id, repo_id)
         )
         self._execute(q)
 
@@ -603,10 +604,9 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         syms = include_direct_descendants(self, syms)
         return syms
 
-    def delete_by_file_id(self, file_id: str) -> int:
+    def delete_by_file_id(self, file_id: str) -> None:
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
-        res = self._execute(q)
-        return res[0]["count_star()"] if res else 0
+        self._execute(q)
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[Node]:
         syms = super().get_list_by_ids(symbol_ids)
@@ -681,10 +681,9 @@ class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
         rows = self._execute(q)
         return [self.model(**self._deserialize_data(r)) for r in rows]
 
-    def delete_by_file_id(self, file_id: str) -> int:
+    def delete_by_file_id(self, file_id: str) -> None:
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
         res = self._execute(q)
-        return res[0]["count_star()"] if res else 0
 
 # Data-repository
 class DuckDBDataRepository(AbstractDataRepository):

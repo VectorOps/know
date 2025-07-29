@@ -12,9 +12,9 @@ from know.parsers import (
 from know.models import (
     ProgrammingLanguage, NodeKind, Visibility, Modifier,
     NodeSignature, NodeParameter, Node, ImportEdge,
-    NodeRefType, File
+    NodeRefType, File, Repo
 )
-from know.project import Project, ProjectCache
+from know.project import ProjectManager, ProjectCache
 from know.helpers import compute_file_hash
 from know.logger import logger
 
@@ -59,12 +59,13 @@ class JavaScriptCodeParser(AbstractCodeParser):
             constructor: [(identifier) (member_expression)] @ctor) @new
     """)
 
-    def __init__(self, project: Project, rel_path: str):
-        self.parser      = _get_parser()
-        self.project     = project
-        self.rel_path    = rel_path
+    def __init__(self, pm: ProjectManager, repo: Repo, rel_path: str):
+        self.parser = _get_parser()
+        self.pm = pm
+        self.repo = repo
+        self.rel_path  = rel_path
         self.source_bytes: bytes = b""
-        self.package     : ParsedPackage | None = None
+        self.package : ParsedPackage | None = None
         self.parsed_file : ParsedFile  | None = None
 
     def _handle_file(self, root_node: ts.Node) -> None:
@@ -135,7 +136,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 for suf in self.extensions:
                     cand = f"{rel_candidate}{suf}"
                     if os.path.exists(
-                        os.path.join(self.project.settings.project_path, cand)
+                        os.path.join(self.repo.root_path, cand)
                     ):
                         rel_candidate = cand
                         break

@@ -18,8 +18,9 @@ from know.models import (
     ImportEdge,
     NodeRefType,
     File,
+    Repo,
 )
-from know.project import Project, ProjectCache
+from know.project import ProjectManager, ProjectCache
 from know.settings import PythonSettings
 from know.parsers import CodeParserRegistry
 from know.logger import logger
@@ -42,15 +43,16 @@ class PythonCodeParser(AbstractCodeParser):
     language = ProgrammingLanguage.PYTHON
     extensions = (".py",)
 
-    def __init__(self, project: Project, rel_path: str):
+    def __init__(self, pm: ProjectManager, repo: Repo, rel_path: str):
         self.parser = _get_parser()
-        self.project = project
+        self.pm = pm
+        self.repo = repo
         self.rel_path = rel_path
         self.source_bytes: bytes = b""
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
-        lang_settings = self.project.settings.languages.get(self.language.value, PythonSettings())
+        lang_settings = self.pm.settings.languages.get(self.language.value, PythonSettings())
         if not isinstance(lang_settings, PythonSettings):
             logger.warning(
                 "Python language settings are not of the correct type, using defaults.",
@@ -769,7 +771,7 @@ class PythonCodeParser(AbstractCodeParser):
         if not import_path:
             return None
 
-        project_root = Path(self.project.settings.project_path).resolve()
+        project_root = Path(self.repo.root_path).resolve()
         parts = import_path.split(".")
         found: Optional[Path] = None  # remember the most-specific hit
 
@@ -797,7 +799,7 @@ class PythonCodeParser(AbstractCodeParser):
         path_obj = self._locate_module_path(import_path)
         if path_obj is None:
             return None
-        project_root = Path(self.project.settings.project_path).resolve()
+        project_root = Path(self.repo.root_path).resolve()
         return path_obj.relative_to(project_root).as_posix()
 
     def _is_local_import(self, import_path: str) -> bool:

@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from collections import defaultdict
 from typing import Dict, Optional, Sequence, Set, List
 from litellm import token_counter
+import networkx as nx
 
 from .base import BaseTool, MCPToolDefinition
-import networkx as nx  # type: ignore
 from pydantic import BaseModel, Field
 from know.logger import logger
-from know.project import Project, ScanResult, ProjectComponent
+from know.project import ProjectManager, ScanResult, ProjectComponent
 from know.models import Node, Visibility
 from know.file_summary import SummaryMode, build_file_summary
 from know.data import FileFilter, NodeFilter, NodeRefFilter
@@ -56,10 +56,10 @@ class RepoMap(ProjectComponent):
     """Component that maintains the heterograph of files and symbols."""
     component_name = "repomap"
 
-    def __init__(self, project: Project):
+    def __init__(self, pm: ProjectManager):
         """Initialize the RepoMap component."""
-        super().__init__(project)
-        self.G = nx.MultiDiGraph()
+        super().__init__(pm)
+        self.G: nx.MultiDiGraph = nx.MultiDiGraph()
         self._path_to_fid: Dict[str, str] = {}
 
         # caches for fast weight computations
@@ -142,7 +142,7 @@ class RepoMap(ProjectComponent):
     # ---------- graph construction --------------------------------------
     def _rebuild_graph(self) -> None:
         """(Re)build the 2-layer heterograph from the current caches."""
-        G = nx.MultiDiGraph()
+        G: nx.MultiDiGraph = nx.MultiDiGraph()
 
         # -- add nodes ----------------------------------------------------
         for path in self._path_to_fid.keys():
@@ -180,10 +180,10 @@ class RepoMap(ProjectComponent):
 
     def _collect_caches_full(self) -> None:
         """Populate _defs / _refs / _name_props / _path_to_fid from scratch."""
-        repo_id        = self.project.get_repo().id
-        file_repo      = self.project.data_repository.file
-        symbol_repo    = self.project.data_repository.symbol
-        symbolref_repo = self.project.data_repository.symbolref
+        repo_id        = self.pm.default_repo.id
+        file_repo      = self.pm.data.file
+        symbol_repo    = self.pm.data.symbol
+        symbolref_repo = self.pm.data.symbolref
 
         # clear previous state
         self._defs.clear()
@@ -191,7 +191,7 @@ class RepoMap(ProjectComponent):
         self._name_props.clear()
         self._path_to_fid.clear()
 
-        for fm in file_repo.get_list(FileFilter(repo_id=repo_id)):
+        for fm in file_repo.get_list(FileFilter(repo_id=[repo_id])):
             path, fid = fm.path, fm.id
             self._path_to_fid[path] = fid
 
@@ -213,9 +213,11 @@ class RepoMap(ProjectComponent):
         stays exactly the same as before; we simply call `_rebuild_graph()`
         at the end so that the heterograph is always current.
         """
-        file_repo      = self.project.data_repository.file
-        symbol_repo    = self.project.data_repository.symbol
-        symbolref_repo = self.project.data_repository.symbolref
+        file_repo      = self.pm.data.file
+        symbol_repo    = self.pm.data.symbol
+        symbolref_repo = self.pm.data.symbolref
+
+        print(scan)
 
         # ----- deletions -------------------------------------------------
         for rel_path in scan.files_deleted:
@@ -232,7 +234,7 @@ class RepoMap(ProjectComponent):
         # ----- additions / updates --------------------------------------
         changed = list(scan.files_added) + list(scan.files_updated)
         for rel_path in changed:
-            fm = file_repo.get_by_path(rel_path)
+            fm = file_repo.get_by_path(self.pm.default_repo.id, rel_path)
             if fm is None:
                 continue
             path, fid = fm.path, fm.id
@@ -319,14 +321,14 @@ class RepoMapTool(BaseTool):
     tool_output = List[RepoMapScore]
 
     def __init__(self, *a, **kw):
-        from know.project import Project
-        Project.register_component(RepoMap)   # one-time registration
+        from know.project import ProjectManager
+        ProjectManager.register_component(RepoMap)
         super().__init__(*a, **kw)
 
     # ------------- public ‘execute’ ----------------------------------
     def execute(
         self,
-        project: Project,
+        pm: ProjectManager,
         req: RepoMapReq,
     ) -> List[RepoMapScore]:
         summary_mode = req.summary_mode
@@ -335,11 +337,11 @@ class RepoMapTool(BaseTool):
 
         _t_start = time.perf_counter()
 
-        repomap = project.get_component("repomap")
+        repomap = pm.get_component("repomap")
         if not isinstance(repomap, RepoMap):
             raise RuntimeError(
                 "RepoMap component is missing. Call "
-                "`project.get_component('repomap')` (or ensure it is "
+                "`pm.get_component('repomap')` (or ensure it is "
                 "initialised) before using this tool."
             )
 
@@ -367,7 +369,7 @@ class RepoMapTool(BaseTool):
                     tok = tok[:-1]
                 if not tok:
                     continue
-                if len(tok) < project.settings.repomap.min_symbol_len:
+                if len(tok) < pm.settings.repomap.min_symbol_len:
                     continue
 
                 last = tok.rsplit(".", 1)[-1]
@@ -376,7 +378,7 @@ class RepoMapTool(BaseTool):
                     for s in known_syms_lower_map[tok]:
                         symbol_names_set.add(s)
 
-                if len(last) >= project.settings.repomap.min_symbol_len and last in known_syms_lower_map:
+                if len(last) >= pm.settings.repomap.min_symbol_len and last in known_syms_lower_map:
                     for s in known_syms_lower_map[last]:
                         symbol_names_set.add(s)
 
@@ -415,7 +417,7 @@ class RepoMapTool(BaseTool):
         #  2. Run Random-Walk-with-Restart (= personalised PageRank)
         pr = nx.pagerank(
             G,
-            alpha=(1.0 - project.settings.repomap.restart_prob),
+            alpha=(1.0 - pm.settings.repomap.restart_prob),
             personalization=personalization,
             weight="weight",
         )
@@ -438,7 +440,8 @@ class RepoMapTool(BaseTool):
 
             effective_mode = SummaryMode.Skip if skip_summary else summary_mode
             fs = build_file_summary(
-                project,
+                pm,
+                pm.default_repo,
                 path,
                 effective_mode,
             )
@@ -522,9 +525,9 @@ class RepoMapTool(BaseTool):
             },
         }
 
-    def get_mcp_definition(self, project: Project) -> MCPToolDefinition:
+    def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         def repomap(req: RepoMapReq) -> List[RepoMapScore]:
-            return self.execute(project, req)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(

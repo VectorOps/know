@@ -3,10 +3,7 @@ from typing import Any, Optional, Type, Dict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
-from know.models import (
-    Repo, File, Package, Node,
-    ImportEdge, Vector, NodeKind
-)
+from know.models import Project, ProjectRepo, Vector, Repo
 from know.data import AbstractDataRepository, NodeSearchQuery
 from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
@@ -29,13 +26,8 @@ class ProjectComponent(ABC):
 
     component_name: str | None = None
 
-    def __init__(self, project: "Project"):
-        self.project = project
-
-    @classmethod
-    def get_registered_components(cls):
-        from know.project import Project
-        return dict(Project._component_registry)
+    def __init__(self, pm: "ProjectManager"):
+        self.pm = pm
 
     @abstractmethod
     def initialize(self) -> None:
@@ -50,12 +42,7 @@ class ProjectComponent(ABC):
         ...
 
 
-class Project:
-    """
-    Represents a single project and offers various APIs to get information
-    about the project or notify of project file changes.
-    """
-
+class ProjectManager:
     _component_registry: Dict[str, Type[ProjectComponent]] = {}
 
     @classmethod
@@ -70,14 +57,14 @@ class Project:
     def __init__(
         self,
         settings: ProjectSettings,
-        data_repository: AbstractDataRepository,
-        repo_metadata: Repo,
+        data: AbstractDataRepository,
         embeddings: EmbeddingWorker | None = None,
     ):
         self.settings = settings
-        self.data_repository = data_repository
-        self._repo_metadata = repo_metadata
+        self.data = data
         self.embeddings = embeddings
+
+        self._init_project()
 
         self._components: dict[str, ProjectComponent] = {}
         for name, comp_cls in self._component_registry.items():
@@ -88,6 +75,61 @@ class Project:
             except Exception as exc:
                 logger.error("Component failed to initialize", name=name, exc=exc)
 
+    def _init_project(self):
+        project = self.data.project.get_by_name(self.settings.project_name)
+        if project is None:
+            project = Project(
+                id=generate_id(),
+                name=self.settings.project_name,
+            )
+            self.data.project.create(project)
+        self.project = project
+
+        self.repo_ids = self.data.prj_repo.get_repo_ids(project.id)
+
+        self.default_repo = self.add_repo_path(self.settings.repo_path)
+
+    # Simple repo management
+    def add_repo_path(self, path):
+        repo = self.data.repo.get_by_path(path)
+        if repo is None:
+            repo = Repo(
+                id=generate_id(),
+                root_path=path,
+            )
+            self.data.repo.create(repo)
+
+        if repo.id not in self.repo_ids:
+            self.repo_ids.append(repo.id)
+            self.data.prj_repo.add_repo_id(self.project.id, repo.id)
+
+        return repo
+
+    def remove_repo(self, repo_id):
+        if repo_id in self.repo_ids:
+            self.repo_ids.remove(repo_id)
+
+        self.data.prj_repo.remove_project_repo(self.project.id, repo_id)
+
+    # Single repo refresh helper
+    def refresh(self, repo=None):
+        if repo is None:
+            repo = self.default_repo
+
+        from know import scanner
+        scan_result = scanner.scan_repo(self, repo)
+
+        self.refresh_components(scan_result)
+
+    def refresh_components(self, scan_result):
+        for name, comp in self._components.items():
+            try:
+                # TODO: pass repo to refresh
+                comp.refresh(scan_result)
+            except Exception as exc:
+                logger.error("Component failed to refresh", name=name, exc=exc)
+
+    # Pluggable lifecycle components
     def add_component(self, name: str, component: ProjectComponent) -> None:
         """Register *component* under *name* and immediately call initialise()."""
         if name in self._components:
@@ -99,21 +141,11 @@ class Project:
         except Exception as exc:
             logger.error("Component failed to initialize", name=name, exc=exc)
 
-    register_component_instance = add_component
-
-    def get_repo(self) -> Repo:
-        """Return related Repo."""
-        return self._repo_metadata
-
-    def __getattr__(self, item: str):
-        if item in self._components:
-            return self._components[item]
-        raise AttributeError(f"{self.__class__.__name__} has no attribute {item!r}")
-
     def get_component(self, name: str) -> ProjectComponent | None:
         """Return registered component (or None when unknown)."""
         return self._components.get(name)
 
+    # Embedding helper
     def compute_embedding(
         self,
         text: str,
@@ -123,17 +155,7 @@ class Project:
 
         return self.embeddings.get_embedding(text)
 
-    def refresh(self):
-        from know import scanner
-        scan_result = scanner.scan_project_directory(self)
-
-        for name, comp in self._components.items():
-            try:
-                comp.refresh(scan_result)
-            except Exception as exc:
-                logger.error("Component failed to refresh", name=name, exc=exc)
-
-    # teardown helpers
+    # teardown helper
     def destroy(self, *, timeout: float | None = None) -> None:
         """
         Release every resource held by this Project instance.
@@ -153,7 +175,7 @@ class Project:
             self.embeddings = None
 
         try:
-            self.data_repository.close()
+            self.data.close()
         except Exception as exc:
             logger.error("Failed to close data repository", exc=exc)
 
@@ -177,32 +199,22 @@ class ProjectCache:
         self._cache.clear()
 
 
-def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
+def init_project(settings: ProjectSettings, refresh: bool = True) -> ProjectManager:
     """
     Initializes the project. Settings object contains project path and/or project id.
     Then init project checks if Repo exists for the id (if provided) or absolute path.
     If it does not exist - creates a new Repo and sets that on Project instance that's returned.
     Finally, kicks off a function to recursively scan the project directory.
     """
+    # TODO: Move registration out
     backend = settings.repository_backend or "memory"
-    data_repository: AbstractDataRepository
+    data: AbstractDataRepository
     if backend == "duckdb":
-        data_repository = DuckDBDataRepository(db_path=settings.repository_connection)
+        data = DuckDBDataRepository(db_path=settings.repository_connection)
     elif backend == "memory":
-        data_repository = InMemoryDataRepository()
+        data = InMemoryDataRepository()
     else:
         raise ValueError(f"Unsupported repository backend: {backend}")
-
-    repo_repository = data_repository.repo
-
-    repo_metadata = repo_repository.get_by_path(settings.project_path)
-    if not repo_metadata:
-        # Create new Repo
-        repo_metadata = Repo(
-            id=generate_id(),
-            root_path=settings.project_path,
-        )
-        repo_repository.create(repo_metadata)
 
     embeddings: EmbeddingWorker | None = None
     if settings.embedding and settings.embedding.enabled:
@@ -215,18 +227,17 @@ def init_project(settings: ProjectSettings, refresh: bool = True) -> Project:
             batch_size=settings.embedding.batch_size,
         )
 
-    project = Project(
+    pm = ProjectManager(
         settings,
-        data_repository,
-        repo_metadata,
-        embeddings=embeddings,   # pass along
+        data,
+        embeddings=embeddings,
     )
 
     # Recursively scan the project directory and parse source files
     if refresh:
-        project.refresh()
+        pm.refresh()
         # enqueue embeddings for symbols that still miss them
         from know import scanner as _scanner
-        _scanner.schedule_missing_embeddings(project)
+        _scanner.schedule_missing_embeddings(pm, pm.default_repo)
 
-    return project
+    return pm

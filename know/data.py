@@ -1,6 +1,8 @@
 from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
 from know.models import (
+    Project,
+    ProjectRepo,
     Repo,
     Package,
     File,
@@ -14,7 +16,48 @@ from know.models import (
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List
 
-# helper: enrich result-set with direct descendants
+
+class AbstractProjectRepository(ABC):
+    @abstractmethod
+    def get_by_id(self, repo_id: str) -> Optional[Project]:
+        pass
+
+    @abstractmethod
+    def get_list_by_ids(self, project_ids: List[str]) -> List[Project]:
+        pass
+
+    @abstractmethod
+    def create(self, prj: Project) -> Project:
+        pass
+
+    @abstractmethod
+    def update(self, prj_id: str, data: Dict[str, Any]) -> Optional[Project]:
+        pass
+
+    @abstractmethod
+    def delete(self, prj_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_by_name(self, name) -> Optional[Project]:
+        pass
+
+
+class AbstractProjectRepoRepository(ABC):
+    @abstractmethod
+    def get_repo_ids(self, project_id) -> List[str]:
+        pass
+
+    @abstractmethod
+    def add_repo_id(self, project_id, repo_id):
+        pass
+
+
+@dataclass
+class RepoFilter:
+    project_id: Optional[str] = None
+
+
 class AbstractRepoRepository(ABC):
     @abstractmethod
     def get_by_id(self, repo_id: str) -> Optional[Repo]:
@@ -22,6 +65,10 @@ class AbstractRepoRepository(ABC):
 
     @abstractmethod
     def get_list_by_ids(self, repo_ids: List[str]) -> List[Repo]:
+        pass
+
+    @abstractmethod
+    def get_list(self, flt: RepoFilter) -> List[Repo]:
         pass
 
     @abstractmethod
@@ -44,7 +91,7 @@ class AbstractRepoRepository(ABC):
 
 @dataclass
 class PackageFilter:
-    repo_id: Optional[str] = None
+    repo_id: Optional[List[str]] = None
 
 
 class AbstractPackageRepository(ABC):
@@ -61,12 +108,12 @@ class AbstractPackageRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_physical_path(self, root_path: str) -> Optional[Package]:
+    def get_by_physical_path(self, repo_id: str, root_path: str) -> Optional[Package]:
         """Get a repo by its root path."""
         pass
 
     @abstractmethod
-    def get_by_virtual_path(self, root_path: str) -> Optional[Package]:
+    def get_by_virtual_path(self, repo_id: str, root_path: str) -> Optional[Package]:
         """Get a repo by its root path."""
         pass
 
@@ -89,7 +136,7 @@ class AbstractPackageRepository(ABC):
 
 @dataclass
 class FileFilter:
-    repo_id: Optional[str] = None
+    repo_id: Optional[List[str]] = None
     package_id: Optional[str] = None
 
 
@@ -115,7 +162,7 @@ class AbstractFileRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_path(self, path: str) -> Optional[File]:
+    def get_by_path(self, repo_id: str, path: str) -> Optional[File]:
         """Get a file by its project-relative path."""
         pass
 
@@ -128,7 +175,7 @@ class AbstractFileRepository(ABC):
 @dataclass
 class NodeFilter:
     parent_ids: Optional[List[str]] = None
-    repo_id: Optional[str] = None
+    repo_id: Optional[List[str]] = None
     file_id: Optional[str] = None
     package_id: Optional[str] = None
     kind: Optional[NodeKind] = None
@@ -170,10 +217,6 @@ class AbstractNodeRepository(ABC):
 
     @abstractmethod
     def delete_by_file_id(self, file_id: str) -> None:
-        """
-        Delete every Node whose ``file_id`` equals *file_id*.
-        Return number of deleted rows.
-        """
         pass
 
     @abstractmethod
@@ -199,9 +242,9 @@ class AbstractNodeRepository(ABC):
 
 @dataclass
 class ImportEdgeFilter:
+    repo_id: Optional[List[str]] = None
     source_package_id: Optional[str] = None
     source_file_id: Optional[str] = None
-    repo_id: Optional[str] = None
 
 
 class AbstractImportEdgeRepository(ABC):
@@ -232,9 +275,9 @@ class AbstractImportEdgeRepository(ABC):
 
 @dataclass
 class NodeRefFilter:
+    repo_id: Optional[List[str]] = None
     file_id: Optional[str] = None
     package_id: Optional[str] = None
-    repo_id: Optional[str] = None
 
 
 class AbstractNodeRefRepository(ABC):
@@ -274,6 +317,16 @@ class AbstractNodeRefRepository(ABC):
 class AbstractDataRepository(ABC):
     @abstractmethod
     def close(self) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def project(self) -> AbstractProjectRepository:
+        pass
+
+    @property
+    @abstractmethod
+    def prj_repo(self) -> AbstractProjectRepoRepository:
         pass
 
     @property
@@ -356,7 +409,9 @@ def include_parents(
 
         for s in source:
             if s.parent_node_id:
-                parent = parents[s.parent_node_id]
+                parent = parents.get(s.parent_node_id)
+                if not parent:
+                    continue
                 s.parent_ref = parent
 
                 for i, c in enumerate(parent.children):

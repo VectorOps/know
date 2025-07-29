@@ -34,7 +34,7 @@ def _setup_project(tmp_path):
         """
     )
     (tmp_path / "foo.py").write_text(code)
-    settings = ProjectSettings(project_path=str(tmp_path))  # memory backend by default
+    settings = ProjectSettings(project_name="test", repo_path=str(tmp_path))  # memory backend by default
     return init_project(settings)
 
 

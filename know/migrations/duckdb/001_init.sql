@@ -1,4 +1,15 @@
 -- 001_init.sql  : create initial schema
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+);
+
+CREATE TABLE IF NOT EXISTS project_repos (
+    id TEXT PRIMARY KEY,
+    project_id TEXT,
+    repo_id TEXT
+);
+
 CREATE TABLE IF NOT EXISTS repos (
     id TEXT PRIMARY KEY,
     name TEXT,
