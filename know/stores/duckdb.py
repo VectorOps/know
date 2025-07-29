@@ -25,6 +25,7 @@ from know.models import (
     ImportEdge,
     NodeRef,
     Modifier,
+    Project,
 )
 from know.data import (
     AbstractRepoRepository,
@@ -40,6 +41,9 @@ from know.data import (
     resolve_node_hierarchy,
     NodeFilter,
     ImportEdgeFilter,
+    AbstractProjectRepository,
+    AbstractProjectRepoRepository,
+    RepoFilter,
 )
 from know.data import NodeRefFilter
 
@@ -294,6 +298,50 @@ class _DuckDBBaseRepo(Generic[T]):
         self._execute(q)
         return True
 
+class DuckDBProjectRepo(_DuckDBBaseRepo[Project], AbstractProjectRepository):
+    table = "projects"
+    model = Project
+
+    def get_by_name(self, name: str) -> Optional[Project]:
+        q = Query.from_(self._table).select("*").where(self._table.name == name)
+        rows = self._execute(q)
+        return self.model(**self._deserialize_data(rows[0])) if rows else None
+
+
+class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
+    table = "project_repos"
+
+    def __init__(self, conn: "DuckDBThreadWrapper"):
+        self.conn = conn
+        self._table = Table(self.table)
+
+    def _get_query(self, q):
+        parameter = QmarkParameter()
+        sql = q.get_sql(parameter=parameter)
+        return sql, parameter.get_parameters()
+
+    def _execute(self, q):
+        sql, args = self._get_query(q)
+        return self.conn.execute(sql, args)
+
+    def get_repo_ids(self, project_id: str) -> List[str]:
+        q = (
+            Query.from_(self._table)
+            .select(self._table.repo_id)
+            .where(self._table.project_id == project_id)
+        )
+        rows = self._execute(q)
+        return [r["repo_id"] for r in rows]
+
+    def add_repo_id(self, project_id: str, repo_id: str) -> None:
+        q = (
+            Query.into(self._table)
+            .columns(self._table.project_id, self._table.repo_id)
+            .insert(project_id, repo_id)
+        )
+        self._execute(q)
+
+
 # ---------------------------------------------------------------------------
 # concrete repositories
 # ---------------------------------------------------------------------------
@@ -305,7 +353,21 @@ class DuckDBRepoRepo(_DuckDBBaseRepo[Repo], AbstractRepoRepository):
     def get_by_path(self, root_path: str) -> Optional[Repo]:
         q = Query.from_(self._table).select("*").where(self._table.root_path == root_path)
         rows = self._execute(q)
-        return Repo(**rows[0]) if rows else None
+        return self.model(**self._deserialize_data(rows[0])) if rows else None
+
+    def get_list(self, flt: RepoFilter) -> list[Repo]:
+        q = Query.from_(self._table).select(self._table.star)
+        if flt.project_id:
+            project_repos = Table("project_repos")
+            subq = (
+                Query.from_(project_repos)
+                .select(project_repos.repo_id)
+                .where(project_repos.project_id == flt.project_id)
+            )
+            q = q.where(self._table.id.isin(subq))
+
+        rows = self._execute(q)
+        return [self.model(**self._deserialize_data(r)) for r in rows]
 
 
 class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
@@ -316,25 +378,29 @@ class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
         super().__init__(conn)
         self._file_repo = file_repo
 
-    def get_by_physical_path(self, path: str) -> Optional[Package]:
-        q = Query.from_(self._table).select("*").where(self._table.physical_path == path)
+    def get_by_physical_path(self, repo_id: str, root_path: str) -> Optional[Package]:
+        q = Query.from_(self._table).select("*").where(
+            (self._table.repo_id == repo_id) & (self._table.physical_path == root_path)
+        )
         rows = self._execute(q)
-        return Package(**rows[0]) if rows else None
+        return self.model(**self._deserialize_data(rows[0])) if rows else None
 
-    def get_by_virtual_path(self, path: str) -> Optional[Package]:
-        q = Query.from_(self._table).select("*").where(self._table.virtual_path == path)
+    def get_by_virtual_path(self, repo_id: str, root_path: str) -> Optional[Package]:
+        q = Query.from_(self._table).select("*").where(
+            (self._table.repo_id == repo_id) & (self._table.virtual_path == root_path)
+        )
         rows = self._execute(q)
-        return Package(**rows[0]) if rows else None
+        return self.model(**self._deserialize_data(rows[0])) if rows else None
 
     def get_list(self, flt: PackageFilter) -> list[Package]:
         q = Query.from_(self._table).select("*")
 
         if flt.repo_id:
-            q = q.where(self._table.repo_id == flt.repo_id)
+            q = q.where(self._table.repo_id.isin(flt.repo_id))
 
         rows = self._execute(q)
 
-        return [Package(**r) for r in rows]
+        return [self.model(**self._deserialize_data(r)) for r in rows]
 
     def delete_orphaned(self) -> None:
         files_tbl = Table("files")
@@ -350,21 +416,23 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
     table = "files"
     model = File
 
-    def get_by_path(self, path: str) -> Optional[File]:
-        q = Query.from_(self._table).select("*").where(self._table.path == path)
+    def get_by_path(self, repo_id: str, path: str) -> Optional[File]:
+        q = Query.from_(self._table).select("*").where(
+            (self._table.path == path) & (self._table.repo_id == repo_id)
+        )
         rows = self._execute(q)
-        return File(**rows[0]) if rows else None
+        return self.model(**self._deserialize_data(rows[0])) if rows else None
 
     def get_list(self, flt: FileFilter) -> list[File]:
         q = Query.from_(self._table).select("*")
 
         if flt.repo_id:
-            q = q.where(self._table.repo_id == flt.repo_id)
+            q = q.where(self._table.repo_id.isin(flt.repo_id))
         if flt.package_id:
             q = q.where(self._table.package_id == flt.package_id)
 
         rows = self._execute(q)
-        return [File(**r) for r in rows]
+        return [self.model(**self._deserialize_data(r)) for r in rows]
 
 
 class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
@@ -589,10 +657,10 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
         if flt.source_file_id:
             q = q.where(self._table.from_file_id == flt.source_file_id)
         if flt.repo_id:
-            q = q.where(self._table.repo_id == flt.repo_id)
+            q = q.where(self._table.repo_id.isin(flt.repo_id))
 
         rows = self._execute(q)
-        return [ImportEdge(**r) for r in rows]
+        return [self.model(**self._deserialize_data(r)) for r in rows]
 
 
 class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
@@ -607,14 +675,15 @@ class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
         if flt.package_id:
             q = q.where(self._table.package_id == flt.package_id)
         if flt.repo_id:
-            q = q.where(self._table.repo_id == flt.repo_id)
+            q = q.where(self._table.repo_id.isin(flt.repo_id))
 
         rows = self._execute(q)
-        return [NodeRef(**r) for r in rows]
+        return [self.model(**self._deserialize_data(r)) for r in rows]
 
-    def delete_by_file_id(self, file_id: str) -> None:
+    def delete_by_file_id(self, file_id: str) -> int:
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
-        self._execute(q)
+        res = self._execute(q)
+        return res[0]["count_star()"] if res else 0
 
 # Data-repository
 class DuckDBDataRepository(AbstractDataRepository):
@@ -641,15 +710,25 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._conn.start()
 
         # build repositories (some need cross-references)
-        self._file_repo    = DuckDBFileRepo(self._conn)
+        self._project_repo = DuckDBProjectRepo(self._conn)
+        self._prj_repo_repo = DuckDBProjectRepoRepo(self._conn)
+        self._file_repo = DuckDBFileRepo(self._conn)
         self._package_repo = DuckDBPackageRepo(self._conn, self._file_repo)
-        self._repo_repo    = DuckDBRepoRepo(self._conn)
-        self._symbol_repo  = DuckDBNodeRepo(self._conn)
-        self._edge_repo    = DuckDBImportEdgeRepo(self._conn)
+        self._repo_repo = DuckDBRepoRepo(self._conn)
+        self._symbol_repo = DuckDBNodeRepo(self._conn)
+        self._edge_repo = DuckDBImportEdgeRepo(self._conn)
         self._symbolref_repo = DuckDBNodeRefRepo(self._conn)
 
     def close(self):
         self._conn.close()
+
+    @property
+    def project(self) -> AbstractProjectRepository:
+        return self._project_repo
+
+    @property
+    def prj_repo(self) -> AbstractProjectRepoRepository:
+        return self._prj_repo_repo
 
     @property
     def repo(self) -> AbstractRepoRepository:
