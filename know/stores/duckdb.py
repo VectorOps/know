@@ -603,9 +603,10 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         syms = include_direct_descendants(self, syms)
         return syms
 
-    def delete_by_file_id(self, file_id: str) -> None:
+    def delete_by_file_id(self, file_id: str) -> int:
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
-        self._execute(q)
+        res = self._execute(q)
+        return res[0]["count_star()"] if res else 0
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[Node]:
         syms = super().get_list_by_ids(symbol_ids)
@@ -618,7 +619,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         if flt.parent_ids:
             q = q.where(self._table.parent_node_id.isin(flt.parent_ids))
         if flt.repo_id:
-            q = q.where(self._table.repo_id == flt.repo_id)
+            q = q.where(self._table.repo_id.isin(flt.repo_id))
         if flt.file_id:
             q = q.where(self._table.file_id == flt.file_id)
         if flt.package_id:
