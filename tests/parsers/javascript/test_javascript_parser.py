@@ -10,6 +10,7 @@ from know.models import ProgrammingLanguage, NodeKind
 def _make_dummy_project(root_dir: Path):
     settings = ProjectSettings(
         project_name="test",
+        repo_name="test",
         repo_path=str(root_dir),
         repository_backend="memory",   # lightweight in-mem backend
     )

@@ -407,8 +407,8 @@ class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
     def get_list(self, flt: PackageFilter) -> list[Package]:
         q = Query.from_(self._table).select("*")
 
-        if flt.repo_id:
-            q = q.where(self._table.repo_id.isin(flt.repo_id))
+        if flt.repo_ids:
+            q = q.where(self._table.repo_id.isin(flt.repo_ids))
 
         rows = self._execute(q)
 
@@ -438,8 +438,8 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
     def get_list(self, flt: FileFilter) -> list[File]:
         q = Query.from_(self._table).select("*")
 
-        if flt.repo_id:
-            q = q.where(self._table.repo_id.isin(flt.repo_id))
+        if flt.repo_ids:
+            q = q.where(self._table.repo_id.isin(flt.repo_ids))
         if flt.package_id:
             q = q.where(self._table.package_id == flt.package_id)
 
@@ -462,22 +462,21 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     RRF_CODE_WEIGHT: float = 0.7
     RRF_FTS_WEIGHT:  float = 0.3
 
-    def search(self, repo_id: str, query: NodeSearchQuery) -> list[Node]:
+    def search(self, query: NodeSearchQuery) -> list[Node]:
         q = Query.from_(self._table)
 
         # Candidates
         candidates = (
             Query.
             from_(self._table).
-            select(self._table.id, self._table.embedding_code_vec).
-            where(self._table.repo_id == repo_id)
+            select(self._table.id, self._table.embedding_code_vec)
         )
+
+        if query.repo_ids:
+            q = q.where(self._table.repo_id.isin(query.repo_ids))
 
         if query.symbol_name:
             q = q.where(functions.Lower(self._table.name) == query.symbol_name.lower())
-
-        if query.symbol_fqn:
-            q = q.where(functions.Lower(self._table.fqn).like(f"%{query.symbol_fqn.lower()}%"))
 
         if query.kind:
             q = q.where(self._table.kind == query.kind)
@@ -629,8 +628,8 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
         if flt.parent_ids:
             q = q.where(self._table.parent_node_id.isin(flt.parent_ids))
-        if flt.repo_id:
-            q = q.where(self._table.repo_id.isin(flt.repo_id))
+        if flt.repo_ids:
+            q = q.where(self._table.repo_id.isin(flt.repo_ids))
         if flt.file_id:
             q = q.where(self._table.file_id == flt.file_id)
         if flt.package_id:
@@ -668,8 +667,8 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
             q = q.where(self._table.from_package_id == flt.source_package_id)
         if flt.source_file_id:
             q = q.where(self._table.from_file_id == flt.source_file_id)
-        if flt.repo_id:
-            q = q.where(self._table.repo_id.isin(flt.repo_id))
+        if flt.repo_ids:
+            q = q.where(self._table.repo_id.isin(flt.repo_ids))
 
         rows = self._execute(q)
         return [self.model(**self._deserialize_data(r)) for r in rows]
@@ -686,8 +685,8 @@ class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
             q = q.where(self._table.file_id == flt.file_id)
         if flt.package_id:
             q = q.where(self._table.package_id == flt.package_id)
-        if flt.repo_id:
-            q = q.where(self._table.repo_id.isin(flt.repo_id))
+        if flt.repo_ids:
+            q = q.where(self._table.repo_id.isin(flt.repo_ids))
 
         rows = self._execute(q)
         return [self.model(**self._deserialize_data(r)) for r in rows]

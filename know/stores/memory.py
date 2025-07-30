@@ -222,9 +222,9 @@ class InMemoryPackageRepository(InMemoryBaseRepository[Package], AbstractPackage
         Currently only repo_id is supported.
         """
         with self._lock:
-            if flt.repo_id:
+            if flt.repo_ids:
                 return [pkg for pkg in self._items.values()
-                        if pkg.repo_id in flt.repo_id]
+                        if pkg.repo_id in flt.repo_ids]
             # no filter → return every package
             return list(self._items.values())
 
@@ -263,7 +263,7 @@ class InMemoryFileRepository(InMemoryBaseRepository[File],
         with self._lock:
             return [
                 f for f in self._items.values()
-                if (not flt.repo_id   or f.repo_id in flt.repo_id)
+                if (not flt.repo_ids   or f.repo_id in flt.repo_ids)
                 and (not flt.package_id or f.package_id == flt.package_id)
             ]
 
@@ -337,7 +337,7 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
             syms = [
                 s for s in self._items.values()
                 if (not flt.parent_ids or s.parent_node_id in flt.parent_ids)
-                and (not flt.repo_id    or s.repo_id in flt.repo_id)
+                and (not flt.repo_ids    or s.repo_id in flt.repo_ids)
                 and (not flt.file_id    or s.file_id == flt.file_id)
                 and (not flt.package_id or s.package_id == flt.package_id)
                 and (not flt.kind or s.kind == flt.kind)
@@ -397,21 +397,20 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
         scored.sort(key=lambda p: p[1], reverse=True)            # best first
         return {sid: rank + 1 for rank, (sid, _) in enumerate(scored)}
 
-    def search(self, repo_id: str, query: NodeSearchQuery) -> list[Node]:
+    def search(self, query: NodeSearchQuery) -> list[Node]:
         with self._lock:
             # candidate set: repo + scalar filters
             candidates: list[Node] = [
-                s for s in self._items.values() if getattr(s, "repo_id", None) == repo_id
+                s for s in self._items.values()
             ]
 
             # scalar filters
+            if query.repo_ids:
+                candidates = [s for s in candidates if s.repo_id in query.repo_ids]
+
             if query.symbol_name:
                 needle = query.symbol_name.lower()
                 candidates = [s for s in candidates if (s.name or "").lower() == needle]
-
-            if query.symbol_fqn:
-                needle_fqn = query.symbol_fqn.lower()
-                candidates = [s for s in candidates if needle_fqn in (s.fqn or "").lower()]
 
             if query.kind:
                 candidates = [s for s in candidates if s.kind == query.kind]
@@ -507,7 +506,7 @@ class InMemoryImportEdgeRepository(InMemoryBaseRepository[ImportEdge], AbstractI
                 edge for edge in self._items.values()
                 if (not flt.source_package_id or edge.from_package_id == flt.source_package_id)
                 and (not flt.source_file_id  or edge.from_file_id    == flt.source_file_id)
-                and (not flt.repo_id         or edge.repo_id in flt.repo_id)
+                and (not flt.repo_ids         or edge.repo_id in flt.repo_ids)
             ]
 
 
@@ -522,7 +521,7 @@ class InMemoryNodeRefRepository(InMemoryBaseRepository[NodeRef],
                 r for r in self._items.values()
                 if (not flt.file_id    or r.file_id    == flt.file_id)
                 and (not flt.package_id or r.package_id == flt.package_id)
-                and (not flt.repo_id    or r.repo_id in flt.repo_id)
+                and (not flt.repo_ids    or r.repo_id in flt.repo_ids)
             ]
 
     def delete_by_file_id(self, file_id: str) -> None:

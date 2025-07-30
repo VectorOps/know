@@ -103,11 +103,15 @@ class ProjectSettings(BaseSettings):
     """Top-level settings for a project."""
 
     project_name: str = Field(
-        description="Project name"
+        description="Project name."
     )
 
-    repo_path: str = Field(
-        description="The root directory of the project to be analyzed."
+    repo_name: str = Field(
+        description="Repository name."
+    )
+    repo_path: Optional[str] = Field(
+        default=None,
+        description="The root directory of the project to be analyzed. Required for new repositories."
     )
     repository_backend: Optional[str] = Field(
         default="memory",

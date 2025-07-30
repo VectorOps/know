@@ -1,5 +1,7 @@
 from pathlib import Path
-from typing import Any, Optional, Type, Dict
+import os
+import os.path as op
+from typing import Any, Optional, Type, Dict, Tuple
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
@@ -11,6 +13,9 @@ from know.logger import logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
 from know.settings import ProjectSettings
 from know.embeddings import EmbeddingWorker
+
+
+VIRTUAL_PATH_PREFIX = ".virtual-path"
 
 
 @dataclass
@@ -76,6 +81,7 @@ class ProjectManager:
                 logger.error("Component failed to initialize", name=name, exc=exc)
 
     def _init_project(self):
+        # Initialize project
         project = self.data.project.get_by_name(self.settings.project_name)
         if project is None:
             project = Project(
@@ -87,18 +93,36 @@ class ProjectManager:
 
         self.repo_ids = self.data.prj_repo.get_repo_ids(project.id)
 
-        self.default_repo = self.add_repo_path(self.settings.repo_path)
+        # Initialize default repo
+        self.default_repo = self.add_repo_path(self.settings.repo_name, self.settings.repo_path)
 
     # Simple repo management
-    def add_repo_path(self, path):
-        repo = self.data.repo.get_by_path(path)
+    def add_repo_path(self, name, path: Optional[str]=None):
+        repo = self.data.repo.get_by_name(name)
         if repo is None:
+            if path is None:
+                raise ValueError(f"Path is required for a new repo {name}")
+
+            # TODO: Validate if path is valid
+
             repo = Repo(
                 id=generate_id(),
+                name=name,
                 root_path=path,
             )
             self.data.repo.create(repo)
 
+        if path and repo.root_path != path:
+            logger.warn("Repo path does not match, updating...",
+                        repo_name=name,
+                        old_path=repo.root_path,
+                        new_path=path)
+
+            repo = self.data.repo.update(repo.id, {
+                "root_path": path,
+            })
+
+        assert repo is not None
         if repo.id not in self.repo_ids:
             self.repo_ids.append(repo.id)
             self.data.prj_repo.add_repo_id(self.project.id, repo.id)
@@ -110,6 +134,27 @@ class ProjectManager:
             self.repo_ids.remove(repo_id)
 
         self.data.prj_repo.remove_project_repo(self.project.id, repo_id)
+
+    # Virtual path helpers
+    def construct_virtual_path(self, repo_id: str, path: str) -> str:
+        repo = self.data.repo.get_by_id(repo_id)
+        if repo is None:
+            raise ValueError("Repository was not found.")
+
+        return op.join(VIRTUAL_PATH_PREFIX, repo.name, path)
+
+    def deconstruct_virtual_path(self, path) -> Optional[Tuple[Repo, str]]:
+        if not path.beginswith(VIRTUAL_PATH_PREFIX):
+            return (self.default_repo, path)
+
+        path = path[len(VIRTUAL_PATH_PREFIX) + 1:]
+        parts = path.split(os.sep, 1)
+
+        repo = self.data.repo.get_by_name(parts[0])
+        if repo is None:
+            return None
+
+        return (repo, parts[1])
 
     # Single repo refresh helper
     def refresh(self, repo=None):

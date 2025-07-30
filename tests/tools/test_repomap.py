@@ -49,7 +49,7 @@ def _create_ref(repo_id: str, file_id: str, pkg_id: str, name="func"):
 def _build_project():
     dr = InMemoryDataRepository()
 
-    settings = ProjectSettings(project_name="test", repo_path="/dummy")
+    settings = ProjectSettings(project_name="test", repo_name="test", repo_path="/dummy")
     project = ProjectManager(settings, dr)
 
     repo_id = project.default_repo.id
@@ -87,7 +87,7 @@ def test_repo_map_build_and_refresh():
     # ── prepare in-memory repo ────────────────────────────────────────────
     dr = InMemoryDataRepository()
 
-    settings = ProjectSettings(project_name="test", repo_path="/dummy")
+    settings = ProjectSettings(project_name="test", repo_name="test", repo_path="/dummy")
     project = ProjectManager(settings, dr)
 
     repo_id = project.default_repo.id

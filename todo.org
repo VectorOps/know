@@ -1,14 +1,7 @@
 #+title: Todo
 * [ ] Introduce concept of project which is a collection of repositories
-- Project links multiple repos together
-- Move project_path out of settings
-- Change Project API to return methods to add/remove repos to project
-- Create data storage class
-- Refresh repo should be a separate method and take path/repo id
-- There should be a default repo for the project, passed to Project initialization
-- All tools should be project aware - request only relevant repo_ids in the project (or default)
-- Update all filters and search criteria to do repo_id IN (...) when filtering by repo
-- Extend tools to search globally or by project
+** [X] Create virtual path for other repos
+** [ ] Boost default file suggestions in search, make it configurable
 * [ ] Add Turso DB support
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories

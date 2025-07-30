@@ -239,7 +239,7 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
 
     # All File currently stored for this repo
     from know.data import FileFilter
-    existing_files = file_repo.get_list(FileFilter(repo_id=[repo_id]))
+    existing_files = file_repo.get_list(FileFilter(repo_ids=[repo_id]))
 
     for fm in existing_files:
         if fm.path not in processed_paths:
@@ -484,7 +484,7 @@ def assign_parents_to_orphan_methods(pm: ProjectManager, repo: Repo) -> None:
     while True:
         page = symbol_repo.get_list(
             NodeFilter(
-                repo_id=[repo_id],
+                repo_ids=[repo_id],
                 kind=NodeKind.METHOD,
                 top_level_only=True,
                 limit=PAGE_SIZE,

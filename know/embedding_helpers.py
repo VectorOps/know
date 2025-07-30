@@ -43,7 +43,7 @@ def schedule_missing_embeddings(pm: ProjectManager, repo: Repo) -> None:
     while True:
         page = symbol_repo.get_list(
             NodeFilter(
-                repo_id=[repo_id],
+                repo_ids=[repo_id],
                 has_embedding=False,
                 limit=PAGE_SIZE,
                 offset=offset,
@@ -82,7 +82,7 @@ def schedule_outdated_embeddings(pm: ProjectManager, repo: Repo) -> None:
     while True:
         page = symbol_repo.get_list(
             NodeFilter(
-                repo_id=[repo_id],
+                repo_ids=[repo_id],
                 limit=PAGE_SIZE,
                 offset=offset,
             ),

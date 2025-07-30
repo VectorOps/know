@@ -51,23 +51,23 @@ def test_package_metadata_repository(data_repo):
     used_id   = make_id()
     rid = make_id()
     pkg_repo.create(Package(id=orphan_id, name="orphan", virtual_path="pkg/orphan", physical_path="pkg/orphan.py", repo_id=rid))
-    pkg_repo.create(Package(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used.go",   repo_id=rid))
+    pkg_repo.create(Package(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used.go", repo_id=rid))
 
     # add a file that references the “used” package, leaving the first one orphaned
     file_repo.create(File(id=make_id(), path="pkg/used/a.py", package_id=used_id))
 
     assert pkg_repo.get_by_virtual_path(rid, "pkg/used").id == used_id
     assert pkg_repo.get_by_physical_path(rid, "pkg/used.go").id == used_id
-    assert {p.id for p in pkg_repo.get_list(PackageFilter(repo_id=[rid]))} == {orphan_id, used_id}
+    assert {p.id for p in pkg_repo.get_list(PackageFilter(repo_ids=[rid]))} == {orphan_id, used_id}
     # delete_orphaned should remove only the orphan package
     pkg_repo.delete_orphaned()
     assert pkg_repo.get_by_id(orphan_id) is None
     assert pkg_repo.get_by_id(used_id) is not None
-    assert [p.id for p in pkg_repo.get_list(PackageFilter(repo_id=[rid]))] == [used_id]
+    assert [p.id for p in pkg_repo.get_list(PackageFilter(repo_ids=[rid]))] == [used_id]
     # update / delete
     assert pkg_repo.update(used_id, {"name": "renamed"}).name == "renamed"
     assert pkg_repo.delete(used_id) is True
-    assert pkg_repo.get_list(PackageFilter(repo_id=[rid])) == []
+    assert pkg_repo.get_list(PackageFilter(repo_ids=[rid])) == []
 
 
 def test_file_metadata_repository(data_repo):
@@ -77,7 +77,7 @@ def test_file_metadata_repository(data_repo):
 
     file_repo.create(obj)
     assert file_repo.get_by_path(rid, "src/file.py") == obj
-    assert file_repo.get_list(FileFilter(repo_id=[rid])) == [obj]
+    assert file_repo.get_list(FileFilter(repo_ids=[rid])) == [obj]
     assert file_repo.get_list(FileFilter(package_id=pid)) == [obj]
     assert file_repo.update(fid, {"path": "src/other.py"}).path == "src/other.py"
     assert file_repo.delete(fid) is True
@@ -86,7 +86,7 @@ def test_file_metadata_repository(data_repo):
 def test_symbol_metadata_repository(data_repo):
     repo_repo = data_repo.repo
     rid = make_id()
-    repo_repo.create(Repo(id=rid, root_path=f"/tmp/{rid}"))
+    repo_repo.create(Repo(id=rid, name="test", root_path=f"/tmp/{rid}"))
 
     sym_repo = data_repo.symbol
     fid, sid = make_id(), make_id()
@@ -128,10 +128,10 @@ def test_import_edge_repository(data_repo):
     edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, from_file_id=fid, to_package_physical_path="pkg/other", to_package_virtual_path="pkg/other", raw="import pkg.other", external=False))
 
     assert edge_repo.get_list(ImportEdgeFilter(source_package_id=from_pid))[0].id == eid
-    assert edge_repo.get_list(ImportEdgeFilter(repo_id=[rid]))[0].id == eid
+    assert edge_repo.get_list(ImportEdgeFilter(repo_ids=[rid]))[0].id == eid
     assert edge_repo.update(eid, {"alias": "aliaspkg"}).alias == "aliaspkg"
     assert edge_repo.delete(eid) is True
-    assert edge_repo.get_list(ImportEdgeFilter(repo_id=[rid])) == []
+    assert edge_repo.get_list(ImportEdgeFilter(repo_ids=[rid])) == []
 
 
 def test_symbol_search(data_repo):
@@ -140,7 +140,7 @@ def test_symbol_search(data_repo):
     # ---------- minimal repo / file scaffolding ----------
     rid  = make_id()
     fid  = make_id()
-    repo_repo.create(Repo(id=rid, root_path="/tmp/rid"))
+    repo_repo.create(Repo(id=rid, name="test", root_path="/tmp/rid"))
     file_repo.create(File(id=fid, repo_id=rid, path="src/a.py"))
 
     # ---------- seed three symbols ----------
@@ -165,24 +165,24 @@ def test_symbol_search(data_repo):
     data_repo.refresh_full_text_indexes()
 
     # ---------- no-filter search: default ordering (name ASC) ----------
-    res = sym_repo.search(rid, NodeSearchQuery())
+    res = sym_repo.search(NodeSearchQuery(repo_ids=[rid]))
     assert [s.name for s in res] == ["Alpha", "Beta", "Gamma"]
 
     # ---------- name substring (case-insensitive) ----------
-    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(symbol_name="alpha"))] == ["Alpha"]
+    assert [s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], symbol_name="alpha"))] == ["Alpha"]
 
     # ---------- kind filter ----------
-    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(kind="class"))] == ["Beta"]
+    assert [s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], kind="class"))] == ["Beta"]
 
     # ---------- visibility filter ----------
-    assert {s.name for s in sym_repo.search(rid, NodeSearchQuery(visibility="public"))} == {"Alpha", "Gamma"}
+    assert {s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], visibility="public"))} == {"Alpha", "Gamma"}
 
     # ---------- docstring / comment full-text search ----------
-    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(doc_needle="foo"))] == ["Alpha"]
+    assert [s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], doc_needle="foo"))] == ["Alpha"]
 
     # ---------- pagination ----------
-    assert len(sym_repo.search(rid, NodeSearchQuery(limit=2))) == 2
-    assert [s.name for s in sym_repo.search(rid, NodeSearchQuery(limit=2, offset=2))] == ["Gamma"]
+    assert len(sym_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2))) == 2
+    assert [s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2, offset=2))] == ["Gamma"]
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +194,7 @@ def test_symbol_embedding_search(data_repo):
     rid = make_id()
     fid = make_id()
 
-    repo_repo.create(Repo(id=rid, root_path="/tmp/emb_repo"))
+    repo_repo.create(Repo(id=rid, name="test", root_path="/tmp/emb_repo"))
     file_repo.create(File(id=fid, repo_id=rid, path="src/vec.py"))
 
     # seed three symbols with simple, orthogonal 3-d vectors
@@ -213,8 +213,7 @@ def test_symbol_embedding_search(data_repo):
 
     # query vector identical to VecA  ->  VecA must rank first
     res = sym_repo.search(
-        rid,
-        NodeSearchQuery(embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3),
+        NodeSearchQuery(repo_ids=[rid], embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3),
     )
 
     assert res[0].name == "VecA"

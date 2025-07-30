@@ -47,6 +47,7 @@ def _make_project(root: Path) -> ProjectManager:
     """
     settings = ProjectSettings(
         project_name="test",
+        repo_name="test",
         repo_path=str(root),
     )
     #data_repo = InMemoryDataRepository()
@@ -95,13 +96,13 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     repo_meta  = pm.default_repo
 
     # expect exactly two packages / files (one per source file)
-    packages = rs.package.get_list(PackageFilter(repo_id=[repo_meta.id]))
+    packages = rs.package.get_list(PackageFilter(repo_ids=[repo_meta.id]))
     assert len(packages) == 2
 
     pkg_id_mod1 = next(p.id for p in packages if p.physical_path == "mod.py" or (p.virtual_path or "").endswith("mod"))
     pkg_id_mod2 = next(p.id for p in packages if p.physical_path == "mod2.py" or (p.virtual_path or "").endswith("mod2"))
 
-    files = rs.file.get_list(FileFilter(repo_id=[repo_meta.id]))
+    files = rs.file.get_list(FileFilter(repo_ids=[repo_meta.id]))
     assert len(files) == 2
     file_id = next(f.id for f in files if f.path == "mod.py")
     file_id_mod2 = next(f.id for f in files if f.path == "mod2.py")
@@ -127,8 +128,8 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     upsert_parsed_file(pm, pm.default_repo, state, parsed_v2)
 
     # packages / files unchanged (update, not duplicate)
-    assert len(rs.package.get_list(PackageFilter(repo_id=[repo_meta.id]))) == 2
-    assert len(rs.file.get_list(FileFilter(repo_id=[repo_meta.id])))    == 2
+    assert len(rs.package.get_list(PackageFilter(repo_ids=[repo_meta.id]))) == 2
+    assert len(rs.file.get_list(FileFilter(repo_ids=[repo_meta.id])))    == 2
 
     # symbols: only foo remains, id should be SAME, hash should be different
     symbols_after = rs.symbol.get_list(NodeFilter(file_id=file_id))
@@ -142,7 +143,7 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     scan_repo(pm, pm.default_repo)
 
     # Only mod.py-related metadata should remain
-    assert len(rs.file.get_list(FileFilter(repo_id=[repo_meta.id]))) == 1
-    assert len(rs.package.get_list(PackageFilter(repo_id=[repo_meta.id]))) == 1
+    assert len(rs.file.get_list(FileFilter(repo_ids=[repo_meta.id]))) == 1
+    assert len(rs.package.get_list(PackageFilter(repo_ids=[repo_meta.id]))) == 1
     # Confirm mod2 file metadata truly deleted
     assert rs.file.get_by_id(file_id_mod2) is None

@@ -96,7 +96,7 @@ class AbstractRepoRepository(ABC):
 
 @dataclass
 class PackageFilter:
-    repo_id: Optional[List[str]] = None
+    repo_ids: Optional[List[str]] = None
 
 
 class AbstractPackageRepository(ABC):
@@ -141,7 +141,7 @@ class AbstractPackageRepository(ABC):
 
 @dataclass
 class FileFilter:
-    repo_id: Optional[List[str]] = None
+    repo_ids: Optional[List[str]] = None
     package_id: Optional[str] = None
 
 
@@ -180,7 +180,7 @@ class AbstractFileRepository(ABC):
 @dataclass
 class NodeFilter:
     parent_ids: Optional[List[str]] = None
-    repo_id: Optional[List[str]] = None
+    repo_ids: Optional[List[str]] = None
     file_id: Optional[str] = None
     package_id: Optional[str] = None
     kind: Optional[NodeKind] = None
@@ -193,10 +193,10 @@ class NodeFilter:
 
 @dataclass
 class NodeSearchQuery:
+    # Repo filter
+    repo_ids: Optional[List[str]] = None
     # Filter by symbol name
     symbol_name: Optional[str] = None
-    # Filter by symbol fully qualified name
-    symbol_fqn: Optional[str] = None
     # Filter by symbol kind
     kind: Optional[NodeKind] = None
     # Filter by symbol visiblity
@@ -229,7 +229,7 @@ class AbstractNodeRepository(ABC):
         pass
 
     @abstractmethod
-    def search(self, repo_id: str, query: NodeSearchQuery) -> List[Node]:
+    def search(self, query: NodeSearchQuery) -> List[Node]:
         pass
 
     @abstractmethod
@@ -247,7 +247,7 @@ class AbstractNodeRepository(ABC):
 
 @dataclass
 class ImportEdgeFilter:
-    repo_id: Optional[List[str]] = None
+    repo_ids: Optional[List[str]] = None
     source_package_id: Optional[str] = None
     source_file_id: Optional[str] = None
 
@@ -280,7 +280,7 @@ class AbstractImportEdgeRepository(ABC):
 
 @dataclass
 class NodeRefFilter:
-    repo_id: Optional[List[str]] = None
+    repo_ids: Optional[List[str]] = None
     file_id: Optional[str] = None
     package_id: Optional[str] = None
 

@@ -94,10 +94,9 @@ for item in RepoMapTool().execute(project, map_req):
     print(f"{item.score:0.4f}", item.file_path)
 
 # 4. low-level access to repositories
-repo_id = project.get_repo().id
+repo_id = project.default_repo.id
 symbols = project.data_repository.symbol.search(
-    repo_id=repo_id,
-    query=NodeSearchQuery(symbol_name="Project")
+    query=NodeSearchQuery(repo_ids=[repo_id], symbol_name="Project")
 )
 print("Found", len(symbols), "symbols named Project")
 

@@ -112,10 +112,10 @@ def main() -> None:
                     )
 
                 elif cmd == "/files":
-                    repo_id = project.get_repo().id
+                    repo_id = project.default_repo.id
                     paths = sorted(
-                        f.path for f in project.data_repository.file.get_list(
-                            FileFilter(repo_id=repo_id)
+                        f.path for f in project.data.file.get_list(
+                            FileFilter(repo_ids=[repo_id])
                         )
                     )
                     for p in paths: print(p)

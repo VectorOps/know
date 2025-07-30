@@ -87,7 +87,7 @@ class ProjectRepo(BaseModel):
 
 class Repo(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str
     root_path: str = ""
     remote_url: Optional[str] = None
     default_branch: str = "main"

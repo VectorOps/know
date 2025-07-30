@@ -12,6 +12,9 @@ from know.models import File
 
 
 class NodeSearchReq(BaseModel):
+    global_search: bool = Field(
+        default=True, description="Search through all repos in the project."
+    )
     symbol_name: Optional[str] = Field(
         default=None, description="Exact, case-sensitive match on the symbol’s short name."
     )
@@ -109,8 +112,13 @@ class NodeSearchTool(BaseTool):
         if req.query:
             embedding_vec = pm.compute_embedding(req.query)
 
-        repo_id = pm.default_repo.id
-        query   = NodeSearchQuery(
+        if req.global_search:
+            repo_ids = pm.repo_ids
+        else:
+            repo_ids = [pm.default_repo.id]
+
+        query = NodeSearchQuery(
+            repo_ids = repo_ids,
             symbol_name = req.symbol_name,
             kind = kind,
             visibility = vis,
@@ -119,7 +127,7 @@ class NodeSearchTool(BaseTool):
             limit = req.limit or 20,
             offset = req.offset,
         )
-        syms = pm.data.symbol.search(repo_id, query)
+        syms = pm.data.symbol.search(query)
 
         file_repo = pm.data.file
 
@@ -132,7 +140,7 @@ class NodeSearchTool(BaseTool):
             file_path = None
             if s.file_id:
                 fm = file_repo.get_by_id(s.file_id)
-                file_path = fm.path if fm else None
+                file_path = pm.construct_virtual_path(s.repo_id, fm.path) if fm else None
 
                 if fm and fm.language:
                     helper = CodeParserRegistry.get_helper(fm.language)

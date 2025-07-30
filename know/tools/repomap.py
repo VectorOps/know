@@ -191,7 +191,7 @@ class RepoMap(ProjectComponent):
         self._name_props.clear()
         self._path_to_fid.clear()
 
-        for fm in file_repo.get_list(FileFilter(repo_id=[repo_id])):
+        for fm in file_repo.get_list(FileFilter(repo_ids=[repo_id])):
             path, fid = fm.path, fm.id
             self._path_to_fid[path] = fid
 

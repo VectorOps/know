@@ -14,17 +14,17 @@ SAMPLES_DIR = Path(__file__).parent / "samples"
 
 def test_python_project_scan_populates_repositories():
     """Project.init + directory scan should create metadata for every sample file."""
-    project = init_project(ProjectSettings(project_name="test", repo_path=str(SAMPLES_DIR)))
+    project = init_project(ProjectSettings(project_name="test", repo_name="test", repo_path=str(SAMPLES_DIR)))
     repo_store = project.data
     repo_meta = project.default_repo
 
     # ── files ────────────────────────────────────────────────────────────
-    files = repo_store.file.get_list(FileFilter(repo_id=repo_meta.id))
+    files = repo_store.file.get_list(FileFilter(repo_ids=[repo_meta.id]))
     assert len(files) == 4
 
     # ── packages ─────────────────────────────────────────────────────────
     pkg_ids = {f.package_id for f in files if f.package_id}
-    print(repo_store.package.get_list(PackageFilter(repo_id=repo_meta.id)))
+    print(repo_store.package.get_list(PackageFilter(repo_ids=[repo_meta.id])))
     assert len(pkg_ids) == 2
 
     # ── symbols (spot-check method.go) ───────────────────────────────────

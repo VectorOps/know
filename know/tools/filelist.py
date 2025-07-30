@@ -42,7 +42,7 @@ class ListFilesTool(BaseTool):
         repo_id = pm.default_repo.id
         file_repo = pm.data.file
         # TODO: search by pm.repo_ids
-        all_files = file_repo.get_list(FileFilter(repo_id=[repo_id]))
+        all_files = file_repo.get_list(FileFilter(repo_ids=[repo_id]))
 
         pats = list(req.patterns) if req.patterns else []
         if not pats:
