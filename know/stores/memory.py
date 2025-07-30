@@ -113,6 +113,22 @@ class InMemoryProjectRepository(InMemoryBaseRepository[Project], AbstractProject
                     return project
         return None
 
+    def create(self, item: Project) -> Project:
+        """Create a new project, enforcing name uniqueness."""
+        with self._lock:
+            if self.get_by_name(item.name):
+                raise ValueError(f"A project with name '{item.name}' already exists.")
+            return super().create(item)
+
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[Project]:
+        """Update a project, enforcing name uniqueness."""
+        with self._lock:
+            if "name" in data:
+                existing = self.get_by_name(data["name"])
+                if existing and existing.id != item_id:
+                    raise ValueError(f"A project with name '{data['name']}' already exists.")
+            return super().update(item_id, data)
+
 
 class InMemoryProjectRepoRepository(AbstractProjectRepoRepository):
     def __init__(self, tables: _MemoryTables):
@@ -135,6 +151,14 @@ class InMemoryRepoRepository(InMemoryBaseRepository[Repo], AbstractRepoRepositor
         super().__init__(tables.repos, tables.lock)
         self._project_repos = tables.project_repos
 
+    def get_by_name(self, name: str) -> Optional[Repo]:
+        """Get a repo by its name."""
+        with self._lock:
+            for repo in self._items.values():
+                if repo.name == name:
+                    return repo
+        return None
+
     def get_by_path(self, root_path: str) -> Optional[Repo]:
         """Get a repo by its root path."""
         with self._lock:
@@ -150,6 +174,22 @@ class InMemoryRepoRepository(InMemoryBaseRepository[Repo], AbstractRepoRepositor
                 repo_ids = self._project_repos.get(flt.project_id, set())
                 repos = [r for r in repos if r.id in repo_ids]
             return repos
+
+    def create(self, item: Repo) -> Repo:
+        """Create a new repo, enforcing name uniqueness."""
+        with self._lock:
+            if self.get_by_name(item.name):
+                raise ValueError(f"A repo with name '{item.name}' already exists.")
+            return super().create(item)
+
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[Repo]:
+        """Update a repo, enforcing name uniqueness."""
+        with self._lock:
+            if "name" in data:
+                existing = self.get_by_name(data["name"])
+                if existing and existing.id != item_id:
+                    raise ValueError(f"A repo with name '{data['name']}' already exists.")
+            return super().update(item_id, data)
 
 class InMemoryPackageRepository(InMemoryBaseRepository[Package], AbstractPackageRepository):
     def __init__(self, tables: _MemoryTables):
