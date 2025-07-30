@@ -339,10 +339,13 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
             Query.into(self._table)
             .columns(self._table.id, self._table.project_id, self._table.repo_id)
             .insert(generate_id(), project_id, repo_id)
-            .on_conflict(self._table.project_id, self._table.repo_id)
-            .do_nothing()
         )
-        self._execute(q)
+        try:
+            self._execute(q)
+        except duckdb.ConstraintException:
+            # This can happen if the repo is already associated with the project,
+            # which is fine.
+            pass
 
 
 # ---------------------------------------------------------------------------
