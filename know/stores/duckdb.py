@@ -339,6 +339,8 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
             Query.into(self._table)
             .columns(self._table.id, self._table.project_id, self._table.repo_id)
             .insert(generate_id(), project_id, repo_id)
+            .on_conflict(self._table.project_id, self._table.repo_id)
+            .do_nothing()
         )
         self._execute(q)
 
@@ -350,6 +352,12 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
 class DuckDBRepoRepo(_DuckDBBaseRepo[Repo], AbstractRepoRepository):
     table = "repos"
     model = Repo
+
+    def get_by_name(self, name: str) -> Optional[Repo]:
+        """Get a repo by its name."""
+        q = Query.from_(self._table).select("*").where(self._table.name == name)
+        rows = self._execute(q)
+        return self.model(**self._deserialize_data(rows[0])) if rows else None
 
     def get_by_path(self, root_path: str) -> Optional[Repo]:
         q = Query.from_(self._table).select("*").where(self._table.root_path == root_path)

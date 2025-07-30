@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, List
 
 class AbstractProjectRepository(ABC):
     @abstractmethod
-    def get_by_id(self, repo_id: str) -> Optional[Project]:
+    def get_by_id(self, project_id: str) -> Optional[Project]:
         pass
 
     @abstractmethod
@@ -81,6 +81,11 @@ class AbstractRepoRepository(ABC):
 
     @abstractmethod
     def delete(self, repo_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_by_name(self, name: str) -> Optional[Repo]:
+        """Get a repo by its name."""
         pass
 
     @abstractmethod
