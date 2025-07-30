@@ -15,10 +15,6 @@ class NodeSearchReq(BaseModel):
     symbol_name: Optional[str] = Field(
         default=None, description="Exact, case-sensitive match on the symbol’s short name."
     )
-    symbol_fqn: Optional[str] = Field(
-        default=None,
-        description="Substring match against the fully-qualified name (e.g. `package.module.Class.method`).",
-    )
     kind: Optional[NodeKind | str] = Field(
         default=None, description="Restrict results to a specific kind of node or a symbol."
     )
@@ -116,7 +112,6 @@ class NodeSearchTool(BaseTool):
         repo_id = pm.default_repo.id
         query   = NodeSearchQuery(
             symbol_name = req.symbol_name,
-            symbol_fqn = req.symbol_fqn,
             kind = kind,
             visibility = vis,
             doc_needle = req.query,
@@ -187,13 +182,6 @@ class NodeSearchTool(BaseTool):
                     "symbol_name": {
                         "type": "string",
                         "description": "Exact, case-sensitive match on the symbol’s short name."
-                    },
-                    "symbol_fqn": {
-                        "type": "string",
-                        "description": (
-                            "Substring match against the fully-qualified name "
-                            "(e.g. `package.module.Class.method`)."
-                        )
                     },
                     "kind": {
                         "type": "string",

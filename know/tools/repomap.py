@@ -217,8 +217,6 @@ class RepoMap(ProjectComponent):
         symbol_repo    = self.pm.data.symbol
         symbolref_repo = self.pm.data.symbolref
 
-        print(scan)
-
         # ----- deletions -------------------------------------------------
         for rel_path in scan.files_deleted:
             path = rel_path

@@ -64,7 +64,7 @@ def main() -> None:
     project = init_project(settings)
 
     # obtain tool instance from registry
-    search_tool = ToolRegistry.get("vectorops_search_symbols")
+    search_tool = ToolRegistry.get("vectorops_search")
 
     print("Interactive symbol search.  Type '/exit' or Ctrl-D to quit.")
     session: PromptSession = PromptSession(history=FileHistory(".symbol_search_history"))
