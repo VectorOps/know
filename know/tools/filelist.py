@@ -3,7 +3,7 @@ from typing import Sequence, List, Optional
 
 from pydantic import BaseModel, Field
 
-from know.project import ProjectManager
+from know.project import ProjectManager, VIRTUAL_PATH_PREFIX
 from know.models import ProgrammingLanguage
 from know.data import FileFilter
 from .base import BaseTool, MCPToolDefinition
@@ -39,10 +39,8 @@ class ListFilesTool(BaseTool):
         If `patterns` is None or empty, return an empty list. The matching is
         done fnmatch-style.
         """
-        repo_id = pm.default_repo.id
         file_repo = pm.data.file
-        # TODO: search by pm.repo_ids
-        all_files = file_repo.get_list(FileFilter(repo_ids=[repo_id]))
+        all_files = file_repo.get_list(FileFilter(repo_ids=pm.repo_ids))
 
         pats = list(req.patterns) if req.patterns else []
         if not pats:
@@ -52,9 +50,9 @@ class ListFilesTool(BaseTool):
             return any(fnmatch.fnmatch(path, pat) for pat in pats)
 
         return [
-            FileListItem(path=fm.path, language=fm.language)
+            FileListItem(path=vpath, language=fm.language)
             for fm in all_files
-            if _matches(fm.path)
+            if _matches(vpath := pm.construct_virtual_path(fm.repo_id, fm.path))
         ]
 
     def get_openai_schema(self) -> dict:
@@ -63,7 +61,8 @@ class ListFilesTool(BaseTool):
             "name": self.tool_name,
             "description": (
                 "Return all project files whose path matches at least one "
-                "of the supplied glob patterns."
+                "of the supplied glob patterns. File paths for repos other than the "
+                f"default repo will be prefixed with '{VIRTUAL_PATH_PREFIX}/<repo_name>'."
             ),
             "parameters": {
                 "type": "object",
