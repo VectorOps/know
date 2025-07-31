@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List, Generic, TypeVar, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime, timezone
 from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order, Case
-from pypika.terms import LiteralValue
+from pypika.terms import LiteralValue, ValueWrapper
 
 from pydantic import BaseModel
 from know.logger import logger
