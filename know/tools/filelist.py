@@ -52,7 +52,7 @@ class ListFilesTool(BaseTool):
         return [
             FileListItem(path=vpath, language=fm.language)
             for fm in all_files
-            if _matches(vpath := pm.construct_virtual_path(fm.repo_id, fm.path))
+            if fm.repo_id is not None and _matches(vpath := pm.construct_virtual_path(fm.repo_id, fm.path))
         ]
 
     def get_openai_schema(self) -> dict:
