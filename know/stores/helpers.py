@@ -6,19 +6,19 @@ from typing import Any, Optional
 
 
 class BaseQueueWorker(ABC):
-    def __init__(self):
+    def __init__(self) -> None:
         self._queue: queue.Queue[Optional[Any]] = queue.Queue()
         self._thread: Optional[threading.Thread] = None
-        self._init_future: Future = Future()
+        self._init_future: Future[bool] = Future()
 
-    def start(self):
+    def start(self) -> bool:
         if self._thread is not None:
             return self._init_future.result()
         self._thread = threading.Thread(target=self._worker, daemon=True)
         self._thread.start()
         return self._init_future.result()
 
-    def _worker(self):
+    def _worker(self) -> None:
         try:
             self._initialize_worker()
             self._init_future.set_result(True)
@@ -50,7 +50,7 @@ class BaseQueueWorker(ABC):
         """Optional cleanup hook for subclasses."""
         pass
 
-    def close(self):
+    def close(self) -> None:
         if self._thread and self._thread.is_alive():
             self._queue.put(None)
             self._thread.join()
