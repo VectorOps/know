@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from know.data import NodeSearchQuery
 from know.models import NodeKind, Visibility
-from know.project import ProjectManager
+from know.project import ProjectManager, VIRTUAL_PATH_PREFIX
 from .base import BaseTool, MCPToolDefinition
 from know.file_summary import SummaryMode
 from know.parsers import CodeParserRegistry, AbstractCodeParser, AbstractLanguageHelper
@@ -124,15 +124,12 @@ class NodeSearchTool(BaseTool):
             visibility = vis,
             doc_needle = req.query,
             embedding_query = embedding_vec,
+            boost_repo_id = pm.default_repo.id,
+            repo_boost_factor = pm.settings.search.default_repo_boost,
             limit = req.limit or 20,
             offset = req.offset,
         )
         
-        # Only boost if there is a free-text query
-        if req.query:
-            query.boost_repo_id = pm.default_repo.id
-            query.repo_boost_factor = pm.settings.search.default_repo_boost
-
         syms = pm.data.symbol.search(query)
 
         file_repo = pm.data.file
@@ -188,7 +185,9 @@ class NodeSearchTool(BaseTool):
             "name": self.tool_name,
             "description": (
                 "Search for code blocks (functions, classes, variables, etc.) in the current repository. "
-                "All supplied filters are combined with logical **AND**."
+                f"All supplied filters are combined with logical **AND**. If the file path contains {VIRTUAL_PATH_PREFIX} "
+                "then it is not part of the current repository and should be only considered as an external "
+                "dependency."
             ),
             "parameters": {
                 "type": "object",

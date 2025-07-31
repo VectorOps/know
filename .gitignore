@@ -8,6 +8,7 @@ wheels/
 .DS_Store
 *.duckdb
 *.duckdb.wal
+.chat_history
 .symbol_search_history
 .repomap_history
 .mypy_cache

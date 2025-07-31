@@ -54,7 +54,7 @@ class Settings(ProjectSettings):
 
 
 async def _chat(settings: Settings, project):
-    session: PromptSession = PromptSession()
+    session: PromptSession = PromptSession(history=FileHistory(".chat_history"))
     messages: List[Dict] = [{"role": "system", "content": settings.system}]
 
     tools = [t.get_openai_schema() for t in ToolRegistry.get_enabled_tools(settings)]

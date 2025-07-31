@@ -3,6 +3,7 @@
 ** [X] Create virtual path for other repos
 ** [ ] Boost default file suggestions in search, make it configurable
 * [ ] Add Turso DB support
+** [ ] Extract common SQL functionality into helper
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Generic helper to find references using tree sitter query in a generic way
