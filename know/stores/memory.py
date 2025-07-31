@@ -464,6 +464,15 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
                     score += self.RRF_CODE_WEIGHT / (self.RRF_K + code_rank[s.id])
                 if s.id in fts_rank:
                     score += self.RRF_FTS_WEIGHT / (self.RRF_K + fts_rank[s.id])
+
+                if (
+                    score > 0
+                    and query.boost_repo_id
+                    and query.repo_boost_factor != 1.0
+                    and s.repo_id == query.boost_repo_id
+                ):
+                    score *= query.repo_boost_factor
+
                 fused_score[s.id] = score
 
             if has_fts or has_embedding:

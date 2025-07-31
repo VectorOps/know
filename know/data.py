@@ -205,6 +205,11 @@ class NodeSearchQuery:
     doc_needle: Optional[str] = None
     # Embedding similarity search
     embedding_query: Optional[Vector] = None
+    # ID of a repo whose symbols should be boosted in search results
+    boost_repo_id: Optional[str] = None
+    # Boost factor to apply. Only used if boost_repo_id is also provided.
+    # Values > 1.0 will boost, < 1.0 will penalize. Default is 1.0 (no change).
+    repo_boost_factor: float = 1.0
     # Number of records to return. If None is passed, no limit will be applied.
     limit: Optional[int] = None
     # Zero-based offset

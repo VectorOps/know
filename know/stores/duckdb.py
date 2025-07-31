@@ -10,7 +10,7 @@ from concurrent.futures import Future
 from typing import Optional, Dict, Any, List, Generic, TypeVar, Type, Callable
 import importlib.resources as pkg_resources
 from datetime import datetime, timezone
-from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order
+from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order, Case
 from pypika.terms import ValueWrapper, LiteralValue
 
 from pydantic import BaseModel
@@ -469,7 +469,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         candidates = (
             Query.
             from_(self._table).
-            select(self._table.id, self._table.embedding_code_vec)
+            select(self._table.id, self._table.repo_id, self._table.embedding_code_vec)
         )
 
         if query.repo_ids:
@@ -581,11 +581,19 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             aliased_scores = AliasedQuery("rrf_final")
             aliased_fused = AliasedQuery("fused")
 
+            score_col = aliased_scores.score
+            if query.boost_repo_id and query.repo_boost_factor != 1.0:
+                score_col = Case().when(
+                    aliased_candidates.repo_id == query.boost_repo_id,
+                    aliased_scores.score * query.repo_boost_factor
+                ).else_(aliased_scores.score)
+
+
             fused = (
                 Query.
                 from_(aliased_candidates).
                 join(aliased_scores).on(aliased_candidates.id == aliased_scores.id).
-                select(aliased_scores.id, aliased_scores.score.as_("rrf_score"))
+                select(aliased_scores.id, score_col.as_("rrf_score"))
             )
 
             q = (
