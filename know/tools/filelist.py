@@ -40,6 +40,8 @@ class ListFilesTool(BaseTool):
         done fnmatch-style.
         """
         file_repo = pm.data.file
+
+        # TODO: Better search
         all_files = file_repo.get_list(FileFilter(repo_ids=pm.repo_ids))
 
         pats = list(req.patterns) if req.patterns else []
@@ -52,7 +54,7 @@ class ListFilesTool(BaseTool):
         return [
             FileListItem(path=vpath, language=fm.language)
             for fm in all_files
-            if fm.repo_id is not None and _matches(vpath := pm.construct_virtual_path(fm.repo_id, fm.path))
+            if _matches(vpath := pm.construct_virtual_path(fm.repo_id, fm.path))
         ]
 
     def get_openai_schema(self) -> dict:

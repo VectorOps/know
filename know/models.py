@@ -97,7 +97,7 @@ class Repo(BaseModel):
 class Package(BaseModel):
     id: str
     name: Optional[str] = None
-    repo_id: Optional[str] = None
+    repo_id: str
     language: Optional[ProgrammingLanguage] = None
     virtual_path: Optional[str] = None  # import path such as "mypkg/subpkg"
     physical_path: Optional[str] = None  # directory or file relative to repo root
@@ -110,7 +110,7 @@ class Package(BaseModel):
 
 class File(BaseModel):
     id: str
-    repo_id: Optional[str] = None
+    repo_id: str
     package_id: Optional[str] = None
     path: str # project relative path
     file_hash: Optional[str] = None
