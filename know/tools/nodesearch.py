@@ -127,6 +127,12 @@ class NodeSearchTool(BaseTool):
             limit = req.limit or 20,
             offset = req.offset,
         )
+        
+        # Only boost if there is a free-text query
+        if req.query:
+            query.boost_repo_id = pm.default_repo.id
+            query.repo_boost_factor = pm.settings.search.default_repo_boost
+
         syms = pm.data.symbol.search(query)
 
         file_repo = pm.data.file

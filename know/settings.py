@@ -76,6 +76,18 @@ class RepoMapSettings(BaseModel):
     )
 
 
+class SearchSettings(BaseModel):
+    """Settings for search-related functionality."""
+
+    default_repo_boost: float = Field(
+        default=1.1,
+        description=(
+            "Boost factor for search results from the default repository. Applied when a free-text `query` "
+            "is provided. Values > 1.0 will boost, < 1.0 will penalize."
+        ),
+    )
+
+
 class LanguageSettings(BaseModel):
     """Base class for language-specific settings."""
 
@@ -159,6 +171,10 @@ class ProjectSettings(BaseSettings):
     repomap: RepoMapSettings = Field(
         default_factory=RepoMapSettings,
         description="Settings for the RepoMap tool."
+    )
+    search: SearchSettings = Field(
+        default_factory=SearchSettings,
+        description="Settings for search-related functionality.",
     )
     languages: dict[str, LanguageSettings] = Field(
         default_factory=_get_default_languages,
