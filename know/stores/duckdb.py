@@ -47,6 +47,7 @@ from know.data import (
     RepoFilter,
 )
 from know.helpers import generate_id
+from know.stores.helpers import BaseQueueWorker
 
 T = TypeVar("T", bound=BaseModel)
 
