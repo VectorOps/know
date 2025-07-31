@@ -32,9 +32,17 @@ class SummarizeFilesTool(BaseTool):
             summary_mode = SummaryMode(summary_mode)
 
         summaries: list[FileSummary] = []
-        for rel_path in req.paths:
-            fs = build_file_summary(pm, pm.default_repo, rel_path, summary_mode=summary_mode)
+        for path in req.paths:
+            deconstructed = pm.deconstruct_virtual_path(path)
+            if not deconstructed:
+                continue
+
+            repo, rel_path = deconstructed
+            fs = build_file_summary(
+                pm, repo, rel_path, summary_mode=summary_mode
+            )
             if fs:
+                fs.path = path
                 summaries.append(fs)
 
         return summaries
