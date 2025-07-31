@@ -101,70 +101,51 @@ def _row_to_dict(rel) -> list[dict[str, Any]]:
     return records
 
 
-class DuckDBThreadWrapper:
+class DuckDBThreadWrapper(BaseQueueWorker):
     """
     DuckDB is not great with threading, initialize connection and serialize all accesses to DuckDB
     to a separate worker thread. Without this random lockups in execute() were happening even
     with cursor.
     """
     def __init__(self, db_path: Optional[str] = None):
-        self._queue: queue.Queue[Optional[tuple[str, Any, Future]]] = queue.Queue()
+        super().__init__()
         self._db_path = db_path
-        self._conn = None
-        self._thread = None
+        self._conn: Optional[duckdb.DuckDBPyConnection] = None
 
-    def start(self):
-        self._init = Future()
-        self._thread = threading.Thread(target=self._worker, daemon=True)
-        self._thread.start()
-        return self._init.result()
+    def _initialize_worker(self) -> None:
+        self._conn = duckdb.connect()
 
-    def _worker(self):
-        try:
-            self._conn = duckdb.connect()
+        self._conn.execute("INSTALL vss")
+        self._conn.execute("LOAD vss")
 
-            self._conn.execute("INSTALL vss")
-            self._conn.execute("LOAD vss")
+        self._conn.execute("INSTALL fts")
+        self._conn.execute("LOAD fts")
 
-            self._conn.execute("INSTALL fts")
-            self._conn.execute("LOAD fts")
+        # TODO: SQL injection?
+        if self._db_path:
+            self._conn.execute(f"ATTACH '{self._db_path}' as db")
+            self._conn.execute("USE db")
 
-            # TODO: SQL injection?
-            if self._db_path:
-                self._conn.execute(f"ATTACH '{self._db_path}' as db")
-                self._conn.execute("USE db")
+        _apply_migrations(self._conn)
 
-            _apply_migrations(self._conn)
+    def _handle_item(self, item: Any) -> None:
+        sql, params, fut = item
+        if fut.set_running_or_notify_cancel():
+            try:
+                assert self._conn is not None
+                fut.set_result(_row_to_dict(self._conn.execute(sql, params)))
+            except Exception as exc:
+                fut.set_exception(exc)
 
-            self._init.set_result(True)
-        except Exception as ex:
-            self._init.set_exception(ex)
-            return
-
-        while True:
-            item = self._queue.get()
-            if item is None:
-                break
-            sql, params, fut = item
-            if fut.set_running_or_notify_cancel():
-                 try:
-                      fut.set_result(_row_to_dict(self._conn.execute(sql, params)))
-                 except Exception as exc:
-                      fut.set_exception(exc)
-            self._queue.task_done()
-
+    def _cleanup(self) -> None:
         if self._conn:
             self._conn.close()
+            self._conn = None
 
     def execute(self, sql, params=None):
         fut = Future()
         self._queue.put((sql, params, fut))
         return fut.result()
-
-    def close(self):
-        if self._thread:
-            self._queue.put(None)
-            self._thread.join()
 
 # generic base repository
 class _DuckDBBaseRepo(BaseSQLRepository[T]):
