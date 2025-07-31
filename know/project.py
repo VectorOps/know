@@ -137,6 +137,9 @@ class ProjectManager:
 
     # Virtual path helpers
     def construct_virtual_path(self, repo_id: str, path: str) -> str:
+        if repo_id == self.default_repo.id:
+            return path
+
         repo = self.data.repo.get_by_id(repo_id)
         if repo is None:
             raise ValueError("Repository was not found.")
@@ -144,7 +147,7 @@ class ProjectManager:
         return op.join(VIRTUAL_PATH_PREFIX, repo.name, path)
 
     def deconstruct_virtual_path(self, path) -> Optional[Tuple[Repo, str]]:
-        if not path.beginswith(VIRTUAL_PATH_PREFIX):
+        if not path.startswith(VIRTUAL_PATH_PREFIX):
             return (self.default_repo, path)
 
         path = path[len(VIRTUAL_PATH_PREFIX) + 1:]
