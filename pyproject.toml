@@ -23,6 +23,7 @@ dependencies = [
     "tree-sitter-javascript>=0.23.1",
     "pypika",
     "pydantic-settings>=2.10.1",
+    "libsql-client",
 ]
 
 [project.optional-dependencies]
