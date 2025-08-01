@@ -56,6 +56,7 @@ CREATE_MIGRATIONS_TABLE_SQL = """
     );
 """
 GET_APPLIED_MIGRATIONS_SQL = "SELECT name FROM __migrations__"
+INSERT_MIGRATION_SQL = "INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)"
 
 MatchBM25Fn = CustomFunction('fts_main_nodes.match_bm25', ['id', 'query'])
 ArrayCosineSimilarityFn = CustomFunction("array_cosine_similarity", ["vec", "param"])
@@ -122,6 +123,7 @@ class DuckDBThreadWrapper(BaseQueueWorker):
             "know.migrations.duckdb",
             CREATE_MIGRATIONS_TABLE_SQL,
             GET_APPLIED_MIGRATIONS_SQL,
+            INSERT_MIGRATION_SQL,
         )
 
     def _handle_item(self, item: Any) -> None:
