@@ -54,7 +54,7 @@ def test_package_metadata_repository(data_repo):
     pkg_repo.create(Package(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used.go", repo_id=rid))
 
     # add a file that references the “used” package, leaving the first one orphaned
-    file_repo.create(File(id=make_id(), path="pkg/used/a.py", package_id=used_id))
+    file_repo.create(File(id=make_id(), repo_id=make_id(), path="pkg/used/a.py", package_id=used_id))
 
     assert pkg_repo.get_by_virtual_path(rid, "pkg/used").id == used_id
     assert pkg_repo.get_by_physical_path(rid, "pkg/used.go").id == used_id
