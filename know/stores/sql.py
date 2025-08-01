@@ -22,6 +22,7 @@ def apply_migrations(
     migrations_pkg: str,
     create_migrations_table_sql: str,
     get_applied_migrations_sql: str,
+    insert_migration_sql: str,
 ) -> None:
     """
     Generic migration helper.
@@ -49,7 +50,7 @@ def apply_migrations(
             sql = file_path.read_text()
             execute_fn(sql, None)
 
-            execute_fn("INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)",
+            execute_fn(insert_migration_sql,
                          [file_path.name, datetime.now(timezone.utc)])
 
 
