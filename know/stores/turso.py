@@ -1,14 +1,13 @@
 import threading
 import os
-import duckdb
-import pandas as pd
+import libsql_client
 import math
 import queue
 from concurrent.futures import Future
 from typing import Optional, Dict, Any, List, Generic, TypeVar, Callable
 import importlib.resources as pkg_resources
 from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order, Case
-from pypika.terms import LiteralValue, ValueWrapper
+from pypika.terms import LiteralValue, ValueWrapper, Field
 
 from pydantic import BaseModel
 from know.logger import logger
@@ -42,6 +41,7 @@ from know.data import (
     AbstractProjectRepository,
     AbstractProjectRepoRepository,
     RepoFilter,
+    FileFilter,
 )
 from know.helpers import generate_id
 from know.stores.helpers import BaseQueueWorker
@@ -52,74 +52,44 @@ T = TypeVar("T", bound=BaseModel)
 CREATE_MIGRATIONS_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS __migrations__ (
         name TEXT PRIMARY KEY,
-        applied_at TIMESTAMP DEFAULT NOW()
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 """
 GET_APPLIED_MIGRATIONS_SQL = "SELECT name FROM __migrations__"
 
-MatchBM25Fn = CustomFunction('fts_main_nodes.match_bm25', ['id', 'query'])
-ArrayCosineSimilarityFn = CustomFunction("array_cosine_similarity", ["vec", "param"])
-
+VectorDistanceCosFn = CustomFunction("vector_distance_cos", ["vec", "param"])
+VectorFn = CustomFunction("vector32", ["param"])
 
 # helpers
-def _row_to_dict(rel) -> list[dict[str, Any]]:
-    """
-    Convert a DuckDB relation to List[Dict] via a pandas DataFrame.
-    Using DataFrame avoids the manual column-name handling and is faster.
-    """
-    df = rel.df()
-    records = df.to_dict(orient="records")  # [] when df is empty
-    for row in records:
-        for k, v in row.items():
-            # convert scalar NaN / pandas.NA → None, but skip sequences/arrays
-            if isinstance(v, float) and math.isnan(v):
-                row[k] = None
-                continue
-            try:
-                is_na = pd.isna(v)          # may return array for sequences
-            except Exception:
-                is_na = False
-            if isinstance(is_na, bool) and is_na:
-                row[k] = None
-    return records
+def _result_set_to_dict(rs: libsql_client.ResultSet) -> list[dict[str, Any]]:
+    """Convert a libSQL result set to a list of dicts."""
+    return [dict(zip(rs.columns, row)) for row in rs.rows]
 
 
-class DuckDBThreadWrapper(BaseQueueWorker):
+class TursoClientWrapper(BaseQueueWorker):
     """
-    DuckDB is not great with threading, initialize connection and serialize all accesses to DuckDB
-    to a separate worker thread. Without this random lockups in execute() were happening even
-    with cursor.
+    Serialize all accesses to Turso to a separate worker thread.
     """
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, url: str, auth_token: Optional[str] = None):
         super().__init__()
-        self._db_path = db_path
-        self._conn: Optional[duckdb.DuckDBPyConnection] = None
+        self._url = url
+        self._auth_token = auth_token
+        self._client: Optional[libsql_client.Client] = None
 
     def _initialize_worker(self) -> None:
-        self._conn = duckdb.connect()
-
-        self._conn.execute("INSTALL vss")
-        self._conn.execute("LOAD vss")
-
-        self._conn.execute("INSTALL fts")
-        self._conn.execute("LOAD fts")
-
-        # TODO: SQL injection?
-        if self._db_path:
-            self._conn.execute(f"ATTACH '{self._db_path}' as db")
-            self._conn.execute("USE db")
+        self._client = libsql_client.create_client_sync(self._url, auth_token=self._auth_token)
 
         def execute_fn(sql: str, params: Optional[list[Any]] = None):
-            self._conn.execute(sql, params if params else [])
+            self._client.execute(sql, params if params else [])
 
         def query_fn(sql: str, params: Optional[list[Any]] = None) -> list[dict[str, Any]]:
-            rel = self._conn.execute(sql, params if params else [])
-            return _row_to_dict(rel) if rel is not None else []
+            rs = self._client.execute(sql, params if params else [])
+            return _result_set_to_dict(rs)
 
         apply_migrations(
             execute_fn,
             query_fn,
-            "know.migrations.duckdb",
+            "know.migrations.turso",
             CREATE_MIGRATIONS_TABLE_SQL,
             GET_APPLIED_MIGRATIONS_SQL,
         )
@@ -128,15 +98,16 @@ class DuckDBThreadWrapper(BaseQueueWorker):
         sql, params, fut = item
         if fut.set_running_or_notify_cancel():
             try:
-                assert self._conn is not None
-                fut.set_result(_row_to_dict(self._conn.execute(sql, params)))
+                assert self._client is not None
+                rs = self._client.execute(sql, params)
+                fut.set_result(_result_set_to_dict(rs))
             except Exception as exc:
                 fut.set_exception(exc)
 
     def _cleanup(self) -> None:
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+        if self._client:
+            self._client.close()
+            self._client = None
 
     def execute(self, sql, params=None):
         fut = Future()
@@ -144,11 +115,11 @@ class DuckDBThreadWrapper(BaseQueueWorker):
         return fut.result()
 
 # generic base repository
-class _DuckDBBaseRepo(BaseSQLRepository[T]):
+class _TursoBaseRepo(BaseSQLRepository[T]):
     table: str
 
-    def __init__(self, conn: "DuckDBThreadWrapper"):
-        self.conn = conn
+    def __init__(self, client: "TursoClientWrapper"):
+        self.client = client
         self._table = Table(self.table)
 
     def _get_query(self, q):
@@ -158,7 +129,7 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
 
     def _execute(self, q):
         sql, args = self._get_query(q)
-        return self.conn.execute(sql, args)
+        return self.client.execute(sql, args)
 
     # CRUD
     def get_by_id(self, item_id: str) -> Optional[T]:
@@ -186,7 +157,6 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
         if not data:
             return self.get_by_id(item_id)
 
-        # TODO: Unify helpers
         data = self._serialize_data(data)
 
         q = Query.update(self._table).where(self._table.id == item_id)
@@ -202,7 +172,7 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
         self._execute(q)
         return True
 
-class DuckDBProjectRepo(_DuckDBBaseRepo[Project], AbstractProjectRepository):
+class TursoProjectRepo(_TursoBaseRepo[Project], AbstractProjectRepository):
     table = "projects"
     model = Project
 
@@ -212,11 +182,11 @@ class DuckDBProjectRepo(_DuckDBBaseRepo[Project], AbstractProjectRepository):
         return self.model(**self._deserialize_data(rows[0])) if rows else None
 
 
-class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
+class TursoProjectRepoRepo(AbstractProjectRepoRepository):
     table = "project_repos"
 
-    def __init__(self, conn: "DuckDBThreadWrapper"):
-        self.conn = conn
+    def __init__(self, client: "TursoClientWrapper"):
+        self.client = client
         self._table = Table(self.table)
 
     def _get_query(self, q):
@@ -226,7 +196,7 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
 
     def _execute(self, q):
         sql, args = self._get_query(q)
-        return self.conn.execute(sql, args)
+        return self.client.execute(sql, args)
 
     def get_repo_ids(self, project_id: str) -> List[str]:
         q = (
@@ -245,17 +215,17 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
         )
         try:
             self._execute(q)
-        except duckdb.ConstraintException:
+        except Exception as e:
             # This can happen if the repo is already associated with the project,
-            # which is fine.
-            pass
-
+            # which is fine. Check for unique constraint violation.
+            if "UNIQUE constraint failed" not in str(e):
+                raise
 
 # ---------------------------------------------------------------------------
 # concrete repositories
 # ---------------------------------------------------------------------------
 
-class DuckDBRepoRepo(_DuckDBBaseRepo[Repo], AbstractRepoRepository):
+class TursoRepoRepo(_TursoBaseRepo[Repo], AbstractRepoRepository):
     table = "repos"
     model = Repo
 
@@ -285,12 +255,12 @@ class DuckDBRepoRepo(_DuckDBBaseRepo[Repo], AbstractRepoRepository):
         return [self.model(**self._deserialize_data(r)) for r in rows]
 
 
-class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
+class TursoPackageRepo(_TursoBaseRepo[Package], AbstractPackageRepository):
     table = "packages"
     model = Package
 
-    def __init__(self, conn, file_repo: "DuckDBFileRepo"):  # type: ignore
-        super().__init__(conn)
+    def __init__(self, client, file_repo: "TursoFileRepo"):  # type: ignore
+        super().__init__(client)
         self._file_repo = file_repo
 
     def get_by_physical_path(self, repo_id: str, root_path: str) -> Optional[Package]:
@@ -325,9 +295,7 @@ class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
         self._execute(q)
 
 
-from know.data import FileFilter      # already present – keep / ensure
-
-class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
+class TursoFileRepo(_TursoBaseRepo[File], AbstractFileRepository):
     table = "files"
     model = File
 
@@ -350,8 +318,9 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
         return [self.model(**self._deserialize_data(r)) for r in rows]
 
 
-class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
+class TursoNodeRepo(_TursoBaseRepo[Node], AbstractNodeRepository):
     table = "nodes"
+    fts_table_name = "nodes_fts"
     model = Node
 
     _json_fields = {"signature", "modifiers"}
@@ -365,6 +334,19 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     RRF_CODE_WEIGHT: float = 0.7
     RRF_FTS_WEIGHT:  float = 0.3
 
+    def __init__(self, client: "TursoClientWrapper"):
+        super().__init__(client)
+        self._fts_table = Table(self.fts_table_name)
+
+    def create(self, item: Node) -> Node:
+        return super().create(item)
+
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[Node]:
+        return super().update(item_id, data)
+
+    def delete(self, item_id: str) -> bool:
+        return super().delete(item_id)
+
     def search(self, query: NodeSearchQuery) -> list[Node]:
         q = Query.from_(self._table)
 
@@ -377,13 +359,10 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
         if query.repo_ids:
             q = q.where(self._table.repo_id.isin(query.repo_ids))
-
         if query.symbol_name:
             q = q.where(functions.Lower(self._table.name) == query.symbol_name.lower())
-
         if query.kind:
             q = q.where(self._table.kind == query.kind)
-
         if query.visibility:
             q = q.where(self._table.visibility == query.visibility)
 
@@ -396,14 +375,15 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
         # unified CTE / query construction
         if has_embedding:
+            embedding_query_str = str(query.embedding_query)
             rank_code_scores = (
                 Query.
                 from_(aliased_candidates).
                 select(
                     aliased_candidates.id,
-                    ArrayCosineSimilarityFn(
-                        aliased_candidates.embedding_code_vec,
-                        functions.Cast(ValueWrapper(query.embedding_query), "FLOAT[1024]")
+                    VectorDistanceCosFn(
+                        Field("embedding_code_vec"),
+                        VectorFn(RawValue(embedding_query_str))
                     ).as_("dist"))
             )
 
@@ -412,8 +392,8 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             rank_code = (
                 Query.
                 from_(aliased).
-                select(aliased.id, analytics.RowNumber().orderby(aliased.dist, order=Order.desc).as_("code_rank")).
-                where(aliased.dist >= 0.4)
+                select(aliased.id, analytics.RowNumber().orderby(aliased.dist, order=Order.asc).as_("code_rank")).
+                where(aliased.dist <= 0.6) # cosine distance
             )
 
             q = q.with_(rank_code_scores, "rank_code_scores").with_(rank_code, "rank_code")
@@ -421,13 +401,13 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         if has_fts:
             rank_fts_scores = (
                 Query.
-                from_(aliased_candidates).
+                from_(self._fts_table).
+                join(aliased_candidates).on(self._fts_table.id == aliased_candidates.id).
                 select(
-                    aliased_candidates.id,
-                    MatchBM25Fn(
-                        aliased_candidates.id,
-                        query.doc_needle
-                    ).as_("score"))
+                    self._fts_table.id,
+                    RawValue("bm25(nodes_fts)").as_("score")
+                ).
+                where(self._fts_table.match(query.doc_needle))
             )
 
             aliased = AliasedQuery("rank_fts_scores")
@@ -447,7 +427,6 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
             if has_embedding:
                 aliased = AliasedQuery("rank_code")
-
                 union_parts.append(
                     Query.
                     from_(aliased).
@@ -458,7 +437,6 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
             if has_fts:
                 aliased = AliasedQuery("rank_fts")
-
                 union_parts.append(
                     Query.
                     from_(aliased).
@@ -567,7 +545,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         return syms
 
 
-class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeRepository):
+class TursoImportEdgeRepo(_TursoBaseRepo[ImportEdge], AbstractImportEdgeRepository):
     table = "import_edges"
     model = ImportEdge
 
@@ -585,7 +563,7 @@ class DuckDBImportEdgeRepo(_DuckDBBaseRepo[ImportEdge], AbstractImportEdgeReposi
         return [self.model(**self._deserialize_data(r)) for r in rows]
 
 
-class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
+class TursoNodeRefRepo(_TursoBaseRepo[NodeRef], AbstractNodeRefRepository):
     table = "node_refs"
     model = NodeRef
 
@@ -607,41 +585,42 @@ class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
         res = self._execute(q)
 
 # Data-repository
-class DuckDBDataRepository(AbstractDataRepository):
+class TursoDataRepository(AbstractDataRepository):
     """
-    Main entry point.  Automatically applies pending SQL migrations on first
-    construction.
+    Main entry point for Turso/libSQL.
     """
-
-    def __init__(self, db_path: str | None = None):
+    def __init__(self, db_url: str | None = None, auth_token: Optional[str] = None):
         """
         Parameters
         ----------
-        db_path : str | None
-            Filesystem path to the DuckDB database.
-            • None  ->  use in-memory database.
+        db_url : str | None
+            URL to the database (e.g., "file:local.db", "libsql://...")
+            If None, an in-memory database is used.
+        auth_token: str | None
+            Auth token for Turso platform databases.
         """
-        if db_path is None:
-            db_path = ":memory:"
-        # ensure parent dir exists for file-based DBs
-        if db_path != ":memory:":
+        if db_url is None:
+            db_url = "file::memory:"
+
+        if db_url.startswith("file:") and not db_url == "file::memory:":
+            db_path = db_url.split(":", 1)[1]
             os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
 
-        self._conn = DuckDBThreadWrapper(db_path)
-        self._conn.start()
+        self._client = TursoClientWrapper(url=db_url, auth_token=auth_token)
+        self._client.start()
 
         # build repositories (some need cross-references)
-        self._project_repo = DuckDBProjectRepo(self._conn)
-        self._prj_repo_repo = DuckDBProjectRepoRepo(self._conn)
-        self._file_repo = DuckDBFileRepo(self._conn)
-        self._package_repo = DuckDBPackageRepo(self._conn, self._file_repo)
-        self._repo_repo = DuckDBRepoRepo(self._conn)
-        self._symbol_repo = DuckDBNodeRepo(self._conn)
-        self._edge_repo = DuckDBImportEdgeRepo(self._conn)
-        self._symbolref_repo = DuckDBNodeRefRepo(self._conn)
+        self._project_repo = TursoProjectRepo(self._client)
+        self._prj_repo_repo = TursoProjectRepoRepo(self._client)
+        self._file_repo = TursoFileRepo(self._client)
+        self._package_repo = TursoPackageRepo(self._client, self._file_repo)
+        self._repo_repo = TursoRepoRepo(self._client)
+        self._symbol_repo = TursoNodeRepo(self._client)
+        self._edge_repo = TursoImportEdgeRepo(self._client)
+        self._symbolref_repo = TursoNodeRefRepo(self._client)
 
     def close(self):
-        self._conn.close()
+        self._client.close()
 
     @property
     def project(self) -> AbstractProjectRepository:
@@ -676,11 +655,4 @@ class DuckDBDataRepository(AbstractDataRepository):
         return self._symbolref_repo
 
     def refresh_full_text_indexes(self) -> None:
-        try:
-            self._conn.execute("PRAGMA drop_fts_index('nodes');")
-            self._conn.execute(
-                "PRAGMA create_fts_index('nodes', "
-                "'id', 'name', 'fqn', 'docstring', 'comment');"
-            )
-        except Exception as ex:
-            logger.debug("Failed to refresh DuckDB FTS index", ex=ex)
+        pass

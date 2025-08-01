@@ -20,33 +20,18 @@ def apply_migrations(
     execute_fn: Callable[[str, Optional[list[Any]]], None],
     query_fn: Callable[[str, Optional[list[Any]]], list[dict[str, Any]]],
     migrations_pkg: str,
+    create_migrations_table_sql: str,
+    get_applied_migrations_sql: str,
 ) -> None:
     """
     Generic migration helper.
 
     Scans a package for ``.sql`` files and applies them in alphabetical
     order.  Tracks applied migrations in a ``__migrations__`` table.
-
-    Parameters
-    ----------
-    execute_fn : callable
-        Function to execute a SQL command that does not return rows.
-        ``(sql: str, params: Optional[list]) -> None``
-    query_fn : callable
-        Function to execute a SQL query and return rows.
-        ``(sql: str, params: Optional[list]) -> list[dict]``
-    migrations_pkg : str
-        Name of the package containing ``.sql`` migration files
-        (e.g., "know.migrations.duckdb").
     """
     # ensure bookkeeping table exists
-    execute_fn("""
-        CREATE TABLE IF NOT EXISTS __migrations__ (
-            name TEXT PRIMARY KEY,
-            applied_at TIMESTAMP DEFAULT NOW()
-        );
-    """, None)
-    applied_rows = query_fn("SELECT name FROM __migrations__", None)
+    execute_fn(create_migrations_table_sql, None)
+    applied_rows = query_fn(get_applied_migrations_sql, None)
     already_applied = {r["name"] for r in applied_rows}
 
     try:
