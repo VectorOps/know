@@ -21,7 +21,6 @@ def apply_migrations(
     query_fn: Callable[[str, Optional[list[Any]]], list[dict[str, Any]]],
     migrations_pkg: str,
     create_migrations_table_sql: str,
-    get_applied_migrations_sql: str,
     insert_migration_sql: str,
 ) -> None:
     """
@@ -32,7 +31,7 @@ def apply_migrations(
     """
     # ensure bookkeeping table exists
     execute_fn(create_migrations_table_sql, None)
-    applied_rows = query_fn(get_applied_migrations_sql, None)
+    applied_rows = query_fn("SELECT name FROM __migrations__", None)
     already_applied = {r["name"] for r in applied_rows}
 
     try:

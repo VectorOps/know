@@ -55,7 +55,6 @@ CREATE_MIGRATIONS_TABLE_SQL = """
         applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 """
-GET_APPLIED_MIGRATIONS_SQL = "SELECT name FROM __migrations__"
 INSERT_MIGRATION_SQL = "INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)"
 
 VectorDistanceCosFn = CustomFunction("vector_distance_cos", ["vec", "param"])
@@ -92,7 +91,6 @@ class TursoClientWrapper(BaseQueueWorker):
             query_fn,
             "know.migrations.turso",
             CREATE_MIGRATIONS_TABLE_SQL,
-            GET_APPLIED_MIGRATIONS_SQL,
             INSERT_MIGRATION_SQL,
         )
 

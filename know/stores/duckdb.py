@@ -55,7 +55,6 @@ CREATE_MIGRATIONS_TABLE_SQL = """
         applied_at TIMESTAMP DEFAULT NOW()
     );
 """
-GET_APPLIED_MIGRATIONS_SQL = "SELECT name FROM __migrations__"
 INSERT_MIGRATION_SQL = "INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)"
 
 MatchBM25Fn = CustomFunction('fts_main_nodes.match_bm25', ['id', 'query'])
@@ -122,7 +121,6 @@ class DuckDBThreadWrapper(BaseQueueWorker):
             query_fn,
             "know.migrations.duckdb",
             CREATE_MIGRATIONS_TABLE_SQL,
-            GET_APPLIED_MIGRATIONS_SQL,
             INSERT_MIGRATION_SQL,
         )
 
