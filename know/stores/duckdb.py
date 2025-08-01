@@ -7,7 +7,6 @@ import queue
 from concurrent.futures import Future
 from typing import Optional, Dict, Any, List, Generic, TypeVar, Callable
 import importlib.resources as pkg_resources
-from datetime import datetime, timezone
 from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order, Case
 from pypika.terms import LiteralValue, ValueWrapper
 
@@ -46,7 +45,7 @@ from know.data import (
 )
 from know.helpers import generate_id
 from know.stores.helpers import BaseQueueWorker
-from know.stores.sql import BaseSQLRepository, RawValue
+from know.stores.sql import BaseSQLRepository, RawValue, apply_migrations
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -55,30 +54,6 @@ ArrayCosineSimilarityFn = CustomFunction("array_cosine_similarity", ["vec", "par
 
 
 # helpers
-def _apply_migrations(conn: duckdb.DuckDBPyConnection) -> None:
-    # ensure bookkeeping table exists
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS __migrations__ (
-            name TEXT PRIMARY KEY,
-            applied_at TIMESTAMP DEFAULT NOW()
-        );
-    """)
-    applied_rows = _row_to_dict(conn.execute("SELECT name FROM __migrations__"))
-    already_applied = {r["name"] for r in applied_rows}
-
-    with pkg_resources.as_file(pkg_resources.files("know.migrations.duckdb")) as mig_root:
-        sql_files = sorted(p for p in mig_root.iterdir() if p.suffix == ".sql")
-
-        for file_path in sql_files:
-            if file_path.name in already_applied:
-                continue
-            sql = file_path.read_text()
-            conn.execute(sql)
-
-            conn.execute("INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)",
-                         [file_path.name, datetime.now(timezone.utc)])
-
-
 def _row_to_dict(rel) -> list[dict[str, Any]]:
     """
     Convert a DuckDB relation to List[Dict] via a pandas DataFrame.
@@ -126,7 +101,14 @@ class DuckDBThreadWrapper(BaseQueueWorker):
             self._conn.execute(f"ATTACH '{self._db_path}' as db")
             self._conn.execute("USE db")
 
-        _apply_migrations(self._conn)
+        def execute_fn(sql: str, params: Optional[list[Any]] = None):
+            self._conn.execute(sql, params if params else [])
+
+        def query_fn(sql: str, params: Optional[list[Any]] = None) -> list[dict[str, Any]]:
+            rel = self._conn.execute(sql, params if params else [])
+            return _row_to_dict(rel) if rel is not None else []
+
+        apply_migrations(execute_fn, query_fn, "know.migrations.duckdb")
 
     def _handle_item(self, item: Any) -> None:
         sql, params, fut = item
