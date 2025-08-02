@@ -50,7 +50,7 @@ def test_markdown_parser_on_readme():
     all_symbols = flatten_symbols(parsed_file.symbols)
     symbols = [
         s for s in all_symbols
-        if s.name not in ["paragraph", "fenced_code_block", "list", "block_quote"]
+        if s.name not in ["paragraph", "fenced_code_block", "list", "block_quote", "pipe_table"]
     ]
 
     assert len(symbols) == 16
