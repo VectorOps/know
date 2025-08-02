@@ -56,6 +56,7 @@ class MarkdownCodeParser(AbstractCodeParser):
     def _process_node(
         self, node: Any, parent: Optional[ParsedNode] = None
     ) -> List[ParsedNode]:
+        print(node.type, node.children)
         if node.type == "document":
             return self._handle_document(node, parent)
         elif node.type == "section":
@@ -126,7 +127,7 @@ class MarkdownCodeParser(AbstractCodeParser):
                 name = header_text
 
         # Use start byte for FQN uniqueness
-        fqn = f"{self._make_fqn(name)}@{node.start_byte}"
+        fqn = f"{self._make_fqn(name, parent)}@{node.start_byte}"
 
         parsed_node = self._make_node(
             node,
@@ -136,6 +137,17 @@ class MarkdownCodeParser(AbstractCodeParser):
             body=body,
             visibility=Visibility.PUBLIC,
         )
+
+        # Recursively process children, skipping the heading node itself
+        child_nodes_to_process = node.children
+        if heading_node:
+            child_nodes_to_process = node.children[1:]
+
+        for child_node in child_nodes_to_process:
+            parsed_node.children.extend(
+                self._process_node(child_node, parent=parsed_node)
+            )
+
         return [parsed_node]
 
     def _handle_generic_block(
@@ -147,7 +159,7 @@ class MarkdownCodeParser(AbstractCodeParser):
 
         name = node.type
         # Use start byte for FQN uniqueness
-        fqn = f"{self._make_fqn(name)}@{node.start_byte}"
+        fqn = f"{self._make_fqn(name, parent)}@{node.start_byte}"
 
         parsed_node = self._make_node(
             node,
