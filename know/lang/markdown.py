@@ -64,80 +64,76 @@ class MarkdownCodeParser(AbstractCodeParser):
 
     def _handle_file(self, root_node: Any) -> None:
         assert self.parsed_file is not None
-        sections = []
-        current_section_nodes = []
-        heading_node_types = {"atx_heading", "setext_heading"}
 
-        # The markdown parser creates 'section' nodes, but our logic below is
-        # designed to work on a flat list of content nodes. Unwrap sections.
-        all_nodes = []
+        if root_node.type != "document":
+            return
+
+        # Handle potentially nested document structure from tree-sitter-markdown
         nodes_to_process = root_node.children
         if (
-            root_node.type == "document"
-            and len(root_node.children) == 1
+            len(root_node.children) == 1
             and root_node.children[0].type == "document"
         ):
             nodes_to_process = root_node.children[0].children
 
-        for child in nodes_to_process:
-            if child.type == "section":
-                all_nodes.extend(child.children)
-            else:
-                all_nodes.append(child)
-
-        for child in all_nodes:
-            if child.type in heading_node_types:
-                if current_section_nodes:
-                    sections.append(current_section_nodes)
-                current_section_nodes = [child]
-            else:
-                # ignore horizontal rules before the first heading
-                if not current_section_nodes and child.type in ("thematic_break",):
-                    continue
-                current_section_nodes.append(child)
-
-        if current_section_nodes:
-            sections.append(current_section_nodes)
-
-        for section_nodes in sections:
-            first_node = section_nodes[0]
-            last_node = section_nodes[-1]
-
-            section_name = "prologue"
-            if first_node.type in heading_node_types:
-                heading_node = first_node
-                content_node = next(
-                    (n for n in heading_node.children if n.type == "heading_content"),
-                    None,
-                )
-                if not content_node:
-                    content_node = next(
-                        (n for n in heading_node.children if n.type == "paragraph"),
-                        None,
-                    )
-
-                if content_node:
-                    section_name = get_node_text(content_node).strip()
-                else:
-                    raw_text = get_node_text(heading_node)
-                    section_name = re.sub(
-                        r"^[#\s]+|[=\s\-_]+$", "", raw_text, flags=re.MULTILINE
-                    ).strip()
-
+        for child_node in nodes_to_process:
             body = self.source_bytes[
-                first_node.start_byte : last_node.end_byte
+                child_node.start_byte : child_node.end_byte
             ].decode("utf-8")
 
+            if not body.strip():
+                continue
+
+            name = child_node.type
+            fqn_name = name
+
+            if child_node.type == "section":
+                heading_node = None
+                # A section's first child should be a heading
+                if child_node.children and "heading" in child_node.children[0].type:
+                    heading_node = child_node.children[0]
+
+                if heading_node:
+                    content_node = next(
+                        (
+                            n
+                            for n in heading_node.children
+                            if n.type == "heading_content"
+                        ),
+                        None,
+                    )
+                    if not content_node:
+                        content_node = next(
+                            (n for n in heading_node.children if n.type == "paragraph"),
+                            None,
+                        )
+
+                    header_text = ""
+                    if content_node:
+                        header_text = get_node_text(content_node).strip()
+                    else:
+                        raw_text = get_node_text(heading_node)
+                        header_text = re.sub(
+                            r"^[#\s]+|[=\s\-_]+$", "", raw_text, flags=re.MULTILINE
+                        ).strip()
+
+                    if header_text:
+                        name = header_text
+                        fqn_name = header_text
+
+            # Use start byte for FQN uniqueness to handle multiple nodes with same name/type
+            fqn = f"{self._make_fqn(fqn_name)}@{child_node.start_byte}"
+
             node = self._make_node(
-                first_node,
+                child_node,
                 kind=NodeKind.BLOCK,
-                name=section_name,
-                fqn=self._make_fqn(section_name),
+                name=name,
+                fqn=fqn,
                 body=body,
                 visibility=Visibility.PUBLIC,
             )
-            node.end_line = last_node.end_point[0]
-            node.end_byte = last_node.end_byte
+            node.end_line = child_node.end_point[0]
+            node.end_byte = child_node.end_byte
 
             self.parsed_file.symbols.append(node)
 

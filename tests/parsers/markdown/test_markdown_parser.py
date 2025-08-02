@@ -38,21 +38,28 @@ def test_markdown_parser_on_readme():
     assert parsed_file.path == "README.md"
     assert parsed_file.language == ProgrammingLanguage.MARKDOWN
 
-    # The README should be broken into one symbol per major heading
+    # The README should now be broken into one symbol per top-level node
     symbols = parsed_file.symbols
-    assert len(symbols) == 9
+    assert len(symbols) == 16
     assert all(s.kind == NodeKind.BLOCK for s in symbols)
 
-    # Check section names
+    # Check section names (headings for sections, node type for others)
     expected_headings = [
         "VectorOps – *Know*",
         "Key Features",
+        "thematic_break",
         "Installation",
+        "thematic_break",
         "Built-in Tools",
+        "thematic_break",
         "Quick CLI Examples",
+        "thematic_break",
         "MCP Server",
+        "thematic_break",
         "Using the Python API",
+        "thematic_break",
         "Extending Know",
+        "thematic_break",
         "License",
     ]
     actual_headings = [s.name for s in symbols]
