@@ -415,7 +415,8 @@ def include_parents(
         if not parent_ids:
             break
 
-        parents = {s.id: s for s in repo.get_list_by_ids(list(parent_ids))}
+        all_parents = repo.get_list_by_ids(list(parent_ids))
+        parents = {p.id: p for p in all_parents if p.kind != NodeKind.LITERAL}
 
         for s in source:
             if s.parent_node_id:
@@ -496,8 +497,5 @@ def post_process_search_results(
 
     # Enrich with direct descendants
     final_results = include_direct_descendants(repo, final_results)
-    #resolve_node_hierarchy(final_results)
-
-    print(len(final_results))
 
     return final_results
