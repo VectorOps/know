@@ -38,8 +38,16 @@ def test_markdown_parser_on_readme():
     assert parsed_file.path == "README.md"
     assert parsed_file.language == ProgrammingLanguage.MARKDOWN
 
-    # The README should now be broken into one symbol per top-level node
-    symbols = parsed_file.symbols
+    # The README is parsed into a single top-level section (H1) with other
+    # sections and thematic breaks as children. We flatten this structure for
+    # the test, filtering out intermediate blocks like paragraphs.
+    assert len(parsed_file.symbols) == 1
+    top_level_section = parsed_file.symbols[0]
+    symbols = [top_level_section] + [
+        child for child in top_level_section.children
+        if child.name not in ["paragraph", "fenced_code_block", "list", "block_quote"]
+    ]
+
     assert len(symbols) == 16
     assert all(s.kind == NodeKind.BLOCK for s in symbols)
 
