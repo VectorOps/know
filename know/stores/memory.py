@@ -25,6 +25,7 @@ from know.data import (
     ImportEdgeFilter,
     include_direct_descendants,
     resolve_node_hierarchy,
+    post_process_search_results,
     AbstractProjectRepository,
     AbstractProjectRepoRepository,
     RepoFilter,
@@ -490,12 +491,14 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
             results = candidates
 
             offset = query.offset or 0
-            limit  = query.limit  or 20
-            results = results[offset: offset + limit]
+            limit = query.limit if query.limit is not None else 20
+            offset = query.offset if query.offset is not None else 0
+            fetch_limit = limit * 2
 
-        results = include_direct_descendants(self, results)
+            results = candidates[offset : offset + fetch_limit]
 
-        return results
+        limit = query.limit if query.limit is not None else 20
+        return post_process_search_results(self, results, limit)
 
     def delete_by_file_id(self, file_id: str) -> None:
         with self._lock:

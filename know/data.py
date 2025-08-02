@@ -466,3 +466,38 @@ def include_direct_descendants(
     result = include_parents(repo, result)
 
     return result
+
+
+def post_process_search_results(
+    repo: AbstractNodeRepository,
+    results: List[Node],
+    limit: int,
+) -> List[Node]:
+    """
+    Post-processes a list of search results to improve relevance.
+
+    - Filters out parent nodes if their children are also in the results.
+    - Enforces the final limit on the primary results.
+    - Includes direct descendants of the final results.
+    - Designed to allow for future inclusion of reranking models.
+    """
+    # Filter out nodes that are parents of other nodes in the result set
+    all_ids = {n.id for n in results}
+    parent_ids_in_results = {n.parent_node_id for n in results if n.parent_node_id in all_ids}
+
+    processed_results = [n for n in results if n.id not in parent_ids_in_results]
+
+    # TODO: Add reranking logic here in the future.
+
+    # Limit the number of primary results
+    final_results = processed_results[:limit]
+
+    print(len(final_results), len(processed_results))
+
+    # Enrich with direct descendants
+    final_results = include_direct_descendants(repo, final_results)
+    #resolve_node_hierarchy(final_results)
+
+    print(len(final_results))
+
+    return final_results

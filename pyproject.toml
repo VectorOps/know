@@ -24,6 +24,7 @@ dependencies = [
     "pypika",
     "pydantic-settings>=2.10.1",
     "libsql-client",
+    "tree-sitter-markdown>=0.3.2",
 ]
 
 [project.optional-dependencies]

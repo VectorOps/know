@@ -36,6 +36,7 @@ from know.data import (
     PackageFilter,
     include_direct_descendants,
     resolve_node_hierarchy,
+    post_process_search_results,
     NodeFilter,
     NodeRefFilter,
     ImportEdgeFilter,
@@ -355,7 +356,6 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     model = Node
 
     _json_fields = {"signature", "modifiers"}
-    _compress_fields = {"body"}
     _field_parsers = {
         "signature": lambda v: NodeSignature(**v) if v is not None else None,
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
@@ -515,15 +515,18 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
                 orderby(self._table.name)
             )
 
-        limit  = query.limit  if query.limit  is not None else 20
+        raw_limit = query.limit if query.limit is not None else 20
         offset = query.offset if query.offset is not None else 0
 
-        q = q.limit(limit).offset(offset)
+        fetch_limit = raw_limit * 2
+        q = q.limit(fetch_limit).offset(offset)
+
+        print(raw_limit, fetch_limit)
 
         rows = self._execute(q)
-        syms = [self.model(**self._deserialize_data(r)) for r in rows]
-        syms = include_direct_descendants(self, syms)
-        return syms
+        nodes = [self.model(**self._deserialize_data(r)) for r in rows]
+        print(len(nodes))
+        return post_process_search_results(self, nodes, raw_limit)
 
     def delete_by_file_id(self, file_id: str) -> None:
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
@@ -680,7 +683,7 @@ class DuckDBDataRepository(AbstractDataRepository):
             self._conn.execute("PRAGMA drop_fts_index('nodes');")
             self._conn.execute(
                 "PRAGMA create_fts_index('nodes', "
-                "'id', 'name', 'fqn', 'docstring', 'comment');"
+                "'id', 'body', 'comment');"
             )
         except Exception as ex:
             logger.debug("Failed to refresh DuckDB FTS index", ex=ex)

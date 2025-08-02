@@ -1,9 +1,12 @@
 #+title: Todo
+* [ ] Move data helpers out of data.py
 * [X] Introduce concept of project which is a collection of repositories
 ** [X] Create virtual path for other repos
 ** [X] Boost default file suggestions in search, make it configurable
-* [ ] Add Turso DB support
-** [ ] Extract common SQL functionality into helper
+* [ ] Storage backends
+** [ ] PostgreSQL backend
+** [ ] Add sqlite backend
+** [X] Extract common SQL functionality into helper
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Generic helper to find references using tree sitter query in a generic way
@@ -11,7 +14,6 @@
 * [X] Fix mypy warnings
 * [ ] Repomap tool
 ** [ ] Should only look for exported symbols
-* [ ] PostgreSQL store engine
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols?
 ** [ ] Make tool search all symbols, not just public by default
@@ -29,6 +31,9 @@
 * [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
 * [ ] Move some tool parameters to project settings
 * [ ] Language support
+** [ ] Text
+*** [ ] Use chonkie
+** [ ] Markdown
 ** [-] Python
 *** [X] Test module path resolution
 *** [X] Fix to_package_path for python

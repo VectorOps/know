@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     package_id TEXT,
     name TEXT,
     fqn TEXT,
-    body BLOB,
+    body TEXT,
     kind TEXT,
     parent_node_id TEXT,
     start_line INTEGER,

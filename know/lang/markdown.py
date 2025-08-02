@@ -97,42 +97,9 @@ class MarkdownCodeParser(AbstractCodeParser):
         if not body.strip():
             return []
 
-        heading_node = None
-        # A section's first child should be a heading
-        if node.children and "heading" in node.children[0].type:
-            heading_node = node.children[0]
-
-        name = "section"
-        if heading_node:
-            content_node = next(
-                (n for n in heading_node.children if n.type == "heading_content"),
-                None,
-            )
-            if not content_node:
-                content_node = next(
-                    (n for n in heading_node.children if n.type == "paragraph"), None
-                )
-
-            header_text = ""
-            if content_node:
-                header_text = get_node_text(content_node).strip()
-            else:
-                raw_text = get_node_text(heading_node)
-                header_text = re.sub(
-                    r"^[#\s]+|[=\s\-_]+$", "", raw_text, flags=re.MULTILINE
-                ).strip()
-
-            if header_text:
-                name = header_text
-
-        # Use start byte for FQN uniqueness
-        fqn = f"{self._make_fqn(name, parent)}@{node.start_byte}"
-
         parsed_node = self._make_node(
             node,
             kind=NodeKind.BLOCK,
-            name=name,
-            fqn=fqn,
             body=body,
             visibility=Visibility.PUBLIC,
         )
@@ -145,8 +112,6 @@ class MarkdownCodeParser(AbstractCodeParser):
         if not is_terminal:
             # Recursively process children, skipping the heading node itself
             child_nodes_to_process = node.children
-            if heading_node:
-                child_nodes_to_process = node.children[1:]
 
             for child_node in child_nodes_to_process:
                 parsed_node.children.extend(
@@ -162,15 +127,9 @@ class MarkdownCodeParser(AbstractCodeParser):
         if not body.strip():
             return []
 
-        name = node.type
-        # Use start byte for FQN uniqueness
-        fqn = f"{self._make_fqn(name, parent)}@{node.start_byte}"
-
         parsed_node = self._make_node(
             node,
             kind=NodeKind.BLOCK,
-            name=name,
-            fqn=fqn,
             body=body,
             visibility=Visibility.PUBLIC,
         )
