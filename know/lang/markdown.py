@@ -97,9 +97,38 @@ class MarkdownCodeParser(AbstractCodeParser):
         if not body.strip():
             return []
 
+        heading_node = None
+        # A section's first child should be a heading
+        if node.children and "heading" in node.children[0].type:
+            heading_node = node.children[0]
+
+        name = "section"
+        if heading_node:
+            content_node = next(
+                (n for n in heading_node.children if n.type == "heading_content"),
+                None,
+            )
+            if not content_node:
+                content_node = next(
+                    (n for n in heading_node.children if n.type == "paragraph"), None
+                )
+
+            header_text = ""
+            if content_node:
+                header_text = get_node_text(content_node).strip()
+            else:
+                raw_text = get_node_text(heading_node)
+                header_text = re.sub(
+                    r"^[#\s]+|[=\s\-_]+$", "", raw_text, flags=re.MULTILINE
+                ).strip()
+
+            if header_text:
+                name = header_text
+
         parsed_node = self._make_node(
             node,
-            kind=NodeKind.BLOCK,
+            kind=NodeKind.LITERAL,
+            docstring=name,
             body=body,
             visibility=Visibility.PUBLIC,
         )
@@ -112,7 +141,6 @@ class MarkdownCodeParser(AbstractCodeParser):
         if not is_terminal:
             # Recursively process children, skipping the heading node itself
             child_nodes_to_process = node.children
-
             for child_node in child_nodes_to_process:
                 parsed_node.children.extend(
                     self._process_node(child_node, parent=parsed_node)
@@ -129,7 +157,7 @@ class MarkdownCodeParser(AbstractCodeParser):
 
         parsed_node = self._make_node(
             node,
-            kind=NodeKind.BLOCK,
+            kind=NodeKind.LITERAL,
             body=body,
             visibility=Visibility.PUBLIC,
         )

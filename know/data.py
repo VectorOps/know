@@ -450,7 +450,7 @@ def include_direct_descendants(
     if not symbols:
         return symbols
 
-    parent_ids = [s.id for s in symbols if s.id]
+    parent_ids = [s.id for s in symbols if s.id and s.kind != NodeKind.LITERAL]
     if parent_ids:
         children = repo.get_list(NodeFilter(parent_ids=parent_ids))
         seen_ids = {s.id for s in symbols}
@@ -482,6 +482,8 @@ def post_process_search_results(
     - Includes direct descendants of the final results.
     - Designed to allow for future inclusion of reranking models.
     """
+    from devtools import pprint; pprint(results)
+
     # Filter out nodes that are parents of other nodes in the result set
     all_ids = {n.id for n in results}
     parent_ids_in_results = {n.parent_node_id for n in results if n.parent_node_id in all_ids}

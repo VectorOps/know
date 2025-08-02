@@ -34,7 +34,7 @@ def test_markdown_parser_on_readme():
     parser = MarkdownCodeParser(project, project.default_repo, "README.md")
     parsed_file = parser.parse(cache)
 
-    from devtools import pprint; pprint(parsed_file)
+    #from devtools import pprint; pprint(parsed_file)
 
     # Basic assertions
     assert parsed_file.path == "README.md"
@@ -55,29 +55,24 @@ def test_markdown_parser_on_readme():
         if s.name not in ["paragraph", "fenced_code_block", "list", "block_quote", "pipe_table"]
     ]
 
-    assert len(symbols) == 16
-    assert all(s.kind == NodeKind.BLOCK for s in symbols)
+    assert len(symbols) == 11
+    assert all(s.kind == NodeKind.LITERAL for s in symbols)
 
     # Check section names (headings for sections, node type for others)
     expected_headings = [
         "VectorOps – *Know*",
+        None,
+        None,
         "Key Features",
-        "thematic_break",
         "Installation",
-        "thematic_break",
         "Built-in Tools",
-        "thematic_break",
         "Quick CLI Examples",
-        "thematic_break",
         "MCP Server",
-        "thematic_break",
         "Using the Python API",
-        "thematic_break",
         "Extending Know",
-        "thematic_break",
         "License",
     ]
-    actual_headings = [s.name for s in symbols]
+    actual_headings = [s.docstring for s in symbols]
     assert actual_headings == expected_headings
 
     # Check that each symbol's body is not empty
@@ -87,11 +82,11 @@ def test_markdown_parser_on_readme():
     # Check that terminal sections (those without sub-sections) have no parsed
     # children, while non-terminal sections do.
     non_terminal_node = symbols[0]  # 'VectorOps – *Know*' (H1)
-    assert non_terminal_node.name == "VectorOps – *Know*"
+    assert non_terminal_node.docstring == "VectorOps – *Know*"
     assert len(non_terminal_node.children) > 0
 
-    terminal_node = symbols[1]  # 'Key Features' (H2)
-    assert terminal_node.name == "Key Features"
+    terminal_node = symbols[3]  # 'Key Features' (H2)
+    assert terminal_node.docstring == "Key Features"
     assert len(terminal_node.children) == 0
 
     # Also verify the terminal node's body contains its content, not just the heading.

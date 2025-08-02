@@ -521,11 +521,8 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         fetch_limit = raw_limit * 2
         q = q.limit(fetch_limit).offset(offset)
 
-        print(raw_limit, fetch_limit)
-
         rows = self._execute(q)
         nodes = [self.model(**self._deserialize_data(r)) for r in rows]
-        print(len(nodes))
         return post_process_search_results(self, nodes, raw_limit)
 
     def delete_by_file_id(self, file_id: str) -> None:

@@ -116,7 +116,7 @@ def test_repo_map_build_and_refresh():
 
     # initial assertions
     assert set(rm.G.nodes) == {f1.path, f2.path, 'sym::func'}
-    print(rm.G.edges)
+    #print(rm.G.edges)
     assert rm.G.has_edge('sym::func', f1.path)
     assert any(d["name"] == "func" for *_ , d in rm.G.edges(data=True))
 
