@@ -56,86 +56,108 @@ class MarkdownCodeParser(AbstractCodeParser):
     def _process_node(
         self, node: Any, parent: Optional[ParsedNode] = None
     ) -> List[ParsedNode]:
-        # The main logic is in _handle_file to process the whole file at once.
-        return []
+        if node.type == "document":
+            return self._handle_document(node, parent)
+        elif node.type == "section":
+            return self._handle_section(node, parent)
+        else:
+            return self._handle_generic_block(node, parent)
 
     def _collect_symbol_refs(self, root_node: Any) -> List[ParsedNodeRef]:
         return []
 
     def _handle_file(self, root_node: Any) -> None:
-        assert self.parsed_file is not None
+        """
+        Optional hook for language-specific post-processing at file-level.
+        With dispatcher pattern, most logic moved to _handle_document.
+        """
+        pass
 
-        if root_node.type != "document":
-            return
-
+    def _handle_document(
+        self, node: Any, parent: Optional[ParsedNode] = None
+    ) -> List[ParsedNode]:
+        all_nodes: List[ParsedNode] = []
         # Handle potentially nested document structure from tree-sitter-markdown
-        nodes_to_process = root_node.children
+        nodes_to_process = node.children
         if (
-            len(root_node.children) == 1
-            and root_node.children[0].type == "document"
+            len(node.children) == 1
+            and node.children[0].type == "document"
         ):
-            nodes_to_process = root_node.children[0].children
+            nodes_to_process = node.children[0].children
 
         for child_node in nodes_to_process:
-            body = self.source_bytes[
-                child_node.start_byte : child_node.end_byte
-            ].decode("utf-8")
+            # Recursively process children and extend the list of symbols
+            all_nodes.extend(self._process_node(child_node, parent))
+        return all_nodes
 
-            if not body.strip():
-                continue
+    def _handle_section(
+        self, node: Any, parent: Optional[ParsedNode] = None
+    ) -> List[ParsedNode]:
+        body = self.source_bytes[node.start_byte : node.end_byte].decode("utf-8")
+        if not body.strip():
+            return []
 
-            name = child_node.type
-            fqn_name = name
+        heading_node = None
+        # A section's first child should be a heading
+        if node.children and "heading" in node.children[0].type:
+            heading_node = node.children[0]
 
-            if child_node.type == "section":
-                heading_node = None
-                # A section's first child should be a heading
-                if child_node.children and "heading" in child_node.children[0].type:
-                    heading_node = child_node.children[0]
-
-                if heading_node:
-                    content_node = next(
-                        (
-                            n
-                            for n in heading_node.children
-                            if n.type == "heading_content"
-                        ),
-                        None,
-                    )
-                    if not content_node:
-                        content_node = next(
-                            (n for n in heading_node.children if n.type == "paragraph"),
-                            None,
-                        )
-
-                    header_text = ""
-                    if content_node:
-                        header_text = get_node_text(content_node).strip()
-                    else:
-                        raw_text = get_node_text(heading_node)
-                        header_text = re.sub(
-                            r"^[#\s]+|[=\s\-_]+$", "", raw_text, flags=re.MULTILINE
-                        ).strip()
-
-                    if header_text:
-                        name = header_text
-                        fqn_name = header_text
-
-            # Use start byte for FQN uniqueness to handle multiple nodes with same name/type
-            fqn = f"{self._make_fqn(fqn_name)}@{child_node.start_byte}"
-
-            node = self._make_node(
-                child_node,
-                kind=NodeKind.BLOCK,
-                name=name,
-                fqn=fqn,
-                body=body,
-                visibility=Visibility.PUBLIC,
+        name = "section"
+        if heading_node:
+            content_node = next(
+                (n for n in heading_node.children if n.type == "heading_content"),
+                None,
             )
-            node.end_line = child_node.end_point[0]
-            node.end_byte = child_node.end_byte
+            if not content_node:
+                content_node = next(
+                    (n for n in heading_node.children if n.type == "paragraph"), None
+                )
 
-            self.parsed_file.symbols.append(node)
+            header_text = ""
+            if content_node:
+                header_text = get_node_text(content_node).strip()
+            else:
+                raw_text = get_node_text(heading_node)
+                header_text = re.sub(
+                    r"^[#\s]+|[=\s\-_]+$", "", raw_text, flags=re.MULTILINE
+                ).strip()
+
+            if header_text:
+                name = header_text
+
+        # Use start byte for FQN uniqueness
+        fqn = f"{self._make_fqn(name)}@{node.start_byte}"
+
+        parsed_node = self._make_node(
+            node,
+            kind=NodeKind.BLOCK,
+            name=name,
+            fqn=fqn,
+            body=body,
+            visibility=Visibility.PUBLIC,
+        )
+        return [parsed_node]
+
+    def _handle_generic_block(
+        self, node: Any, parent: Optional[ParsedNode] = None
+    ) -> List[ParsedNode]:
+        body = self.source_bytes[node.start_byte : node.end_byte].decode("utf-8")
+        if not body.strip():
+            return []
+
+        name = node.type
+        # Use start byte for FQN uniqueness
+        fqn = f"{self._make_fqn(name)}@{node.start_byte}"
+
+        parsed_node = self._make_node(
+            node,
+            kind=NodeKind.BLOCK,
+            name=name,
+            fqn=fqn,
+            body=body,
+            visibility=Visibility.PUBLIC,
+        )
+        return [parsed_node]
 
 
 class MarkdownLanguageHelper(AbstractLanguageHelper):
