@@ -25,7 +25,7 @@ from know.parsers import (
 )
 from know.project import ProjectManager, ProjectCache
 
-MARKDOWN_LANGUAGE = Language(tsmd.language_markdown())
+MARKDOWN_LANGUAGE = Language(tsmd.language())
 
 _parser: Optional[Parser] = None
 
@@ -68,7 +68,24 @@ class MarkdownCodeParser(AbstractCodeParser):
         current_section_nodes = []
         heading_node_types = {"atx_heading", "setext_heading"}
 
-        for child in root_node.children:
+        # The markdown parser creates 'section' nodes, but our logic below is
+        # designed to work on a flat list of content nodes. Unwrap sections.
+        all_nodes = []
+        nodes_to_process = root_node.children
+        if (
+            root_node.type == "document"
+            and len(root_node.children) == 1
+            and root_node.children[0].type == "document"
+        ):
+            nodes_to_process = root_node.children[0].children
+
+        for child in nodes_to_process:
+            if child.type == "section":
+                all_nodes.extend(child.children)
+            else:
+                all_nodes.append(child)
+
+        for child in all_nodes:
             if child.type in heading_node_types:
                 if current_section_nodes:
                     sections.append(current_section_nodes)
