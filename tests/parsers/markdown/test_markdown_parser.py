@@ -34,6 +34,8 @@ def test_markdown_parser_on_readme():
     parser = MarkdownCodeParser(project, project.default_repo, "README.md")
     parsed_file = parser.parse(cache)
 
+    from devtools import pprint; pprint(parsed_file)
+
     # Basic assertions
     assert parsed_file.path == "README.md"
     assert parsed_file.language == ProgrammingLanguage.MARKDOWN
@@ -81,3 +83,16 @@ def test_markdown_parser_on_readme():
     # Check that each symbol's body is not empty
     for sym in symbols:
         assert sym.body and sym.body.strip()
+
+    # Check that terminal sections (those without sub-sections) have no parsed
+    # children, while non-terminal sections do.
+    non_terminal_node = symbols[0]  # 'VectorOps – *Know*' (H1)
+    assert non_terminal_node.name == "VectorOps – *Know*"
+    assert len(non_terminal_node.children) > 0
+
+    terminal_node = symbols[1]  # 'Key Features' (H2)
+    assert terminal_node.name == "Key Features"
+    assert len(terminal_node.children) == 0
+
+    # Also verify the terminal node's body contains its content, not just the heading.
+    assert "Multi-language parsing" in terminal_node.body

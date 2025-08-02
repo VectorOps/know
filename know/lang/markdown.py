@@ -56,7 +56,6 @@ class MarkdownCodeParser(AbstractCodeParser):
     def _process_node(
         self, node: Any, parent: Optional[ParsedNode] = None
     ) -> List[ParsedNode]:
-        print(node.type, node.children)
         if node.type == "document":
             return self._handle_document(node, parent)
         elif node.type == "section":
@@ -138,15 +137,21 @@ class MarkdownCodeParser(AbstractCodeParser):
             visibility=Visibility.PUBLIC,
         )
 
-        # Recursively process children, skipping the heading node itself
-        child_nodes_to_process = node.children
-        if heading_node:
-            child_nodes_to_process = node.children[1:]
+        # A section is "terminal" if it does not contain any sub-sections.
+        # For terminal sections, we keep the full body but don't parse children.
+        # For non-terminal sections, we parse children to build the hierarchy.
+        is_terminal = not any(child.type == "section" for child in node.children)
 
-        for child_node in child_nodes_to_process:
-            parsed_node.children.extend(
-                self._process_node(child_node, parent=parsed_node)
-            )
+        if not is_terminal:
+            # Recursively process children, skipping the heading node itself
+            child_nodes_to_process = node.children
+            if heading_node:
+                child_nodes_to_process = node.children[1:]
+
+            for child_node in child_nodes_to_process:
+                parsed_node.children.extend(
+                    self._process_node(child_node, parent=parsed_node)
+                )
 
         return [parsed_node]
 
