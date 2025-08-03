@@ -639,6 +639,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     v = self._create_variable_symbol(ch, parent=sym, exported=exported)
                     if v:
                         sym.children.append(v)
+                elif ch.type == "comment":
+                    sym.children.extend(self._handle_comment(ch, parent=sym))
 
                 elif ch.type == "comment":
                     sym.children.extend(self._handle_comment(ch, parent=sym))
