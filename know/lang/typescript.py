@@ -84,7 +84,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     def _handle_statement_block(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         children = []
-        for child_node in node.children:
+        for child_node in node.named_children:
             children.extend(self._process_node(child_node, parent=parent))
         return [
             self._make_node(
@@ -98,7 +98,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     def _handle_parenthesized_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         children = []
-        for child_node in node.children:
+        for child_node in node.named_children:
             children.extend(self._process_node(child_node, parent=parent))
         return [
             self._make_node(
@@ -120,8 +120,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return ".".join(parts)
 
     def _process_node(self, node, parent=None) -> List[ParsedNode]:
-        if node.type in ("{", "}", ";"):
-            return []
         if node.type == "import_statement":
             return self._handle_import(node, parent=parent)
         elif node.type == "import_equals_declaration":
@@ -896,6 +894,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
             elif ch.type == "call_expression":
                 self._collect_require_calls(ch)
 
+            elif ch.type == "parenthesized_expression":
+                children.extend(self._handle_parenthesized_expression(ch, parent=parent))
+                continue
+
             else:
                 logger.warning(
                     "TS parser: unhandled expression child",
@@ -1464,6 +1466,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                         child_stack=child_stack,
                     )
                 )
+
             lines.append(IND + close_char)
             return "\n".join(lines)
 
@@ -1489,13 +1492,13 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             return "\n".join(lines)
 
         # non-class symbols – keep terse one-liner
-        if sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD) and not header.endswith("{"):
+        elif sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD) and not header.endswith("{"):
             if sym.kind == NodeKind.METHOD and Modifier.ABSTRACT in (sym.modifiers or []):
                 header += ";"
             else:
                 header += " { ... }"
 
-        if sym.kind == NodeKind.EXPORT:
+        elif sym.kind == NodeKind.EXPORT:
             # one or more exported declarations
             if sym.children:
                 lines = []
