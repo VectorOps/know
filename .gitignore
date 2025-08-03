@@ -12,6 +12,7 @@ wheels/
 .symbol_search_history
 .repomap_history
 .mypy_cache
+*.py.text-chunks
 
 # Virtual environments
 .venv/
