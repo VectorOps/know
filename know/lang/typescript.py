@@ -92,6 +92,21 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 kind=NodeKind.BLOCK,
                 visibility=Visibility.PUBLIC,
                 children=children,
+                signature=NodeSignature(raw="{}", lexical_type="brace"),
+            )
+        ]
+
+    def _handle_parenthesized_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        children = []
+        for child_node in node.children:
+            children.extend(self._process_node(child_node, parent=parent))
+        return [
+            self._make_node(
+                node,
+                kind=NodeKind.BLOCK,
+                visibility=Visibility.PUBLIC,
+                children=children,
+                signature=NodeSignature(raw="()", lexical_type="parenthesis"),
             )
         ]
 
@@ -135,6 +150,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return self._handle_namespace(node, parent=parent)
         elif node.type == "statement_block":
             return self._handle_statement_block(node, parent)
+        elif node.type == "parenthesized_expression":
+            return self._handle_parenthesized_expression(node, parent)
         elif node.type in self._GENERIC_STATEMENT_NODES:
             return self._handle_generic_statement(node, parent)
 
@@ -351,7 +368,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             if sym.name and sym.name in exported_names:
                 sym.exported = True
 
-            if sym.kind in (NodeKind.CONSTANT, NodeKind.VARIABLE, NodeKind.ASSIGNMENT):
+            if sym.kind in (NodeKind.CONSTANT, NodeKind.VARIABLE, NodeKind.EXPRESSION):
                 for ch in sym.children:
                     _mark_exported(ch)
 
@@ -891,7 +908,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return [
             self._make_node(
                 node,
-                kind=NodeKind.ASSIGNMENT,
+                kind=NodeKind.EXPRESSION,
                 visibility=Visibility.PUBLIC,
                 children=children,
                 )
@@ -1374,7 +1391,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
             return IND + header + ", ".join(child_summaries) + ";"
 
-        elif sym.kind == NodeKind.ASSIGNMENT:
+        elif sym.kind == NodeKind.EXPRESSION:
             # one-liner when the assignment has no nested symbols
             if not sym.children:
                 body = (sym.body or "").strip()
@@ -1429,7 +1446,11 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             return "\n".join(lines)
 
         elif sym.kind == NodeKind.BLOCK:
-            lines = [IND + "{"]
+            open_char, close_char = "{", "}"
+            if sym.signature and sym.signature.lexical_type == "parenthesis":
+                open_char, close_char = "(", ")"
+
+            lines = [IND + open_char]
             for ch in sym.children or []:
                 if only_children and ch not in only_children:
                     continue
@@ -1443,7 +1464,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                         child_stack=child_stack,
                     )
                 )
-            lines.append(IND + "}")
+            lines.append(IND + close_char)
             return "\n".join(lines)
 
         elif sym.kind == NodeKind.NAMESPACE:

@@ -78,6 +78,21 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 kind=NodeKind.BLOCK,
                 visibility=Visibility.PUBLIC,
                 children=children,
+                signature=NodeSignature(raw="{}", lexical_type="brace"),
+            )
+        ]
+
+    def _handle_parenthesized_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        children = []
+        for child_node in node.children:
+            children.extend(self._process_node(child_node, parent=parent))
+        return [
+            self._make_node(
+                node,
+                kind=NodeKind.BLOCK,
+                visibility=Visibility.PUBLIC,
+                children=children,
+                signature=NodeSignature(raw="()", lexical_type="parenthesis"),
             )
         ]
 
@@ -89,7 +104,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         return ".".join(p.with_suffix("").parts)
 
     def _process_node(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
-        if node.type in ("{", "}", ";"):
+        if node.type in ("{", "}", ";", "(", ")"):
             return []
         if node.type == "import_statement":
             return self._handle_import(node, parent)
@@ -111,6 +126,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return self._handle_comment(node, parent)
         elif node.type == "statement_block":
             return self._handle_statement_block(node, parent)
+        elif node.type == "parenthesized_expression":
+            return self._handle_parenthesized_expression(node, parent)
         elif node.type in self._GENERIC_STATEMENT_NODES:
             return self._handle_generic_statement(node, parent)
 
@@ -216,7 +233,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             def _mark(sym):
                 if sym.name and sym.name in exported_names:
                     sym.exported = True
-                if sym.kind in (NodeKind.CONSTANT, NodeKind.VARIABLE, NodeKind.ASSIGNMENT):
+                if sym.kind in (NodeKind.CONSTANT, NodeKind.VARIABLE, NodeKind.EXPRESSION):
                     for ch in sym.children:
                         _mark(ch)
             for s in self.parsed_file.symbols:
@@ -277,9 +294,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
         ]
 
     def _handle_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
-        if len(node.named_children) == 1 and node.named_children[0].type == "string":
-            return [self._create_literal_symbol(node, parent=parent)]
-
         children: list[ParsedNode] = []
         for ch in node.named_children:
             if ch.type == "assignment_expression":
@@ -343,7 +357,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 if sym:
                     children.append(sym)
                 continue
-            elif ch.type in ("call_expression", "member_expression", "unary_expression"):
+            elif ch.type in ("call_expression", "member_expression", "unary_expression", "string"):
                 if ch.type == "call_expression":
                     self._collect_require_calls(ch)
                 children.append(self._create_literal_symbol(ch, parent))
@@ -359,7 +373,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         return [
             self._make_node(
                 node,
-                kind=NodeKind.ASSIGNMENT,
+                kind=NodeKind.EXPRESSION,
                 visibility=Visibility.PUBLIC,
                 children=children,
                 )
@@ -844,7 +858,6 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
         else:
             header = sym.name or ""
 
-        # ---------- VARIABLE / CONSTANT -------------------------------
         if sym.kind in (NodeKind.CONSTANT, NodeKind.VARIABLE):
             if not sym.children:
                 body = (sym.body or "").strip()
@@ -865,8 +878,7 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
                 header += " "
             return IND + header + ", ".join(child_parts) + ";"
 
-        # ---------- ASSIGNMENT ----------------------------------------
-        if sym.kind == NodeKind.ASSIGNMENT:
+        if sym.kind == NodeKind.EXPRESSION:
             if not sym.children:
                 body = (sym.body or "").strip()
                 return "\n".join(f"{IND}{ln.strip()}" for ln in body.splitlines())
@@ -886,7 +898,6 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
                 )
             return "\n".join(lines)
 
-        # ---------- CLASS ---------------------------------------------
         elif sym.kind == NodeKind.CLASS:
             if not header.endswith("{"):
                 header += " {"
@@ -907,9 +918,12 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
             lines.append(IND + "}")
             return "\n".join(lines)
 
-        # ---------- BLOCK ---------------------------------------------
         elif sym.kind == NodeKind.BLOCK:
-            lines = [IND + "{"]
+            open_char, close_char = "{", "}"
+            if sym.signature and sym.signature.lexical_type == "parenthesis":
+                open_char, close_char = "(", ")"
+
+            lines = [IND + open_char]
             for ch in sym.children or []:
                 if only_children and ch not in only_children:
                     continue
@@ -921,10 +935,9 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
                     child_stack=child_stack,
                 )
                 lines.append(child_summary)
-            lines.append(IND + "}")
+            lines.append(IND + close_char)
             return "\n".join(lines)
 
-        # ---------- EXPORT --------------------------------------------
         elif sym.kind == NodeKind.EXPORT:
             if sym.children:
                 export_lines: list[str] = []
@@ -945,14 +958,12 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
             header = sym.signature.raw if sym.signature else (sym.body or "export").strip()
             return IND + header
 
-        # ---------- FUNCTION / METHOD  --------------------------------
         if sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD):
             if not header.endswith("{"):
                 header += " { ... }" if sym.kind == NodeKind.FUNCTION else \
                           (";" if Modifier.ABSTRACT in (sym.modifiers or []) else " { ... }")
             return IND + header
 
-        # ---------- fall-back -----------------------------------------
         return IND + header
 
     # ------------------------------------------------------------------
