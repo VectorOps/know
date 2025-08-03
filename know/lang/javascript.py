@@ -372,6 +372,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
             elif ch.type == "parenthesized_expression":
                 children.extend(self._handle_parenthesized_expression(ch, parent=parent))
                 continue
+            elif ch.type == "sequence_expression":
+                children.extend(self._handle_sequence_expression(ch, parent=parent))
+                continue
             else:
                 logger.warning(
                     "JS parser: unhandled expression child",
