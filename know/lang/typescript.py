@@ -41,6 +41,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
     extensions = (".ts", ".tsx")
 
     _GENERIC_STATEMENT_NODES: set[str] = {
+        "string",
+
         # module / namespace level
         "ambient_declaration",
         "declare_statement",

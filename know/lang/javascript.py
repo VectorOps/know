@@ -59,6 +59,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         "debugger_statement",
         "labeled_statement",
         "with_statement",
+        "string",
     }
     _JS_REF_QUERY = JS_LANGUAGE.query(r"""
         (call_expression
@@ -464,9 +465,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         if not name:
             return [self._create_literal_symbol(node, parent)]
 
-        print(function_node)
         children = self._process_node(function_node, parent=parent)
-        print(children)
 
         arguments_node = node.child_by_field_name("arguments")
         params_objs: list[NodeParameter] = []

@@ -632,6 +632,7 @@ class PythonCodeParser(AbstractCodeParser):
             fqn=fqn,
             visibility=self._infer_visibility(name),
             comment=self._get_preceding_comment(wrapper),
+            exported=self._infer_visibility(name) == Visibility.PUBLIC,
         )
 
     def _handle_assignment(
@@ -679,6 +680,7 @@ class PythonCodeParser(AbstractCodeParser):
                 docstring=self._extract_docstring(node),
                 signature=self._build_function_signature(wrapper),
                 comment=self._get_preceding_comment(node),
+                exported=self._infer_visibility(func_name) == Visibility.PUBLIC,
             )
         ]
 
@@ -696,6 +698,7 @@ class PythonCodeParser(AbstractCodeParser):
             comment=self._get_preceding_comment(node),
             docstring=self._extract_docstring(node),
             signature=self._build_class_signature(wrapper),
+            exported=self._infer_visibility(class_name) == Visibility.PUBLIC,
         )
 
         # Traverse class body to find methods and properties
@@ -750,6 +753,7 @@ class PythonCodeParser(AbstractCodeParser):
             docstring=self._extract_docstring(node),
             signature=self._build_function_signature(wrapper),
             comment=self._get_preceding_comment(node),
+            exported=self._infer_visibility(method_name) == Visibility.PUBLIC,
         )
 
     def _handle_expression_statement(self, node: ts.Node, parent: Optional[ParsedNode]=None) -> List[ParsedNode]:
