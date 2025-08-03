@@ -69,13 +69,6 @@ class MarkdownCodeParser(AbstractCodeParser):
         start_byte_offset = len(section_body[: chunk.start].encode("utf-8"))
         end_byte_offset = len(section_body[: chunk.end].encode("utf-8"))
 
-        children = [
-            self._chunk_to_node(
-                c, section_body, section_start_byte, section_start_line
-            )
-            for c in chunk.children
-        ]
-
         return ParsedNode(
             body=chunk.text,
             kind=NodeKind.LITERAL,
@@ -84,7 +77,7 @@ class MarkdownCodeParser(AbstractCodeParser):
             start_byte=section_start_byte + start_byte_offset,
             end_byte=section_start_byte + end_byte_offset,
             visibility=Visibility.PUBLIC,
-            children=children,
+            children=[],
         )
 
     def _process_node(
@@ -185,9 +178,7 @@ class MarkdownCodeParser(AbstractCodeParser):
             top_chunks = self.chunker.chunk(body)
 
             # Only add children if chunking resulted in splits.
-            has_splits = len(top_chunks) > 1 or (
-                top_chunks and top_chunks[0].children
-            )
+            has_splits = len(top_chunks) > 1
             if has_splits:
                 section_start_byte = node.start_byte
                 section_start_line = node.start_point[0]
@@ -220,7 +211,7 @@ class MarkdownCodeParser(AbstractCodeParser):
         top_chunks = self.chunker.chunk(body)
 
         # Only add children if chunking resulted in splits.
-        has_splits = len(top_chunks) > 1 or (top_chunks and top_chunks[0].children)
+        has_splits = len(top_chunks) > 1
         if has_splits:
             section_start_byte = node.start_byte
             section_start_line = node.start_point[0]

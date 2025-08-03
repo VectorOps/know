@@ -75,7 +75,7 @@ class TextCodeParser(AbstractCodeParser):
             start_byte=start_byte,
             end_byte=end_byte,
             visibility=Visibility.PUBLIC,
-            children=[self._chunk_to_node(c, full_text) for c in chunk.children],
+            children=[],
         )
 
     def _process_node(
