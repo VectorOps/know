@@ -68,11 +68,17 @@ class RecursiveChunker(AbstractChunker):
         if self.token_counter(sentence) <= self.max_tokens:
             return [Chunk(sent_start, sent_start + len(sentence), sentence)]
 
-        parts = [Chunk(s, e, span) for span, s, e in _segments_with_pos(self.phrase_re, sentence, sent_start)]
+        parts = list(_segments_with_pos(self.phrase_re, sentence, sent_start))
         if len(parts) == 1:  # no delimiter
             return self._split_words(sentence, sent_start)
 
-        return self._pack(parts, text)
+        leaves = []
+        for span, s, e in parts:
+            if self.token_counter(span) > self.max_tokens:
+                leaves.extend(self._split_words(span, s))
+            else:
+                leaves.append(Chunk(s, e, span))
+        return leaves
 
     def _split_sentences(self, paragraph: str, para_start: int, text: str) -> List[Chunk]:
         if self.token_counter(paragraph) <= self.max_tokens:
@@ -97,10 +103,12 @@ class RecursiveChunker(AbstractChunker):
             if not para.strip():  # skip blank paras
                 continue
             children = self._split_sentences(para, p_start, text)
-            if len(children) == 1 and not children[0].children:
-                # paragraph fits outright
+            if len(children) == 1:
+                # The whole paragraph fits into a single chunk (either because it was
+                # small to begin with, or because its pieces were packed into one).
                 top_nodes.append(children[0])
             else:
+                # The paragraph was split into multiple chunks. Create a parent for them.
                 top_nodes.append(Chunk(p_start, p_end, para, children))
 
         return top_nodes
