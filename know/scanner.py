@@ -317,7 +317,7 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
     file_data = parsed_file.to_dict()
     file_data.update({"repo_id": repo.id})
 
-    if parsed_file.package:
+    if pkg_meta:
         file_data.update({"package_id": pkg_meta.id})
 
     if file_meta:

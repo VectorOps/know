@@ -23,14 +23,16 @@ from know.data import (
     FileFilter,
     NodeFilter,
     ImportEdgeFilter,
-    include_direct_descendants,
-    resolve_node_hierarchy,
-    post_process_search_results,
     AbstractProjectRepository,
     AbstractProjectRepoRepository,
     RepoFilter,
+    NodeRefFilter,
 )
-from know.data import NodeRefFilter
+from know.data_helpers import (
+    include_direct_descendants,
+    resolve_node_hierarchy,
+    post_process_search_results,
+)
 from dataclasses import dataclass, field
 import math
 import numpy as np

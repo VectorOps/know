@@ -34,15 +34,17 @@ from know.data import (
     AbstractDataRepository,
     NodeSearchQuery,
     PackageFilter,
-    include_direct_descendants,
-    resolve_node_hierarchy,
-    post_process_search_results,
     NodeFilter,
     NodeRefFilter,
     ImportEdgeFilter,
     AbstractProjectRepository,
     AbstractProjectRepoRepository,
     RepoFilter,
+)
+from know.data_helpers import (
+    include_direct_descendants,
+    resolve_node_hierarchy,
+    post_process_search_results,
 )
 from know.helpers import generate_id
 from know.stores.helpers import BaseQueueWorker
@@ -111,9 +113,11 @@ class DuckDBThreadWrapper(BaseQueueWorker):
             self._conn.execute("USE db")
 
         def execute_fn(sql: str, params: Optional[list[Any]] = None):
+            assert self._conn is not None
             self._conn.execute(sql, params if params else [])
 
         def query_fn(sql: str, params: Optional[list[Any]] = None) -> list[dict[str, Any]]:
+            assert self._conn is not None
             rel = self._conn.execute(sql, params if params else [])
             return _row_to_dict(rel) if rel is not None else []
 

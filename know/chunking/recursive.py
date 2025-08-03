@@ -46,7 +46,9 @@ class RecursiveChunker(AbstractChunker):
         if not segments:
             return []
 
-        packed, buf, buf_tokens = [], [], 0
+        packed = []
+        buf: List[Chunk] = []
+        buf_tokens = 0
         for seg in segments:
             t = self.token_counter(seg.text)
 
