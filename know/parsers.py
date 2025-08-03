@@ -185,6 +185,7 @@ class AbstractCodeParser(ABC):
     def parse(self, cache: ProjectCache) -> ParsedFile:
         if not self.repo.root_path:
             raise ValueError("repo.root_path must be set to parse files")
+
         file_path = os.path.join(self.repo.root_path, self.rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
@@ -217,7 +218,8 @@ class AbstractCodeParser(ABC):
         self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
 
         # Sync package-level imports with file-level imports
-        self.package.imports = list(self.parsed_file.imports)
+        if self.package:
+            self.package.imports = list(self.parsed_file.imports)
 
         for sym in self.parsed_file.symbols:
             sym.exported = (sym.visibility != Visibility.PRIVATE)

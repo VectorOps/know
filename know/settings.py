@@ -90,7 +90,6 @@ class SearchSettings(BaseModel):
 
 class LanguageSettings(BaseModel):
     """Base class for language-specific settings."""
-
     pass
 
 
@@ -103,6 +102,10 @@ class TextSettings(LanguageSettings):
     max_tokens: int = Field(
         default=512,
         description="Maximum number of tokens per chunk for text files when embeddings are not enabled.",
+    )
+    min_tokens: int = Field(
+        default=64,
+        description="Minimum number of tokens for chunk to not be merged with another chunk."
     )
 
 

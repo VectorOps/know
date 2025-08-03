@@ -28,7 +28,7 @@ def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str, syn
         return
 
     # normal-priority request
-    emb_calc.get_embedding_callback(body, _on_vec)
+    emb_calc.get_embedding_callback(body, _on_vec, interactive=False)
 
 
 def schedule_missing_embeddings(pm: ProjectManager, repo: Repo) -> None:

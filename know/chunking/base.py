@@ -13,7 +13,6 @@ class Chunk:
     start: int  # byte offset in the original string
     end: int    # exclusive
     text: str
-    children: List["Chunk"] = field(default_factory=list)
 
     def __repr__(self) -> str:  # compact / readable when printing
         t = (self.text[:60] + "…") if len(self.text) > 60 else self.text
@@ -45,14 +44,17 @@ def create_chunker_from_project_manager(pm: "ProjectManager") -> "AbstractChunke
     if pm.embeddings:
         token_counter = pm.embeddings.get_token_count
         max_tokens = pm.embeddings.get_max_context_length()
+        min_tokens = text_settings.min_tokens
     else:
         token_counter = lambda s: len(s.split())
         max_tokens = text_settings.max_tokens if text_settings else 512
+        min_tokens = 64
 
     chunker_type = text_settings.chunker_type if text_settings else "recursive"
 
     return create_chunker(
         chunker_type=chunker_type,
         max_tokens=max_tokens,
+        min_tokens=min_tokens,
         token_counter=token_counter,
     )

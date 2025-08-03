@@ -21,7 +21,7 @@ from know.parsers import (
 from know.project import ProjectManager, ProjectCache
 
 
-class TextCodeParser(AbstractCodeParser):
+class TextParser(AbstractCodeParser):
     language = ProgrammingLanguage.TEXT
     extensions = (".txt",)
 
@@ -87,7 +87,7 @@ class TextCodeParser(AbstractCodeParser):
         return []  # Not used by this parser
 
 
-class TextLanguageHelper(AbstractLanguageHelper):
+class TextHelper(AbstractLanguageHelper):
     language = ProgrammingLanguage.TEXT
 
     def get_symbol_summary(

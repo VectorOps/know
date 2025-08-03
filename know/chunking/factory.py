@@ -13,6 +13,7 @@ def create_chunker(
     *,
     chunker_type: ChunkerType = "recursive",
     max_tokens: int,
+    min_tokens: int = 0,
     token_counter: Callable[[str], int],
 ) -> AbstractChunker:
     """
@@ -31,6 +32,7 @@ def create_chunker(
     if chunker_type == "recursive":
         return RecursiveChunker(
             max_tokens=max_tokens,
+            min_tokens=min_tokens,
             token_counter=token_counter,
         )
 
