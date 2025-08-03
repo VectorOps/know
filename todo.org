@@ -27,6 +27,7 @@
 *** [X] Fix to_package_path for python
         to_package_path='os', for 'os.path.join'
 *** [ ] Fix summary generator to not include module docstring if level is short summary - add special handling to _handle_expression_string and new node type for documentation
+*** [ ] Add support for for_statement, raise_statement, with_statement
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
 *** [X] Refactror node parser to return nodes like python and typescript parsers
@@ -44,6 +45,10 @@
 *** [X] React TSX support
 ** [X] JavaScript
 *** [X] Add support for member_expression, empty_statement node type
+*** [ ] Add support for statement_block, string, ternary_expression
+*** [ ] Do not warn on empty_statement
+*** [ ] Parser handled node but produced no symbols line=84 node_type=expression_statement path=django/contrib/admin/options.py raw='HORIZONTAL, VERTICAL = 1, 2'
+*** [ ] JS parser: unhandled export statement line=21 path=tests/staticfiles_tests/project/documents/cached/module.js raw='export * from "./module_test.js";'
 ** [ ] C
 ** [ ] C#
 ** [ ] Java

@@ -57,3 +57,10 @@ window.onload = () => { alert("yes"); };
 function identity(arg) {
   return arg;
 }
+
+// block
+{
+  function test() {
+    console.log("yes");
+  }
+}

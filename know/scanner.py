@@ -118,7 +118,7 @@ def _process_file(
             return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
 
         # File has changed or is new, needs processing
-        parser_cls = parser_map.get(path.suffix)
+        parser_cls = parser_map.get(path.suffix.lower())
         if parser_cls is None:
             duration = time.perf_counter() - file_proc_start
             return ProcessFileResult(
