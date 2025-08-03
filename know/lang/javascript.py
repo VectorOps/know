@@ -70,8 +70,11 @@ class JavaScriptCodeParser(AbstractCodeParser):
 
     def _handle_statement_block(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         children = []
-        for child_node in node.children:
+        for child_node in node.named_children:
             children.extend(self._process_node(child_node, parent=parent))
+
+        print(children)
+
         return [
             self._make_node(
                 node,
@@ -84,7 +87,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
 
     def _handle_parenthesized_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         children = []
-        for child_node in node.children:
+        for child_node in node.named_children:
             children.extend(self._process_node(child_node, parent=parent))
         return [
             self._make_node(
@@ -104,8 +107,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
         return ".".join(p.with_suffix("").parts)
 
     def _process_node(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
-        if node.type in ("{", "}", ";", "(", ")"):
-            return []
         if node.type == "import_statement":
             return self._handle_import(node, parent)
         elif node.type == "export_statement":
@@ -361,6 +362,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 if ch.type == "call_expression":
                     self._collect_require_calls(ch)
                 children.append(self._create_literal_symbol(ch, parent))
+                continue
+            elif ch.type == "parenthesized_expression":
+                children.extend(self._handle_parenthesized_expression(ch, parent=parent))
                 continue
             else:
                 logger.warning(
@@ -824,7 +828,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         ]
 
 class JavaScriptLanguageHelper(AbstractLanguageHelper):
-    language = ProgrammingLanguage.TYPESCRIPT
+    language = ProgrammingLanguage.JAVASCRIPT
 
     def get_symbol_summary(
         self,
@@ -878,7 +882,7 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
                 header += " "
             return IND + header + ", ".join(child_parts) + ";"
 
-        if sym.kind == NodeKind.EXPRESSION:
+        elif sym.kind == NodeKind.EXPRESSION:
             if not sym.children:
                 body = (sym.body or "").strip()
                 return "\n".join(f"{IND}{ln.strip()}" for ln in body.splitlines())
@@ -958,7 +962,7 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
             header = sym.signature.raw if sym.signature else (sym.body or "export").strip()
             return IND + header
 
-        if sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD):
+        elif sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD):
             if not header.endswith("{"):
                 header += " { ... }" if sym.kind == NodeKind.FUNCTION else \
                           (";" if Modifier.ABSTRACT in (sym.modifiers or []) else " { ... }")
@@ -966,6 +970,5 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
 
         return IND + header
 
-    # ------------------------------------------------------------------
-    def get_import_summary(self, imp: ImportEdge) -> str:  # unchanged
+    def get_import_summary(self, imp: ImportEdge) -> str:
         return imp.raw.strip() if imp.raw else f"import {imp.to_package_virtual_path}"

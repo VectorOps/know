@@ -92,3 +92,15 @@ def test_javascript_parser_on_simple_file():
     test_cls_children = _to_map(flat_map["Test"].children)
     assert "method" in test_cls_children
     assert test_cls_children["method"].kind == NodeKind.METHOD
+
+    # verify parenthesized expression parsing
+    paren_expr_node = next((s for s in parsed_file.symbols if s.body.startswith('(\n  "text"\n)')), None)
+    assert paren_expr_node is not None
+    assert paren_expr_node.kind == NodeKind.EXPRESSION
+    assert len(paren_expr_node.children) == 1
+    assert paren_expr_node.children[0].kind == NodeKind.BLOCK
+    assert paren_expr_node.children[0].signature.lexical_type == "parenthesis"
+    block_child = paren_expr_node.children[0]
+    assert len(block_child.children) == 1
+    assert block_child.children[0].kind == NodeKind.LITERAL
+    assert block_child.children[0].body == '"text"'
