@@ -1,8 +1,7 @@
 import os
 from typing import Optional, List, Any
 
-from know.chunking.base import Chunk, AbstractChunker
-from know.chunking.factory import create_chunker
+from know.chunking.base import Chunk, AbstractChunker, create_chunker_from_project_manager
 from know.models import (
     ProgrammingLanguage,
     NodeKind,
@@ -11,7 +10,6 @@ from know.models import (
     ImportEdge,
     Repo,
 )
-from know.settings import TextSettings
 from know.parsers import (
     AbstractCodeParser,
     AbstractLanguageHelper,
@@ -36,22 +34,7 @@ class TextCodeParser(AbstractCodeParser):
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
-        text_settings: Optional[TextSettings] = self.pm.settings.languages.get("text")
-
-        if self.pm.embeddings:
-            token_counter = self.pm.embeddings.get_token_count
-            max_tokens = self.pm.embeddings.get_max_context_length()
-        else:
-            token_counter = lambda s: len(s.split())
-            max_tokens = text_settings.max_tokens if text_settings else 512
-
-        chunker_type = text_settings.chunker_type if text_settings else "recursive"
-
-        self.chunker: AbstractChunker = create_chunker(
-            chunker_type=chunker_type,
-            max_tokens=max_tokens,
-            token_counter=token_counter,
-        )
+        self.chunker: AbstractChunker = create_chunker_from_project_manager(pm)
 
     def _rel_to_virtual_path(self, rel_path: str) -> str:
         return os.path.splitext(rel_path)[0].replace(os.sep, ".")

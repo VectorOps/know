@@ -5,15 +5,13 @@ from typing import Optional, List, Any
 import tree_sitter_markdown as tsmd
 from tree_sitter import Parser, Language
 
-from know.chunking.base import Chunk, AbstractChunker
-from know.chunking.factory import create_chunker
+from know.chunking.base import Chunk, AbstractChunker, create_chunker_from_project_manager
 from know.helpers import compute_file_hash
 from know.models import (
     ProgrammingLanguage,
     NodeKind,
     Visibility,
     Node,
-    ImportEdge,
     ImportEdge,
     Repo,
 )
@@ -27,7 +25,6 @@ from know.parsers import (
     ParsedNodeRef,
 )
 from know.project import ProjectManager, ProjectCache
-from know.settings import TextSettings
 
 MARKDOWN_LANGUAGE = Language(tsmd.language())
 
@@ -54,22 +51,7 @@ class MarkdownCodeParser(AbstractCodeParser):
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
 
-        text_settings: Optional[TextSettings] = self.pm.settings.languages.get("text")
-
-        if self.pm.embeddings:
-            token_counter = self.pm.embeddings.get_token_count
-            max_tokens = self.pm.embeddings.get_max_context_length()
-        else:
-            token_counter = lambda s: len(s.split())
-            max_tokens = text_settings.max_tokens if text_settings else 512
-
-        chunker_type = text_settings.chunker_type if text_settings else "recursive"
-
-        self.chunker: AbstractChunker = create_chunker(
-            chunker_type=chunker_type,
-            max_tokens=max_tokens,
-            token_counter=token_counter,
-        )
+        self.chunker: AbstractChunker = create_chunker_from_project_manager(pm)
 
     def _rel_to_virtual_path(self, rel_path: str) -> str:
         return os.path.splitext(rel_path)[0].replace(os.sep, ".")
