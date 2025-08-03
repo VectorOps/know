@@ -1585,6 +1585,9 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
             lines.append(IND + "}")
             return "\n".join(lines)
 
+        elif sym.kind == NodeKind.CALL:
+            return IND + header
+
         # non-class symbols – keep terse one-liner
         elif sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD) and not header.endswith("{"):
             if sym.kind == NodeKind.METHOD and Modifier.ABSTRACT in (sym.modifiers or []):
