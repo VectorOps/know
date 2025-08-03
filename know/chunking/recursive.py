@@ -7,6 +7,7 @@ from .base import AbstractChunker, Chunk
 PARAGRAPH_RE: Pattern = re.compile(r"\n\s*\n")          # blank line
 SENTENCE_RE:  Pattern = re.compile(r"(?<=[.!?])\s+")    # ., ! or ?  + space
 PHRASE_RE:    Pattern = re.compile(r"\s*[,;:]\s*")      # , ; :
+WORD_RE:      Pattern = re.compile(r"\S+")              # one or more non-whitespace characters
 
 def _segments_with_pos(regex: Pattern, text: str, offset: int):
     """Split *text* by *regex* while preserving absolute positions."""
@@ -28,22 +29,45 @@ class RecursiveChunker(AbstractChunker):
         paragraph_re: Pattern = PARAGRAPH_RE,
         sentence_re: Pattern = SENTENCE_RE,
         phrase_re: Pattern = PHRASE_RE,
+        word_re: Pattern = WORD_RE,
     ):
         self.max_tokens = max_tokens
         self.token_counter = token_counter
         self.paragraph_re = paragraph_re
         self.sentence_re = sentence_re
         self.phrase_re = phrase_re
+        self.word_re = word_re
 
     def _split_words(self, text: str, start: int) -> List[Chunk]:
         """Final fallback: slice an over-long span on word boundaries."""
-        pieces, matches = [], list(re.finditer(r"\S+", text))
+        pieces, matches = [], list(self.word_re.finditer(text))
         for i in range(0, len(matches), self.max_tokens):
             s_idx = matches[i].start()
             e_idx = matches[min(i + self.max_tokens - 1, len(matches) - 1)].end()
             span = text[s_idx:e_idx]
             pieces.append(Chunk(start + s_idx, start + e_idx, span))
         return pieces
+
+    def _split_recursively(
+        self, text_to_split: str, offset: int, regex: Pattern, next_level_fn: Callable
+    ) -> List[Chunk]:
+        """
+        Generic helper to split text by a regex and recursively call the next-level splitter.
+        """
+        segments = list(_segments_with_pos(regex, text_to_split, offset))
+
+        # If the regex doesn't split the text, pass the whole text to the next level.
+        if len(segments) == 1:
+            # segments[0] is a tuple (text, start, end)
+            return next_level_fn(segments[0][0], segments[0][1])
+
+        leaves = []
+        for span, s, e in segments:
+            if self.token_counter(span) > self.max_tokens:
+                leaves.extend(next_level_fn(span, s))
+            else:
+                leaves.append(Chunk(s, e, span))
+        return leaves
 
     def _pack(self, segments: List[Chunk], text: str) -> List[Chunk]:
         """Greedily combine consecutive leaf segments until token cap."""
@@ -64,32 +88,21 @@ class RecursiveChunker(AbstractChunker):
             packed.append(Chunk(first.start, last.end, text[first.start:last.end], buf))
         return packed
 
-    def _split_phrases(self, sentence: str, sent_start: int, text: str) -> List[Chunk]:
+    def _split_phrases(self, sentence: str, sent_start: int) -> List[Chunk]:
         if self.token_counter(sentence) <= self.max_tokens:
             return [Chunk(sent_start, sent_start + len(sentence), sentence)]
 
-        parts = list(_segments_with_pos(self.phrase_re, sentence, sent_start))
-        if len(parts) == 1:  # no delimiter
-            return self._split_words(sentence, sent_start)
-
-        leaves = []
-        for span, s, e in parts:
-            if self.token_counter(span) > self.max_tokens:
-                leaves.extend(self._split_words(span, s))
-            else:
-                leaves.append(Chunk(s, e, span))
-        return leaves
+        return self._split_recursively(
+            sentence, sent_start, self.phrase_re, self._split_words
+        )
 
     def _split_sentences(self, paragraph: str, para_start: int, text: str) -> List[Chunk]:
         if self.token_counter(paragraph) <= self.max_tokens:
             return [Chunk(para_start, para_start + len(paragraph), paragraph)]
 
-        leaves = []
-        for sent, s, e in _segments_with_pos(self.sentence_re, paragraph, para_start):
-            if self.token_counter(sent) > self.max_tokens:
-                leaves.extend(self._split_phrases(sent, s, text))
-            else:
-                leaves.append(Chunk(s, e, sent))
+        leaves = self._split_recursively(
+            paragraph, para_start, self.sentence_re, self._split_phrases
+        )
         return self._pack(leaves, text)
 
     def chunk(self, text: str) -> List[Chunk]:
