@@ -68,8 +68,17 @@ def test_javascript_parser_on_simple_file():
     # new class-expression symbol
     assert flat_map["Foo"].kind    == NodeKind.CLASS
 
-    nested_expected = {"CONST", "z", "j1", "f1", "a", "fn", "Test", "Foo"}
+    nested_expected = {"CONST", "z", "j1", "f1", "a", "fn", "Test", "Foo", "test"}
     assert nested_expected.issubset(flat_map.keys())
+    assert flat_map["test"].kind == NodeKind.FUNCTION
+
+    # verify statement block parsing
+    block_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.BLOCK), None)
+    assert block_node is not None
+    block_children = _to_map(block_node.children)
+    assert len(block_children) == 1
+    assert "test" in block_children
+    assert block_children["test"].kind == NodeKind.FUNCTION
 
     # class member sanity check
     test_cls_children = _to_map(flat_map["Test"].children)
