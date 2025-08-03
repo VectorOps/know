@@ -1,4 +1,5 @@
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Optional, List
 import logging
@@ -22,6 +23,13 @@ from know.logger import logger
 # ---------------------------------------------------------------------- #
 TS_LANGUAGE = ts.Language(tsts.language_tsx())
 _parser: ts.Parser | None = None
+
+
+class BlockSubType(str, Enum):
+    BRACE = "brace"
+    PARENTHESIS = "parenthesis"
+
+
 def _get_parser() -> ts.Parser:
     global _parser
     if _parser is None:
@@ -90,9 +98,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._make_node(
                 node,
                 kind=NodeKind.BLOCK,
+                subtype=BlockSubType.BRACE,
                 visibility=Visibility.PUBLIC,
                 children=children,
-                signature=NodeSignature(raw="{}", lexical_type="brace"),
+                signature=NodeSignature(raw="{}"),
             )
         ]
 
@@ -104,9 +113,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._make_node(
                 node,
                 kind=NodeKind.BLOCK,
+                subtype=BlockSubType.PARENTHESIS,
                 visibility=Visibility.PUBLIC,
                 children=children,
-                signature=NodeSignature(raw="()", lexical_type="parenthesis"),
+                signature=NodeSignature(raw="()"),
             )
         ]
 
@@ -1578,7 +1588,7 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
         elif sym.kind == NodeKind.BLOCK:
             open_char, close_char = "{", "}"
-            if sym.signature and sym.signature.lexical_type == "parenthesis":
+            if sym.subtype == BlockSubType.PARENTHESIS:
                 open_char, close_char = "(", ")"
 
             lines = [IND + open_char]
