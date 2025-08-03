@@ -298,22 +298,27 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
     updated, otherwise it is created (“upsert”).
     """
     # Package
-    pkg_meta = pm.data.package.get_by_virtual_path(repo.id, parsed_file.package.virtual_path)
+    pkg_meta: Optional[Package] = None
+    if parsed_file.package:
+        pkg_meta = pm.data.package.get_by_virtual_path(repo.id, parsed_file.package.virtual_path)
 
-    pkg_data = parsed_file.package.to_dict()
-    pkg_data["repo_id"] = repo.id
+        pkg_data = parsed_file.package.to_dict()
+        pkg_data["repo_id"] = repo.id
 
-    if pkg_meta:
-        pm.data.package.update(pkg_meta.id, pkg_data)
-    else:
-        pkg_meta = Package(id=generate_id(), **pkg_data)
-        pkg_meta = pm.data.package.create(pkg_meta)
+        if pkg_meta:
+            pm.data.package.update(pkg_meta.id, pkg_data)
+        else:
+            pkg_meta = Package(id=generate_id(), **pkg_data)
+            pkg_meta = pm.data.package.create(pkg_meta)
 
     # File
     file_meta = pm.data.file.get_by_path(repo.id, parsed_file.path)
 
     file_data = parsed_file.to_dict()
-    file_data.update({"package_id": pkg_meta.id, "repo_id": repo.id})
+    file_data.update({"repo_id": repo.id})
+
+    if parsed_file.package:
+        file_data.update({"package_id": pkg_meta.id})
 
     if file_meta:
         pm.data.file.update(file_meta.id, file_data)
@@ -355,7 +360,7 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
         kwargs.update(
             {
                 "repo_id": repo.id,
-                "from_package_id": pkg_meta.id,
+                "from_package_id": pkg_meta.id if pkg_meta else None,
                 "from_file_id": file_meta.id,
                 "to_package_id": to_pkg_id,
             }
@@ -405,7 +410,7 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
             "id": generate_id(),
             "repo_id": repo.id,
             "file_id": file_meta.id,
-            "package_id": pkg_meta.id,
+            "package_id": pkg_meta.id if pkg_meta else None,
             "parent_node_id": parent_id,
         })
 
@@ -461,7 +466,7 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
         ref_data.update(
             {
                 "repo_id": repo.id,
-                "package_id": pkg_meta.id,
+                "package_id": pkg_meta.id if pkg_meta else None,
                 "file_id": file_meta.id,
                 "to_package_id": to_pkg_id,
             }
