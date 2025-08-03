@@ -82,6 +82,19 @@ class TypeScriptCodeParser(AbstractCodeParser):
         self.rel_path = rel_path
         self.source_bytes: bytes = b""
 
+    def _handle_statement_block(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        children = []
+        for child_node in node.children:
+            children.extend(self._process_node(child_node, parent=parent))
+        return [
+            self._make_node(
+                node,
+                kind=NodeKind.BLOCK,
+                visibility=Visibility.PUBLIC,
+                children=children,
+            )
+        ]
+
     # Required methods
     def _handle_file(self, root_node):
         pass
@@ -92,6 +105,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         return ".".join(parts)
 
     def _process_node(self, node, parent=None) -> List[ParsedNode]:
+        if node.type in ("{", "}", ";"):
+            return []
         if node.type == "import_statement":
             return self._handle_import(node, parent=parent)
         elif node.type == "import_equals_declaration":
@@ -118,6 +133,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return self._handle_enum(node, parent=parent)
         elif node.type in self._NAMESPACE_NODES:
             return self._handle_namespace(node, parent=parent)
+        elif node.type == "statement_block":
+            return self._handle_statement_block(node, parent)
         elif node.type in self._GENERIC_STATEMENT_NODES:
             return self._handle_generic_statement(node, parent)
 
@@ -126,6 +143,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             type=node.type,
             path=self.rel_path,
             line=node.start_point[0] + 1,
+            text=node.text.decode("utf-8"),
         )
 
         return [self._create_literal_symbol(node, parent=parent)]
@@ -1403,6 +1421,24 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
                 lines.append(child_summary)
 
             # closing brace
+            lines.append(IND + "}")
+            return "\n".join(lines)
+
+        elif sym.kind == NodeKind.BLOCK:
+            lines = [IND + "{"]
+            for ch in sym.children or []:
+                if only_children and ch not in only_children:
+                    continue
+
+                lines.append(
+                    self.get_symbol_summary(
+                        ch,
+                        indent=indent + 2,
+                        include_comments=include_comments,
+                        include_docs=include_docs,
+                        child_stack=child_stack,
+                    )
+                )
             lines.append(IND + "}")
             return "\n".join(lines)
 

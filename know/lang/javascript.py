@@ -68,6 +68,19 @@ class JavaScriptCodeParser(AbstractCodeParser):
         self.package : ParsedPackage | None = None
         self.parsed_file : ParsedFile  | None = None
 
+    def _handle_statement_block(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        children = []
+        for child_node in node.children:
+            children.extend(self._process_node(child_node, parent=parent))
+        return [
+            self._make_node(
+                node,
+                kind=NodeKind.BLOCK,
+                visibility=Visibility.PUBLIC,
+                children=children,
+            )
+        ]
+
     def _handle_file(self, root_node: ts.Node) -> None:
         pass
 
@@ -76,6 +89,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
         return ".".join(p.with_suffix("").parts)
 
     def _process_node(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
+        if node.type in ("{", "}", ";"):
+            return []
         if node.type == "import_statement":
             return self._handle_import(node, parent)
         elif node.type == "export_statement":
@@ -94,12 +109,16 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return []
         elif node.type == "comment":
             return self._handle_comment(node, parent)
+        elif node.type == "statement_block":
+            return self._handle_statement_block(node, parent)
         elif node.type in self._GENERIC_STATEMENT_NODES:
             return self._handle_generic_statement(node, parent)
 
         logger.debug("JS parser: unhandled node",
-                     type=node.type, path=self.rel_path,
-                     line=node.start_point[0] + 1)
+                     type=node.type,
+                     path=self.rel_path,
+                     line=node.start_point[0] + 1,
+                     text=node.text.decode("utf-8"))
         return [self._create_literal_symbol(node, parent)]
 
     def _has_modifier(self, node, keyword: str) -> bool:
@@ -880,6 +899,23 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
                 )
                 if ch.kind == NodeKind.VARIABLE:
                     child_summary = child_summary.rstrip() + ";"
+                lines.append(child_summary)
+            lines.append(IND + "}")
+            return "\n".join(lines)
+
+        # ---------- BLOCK ---------------------------------------------
+        elif sym.kind == NodeKind.BLOCK:
+            lines = [IND + "{"]
+            for ch in sym.children or []:
+                if only_children and ch not in only_children:
+                    continue
+                child_summary = self.get_symbol_summary(
+                    ch,
+                    indent + 2,
+                    include_comments,
+                    include_docs,
+                    child_stack=child_stack,
+                )
                 lines.append(child_summary)
             lines.append(IND + "}")
             return "\n".join(lines)
