@@ -37,22 +37,19 @@ def create_chunker_from_project_manager(pm: "ProjectManager") -> "AbstractChunke
     Helper to create a chunker based on project settings.
     """
     from know.chunking.factory import create_chunker
-    from know.settings import TextSettings
 
-    text_settings: Optional[TextSettings] = cast(
-        Optional[TextSettings], pm.settings.languages.get("text")
-    )
+    chunking_settings = pm.settings.chunking
 
     if pm.embeddings:
         token_counter = pm.embeddings.get_token_count
         max_tokens = pm.embeddings.get_max_context_length()
-        min_tokens = text_settings.min_tokens if text_settings else 0
+        min_tokens = chunking_settings.min_tokens
     else:
         token_counter = lambda text: len(text.split())
-        max_tokens = text_settings.max_tokens if text_settings else 512
-        min_tokens = 64
+        max_tokens = chunking_settings.max_tokens
+        min_tokens = chunking_settings.min_tokens
 
-    chunker_type = text_settings.chunker_type if text_settings else "recursive"
+    chunker_type = chunking_settings.chunker_type
 
     return create_chunker(
         chunker_type=cast(Literal["recursive"], chunker_type),

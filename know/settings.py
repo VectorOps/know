@@ -88,6 +88,22 @@ class SearchSettings(BaseModel):
     )
 
 
+class ChunkingSettings(BaseModel):
+    """Settings for text chunking."""
+
+    chunker_type: str = Field(
+        default="recursive", description="Chunker to use for plain text files."
+    )
+    max_tokens: int = Field(
+        default=512,
+        description="Maximum number of tokens per chunk when embeddings are not enabled.",
+    )
+    min_tokens: int = Field(
+        default=64,
+        description="Minimum number of tokens for a chunk to not be merged with another chunk.",
+    )
+
+
 class LanguageSettings(BaseModel):
     """Base class for language-specific settings."""
     pass
@@ -96,17 +112,7 @@ class LanguageSettings(BaseModel):
 class TextSettings(LanguageSettings):
     """Settings specific to the Text language parser."""
 
-    chunker_type: str = Field(
-        default="recursive", description="Chunker to use for plain text files."
-    )
-    max_tokens: int = Field(
-        default=512,
-        description="Maximum number of tokens per chunk for text files when embeddings are not enabled.",
-    )
-    min_tokens: int = Field(
-        default=64,
-        description="Minimum number of tokens for chunk to not be merged with another chunk."
-    )
+    pass
 
 
 class PythonSettings(LanguageSettings):
@@ -178,6 +184,10 @@ class ProjectSettings(BaseSettings):
     embedding: EmbeddingSettings = Field(
         default_factory=EmbeddingSettings,
         description="An `EmbeddingSettings` object with embedding-specific configurations.",
+    )
+    chunking: ChunkingSettings = Field(
+        default_factory=ChunkingSettings,
+        description="Settings for text chunking.",
     )
     tools: ToolSettings = Field(
         default_factory=ToolSettings,
