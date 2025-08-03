@@ -111,10 +111,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         ]
 
     def _handle_sequence_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
-        children = []
-        for child_node in node.named_children:
-            children.extend(self._process_node(child_node, parent=parent))
-        return children
+        # parser is not parsing nodes correctly, emit literal
+        return self._handle_generic_statement(node, parent)
 
     # Required methods
     def _handle_file(self, root_node):
@@ -238,7 +236,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
         raw = get_node_text(node)
 
         # ── find module specifier ───────────────────────────────────────
-        spec_node = next((c for c in node.children if c.type == "string"), None)
+        spec_node = node.child_by_field_name("source")
+        if spec_node is None:
+            spec_node = next((c for c in node.children if c.type == "string"), None)
+
         module = get_node_text(spec_node).strip("\"'")
         if not module:
             return []  # defensive – malformed import

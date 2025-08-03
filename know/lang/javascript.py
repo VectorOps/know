@@ -98,10 +98,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
         ]
 
     def _handle_sequence_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
-        children = []
-        for child_node in node.named_children:
-            children.extend(self._process_node(child_node, parent=parent))
-        return children
+        # parser is not parsing nodes correctly, emit literal
+        return self._handle_generic_statement(node, parent)
 
     def _handle_file(self, root_node: ts.Node) -> None:
         pass
@@ -190,7 +188,10 @@ class JavaScriptCodeParser(AbstractCodeParser):
 
     def _handle_import(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         raw = get_node_text(node)
-        spec_node = next((c for c in node.children if c.type == "string"), None)
+        spec_node = node.child_by_field_name("source")
+        if spec_node is None:
+            spec_node = next((c for c in node.children if c.type == "string"), None)
+
         if spec_node is None:
             return []
         module = get_node_text(spec_node).strip("\"'")
@@ -296,6 +297,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 line=node.start_point[0] + 1,
                 raw=get_node_text(node),
             )
+        if not decl_handled and not parent:
+            self._handle_import(node)
         return [
             sym
         ]
