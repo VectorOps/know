@@ -5,6 +5,9 @@ import React from "react";
 // CommonJS import
 const circle = require('./circle.js');
 
+export * from './foobar.js';
+export { bar  } from './foobar.js';
+
 // ------------------------------------------------------------------
 // exported consts / arrow-fn
 export const j1 = 10, f1 = () => {};
@@ -55,6 +58,9 @@ const Foo = class {
 // assignment with arrow-fn
 window.onload = () => { alert("yes"); };
 
+// multi-assignment
+HORIZONTAL, VERTICAL = 1, 2;
+
 // plain function
 function identity(arg) {
   return arg;
@@ -65,4 +71,8 @@ function identity(arg) {
   function test() {
     console.log("yes");
   }
+  "test"
 }
+(
+  "text"
+)

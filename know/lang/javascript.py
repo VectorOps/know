@@ -259,8 +259,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
         string_node = None
         if source_node:  # it's a _from_clause node
             string_node = source_node.child_by_field_name("path")
-        else:
-            string_node = next((c for c in node.children if c.type == "string"), None)
+
+            if not string_node:
+                string_node = next((c for c in node.children if c.type == "string"), None)
 
         if string_node:
             raw = get_node_text(node)

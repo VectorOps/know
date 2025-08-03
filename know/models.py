@@ -38,6 +38,7 @@ class NodeKind(str, Enum):
     NAMESPACE = "namespace"
     IF = "if"
     BLOCK = "block"
+    EXPRESSION = "expression"
 
 
 class Visibility(str, Enum):

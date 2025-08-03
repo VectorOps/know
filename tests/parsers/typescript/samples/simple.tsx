@@ -1,5 +1,8 @@
 import React from "react";
 
+export * from './foobar.ts';
+export { bar } from './foobar.ts';
+
 foo = () => {};
 
 export const j1 = 10, f1 = () => {};
@@ -104,3 +107,13 @@ export default function MyApp() {
 
 const circle = require('./circle.js');
 exports.area = (r) => PI * r ** 2;
+
+{
+  function test() {
+    console.log("yes");
+  }
+  "test"
+}
+(
+  "text"
+)
