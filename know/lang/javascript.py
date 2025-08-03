@@ -88,7 +88,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 subtype=BlockSubType.BRACE,
                 visibility=Visibility.PUBLIC,
                 children=children,
-                signature=NodeSignature(raw="{}"),
             )
         ]
 
@@ -103,7 +102,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 subtype=BlockSubType.PARENTHESIS,
                 visibility=Visibility.PUBLIC,
                 children=children,
-                signature=NodeSignature(raw="()"),
             )
         ]
 
@@ -635,6 +633,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             node,
             kind=base_kind,
             visibility=Visibility.PUBLIC,
+            subtype=lexical_kw,
             signature=NodeSignature(
                 raw=lexical_kw,
                 lexical_type=lexical_kw,

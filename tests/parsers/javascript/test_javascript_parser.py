@@ -40,7 +40,7 @@ def test_javascript_parser_on_simple_file():
     assert string_expr_node.children[0].body == '"use strict"'
 
     # imports
-    assert len(parsed_file.imports) == 2
+    assert len(parsed_file.imports) == 4
     assert parsed_file.imports[0].raw.startswith("import React")
     assert parsed_file.imports[1].physical_path.startswith("circle.js")
 
@@ -99,7 +99,7 @@ def test_javascript_parser_on_simple_file():
     assert paren_expr_node.kind == NodeKind.EXPRESSION
     assert len(paren_expr_node.children) == 1
     assert paren_expr_node.children[0].kind == NodeKind.BLOCK
-    assert paren_expr_node.children[0].signature.lexical_type == "parenthesis"
+    assert paren_expr_node.children[0].subtype == "parenthesis"
     block_child = paren_expr_node.children[0]
     assert len(block_child.children) == 1
     assert block_child.children[0].kind == NodeKind.LITERAL

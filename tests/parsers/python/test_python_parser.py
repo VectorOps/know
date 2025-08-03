@@ -125,7 +125,7 @@ def test_python_parser_on_simple_file():
     assert test_cls.docstring is None
 
     # Symbol references
-    assert len(parsed_file.symbol_refs) == 3
+    assert len(parsed_file.symbol_refs) == 4
 
     refs_by_name = {ref.name: ref for ref in parsed_file.symbol_refs}
 

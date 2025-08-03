@@ -101,7 +101,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 subtype=BlockSubType.BRACE,
                 visibility=Visibility.PUBLIC,
                 children=children,
-                signature=NodeSignature(raw="{}"),
             )
         ]
 
@@ -116,7 +115,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 subtype=BlockSubType.PARENTHESIS,
                 visibility=Visibility.PUBLIC,
                 children=children,
-                signature=NodeSignature(raw="()"),
             )
         ]
 
@@ -1233,6 +1231,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             node,
             kind=base_kind,
             visibility=Visibility.PUBLIC,
+            subtype=lexical_kw,
             signature=NodeSignature(
                 raw=lexical_kw,
                 lexical_type=lexical_kw,
