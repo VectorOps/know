@@ -126,6 +126,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return self._handle_export(node, parent)
         elif node.type == "function_declaration":
             return self._handle_function(node, parent)
+        elif node.type == "arrow_function":
+            sym = self._handle_arrow_function(node, node, parent=parent)
+            return [sym] if sym else []
         elif node.type == "function_expression":
             return self._handle_function_expression(node, parent)
         elif node.type == "class_declaration":
@@ -520,9 +523,10 @@ class JavaScriptCodeParser(AbstractCodeParser):
         exported: bool = False,
     ) -> Optional[ParsedNode]:
         name = self._resolve_arrow_function_name(holder_node)
-        if not name:
-            return None
-        sig_base = self._build_signature(arrow_node, name, prefix="")
+        # if not name:
+        #     return None
+        fqn = self._make_fqn(name, parent) if name else None
+        sig_base = self._build_signature(arrow_node, name or "", prefix="")
         body_node = arrow_node.child_by_field_name("body")
         if body_node:
             raw_header = self.source_bytes[
@@ -544,7 +548,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
             arrow_node,
             kind       = NodeKind.FUNCTION,
             name       = name,
-            fqn        = self._make_fqn(name, parent),
+            fqn        = fqn,
             signature  = sig,
             modifiers  = mods,
             exported   = exported,

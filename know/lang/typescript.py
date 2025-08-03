@@ -148,6 +148,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return [self._create_literal_symbol(node, parent=parent)]
         elif node.type == "function_declaration":
             return self._handle_function(node, parent=parent)
+        elif node.type == "arrow_function":
+            sym = self._handle_arrow_function(node, node, parent=parent)
+            return [sym] if sym else []
         elif node.type == "function_expression":
             return self._handle_function_expression(node, parent=parent)
         elif node.type in ("class_declaration", "abstract_class_declaration"):
@@ -369,6 +372,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     decl_handled = True
                 case "function_expression":
                     sym.children.extend(self._handle_function_expression(child, parent=parent, exported=True))
+                    decl_handled = True
+                case "arrow_function":
+                    arrow_sym = self._handle_arrow_function(node, child, parent=parent, exported=True)
+                    if arrow_sym:
+                        sym.children.append(arrow_sym)
                     decl_handled = True
                 case "class_declaration":
                     sym.children.extend(self._handle_class(child, parent=parent, exported=True))
@@ -1105,11 +1113,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
         """
         # ---------- name resolution -----------------------------------
         name = self._resolve_arrow_function_name(holder_node)
-        if not name:
-            return None
+        # if not name:
+        #     return None
 
         # build signature
-        sig_base = self._build_signature(arrow_node, name, prefix="")
+        fqn = self._make_fqn(name, parent) if name else None
+        sig_base = self._build_signature(arrow_node, name or "", prefix="")
         # include the *left-hand side* in the raw header for better context
         body_node = arrow_node.child_by_field_name("body")
         if body_node:
@@ -1135,7 +1144,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             arrow_node,
             kind       = NodeKind.FUNCTION,
             name       = name,
-            fqn        = self._make_fqn(name, parent),
+            fqn        = fqn,
             signature  = sig,
             modifiers  = mods,
             exported   = exported,
