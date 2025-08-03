@@ -387,6 +387,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "interface_declaration":
                     sym.children.extend(self._handle_interface(child, parent=parent, exported=True))
                     decl_handled = True
+                case "type_alias_declaration":
+                    sym.children.extend(self._handle_type_alias(child, parent=parent, exported=True))
+                    decl_handled = True
                 case "variable_statement" | "lexical_declaration" | "variable_declaration":
                     sym.children.extend(self._handle_lexical(child, parent=parent, exported=True))
                     decl_handled = True
@@ -806,7 +809,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_type_alias(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+    def _handle_type_alias(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         """
         Build a ParsedNode for a TypeScript `type Foo = …` alias.
         """
@@ -836,6 +839,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 fqn=self._make_fqn(name, parent),
                 signature=sig,
                 modifiers=mods,
+                exported=exported,
             )
         ]
 
