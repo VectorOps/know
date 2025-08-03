@@ -144,6 +144,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return self._handle_method(node, parent=parent)
         elif node.type == "expression_statement":
             return self._handle_expression(node, parent=parent)
+        elif node.type == "call_expression":
+            return self._handle_call_expression(node, parent=parent)
         elif node.type in ("lexical_declaration", "variable_declaration"):
             return self._handle_lexical(node, parent=parent)
         elif node.type == "type_alias_declaration":
@@ -938,9 +940,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     children.append(sym)
                 continue
 
-            elif ch.type in ("call_expression", "ternary_expression"):
-                if ch.type == "call_expression":
-                    self._collect_require_calls(ch)
+            elif ch.type == "call_expression":
+                children.extend(self._handle_call_expression(ch, parent=parent))
+                continue
+            elif ch.type == "ternary_expression":
                 children.append(self._create_literal_symbol(ch, parent=parent))
                 continue
 
@@ -967,6 +970,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 children=children,
                 )
         ]
+
+    def _handle_call_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        self._collect_require_calls(node)
+        return [self._create_literal_symbol(node, parent=parent)]
 
     # ──────────────────────────────────────────────────────────────────
     def _resolve_arrow_function_name(self, holder_node) -> Optional[str]:

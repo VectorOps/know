@@ -123,6 +123,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return self._handle_lexical(node, parent)
         elif node.type == "expression_statement":
             return self._handle_expression(node, parent)
+        elif node.type == "call_expression":
+            return self._handle_call_expression(node, parent)
         elif node.type == "empty_statement":
             return [self._create_literal_symbol(node, parent)]
         elif node.type == "comment":
@@ -436,6 +438,10 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 children=children,
                 )
         ]
+
+    def _handle_call_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        self._collect_require_calls(node)
+        return [self._create_literal_symbol(node, parent)]
 
     def _resolve_arrow_function_name(self, holder_node: ts.Node) -> Optional[str]:
         name_node = holder_node.child_by_field_name("name")
