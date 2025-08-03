@@ -25,6 +25,11 @@ def test_local_embeddings_calculator_basic():
         l2_norm = math.sqrt(sum(v * v for v in vec))
         assert abs(l2_norm - 1.0) < 1e-5
 
+        # test token counts
+        count = calc.get_token_count(sample)
+        assert isinstance(count, int)
+        assert count == 10
+
 
 @pytest.mark.parametrize("backend", ["duckdb", "sqlite"])
 def test_local_embeddings_cache(backend):
