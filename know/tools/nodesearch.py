@@ -22,10 +22,10 @@ class NodeSearchReq(BaseModel):
         default=None, description="Restrict results to a specific kind of node or a symbol."
     )
     visibility: Optional[Visibility | str] = Field(
-        default=None,
+        default="all",
         description=(
             "Restrict by visibility modifier (`public`, `protected`, `private`) or use `all` to include "
-            "every symbol. Defaults to `public`."
+            "every symbol. Defaults to `all`."
         ),
     )
     query: Optional[str] = Field(
@@ -206,8 +206,9 @@ class NodeSearchTool(BaseTool):
                         "enum": visibility_enum,
                         "description": (
                             "Restrict by visibility modifier (`public`, `protected`, `private`) "
-                            "or use `all` to include every symbol. Defaults to `public`."
-                        )
+                            "or use `all` to include every symbol. Defaults to `all`."
+                        ),
+                        "default": "all",
                     },
                     "query": {
                         "type": "string",
