@@ -44,6 +44,7 @@ class NameProps:
     name: str
     visibility: Optional[str]
     descriptiveness: float
+    exported: Optional[bool]
 
 
 @dataclass(slots=True)
@@ -114,6 +115,7 @@ class RepoMap(ProjectComponent):
             name=sym.name,
             visibility=vis,
             descriptiveness=self._calc_descriptiveness(sym.name),
+            exported=sym.exported,
         )
 
     def _compute_edge_data(self, name: str) -> float:
@@ -294,6 +296,10 @@ class RepoMapReq(BaseModel):
         default=None,
         description="The model to use for counting tokens for `token_limit_count`. Required if `token_limit_count` is set.",
     )
+    exported_only: bool = Field(
+        default=True,
+        description="If true, consider only exported symbols for ranking.",
+    )
 
 
 class RepoMapScore(BaseModel):
@@ -385,6 +391,13 @@ class RepoMapTool(BaseTool):
         file_paths   = list(file_paths_set)   if file_paths_set   else None
 
         G = repomap.G
+        if req.exported_only:
+            nodes_to_keep = set(repomap._path_to_fid.keys())  # all file nodes
+            for name, props in repomap._name_props.items():
+                if props.exported:
+                    nodes_to_keep.add(repomap.sym_node(name))
+            G = G.subgraph(nodes_to_keep)
+
         sym_node = repomap.sym_node
 
         #  1. Personalisation / restart vector (a.k.a. «boosting»)
@@ -518,6 +531,11 @@ class RepoMapTool(BaseTool):
                     "token_limit_model": {
                         "type": "string",
                         "description": "The model to use for counting tokens for `token_limit_count`. Required if `token_limit_count` is set.",
+                    },
+                    "exported_only": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": "If true, consider only exported symbols for ranking.",
                     },
                 },
             },
