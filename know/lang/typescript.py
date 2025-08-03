@@ -358,7 +358,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "interface_declaration":
                     sym.children.extend(self._handle_interface(child, parent=parent, exported=True))
                     decl_handled = True
-                case "variable_statement" | "lexical_declaration":
+                case "variable_statement" | "lexical_declaration" | "variable_declaration":
                     sym.children.extend(self._handle_lexical(child, parent=parent, exported=True))
                     decl_handled = True
                 case "export_clause":

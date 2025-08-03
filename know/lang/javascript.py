@@ -318,7 +318,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 case "class_declaration":
                     sym.children.extend(self._handle_class(child, parent=parent, exported=True))
                     decl_handled = True
-                case "variable_statement" | "lexical_declaration":
+                case "variable_statement" | "lexical_declaration" | "variable_declaration":
                     sym.children.extend(self._handle_lexical(child, parent=parent, exported=True))
                     decl_handled = True
                 case "export_clause":
