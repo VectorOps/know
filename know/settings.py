@@ -32,6 +32,10 @@ class EmbeddingSettings(BaseSettings):
             "semantic search tools to function."
         ),
     )
+    sync_embeddings: bool = Field(
+        default=False,
+        description="If True, embeddings will be synchronized."
+    )
     cache_path: Optional[str] = Field(
         default=None,
         description=(
@@ -180,10 +184,6 @@ class ProjectSettings(BaseSettings):
             ".mypy_cache"
         },
         description="A set of directory names to ignore during project scanning.",
-    )
-    sync_embeddings: bool = Field(
-        default=False,
-        description="If True, embeddings will be synchronized."
     )
     embedding: EmbeddingSettings = Field(
         default_factory=EmbeddingSettings,

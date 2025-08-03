@@ -1,8 +1,9 @@
 #+title: Todo
 * [X] No packages should be created for text/rest files
 * [X] Embedding priority mode does not run them first
+* [X] Delay embeddings calculation until project parsing has finished to unblock token counts
 * [ ] Optimize chunker to tokenize and then de-tokenize to generate result as an optimization?
-* [ ] Move data helpers out of data.py
+* [X] Move data helpers out of data.py
 * [X] Introduce concept of project which is a collection of repositories
 ** [X] Create virtual path for other repos
 ** [X] Boost default file suggestions in search, make it configurable

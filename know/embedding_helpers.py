@@ -7,7 +7,7 @@ from know.project import ProjectManager
 
 
 # Embedding helpers
-def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str, sync: bool = False) -> None:
+def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str) -> None:
     def _on_vec(vec: Vector) -> None:
         try:
             symbol_repo.update(
@@ -22,10 +22,6 @@ def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str, syn
                 f"Failed to update embedding for symbol {sym_id}: {exc}",
                 exc_info=True,
             )
-
-    if sync:
-        _on_vec(emb_calc.get_embedding(body))
-        return
 
     # normal-priority request
     emb_calc.get_embedding_callback(body, _on_vec, interactive=False)
@@ -58,7 +54,6 @@ def schedule_missing_embeddings(pm: ProjectManager, repo: Repo) -> None:
                     emb_calc,
                     sym_id=sym.id,
                     body=sym.body,
-                    sync=pm.settings.sync_embeddings,
                 )
         offset += PAGE_SIZE
 
@@ -102,7 +97,6 @@ def schedule_outdated_embeddings(pm: ProjectManager, repo: Repo) -> None:
                     emb_calc,
                     sym_id=sym.id,
                     body=sym.body,
-                    sync=pm.settings.sync_embeddings,
                 )
 
         offset += PAGE_SIZE
