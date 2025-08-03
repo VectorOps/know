@@ -77,6 +77,7 @@ class ParsedNode(BaseModel):
     fqn: Optional[str] = None
     body: str
     kind: NodeKind
+    subtype: Optional[str] = None
 
     start_line: int
     end_line: int
@@ -98,6 +99,7 @@ class ParsedNode(BaseModel):
             "fqn": self.fqn,
             "body": self.body,
             "kind": self.kind,
+            "subtype": self.subtype,
             "start_line": self.start_line,
             "end_line": self.end_line,
             "start_byte": self.start_byte,
@@ -274,6 +276,7 @@ class AbstractCodeParser(ABC):
         comment: str | None = None,
         children: list[ParsedNode] | None = None,
         exported: bool | None = None,
+        subtype: str | None = None,
     ) -> ParsedNode:
         """
         Build a ParsedNode and pre-populate all generic fields that can be
@@ -286,6 +289,7 @@ class AbstractCodeParser(ABC):
             fqn=fqn,
             body=body,
             kind=kind,
+            subtype=subtype,
             start_line=node.start_point[0],
             end_line=node.end_point[0],
             start_byte=node.start_byte,

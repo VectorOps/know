@@ -222,7 +222,8 @@ class PythonCodeParser(AbstractCodeParser):
             if_block_symbol = self._make_node(
                 consequence,
                 kind=NodeKind.BLOCK,
-                signature=NodeSignature(raw=raw_sig, lexical_type="if"),
+                signature=NodeSignature(raw=raw_sig),
+                subtype="if",
             )
             _process_block_children(consequence, if_block_symbol)
             if_symbol.children.append(if_block_symbol)
@@ -239,8 +240,8 @@ class PythonCodeParser(AbstractCodeParser):
                     elif_block_symbol = self._make_node(
                         block_node,
                         kind=NodeKind.BLOCK,
-                        name="elif",
-                        signature=NodeSignature(raw=raw_sig, lexical_type="elif"),
+                        signature=NodeSignature(raw=raw_sig),
+                        subtype="elif",
                     )
                     _process_block_children(block_node, elif_block_symbol)
                     if_symbol.children.append(elif_block_symbol)
@@ -250,8 +251,8 @@ class PythonCodeParser(AbstractCodeParser):
                     else_block_symbol = self._make_node(
                         block_node,
                         kind=NodeKind.BLOCK,
-                        name="else",
-                        signature=NodeSignature(raw="else:", lexical_type="else"),
+                        signature=NodeSignature(raw="else:"),
+                        subtype="else",
                     )
                     _process_block_children(block_node, else_block_symbol)
                     if_symbol.children.append(else_block_symbol)
@@ -974,6 +975,8 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                 lines.append(f"{IND}    ...")
 
         elif sym.kind == NodeKind.IF:
+            from devtools import pprint; pprint(sym)
+
             for child in sym.children:
                 if only_children and child not in only_children:
                     continue
