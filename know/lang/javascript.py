@@ -277,6 +277,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
         ]
 
     def _handle_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        if len(node.named_children) == 1 and node.named_children[0].type == "string":
+            return [self._create_literal_symbol(node, parent=parent)]
+
         children: list[ParsedNode] = []
         for ch in node.named_children:
             if ch.type == "assignment_expression":
@@ -351,6 +354,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     path=self.rel_path,
                     node_type=ch.type,
                     line=ch.start_point[0] + 1,
+                    text=ch.text.decode("utf-8"),
                 )
         return [
             self._make_node(
