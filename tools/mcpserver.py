@@ -1,6 +1,7 @@
 import sys
 import inspect
 from dataclasses import asdict
+from typing import TYPE_CHECKING
 from pydantic import Field, AliasChoices, AnyHttpUrl
 from pydantic_settings import SettingsConfigDict
 
@@ -9,8 +10,20 @@ from know.project import Project, init_project
 from know.settings import ProjectSettings
 from know.tools.base import ToolRegistry
 
-from fastmcp import FastMCP, Context
-from fastmcp.server.dependencies import get_context
+if TYPE_CHECKING:
+    from fastmcp import FastMCP, Context
+    from fastmcp.server.dependencies import get_context
+
+try:
+    from fastmcp import FastMCP, Context
+    from fastmcp.server.dependencies import get_context
+except ImportError:
+    print(
+        "Error: `fastmcp` is not installed. Please install it with `pip install 'vectorops[fastmcp]'` to use the MCP server.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
 from contextlib import asynccontextmanager
 
 
