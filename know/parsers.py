@@ -112,7 +112,7 @@ class ParsedNode(BaseModel):
 
 
 class ParsedFile(BaseModel):
-    package: ParsedPackage
+    package: Optional[ParsedPackage] = None
     path: str # relative path
     language: ProgrammingLanguage
     docstring: Optional[str] = None

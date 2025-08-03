@@ -94,6 +94,18 @@ class LanguageSettings(BaseModel):
     pass
 
 
+class TextSettings(LanguageSettings):
+    """Settings specific to the Text language parser."""
+
+    chunker_type: str = Field(
+        default="recursive", description="Chunker to use for plain text files."
+    )
+    max_tokens: int = Field(
+        default=512,
+        description="Maximum number of tokens per chunk for text files when embeddings are not enabled.",
+    )
+
+
 class PythonSettings(LanguageSettings):
     """Settings specific to the Python language parser."""
 
@@ -108,7 +120,7 @@ class PythonSettings(LanguageSettings):
 
 
 def _get_default_languages() -> dict[str, LanguageSettings]:
-    return {"python": PythonSettings()}
+    return {"python": PythonSettings(), "text": TextSettings()}
 
 
 class ProjectSettings(BaseSettings):

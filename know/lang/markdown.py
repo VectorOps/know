@@ -6,6 +6,7 @@ import tree_sitter_markdown as tsmd
 from tree_sitter import Parser, Language
 
 from know.helpers import compute_file_hash
+from know.logger import logger
 from know.models import (
     ProgrammingLanguage,
     NodeKind,
@@ -53,6 +54,48 @@ class MarkdownCodeParser(AbstractCodeParser):
     def _rel_to_virtual_path(self, rel_path: str) -> str:
         return os.path.splitext(rel_path)[0].replace(os.sep, ".")
 
+    def parse(self, cache: ProjectCache) -> ParsedFile:
+        if not self.repo.root_path:
+            raise ValueError("repo.root_path must be set to parse files")
+        file_path = os.path.join(self.repo.root_path, self.rel_path)
+        mtime: float = os.path.getmtime(file_path)
+        with open(file_path, "rb") as file:
+            self.source_bytes = file.read()
+
+        tree = self.parser.parse(self.source_bytes)
+        root_node = tree.root_node
+
+        # Markdown files don't belong to a package in the traditional sense
+        # The package attribute of ParsedFile is now Optional
+        self.parsed_file = self._create_file(file_path, mtime)
+        self.parsed_file.package = None # Explicitly set to None for markdown
+
+        # Traverse the syntax tree and populate Parsed structures
+        for child in root_node.children:
+            nodes = self._process_node(child)
+
+            if nodes:
+                self.parsed_file.symbols.extend(nodes)
+            else:
+                logger.warning(
+                    "Parser handled node but produced no symbols",
+                    path=self.parsed_file.path,
+                    node_type=child.type,
+                    line=child.start_point[0] + 1,
+                    raw=child.text.decode("utf8", errors="replace"),
+                )
+
+        self._handle_file(root_node)
+
+        # Collect outgoing symbol-references (calls)
+        self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
+
+        # Set exported flag
+        for sym in self.parsed_file.symbols:
+            sym.exported = sym.visibility != Visibility.PRIVATE
+
+        return self.parsed_file
+
     def _process_node(
         self, node: Any, parent: Optional[ParsedNode] = None
     ) -> List[ParsedNode]:
@@ -65,13 +108,6 @@ class MarkdownCodeParser(AbstractCodeParser):
 
     def _collect_symbol_refs(self, root_node: Any) -> List[ParsedNodeRef]:
         return []
-
-    def _handle_file(self, root_node: Any) -> None:
-        """
-        Optional hook for language-specific post-processing at file-level.
-        With dispatcher pattern, most logic moved to _handle_document.
-        """
-        pass
 
     def _handle_document(
         self, node: Any, parent: Optional[ParsedNode] = None

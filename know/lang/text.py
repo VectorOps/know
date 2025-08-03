@@ -2,7 +2,7 @@ import os
 from typing import Optional, List, Any
 
 from know.chunking.base import Chunk
-from know.chunking.recursive import RecursiveChunker
+from know.chunking.factory import create_chunker
 from know.models import (
     ProgrammingLanguage,
     NodeKind,
@@ -11,6 +11,7 @@ from know.models import (
     ImportEdge,
     Repo,
 )
+from know.settings import TextSettings
 from know.parsers import (
     AbstractCodeParser,
     AbstractLanguageHelper,
@@ -46,13 +47,26 @@ class TextCodeParser(AbstractCodeParser):
         with open(file_path, "rb") as file:
             self.source_bytes = file.read()
 
-        self.package = self._create_package(None)
         self.parsed_file = self._create_file(file_path, mtime)
 
         text = self.source_bytes.decode("utf-8", errors="replace")
 
-        # TODO: get max_tokens from project settings
-        chunker = RecursiveChunker(max_tokens=512)
+        text_settings: Optional[TextSettings] = self.pm.settings.languages.get("text")
+
+        if self.pm.embeddings:
+            token_counter = self.pm.embeddings.get_token_count
+            max_tokens = self.pm.embeddings.get_max_context_length()
+        else:
+            token_counter = lambda s: len(s.split())
+            max_tokens = text_settings.max_tokens if text_settings else 512
+
+        chunker_type = text_settings.chunker_type if text_settings else "recursive"
+
+        chunker = create_chunker(
+            chunker_type=chunker_type,
+            max_tokens=max_tokens,
+            token_counter=token_counter,
+        )
         top_chunks = chunker.chunk(text)
 
         self.parsed_file.symbols.extend(
