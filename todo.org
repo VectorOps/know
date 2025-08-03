@@ -4,7 +4,7 @@
 * [X] Delay embeddings calculation until project parsing has finished to unblock token counts
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
-* [ ] Optimize chunker to tokenize and then de-tokenize to generate result as an optimization?
+* [ ] Optimize chunker to tokenize and then de-tokenize to generate result, as an optimization?
 * [ ] Method to fully reparse the repo in project
 * [X] Move data helpers out of data.py
 * [X] Introduce concept of project which is a collection of repositories
@@ -17,8 +17,8 @@
 * [ ] Generic helper to find references using tree sitter query in a generic way
 * [ ] Add query timeouts to DuckDB to detect lockups
 * [X] Fix mypy warnings
-* [ ] Repomap tool
-** [ ] Should only look for exported symbols
+* [X] Repomap tool
+** [X] Should only look for exported symbols
 * [ ] Search tool
 ** [ ] Lower weight of comment symbols?
 ** [ ] Make tool search all symbols, not just public by default
