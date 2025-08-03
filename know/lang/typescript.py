@@ -144,6 +144,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return self._handle_export(node, parent=parent)
         elif node.type == "comment":
             return self._handle_comment(node, parent=parent)
+        elif node.type == "hash_bang_line":
+            return [self._create_literal_symbol(node, parent=parent)]
         elif node.type == "empty_statement":
             return [self._create_literal_symbol(node, parent=parent)]
         elif node.type == "function_declaration":

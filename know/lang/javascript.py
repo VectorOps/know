@@ -143,6 +143,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return self._handle_call_expression(node, parent)
         elif node.type == "empty_statement":
             return [self._create_literal_symbol(node, parent)]
+        elif node.type == "hash_bang_line":
+            return [self._create_literal_symbol(node, parent)]
         elif node.type == "comment":
             return self._handle_comment(node, parent)
         elif node.type == "statement_block":
