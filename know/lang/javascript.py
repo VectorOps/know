@@ -437,7 +437,36 @@ class JavaScriptCodeParser(AbstractCodeParser):
 
     def _handle_call_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
         self._collect_require_calls(node)
-        return [self._create_literal_symbol(node, parent)]
+
+        function_node = node.child_by_field_name("function")
+        if not function_node:
+            return [self._create_literal_symbol(node, parent)]
+
+        name = get_node_text(function_node)
+        if not name:
+            return [self._create_literal_symbol(node, parent)]
+
+        arguments_node = node.child_by_field_name("arguments")
+        params_objs: list[NodeParameter] = []
+        if arguments_node:
+            for arg_node in arguments_node.named_children:
+                arg_text = get_node_text(arg_node)
+                params_objs.append(NodeParameter(name=arg_text, type_annotation=None))
+
+        sig = NodeSignature(
+            raw=get_node_text(node),
+            parameters=params_objs,
+        )
+
+        return [
+            self._make_node(
+                node,
+                kind=NodeKind.CALL,
+                name=name,
+                fqn=self._make_fqn(name, parent),
+                signature=sig,
+            )
+        ]
 
     def _resolve_arrow_function_name(self, holder_node: ts.Node) -> Optional[str]:
         name_node = holder_node.child_by_field_name("name")
