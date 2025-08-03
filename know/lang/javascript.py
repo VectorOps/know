@@ -337,6 +337,11 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 case "function_expression":
                     sym.children.extend(self._handle_function_expression(child, parent=parent, exported=True))
                     decl_handled = True
+                case "arrow_function":
+                    arrow_sym = self._handle_arrow_function(node, child, parent=parent, exported=True)
+                    if arrow_sym:
+                        sym.children.append(arrow_sym)
+                    decl_handled = True
                 case "class_declaration":
                     sym.children.extend(self._handle_class(child, parent=parent, exported=True))
                     decl_handled = True
