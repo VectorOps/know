@@ -36,39 +36,50 @@ def test_recursive_chunker_fallback_levels():
     assert not chunks[2].children
 
     # The middle paragraph is long and should be broken down.
-    # It's one sentence, so the top-level chunk for it will be a sentence-chunk...
     long_para_chunk = chunks[1]
     assert long_para_chunk.text == LONG_SENTENCE
-    # ...which is broken down into phrases.
-    assert len(long_para_chunk.children) == 7
 
-    phrase_chunks = long_para_chunk.children
+    # It was broken into leaves (phrases, and words for one long phrase),
+    # which were then packed back into larger chunks under the token limit.
+    # This should result in 5 packed chunks for this paragraph.
+    assert len(long_para_chunk.children) == 5
 
-    assert phrase_chunks[0].text == "This paragraph contains a single, extremely long sentence"
-    assert not phrase_chunks[0].children
+    packed_chunks = long_para_chunk.children
 
-    assert phrase_chunks[1].text == "it has commas"
-    assert not phrase_chunks[1].children
+    # Packed chunk 1: from a single phrase leaf
+    assert packed_chunks[0].text == "This paragraph contains a single, extremely long sentence"
+    assert len(packed_chunks[0].children) == 1
+    assert packed_chunks[0].children[0].text == "This paragraph contains a single, extremely long sentence"
+    assert not packed_chunks[0].children[0].children
 
-    assert phrase_chunks[2].text == "clauses"
-    assert not phrase_chunks[2].children
+    # Packed chunk 2: from two phrase leaves
+    assert packed_chunks[1].text == "it has commas, clauses"
+    assert len(packed_chunks[1].children) == 2
+    assert packed_chunks[1].children[0].text == "it has commas"
+    assert not packed_chunks[1].children[0].children
+    assert packed_chunks[1].children[1].text == "clauses"
+    assert not packed_chunks[1].children[1].children
 
-    assert phrase_chunks[3].text == "and colons that will require multiple fallback levels"
-    assert not phrase_chunks[3].children
+    # Packed chunk 3: from a single phrase leaf
+    assert packed_chunks[2].text == "and colons that will require multiple fallback levels"
+    assert len(packed_chunks[2].children) == 1
+    assert packed_chunks[2].children[0].text == "and colons that will require multiple fallback levels"
+    assert not packed_chunks[2].children[0].children
 
-    # This phrase is too long and must be chunked by words.
-    long_phrase_chunk = phrase_chunks[4]
-    assert long_phrase_chunk.text == "because otherwise the chunk would be far beyond the token limit"
-    assert len(long_phrase_chunk.children) == 2
+    # Packed chunk 4: from a single word-split leaf
+    # The original phrase "because otherwise..." (11 tokens) was split into two word-chunks.
+    # The first word-chunk (10 tokens) is too big to be packed with anything else.
+    assert packed_chunks[3].text == "because otherwise the chunk would be far beyond the token"
+    assert len(packed_chunks[3].children) == 1
+    assert packed_chunks[3].children[0].text == "because otherwise the chunk would be far beyond the token"
+    assert not packed_chunks[3].children[0].children
 
-    word_chunks = long_phrase_chunk.children
-    assert word_chunks[0].text == "because otherwise the chunk would be far beyond the token"
-    assert not word_chunks[0].children
-    assert word_chunks[1].text == "limit"
-    assert not word_chunks[1].children
-
-    assert phrase_chunks[5].text == "therefore"
-    assert not phrase_chunks[5].children
-
-    assert phrase_chunks[6].text == "we must observe how the algorithm behaves."
-    assert not phrase_chunks[6].children
+    # Packed chunk 5: from the second word-split leaf and two phrase leaves
+    assert packed_chunks[4].text == "limit; therefore, we must observe how the algorithm behaves."
+    assert len(packed_chunks[4].children) == 3
+    assert packed_chunks[4].children[0].text == "limit"
+    assert not packed_chunks[4].children[0].children
+    assert packed_chunks[4].children[1].text == "therefore"
+    assert not packed_chunks[4].children[1].children
+    assert packed_chunks[4].children[2].text == "we must observe how the algorithm behaves."
+    assert not packed_chunks[4].children[2].children
