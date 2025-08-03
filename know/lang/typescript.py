@@ -971,7 +971,13 @@ class TypeScriptCodeParser(AbstractCodeParser):
         # build signature
         sig_base = self._build_signature(arrow_node, name, prefix="")
         # include the *left-hand side* in the raw header for better context
-        raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
+        body_node = arrow_node.child_by_field_name("body")
+        if body_node:
+            raw_header = self.source_bytes[
+                holder_node.start_byte:body_node.start_byte
+            ].decode("utf8").rstrip()
+        else:
+            raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
         sig = NodeSignature(
             raw         = raw_header,
             parameters  = sig_base.parameters,

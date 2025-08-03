@@ -73,8 +73,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
         for child_node in node.named_children:
             children.extend(self._process_node(child_node, parent=parent))
 
-        print(children)
-
         return [
             self._make_node(
                 node,
@@ -416,7 +414,13 @@ class JavaScriptCodeParser(AbstractCodeParser):
         if not name:
             return None
         sig_base = self._build_signature(arrow_node, name, prefix="")
-        raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
+        body_node = arrow_node.child_by_field_name("body")
+        if body_node:
+            raw_header = self.source_bytes[
+                holder_node.start_byte:body_node.start_byte
+            ].decode("utf8").rstrip()
+        else:
+            raw_header = get_node_text(holder_node).split("{", 1)[0].strip().rstrip(";")
         sig = NodeSignature(
             raw         = raw_header,
             parameters  = sig_base.parameters,
