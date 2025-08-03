@@ -7,7 +7,7 @@ from .base import AbstractChunker, Chunk
 PARAGRAPH_RE: Pattern = re.compile(r"\n\s*\n")          # blank line
 SENTENCE_RE:  Pattern = re.compile(r"(?<=[.!?])\s+")    # ., ! or ?  + space
 PHRASE_RE:    Pattern = re.compile(r"\s*[,;:]\s*")      # , ; :
-WORD_RE:      Pattern = re.compile(r"\S+")              # one or more non-whitespace characters
+WORD_RE:      Pattern = re.compile(r"\s+")              # one or more non-whitespace characters
 
 def _segments_with_pos(regex: Pattern, text: str, offset: int):
     """Split *text* by *regex* while preserving absolute positions."""
@@ -42,6 +42,7 @@ class RecursiveChunker(AbstractChunker):
         """Greedily combine consecutive leaf segments until token cap."""
         if not segments:
             return []
+
         packed, buf, buf_tokens = [], [], 0
         for seg in segments:
             t = self.token_counter(seg.text)
@@ -52,9 +53,11 @@ class RecursiveChunker(AbstractChunker):
                 first, last = buf[0], buf[-1]
                 packed.append(Chunk(first.start, last.end, text[first.start:last.end], buf))
                 buf, buf_tokens = [seg], t
+
         if buf:
             first, last = buf[0], buf[-1]
             packed.append(Chunk(first.start, last.end, text[first.start:last.end], buf))
+
         return packed
 
     def _split_recursively(
@@ -64,7 +67,7 @@ class RecursiveChunker(AbstractChunker):
         Generic helper to split text by a regex, recursively call the next-level splitter,
         and then pack the results.
         """
-        # Optimization: if the whole text is small enough, no need to split.
+
         if self.token_counter(text_to_split) <= self.max_tokens:
             return [Chunk(offset, offset + len(text_to_split), text_to_split)]
 
@@ -72,13 +75,10 @@ class RecursiveChunker(AbstractChunker):
 
         # If the regex doesn't split the text, pass the whole text to the next level.
         if len(segments) == 1:
-            # segments[0] is a tuple (text, start, end)
             return next_level_fn(segments[0][0], segments[0][1], full_text)
 
         leaves = []
         for span, s, e in segments:
-            if not span.strip():  # filter empty/whitespace-only segments
-                continue
             if self.token_counter(span) > self.max_tokens:
                 leaves.extend(next_level_fn(span, s, full_text))
             else:
@@ -86,9 +86,36 @@ class RecursiveChunker(AbstractChunker):
         return self._pack(leaves, full_text)
 
     def _final_fallback(self, text: str, start: int, full_text: str) -> List[Chunk]:
-        """Base case for recursion: text that can't be split further."""
-        # This might be an over-long word. Just create a chunk for it.
-        return [Chunk(start, start + len(text), text)]
+        """
+        Base case for recursion: text that can't be split further by separators.
+        We greedily pack characters into chunks that respect the token limit.
+        """
+        chunks: List[Chunk] = []
+        current_offset = 0
+        while current_offset < len(text):
+            # Find the largest slice starting at current_offset that is not over max_tokens.
+            end_offset = current_offset
+            while end_offset < len(text):
+                if self.token_counter(text[current_offset : end_offset + 1]) > self.max_tokens:
+                    break
+                end_offset += 1
+
+            # If the loop didn't even advance once, it means the first character
+            # is already over the token limit. In this case, we have no choice but
+            # to create a chunk for it and continue.
+            if end_offset == current_offset:
+                end_offset += 1
+
+            chunk_text = text[current_offset:end_offset]
+            chunks.append(
+                Chunk(
+                    start=start + current_offset,
+                    end=start + end_offset,
+                    text=chunk_text,
+                )
+            )
+            current_offset = end_offset
+        return chunks
 
     def _split_words(self, text: str, start: int, full_text: str) -> List[Chunk]:
         """Splits by words, then packs them."""
@@ -114,8 +141,15 @@ class RecursiveChunker(AbstractChunker):
         Each Chunk's .children holds the next-deeper level, down to leaves whose
         .text is guaranteed not to exceed *max_tokens*.
         """
-        if not text.strip():
-            return []
-        return self._split_recursively(
-            text, 0, text, self.paragraph_re, self._split_sentences
-        )
+        top_nodes: List[Chunk] = []
+        for para, p_start, p_end in _segments_with_pos(self.paragraph_re, text, 0):
+            if not para.strip():
+                continue
+
+            children = self._split_sentences(para, p_start, text)
+            if len(children) == 1:
+                top_nodes.append(children[0])
+            else:
+                top_nodes.append(Chunk(p_start, p_end, para, children))
+
+        return top_nodes
