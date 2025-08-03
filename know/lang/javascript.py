@@ -115,6 +115,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return self._handle_export(node, parent)
         elif node.type == "function_declaration":
             return self._handle_function(node, parent)
+        elif node.type == "function_expression":
+            return self._handle_function_expression(node, parent)
         elif node.type == "class_declaration":
             return self._handle_class(node, parent)
         elif node.type == "method_definition":
@@ -318,6 +320,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 case "function_declaration":
                     sym.children.extend(self._handle_function(child, parent=parent, exported=True))
                     decl_handled = True
+                case "function_expression":
+                    sym.children.extend(self._handle_function_expression(child, parent=parent, exported=True))
+                    decl_handled = True
                 case "class_declaration":
                     sym.children.extend(self._handle_class(child, parent=parent, exported=True))
                     decl_handled = True
@@ -379,6 +384,10 @@ class JavaScriptCodeParser(AbstractCodeParser):
                         elif rhs.type in ("function", "function_declaration"):
                             export_sym.children.extend(
                                 self._handle_function(rhs, parent=export_sym, exported=True)
+                            )
+                        elif rhs.type == "function_expression":
+                            export_sym.children.extend(
+                                self._handle_function_expression(rhs, parent=export_sym, exported=True)
                             )
                         elif rhs.type == "class_declaration":
                             export_sym.children.extend(
@@ -830,6 +839,27 @@ class JavaScriptCodeParser(AbstractCodeParser):
             return_type = return_ty,
             type_parameters=type_params,
         )
+
+    def _handle_function_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
+        name_node = node.child_by_field_name("name")
+        name = get_node_text(name_node) or "anonymous"
+        sig = self._build_signature(node, name, prefix="function")
+        mods: list[Modifier] = []
+        if node.text.lstrip().startswith(b"async"):
+            mods.append(Modifier.ASYNC)
+        if sig.type_parameters:
+            mods.append(Modifier.GENERIC)
+        return [
+            self._make_node(
+                node,
+                kind=NodeKind.FUNCTION,
+                name=name,
+                fqn=self._make_fqn(name, parent),
+                signature=sig,
+                modifiers=mods,
+                exported=exported,
+            )
+        ]
 
     def _handle_function(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
