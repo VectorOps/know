@@ -254,6 +254,49 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     exported=True)]
 
     def _handle_export(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        # -- Check for `export ... from "..."` (re-exports) -------------------
+        source_node = node.child_by_field_name("source")
+        string_node = None
+        if source_node:  # it's a _from_clause node
+            string_node = source_node.child_by_field_name("path")
+        else:
+            string_node = next((c for c in node.children if c.type == "string"), None)
+
+        if string_node:
+            raw = get_node_text(node)
+            module = get_node_text(string_node).strip("\"'")
+            if not module:
+                return []
+            physical, virtual, external = self._resolve_module(module)
+            alias = None
+
+            # Check for `export * as name from "..."`
+            alias_node = node.child_by_field_name("name")
+            if alias_node:
+                alias = get_node_text(alias_node)
+
+            assert self.parsed_file is not None
+            self.parsed_file.imports.append(
+                ParsedImportEdge(
+                    physical_path=physical,
+                    virtual_path=virtual,
+                    alias=alias,
+                    dot=False,
+                    external=external,
+                    raw=raw,
+                )
+            )
+            return [
+                self._make_node(
+                    node,
+                    kind=NodeKind.EXPORT,
+                    visibility=Visibility.PUBLIC,
+                    signature=NodeSignature(raw=raw, lexical_type="export"),
+                    exported=True,
+                )
+            ]
+
+        # -- It's a local export, not a re-export -----------------------------
         decl_handled   = False
         default_seen = False
         sym = self._make_node(
@@ -297,8 +340,6 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 line=node.start_point[0] + 1,
                 raw=get_node_text(node),
             )
-        if not decl_handled and not parent:
-            self._handle_import(node)
         return [
             sym
         ]

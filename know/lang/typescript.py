@@ -279,14 +279,54 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )]
 
     def _handle_export(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
-        """
-        Handle `export …` statements.
+        # -- Check for `export ... from "..."` (re-exports) -------------------
+        source_node = node.child_by_field_name("source")
+        if not source_node:
+            from_clause_node = next((c for c in node.children if c.type == "from_clause"), None)
+            if from_clause_node:
+                source_node = from_clause_node.child_by_field_name("source")
+        if not source_node:
+            source_node = next((c for c in node.children if c.type == "string"), None)
 
-        • If the export re-exports a module (has only a string literal),
-          delegate to `_handle_import` so an ImportEdge is still created.
-        • If the export wraps a declaration, forward that declaration to
-          the regular symbol handlers so the symbols are materialised.
-        """
+        if source_node:
+            raw = get_node_text(node)
+            module = get_node_text(source_node).strip("\"'")
+            if not module:
+                return []
+
+            physical, virtual, external = self._resolve_module(module)
+            alias = None
+
+            # Check for `export * as name from "..."`
+            ns_export_node = next((c for c in node.children if c.type == "namespace_export"), None)
+            if ns_export_node:
+                id_node = next((c for c in ns_export_node.children if c.type == "identifier"), None)
+                if id_node:
+                    alias = get_node_text(id_node)
+
+            assert self.parsed_file is not None
+            self.parsed_file.imports.append(
+                ParsedImportEdge(
+                    physical_path=physical,
+                    virtual_path=virtual,
+                    alias=alias,
+                    dot=False,
+                    external=external,
+                    raw=raw,
+                )
+            )
+
+            return [
+                self._make_node(
+                    node,
+                    kind=NodeKind.EXPORT,
+                    visibility=Visibility.PUBLIC,
+                    signature=NodeSignature(raw=raw, lexical_type="export"),
+                    exported=True,
+                )
+            ]
+
+        # -- It's a local export, not a re-export -----------------------------
         decl_handled   = False
 
         # detect:  export default …
@@ -345,10 +385,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 line=node.start_point[0] + 1,
                 raw=get_node_text(node),
             )
-
-        if not decl_handled and not parent:
-            self._handle_import(node)
-
         return [
             sym
         ]
