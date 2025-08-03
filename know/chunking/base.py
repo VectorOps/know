@@ -17,7 +17,7 @@ class Chunk:
 
     def __repr__(self) -> str:  # compact / readable when printing
         t = (self.text[:60] + "…") if len(self.text) > 60 else self.text
-        return f"Chunk({self.start}:{self.end}, {len(self.text)} ch, {t!r}, {len(self.children)} kids)"
+        return f"Chunk({self.start}:{self.end}, {len(self.text)} ch, {t!r} "
 
 
 class AbstractChunker(ABC):
