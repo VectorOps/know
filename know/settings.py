@@ -106,7 +106,11 @@ class ChunkingSettings(BaseModel):
 
 class LanguageSettings(BaseModel):
     """Base class for language-specific settings."""
-    pass
+
+    extra_extensions: List[str] = Field(
+        default_factory=list,
+        description="A list of additional file extensions to be associated with this language.",
+    )
 
 
 class TextSettings(LanguageSettings):
