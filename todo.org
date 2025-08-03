@@ -1,40 +1,23 @@
 #+title: Todo
-* [X] No packages should be created for text/rest files
-* [X] Embedding priority mode does not run them first
-* [X] Delay embeddings calculation until project parsing has finished to unblock token counts
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Optimize chunker to tokenize and then de-tokenize to generate result, as an optimization?
 * [ ] Method to fully reparse the repo in project
-* [X] Move data helpers out of data.py
-* [X] Introduce concept of project which is a collection of repositories
-** [X] Create virtual path for other repos
-** [X] Boost default file suggestions in search, make it configurable
 * [ ] Storage backends
 ** [ ] PostgreSQL backend
 ** [ ] Add sqlite backend
 ** [X] Extract common SQL functionality into helper
 * [ ] Generic helper to find references using tree sitter query in a generic way
 * [ ] Add query timeouts to DuckDB to detect lockups
-* [X] Fix mypy warnings
-* [X] Repomap tool
-** [X] Should only look for exported symbols
 * [ ] Search tool
-** [ ] Lower weight of comment symbols?
-** [ ] Make tool search all symbols, not just public by default
+** [ ] Lower weight of literal symbols?
+** [X] Make tool search all symbols, not just public by default
 ** [X] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
-* [X] Update chat example to use litellm instead of OpenAI API directly
-* [X] Cache improvements
-** [X] Collect and mass-update embeddings that were recently used
-** [X] Add lifecycle rules to cleanup old unused embeddings
-* [X] Embedding calculation should include docstring and prior comment
 * [ ] Add a inherits field to symbols and use for classes
 ** [ ] Update SymbolRef to use these too
 * [ ] When parsing references from files, skip duplicate names?
-* [X] Add dedicated single-thread worker for DuckDB to work around its thread handling.
-* [X] Define the meaning of to_package_path for ParsedSymbolRef (virtual path, physical path, etc)
 * [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
-* [ ] Move some tool parameters to project settings
+* [X] Move some tool parameters to project settings
 * [ ] Language support
 ** [ ] Text
 *** [ ] Recursive splitter by paragraph and then sentence-based splitters.
@@ -65,27 +48,44 @@
 ** [ ] C#
 ** [ ] Java
 ** [ ] PHP
-* [X] Refactor symbols
-** [X] Everything is a symbol
-** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
-** [X] Do insert/delete instead of update?
-** [X] Rename to Node
-* [X] MCP server
 * [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
-* [X] Add support for Python del_statement, if statement, etc.
 * [ ] Documentation generator
 * [ ] CI/CD pipeline
 * [ ] Do not refresh DuckDB index if project did not change
 * [ ] Improve node search
 ** [ ] Add reranking model support
-* [X] Add infra to maintain in-memory tools like RepoMap
-** [X] Enable/Disable tools configuration flag
 * [ ] Validate traversal logic to ensure we can not go outside of the project directory.
 * [ ] Search to support exclude. For example - tests
 * [ ] Golang summary optimizations - group multiple var/const definitions into a single block to save on tokens
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed?
+* [X] Move data helpers out of data.py
+* [X] Introduce concept of project which is a collection of repositories
+** [X] Create virtual path for other repos
+** [X] Boost default file suggestions in search, make it configurable
+* [X] Fix mypy warnings
+* [X] Repomap tool
+** [X] Should only look for exported symbols
+* [X] Update chat example to use litellm instead of OpenAI API directly
+* [X] Cache improvements
+** [X] Collect and mass-update embeddings that were recently used
+** [X] Add lifecycle rules to cleanup old unused embeddings
+* [X] Embedding calculation should include docstring and prior comment
+* [X] Add dedicated single-thread worker for DuckDB to work around its thread handling.
+* [X] Define the meaning of to_package_path for ParsedSymbolRef (virtual path, physical path, etc)
+* [X] No packages should be created for text/rest files
+* [X] Embedding priority mode does not run them first
+* [X] Delay embeddings calculation until project parsing has finished to unblock token counts
+* [X] Refactor symbols
+** [X] Everything is a symbol
+** [X] Update symbol upsert to work without key. If key is not set, then do matching by content.
+** [X] Do insert/delete instead of update?
+** [X] Rename to Node
+* [X] MCP server
+* [X] Add support for Python del_statement, if statement, etc.
+* [X] Add infra to maintain in-memory tools like RepoMap
+** [X] Enable/Disable tools configuration flag
 * [X] Figure out lockup in filelist tool
 * [X] DuckDB concurrent writes problem when updating vectors: duckdb.duckdb.TransactionException: TransactionContext Error: Failed to commit: write-write conflict on key
 * [X] Only include mentioned symbols in repomap instead of file summary?
