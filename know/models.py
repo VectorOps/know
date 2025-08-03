@@ -13,6 +13,7 @@ class ProgrammingLanguage(str, Enum):
     TYPESCRIPT = "typescript"
     JAVASCRIPT = "javascript"
     MARKDOWN = "markdown"
+    TEXT = "text"
 
 
 class NodeKind(str, Enum):
