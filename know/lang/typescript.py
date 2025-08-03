@@ -42,6 +42,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     _GENERIC_STATEMENT_NODES: set[str] = {
         "string",
+        "identifier",
 
         # module / namespace level
         "ambient_declaration",
@@ -174,6 +175,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return self._handle_sequence_expression(node, parent)
         elif node.type in self._GENERIC_STATEMENT_NODES:
             return self._handle_generic_statement(node, parent)
+
+        print(node, parent)
 
         logger.debug(
             "TS parser: unhandled node",
@@ -639,8 +642,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     v = self._create_variable_symbol(ch, parent=sym, exported=exported)
                     if v:
                         sym.children.append(v)
-                elif ch.type == "comment":
-                    sym.children.extend(self._handle_comment(ch, parent=sym))
 
                 elif ch.type == "comment":
                     sym.children.extend(self._handle_comment(ch, parent=sym))
