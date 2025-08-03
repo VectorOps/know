@@ -143,6 +143,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                      path=self.rel_path,
                      line=node.start_point[0] + 1,
                      text=node.text.decode("utf-8"))
+
         return [self._create_literal_symbol(node, parent)]
 
     def _has_modifier(self, node, keyword: str) -> bool:
@@ -446,6 +447,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
         if not name:
             return [self._create_literal_symbol(node, parent)]
 
+        children = self._process_node(function_node, parent=parent)
+
         arguments_node = node.child_by_field_name("arguments")
         params_objs: list[NodeParameter] = []
         if arguments_node:
@@ -462,9 +465,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
             self._make_node(
                 node,
                 kind=NodeKind.CALL,
-                name=name,
-                fqn=self._make_fqn(name, parent),
                 signature=sig,
+                children=children,
             )
         ]
 
@@ -1054,7 +1056,30 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
             return IND + header
 
         elif sym.kind == NodeKind.CALL:
-            return IND + header
+            child_summaries = []
+            for ch in sym.children or []:
+                if only_children and ch not in only_children:
+                    continue
+                child_summary = self.get_symbol_summary(
+                    ch,
+                    indent=0,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                    child_stack=child_stack,
+                ).strip()
+                child_summaries.append(child_summary)
+
+            function_summary = ", ".join(child_summaries)
+
+            call_signature = ""
+            if sym.signature and sym.signature.parameters:
+                params_str = ", ".join([p.name for p in sym.signature.parameters])
+                call_signature = f"({params_str})"
+
+            if function_summary:
+                return IND + function_summary + call_signature
+            else:
+                return IND + header
 
         elif sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD):
             if not header.endswith("{"):
