@@ -992,7 +992,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 params_objs.append(NodeParameter(name=arg_text, type_annotation=None))
 
         sig = NodeSignature(
-            raw=get_node_text(node),
+            raw=get_node_text(arguments_node),
             parameters=params_objs,
         )
 
@@ -1000,8 +1000,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
             self._make_node(
                 node,
                 kind=NodeKind.CALL,
-                name=name,
-                fqn=self._make_fqn(name, parent),
                 signature=sig,
                 children=children,
             )
