@@ -105,7 +105,14 @@ class PythonCodeParser(AbstractCodeParser):
             return self._handle_try_statement(node, parent=parent)
         elif node.type == "if_statement":
             return self._handle_if_statement(node, parent=parent)
-        elif node.type == "pass_statement":
+        elif node.type in (
+            "for_statement",
+            "async_for_statement",
+            "with_statement",
+            "async_with_statement",
+            "raise_statement",
+            "pass_statement",
+        ):
             return [self._create_literal_symbol(node, parent=parent)]
         elif node.type == "comment":
             return self._handle_comment_symbol(node, parent=parent)
