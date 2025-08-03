@@ -938,8 +938,11 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     children.append(sym)
                 continue
 
-            elif ch.type == "call_expression":
-                self._collect_require_calls(ch)
+            elif ch.type in ("call_expression", "ternary_expression"):
+                if ch.type == "call_expression":
+                    self._collect_require_calls(ch)
+                children.append(self._create_literal_symbol(ch, parent=parent))
+                continue
 
             elif ch.type == "parenthesized_expression":
                 children.extend(self._handle_parenthesized_expression(ch, parent=parent))

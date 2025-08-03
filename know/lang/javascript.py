@@ -409,7 +409,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 if sym:
                     children.append(sym)
                 continue
-            elif ch.type in ("call_expression", "member_expression", "unary_expression", "string"):
+            elif ch.type in ("call_expression", "member_expression", "unary_expression", "string", "ternary_expression"):
                 if ch.type == "call_expression":
                     self._collect_require_calls(ch)
                 children.append(self._create_literal_symbol(ch, parent))
