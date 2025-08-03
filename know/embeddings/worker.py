@@ -83,6 +83,8 @@ class EmbeddingWorker:
             cache_backend, cache_path, cache_size, cache_trim_batch_size
         )
         self._calc: Optional[EmbeddingCalculator] = None  # lazy – initialised in worker thread
+        self._max_context_length: Optional[int] = None
+        self._init_event = threading.Event()
 
         self._queue: Deque[_QueueItem] = collections.deque()
         self._cv = threading.Condition()
@@ -107,6 +109,18 @@ class EmbeddingWorker:
     # public API
     def get_model_name(self) -> str:
         return self._model_name
+
+    def get_max_context_length(self) -> int:
+        """
+        Return the maximum number of tokens for a single input for the
+        embedding model. This call will block until the model is loaded.
+        """
+        self._init_event.wait()
+        if self._max_context_length is None:
+            # this should not be reached if the worker thread initialises correctly
+            logger.error("max_context_length not available from embedding calculator")
+            return 0
+        return self._max_context_length
 
     def get_embedding(self, text: str) -> Vector:
         fut: concurrent.futures.Future[Vector] = concurrent.futures.Future()
@@ -252,6 +266,13 @@ class EmbeddingWorker:
     def _worker_loop(self) -> None:
         """Continuously process items from the queue."""
         self._calc = self._create_calculator()
+        try:
+            self._max_context_length = self._calc.get_max_context_length()
+        except Exception as exc:
+            logger.error("Failed to get max_context_length from embedding calculator", exc=exc)
+            self._max_context_length = 0
+        finally:
+            self._init_event.set()
 
         try:
             while not self._stop_event.is_set():

@@ -215,6 +215,23 @@ class LocalEmbeddingCalculator(EmbeddingCalculator):
     def get_model_name(self):
         return self._model_name
 
+    def get_token_count(self, text: str) -> int:
+        """Return number of tokens in *text*."""
+        model = self._get_model()
+        return len(
+            model.tokenizer(
+                text,
+                padding=False,
+                truncation=False,
+                add_special_tokens=False,
+            )["input_ids"]
+        )
+
+    def get_max_context_length(self) -> int:
+        """Return the maximum number of tokens for a single input."""
+        model = self._get_model()
+        return model.max_seq_length
+
     def get_embedding_list(self, texts: list[str]) -> list[Vector]:
         return self._encode(texts)
 

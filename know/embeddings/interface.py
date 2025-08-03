@@ -13,8 +13,18 @@ class EmbeddingCalculator(ABC):
         pass
 
     @abstractmethod
+    def get_token_count(self, text: str) -> int:
+        """Return number of tokens in *text*."""
+        ...
+
+    @abstractmethod
     def get_embedding_list(self, texts: list[str]) -> list[Vector]:
         """Return one vector per *texts* element (must keep order)."""
+        ...
+
+    @abstractmethod
+    def get_max_context_length(self) -> int:
+        """Return the maximum number of tokens for a single input."""
         ...
 
     # single-text convenience wrapper (NOT abstract any more)
