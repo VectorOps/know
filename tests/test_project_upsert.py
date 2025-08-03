@@ -52,7 +52,7 @@ def _make_project(root: Path) -> ProjectManager:
     )
     #data_repo = InMemoryDataRepository()
     data_repo = DuckDBDataRepository()
-    CodeParserRegistry.register_parser(".py", PythonCodeParser)
+    CodeParserRegistry.register_parser(PythonCodeParser)
     return ProjectManager(settings, data_repo)
 
 

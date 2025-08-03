@@ -1,6 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Type
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import threading
@@ -23,7 +23,7 @@ from know.models import (
     NodeRef,
 )
 from know.data import NodeSearchQuery, NodeFilter, ImportEdgeFilter, PackageFilter
-from know.parsers import CodeParserRegistry, ParsedFile, ParsedNode, ParsedImportEdge
+from know.parsers import CodeParserRegistry, ParsedFile, ParsedNode, ParsedImportEdge, AbstractCodeParser
 from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings, schedule_symbol_embedding
 
 
@@ -53,6 +53,13 @@ class ProcessFileResult:
     exception: Optional[Exception] = None
 
 
+def _get_parser_map() -> dict[str, Type[AbstractCodeParser]]:
+    parser_map = {}
+    for parser_cls in CodeParserRegistry.get_parsers():
+        for ext in parser_cls.extensions:
+            parser_map[ext] = parser_cls
+    return parser_map
+
 
 def _process_file(
     pm: ProjectManager,
@@ -61,6 +68,7 @@ def _process_file(
     root: Path,
     gitignore: "pathspec.PathSpec",
     cache: ProjectCache,
+    parser_map: dict[str, Type[AbstractCodeParser]],
 ) -> ProcessFileResult:
     file_proc_start = time.perf_counter()
     rel_path_str = str(path.relative_to(root))
@@ -87,7 +95,7 @@ def _process_file(
             return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
 
         # File has changed or is new, needs processing
-        parser_cls = CodeParserRegistry.get_parser(path.suffix)
+        parser_cls = parser_map.get(path.suffix)
         if parser_cls is None:
             duration = time.perf_counter() - file_proc_start
             return ProcessFileResult(
@@ -143,6 +151,8 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
     timing_stats: defaultdict[str, dict[str, int | float]] = defaultdict(lambda: {"count": 0, "total_time": 0.0})
     timing_stats_lock = threading.Lock()
 
+    parser_map = _get_parser_map()
+
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
     gitignore = parse_gitignore(root)
 
@@ -176,7 +186,7 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
                 continue
 
             processed_paths.add(str(rel_path))
-            futures.append(executor.submit(_process_file, pm, repo, path, root, gitignore, cache))
+            futures.append(executor.submit(_process_file, pm, repo, path, root, gitignore, cache, parser_map))
 
         total_tasks = len(futures)
         for idx, future in enumerate(as_completed(futures)):

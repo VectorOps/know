@@ -153,8 +153,7 @@ class AbstractCodeParser(ABC):
         if not inspect.isabstract(cls):
             if not hasattr(cls, "extensions") or not cls.extensions:
                 raise ValueError(f"{cls.__name__} missing `extensions`")
-            for ext in cls.extensions:
-                CodeParserRegistry.register_parser(ext, cls)
+            CodeParserRegistry.register_parser(cls)
 
     def __init__(self, pm: ProjectManager, repo: Repo, rel_path: str) -> None:
         self.pm = pm
@@ -341,7 +340,7 @@ class CodeParserRegistry:
     Singleton registry mapping file extensions to CodeParser implementations.
     """
     _instance = None
-    _parsers: Dict[str, Type[AbstractCodeParser]] = {}
+    _parsers: List[Type[AbstractCodeParser]] = []
     _lang_helpers: Dict[ProgrammingLanguage, AbstractLanguageHelper] = {}
 
     def __new__(cls):
@@ -358,12 +357,13 @@ class CodeParserRegistry:
         return cls._lang_helpers.get(lang)
 
     @classmethod
-    def register_parser(cls, ext: str, parser: Type[AbstractCodeParser]) -> None:
-        cls._parsers[ext] = parser
+    def register_parser(cls, parser: Type[AbstractCodeParser]) -> None:
+        if parser not in cls._parsers:
+            cls._parsers.append(parser)
 
     @classmethod
-    def get_parser(cls, ext: str) -> Optional[Type[AbstractCodeParser]]:
-        return cls._parsers.get(ext)
+    def get_parsers(cls) -> List[Type[AbstractCodeParser]]:
+        return cls._parsers
 
 
 # Helpers
