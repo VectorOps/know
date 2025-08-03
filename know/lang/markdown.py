@@ -5,13 +5,15 @@ from typing import Optional, List, Any
 import tree_sitter_markdown as tsmd
 from tree_sitter import Parser, Language
 
+from know.chunking.base import Chunk
+from know.chunking.factory import create_chunker
 from know.helpers import compute_file_hash
-from know.logger import logger
 from know.models import (
     ProgrammingLanguage,
     NodeKind,
     Visibility,
     Node,
+    ImportEdge,
     ImportEdge,
     Repo,
 )
@@ -25,6 +27,7 @@ from know.parsers import (
     ParsedNodeRef,
 )
 from know.project import ProjectManager, ProjectCache
+from know.settings import TextSettings
 
 MARKDOWN_LANGUAGE = Language(tsmd.language())
 
@@ -54,47 +57,36 @@ class MarkdownCodeParser(AbstractCodeParser):
     def _rel_to_virtual_path(self, rel_path: str) -> str:
         return os.path.splitext(rel_path)[0].replace(os.sep, ".")
 
-    def parse(self, cache: ProjectCache) -> ParsedFile:
-        if not self.repo.root_path:
-            raise ValueError("repo.root_path must be set to parse files")
-        file_path = os.path.join(self.repo.root_path, self.rel_path)
-        mtime: float = os.path.getmtime(file_path)
-        with open(file_path, "rb") as file:
-            self.source_bytes = file.read()
+    def _chunk_to_node(
+        self,
+        chunk: Chunk,
+        section_body: str,
+        section_start_byte: int,
+        section_start_line: int,
+    ) -> ParsedNode:
+        rel_start_line = section_body[: chunk.start].count("\n")
+        rel_end_line = section_body[: chunk.end].count("\n")
 
-        tree = self.parser.parse(self.source_bytes)
-        root_node = tree.root_node
+        start_byte_offset = len(section_body[: chunk.start].encode("utf-8"))
+        end_byte_offset = len(section_body[: chunk.end].encode("utf-8"))
 
-        # Markdown files don't belong to a package in the traditional sense
-        # The package attribute of ParsedFile is now Optional
-        self.parsed_file = self._create_file(file_path, mtime)
-        self.parsed_file.package = None # Explicitly set to None for markdown
+        children = [
+            self._chunk_to_node(
+                c, section_body, section_start_byte, section_start_line
+            )
+            for c in chunk.children
+        ]
 
-        # Traverse the syntax tree and populate Parsed structures
-        for child in root_node.children:
-            nodes = self._process_node(child)
-
-            if nodes:
-                self.parsed_file.symbols.extend(nodes)
-            else:
-                logger.warning(
-                    "Parser handled node but produced no symbols",
-                    path=self.parsed_file.path,
-                    node_type=child.type,
-                    line=child.start_point[0] + 1,
-                    raw=child.text.decode("utf8", errors="replace"),
-                )
-
-        self._handle_file(root_node)
-
-        # Collect outgoing symbol-references (calls)
-        self.parsed_file.symbol_refs = self._collect_symbol_refs(root_node)
-
-        # Set exported flag
-        for sym in self.parsed_file.symbols:
-            sym.exported = sym.visibility != Visibility.PRIVATE
-
-        return self.parsed_file
+        return ParsedNode(
+            body=chunk.text,
+            kind=NodeKind.LITERAL,
+            start_line=section_start_line + rel_start_line,
+            end_line=section_start_line + rel_end_line,
+            start_byte=section_start_byte + start_byte_offset,
+            end_byte=section_start_byte + end_byte_offset,
+            visibility=Visibility.PUBLIC,
+            children=children,
+        )
 
     def _process_node(
         self, node: Any, parent: Optional[ParsedNode] = None
@@ -108,6 +100,16 @@ class MarkdownCodeParser(AbstractCodeParser):
 
     def _collect_symbol_refs(self, root_node: Any) -> List[ParsedNodeRef]:
         return []
+
+    def _create_package(self, root_node):
+        return None
+
+    def _handle_file(self, root_node: Any) -> None:
+        """
+        Optional hook for language-specific post-processing at file-level.
+        With dispatcher pattern, most logic moved to _handle_document.
+        """
+        pass
 
     def _handle_document(
         self, node: Any, parent: Optional[ParsedNode] = None
@@ -170,16 +172,51 @@ class MarkdownCodeParser(AbstractCodeParser):
         )
 
         # A section is "terminal" if it does not contain any sub-sections.
-        # For terminal sections, we keep the full body but don't parse children.
-        # For non-terminal sections, we parse children to build the hierarchy.
         is_terminal = not any(child.type == "section" for child in node.children)
 
         if not is_terminal:
-            # Recursively process children, skipping the heading node itself
+            # For non-terminal sections, we parse children to build the hierarchy.
             child_nodes_to_process = node.children
             for child_node in child_nodes_to_process:
                 parsed_node.children.extend(
                     self._process_node(child_node, parent=parsed_node)
+                )
+        else:
+            # For terminal sections, we chunk the body if needed and create child nodes.
+            text_settings: Optional[TextSettings] = self.pm.settings.languages.get(
+                "text"
+            )
+
+            if self.pm.embeddings:
+                token_counter = self.pm.embeddings.get_token_count
+                max_tokens = self.pm.embeddings.get_max_context_length()
+            else:
+                token_counter = lambda s: len(s.split())
+                max_tokens = text_settings.max_tokens if text_settings else 512
+
+            chunker_type = text_settings.chunker_type if text_settings else "recursive"
+
+            chunker = create_chunker(
+                chunker_type=chunker_type,
+                max_tokens=max_tokens,
+                token_counter=token_counter,
+            )
+            top_chunks = chunker.chunk(body)
+
+            # Only add children if chunking resulted in splits.
+            has_splits = len(top_chunks) > 1 or (
+                top_chunks and top_chunks[0].children
+            )
+            if has_splits:
+                section_start_byte = node.start_byte
+                section_start_line = node.start_point[0]
+                parsed_node.children.extend(
+                    [
+                        self._chunk_to_node(
+                            chunk, body, section_start_byte, section_start_line
+                        )
+                        for chunk in top_chunks
+                    ]
                 )
 
         return [parsed_node]

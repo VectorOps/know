@@ -42,6 +42,7 @@ class TextCodeParser(AbstractCodeParser):
     def parse(self, cache: ProjectCache) -> ParsedFile:
         if not self.repo.root_path:
             raise ValueError("repo.root_path must be set to parse files")
+
         file_path = os.path.join(self.repo.root_path, self.rel_path)
         mtime: float = os.path.getmtime(file_path)
         with open(file_path, "rb") as file:
@@ -73,27 +74,22 @@ class TextCodeParser(AbstractCodeParser):
             [self._chunk_to_node(chunk, text) for chunk in top_chunks]
         )
 
-        def set_exported_recursively(nodes: List[ParsedNode]):
-            for node in nodes:
-                node.exported = (node.visibility != Visibility.PRIVATE)
-                if node.children:
-                    set_exported_recursively(node.children)
-
-        set_exported_recursively(self.parsed_file.symbols)
-
         return self.parsed_file
 
     def _chunk_to_node(self, chunk: Chunk, full_text: str) -> ParsedNode:
         start_line = full_text[: chunk.start].count("\n")
         end_line = full_text[: chunk.end].count("\n")
 
+        start_byte = len(full_text[: chunk.start].encode("utf-8"))
+        end_byte = len(full_text[: chunk.end].encode("utf-8"))
+
         return ParsedNode(
             body=chunk.text,
             kind=NodeKind.LITERAL,
             start_line=start_line,
             end_line=end_line,
-            start_byte=chunk.start,
-            end_byte=chunk.end,
+            start_byte=start_byte,
+            end_byte=end_byte,
             visibility=Visibility.PUBLIC,
             children=[self._chunk_to_node(c, full_text) for c in chunk.children],
         )
