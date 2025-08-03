@@ -110,6 +110,12 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
+    def _handle_sequence_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+        children = []
+        for child_node in node.named_children:
+            children.extend(self._process_node(child_node, parent=parent))
+        return children
+
     # Required methods
     def _handle_file(self, root_node):
         pass
@@ -152,6 +158,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return self._handle_statement_block(node, parent)
         elif node.type == "parenthesized_expression":
             return self._handle_parenthesized_expression(node, parent)
+        elif node.type == "sequence_expression":
+            return self._handle_sequence_expression(node, parent)
         elif node.type in self._GENERIC_STATEMENT_NODES:
             return self._handle_generic_statement(node, parent)
 
