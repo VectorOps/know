@@ -31,6 +31,7 @@ def _create_symbol(repo_id: str, file_id: str, pkg_id: str, name="func"):
         name=name,
         body="",
         kind=NodeKind.FUNCTION,
+        exported=True,
     )
 
 
