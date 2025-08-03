@@ -43,6 +43,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
     _GENERIC_STATEMENT_NODES: set[str] = {
         "string",
         "identifier",
+        "member_expression",
 
         # module / namespace level
         "ambient_declaration",
@@ -993,7 +994,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             elif ch.type == "call_expression":
                 children.extend(self._handle_call_expression(ch, parent=parent))
                 continue
-            elif ch.type == "ternary_expression":
+            elif ch.type in ("ternary_expression", "member_expression"):
                 children.append(self._create_literal_symbol(ch, parent=parent))
                 continue
 

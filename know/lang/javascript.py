@@ -60,6 +60,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
         "labeled_statement",
         "with_statement",
         "string",
+        "identifier",
+        "member_expression",
     }
     _JS_REF_QUERY = JS_LANGUAGE.query(r"""
         (call_expression
