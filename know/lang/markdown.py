@@ -215,6 +215,24 @@ class MarkdownCodeParser(AbstractCodeParser):
             body=body,
             visibility=Visibility.PUBLIC,
         )
+
+        # For generic blocks, we chunk the body if needed and create child nodes.
+        top_chunks = self.chunker.chunk(body)
+
+        # Only add children if chunking resulted in splits.
+        has_splits = len(top_chunks) > 1 or (top_chunks and top_chunks[0].children)
+        if has_splits:
+            section_start_byte = node.start_byte
+            section_start_line = node.start_point[0]
+            parsed_node.children.extend(
+                [
+                    self._chunk_to_node(
+                        chunk, body, section_start_byte, section_start_line
+                    )
+                    for chunk in top_chunks
+                ]
+            )
+
         return [parsed_node]
 
 
