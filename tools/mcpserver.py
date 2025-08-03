@@ -11,8 +11,8 @@ from know.settings import ProjectSettings
 from know.tools.base import ToolRegistry
 
 if TYPE_CHECKING:
-    from fastmcp import FastMCP, Context
-    from fastmcp.server.dependencies import get_context
+    from fastmcp import FastMCP, Context  # type: ignore[import-not-found]
+    from fastmcp.server.dependencies import get_context  # type: ignore[import-not-found]
 
 try:
     from fastmcp import FastMCP, Context
