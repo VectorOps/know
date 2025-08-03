@@ -640,6 +640,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     if v:
                         sym.children.append(v)
 
+                elif ch.type == "comment":
+                    sym.children.extend(self._handle_comment(ch, parent=sym))
+
                 elif ch.type in ("{", "}", ";"):
                     continue
 
