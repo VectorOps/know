@@ -28,9 +28,16 @@ from know.embedding_helpers import schedule_missing_embeddings, schedule_outdate
 
 
 
+@dataclass
+class EmbeddingTask:
+    symbol_id: str
+    text: str
+
+
 class ParsingState:
     def __init__(self) -> None:
         self.pending_import_edges: list[ImportEdge] = []
+        self.pending_embeddings: list[EmbeddingTask] = []
 
 
 class ProcessFileStatus(Enum):
@@ -288,6 +295,18 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
     # Resolve import edges
     resolve_pending_import_edges(pm, repo, state)
 
+    if (emb_calc := pm.embeddings) and state.pending_embeddings:
+        logger.debug("Scheduling embeddings for new/updated symbols", count=len(state.pending_embeddings))
+        symbol_repo = pm.data.symbol
+        for task in state.pending_embeddings:
+            schedule_symbol_embedding(
+                symbol_repo,
+                emb_calc,
+                sym_id=task.symbol_id,
+                body=task.text,
+                sync=False,
+            )
+
     # Refresh any full text indexes
     pm.data.refresh_full_text_indexes()
 
@@ -454,13 +473,16 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
         symbol_repo.create(sm)
 
         if schedule_emb:
-            schedule_symbol_embedding(
-                symbol_repo,
-                emb_calc,
-                sym_id=sm.id,
-                body=embedding_text,
-                sync=pm.settings.sync_embeddings,
-            )
+            if pm.settings.sync_embeddings:
+                schedule_symbol_embedding(
+                    symbol_repo,
+                    emb_calc,
+                    sym_id=sm.id,
+                    body=embedding_text,
+                    sync=True,
+                )
+            else:
+                state.pending_embeddings.append(EmbeddingTask(symbol_id=sm.id, text=embedding_text))
 
         # recurse into children
         for child in psym.children:
