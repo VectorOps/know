@@ -529,6 +529,7 @@ class GolangCodeParser(AbstractCodeParser):
                 signature_obj.raw = type_param_raw
 
         fqn = self._make_fqn(name)
+        visibility = infer_visibility(name)
 
         return [
             self._make_node(
@@ -538,7 +539,8 @@ class GolangCodeParser(AbstractCodeParser):
                 fqn=fqn,
                 signature=signature_obj,
                 docstring=docstring,
-                visibility=infer_visibility(name),
+                visibility=visibility,
+                exported=visibility == Visibility.PUBLIC,
             )
         ]
 
@@ -616,7 +618,7 @@ class GolangCodeParser(AbstractCodeParser):
         docstring = self._extract_preceding_comment(node)
 
         fqn = self._make_fqn(f"{receiver_type}.{name}")
-        visibility = Visibility.PUBLIC if name[0].isupper() else Visibility.PRIVATE
+        visibility = infer_visibility(name)
 
         return [
             self._make_node(
@@ -626,7 +628,8 @@ class GolangCodeParser(AbstractCodeParser):
                 fqn=fqn,
                 signature=signature_obj,
                 docstring=docstring,
-                visibility=infer_visibility(name),
+                visibility=visibility,
+                exported=visibility == Visibility.PUBLIC,
             )
         ]
 
@@ -676,13 +679,15 @@ class GolangCodeParser(AbstractCodeParser):
                     )
                     continue
 
+                visibility = infer_visibility(fname)
                 child = self._make_node(
                     fld,
                     kind=NodeKind.PROPERTY,
                     name=fname,
                     fqn=self._make_fqn(fname, parent),
                     docstring=self._extract_preceding_comment(fld),
-                    visibility=infer_visibility(fname),
+                    visibility=visibility,
+                    exported=visibility == Visibility.PUBLIC,
                 )
                 parent.children.append(child)
                 continue
@@ -703,13 +708,15 @@ class GolangCodeParser(AbstractCodeParser):
 
             for idn in id_nodes:
                 fname = get_node_text(idn)
+                visibility = infer_visibility(fname)
                 child = self._make_node(
                     fld,
                     kind=NodeKind.PROPERTY,
                     name=fname,
                     fqn=self._make_fqn(fname, parent),
                     docstring=self._extract_preceding_comment(fld),
-                    visibility=infer_visibility(fname),
+                    visibility=visibility,
+                    exported=visibility == Visibility.PUBLIC,
                 )
                 parent.children.append(child)
 
@@ -748,14 +755,16 @@ class GolangCodeParser(AbstractCodeParser):
             else None
         )
 
+        visibility = infer_visibility(mname)
         child = self._make_node(
             m,
             name=mname,
             fqn=self._make_fqn(mname, parent),
             kind=NodeKind.METHOD_DEF,
-            visibility=infer_visibility(mname),
+            visibility=visibility,
             docstring=self._extract_preceding_comment(m),
             signature=signature_obj,
+            exported=visibility == Visibility.PUBLIC,
         )
         parent.children.append(child)
 
@@ -796,13 +805,15 @@ class GolangCodeParser(AbstractCodeParser):
                 elif type_node.type == "interface_type":
                     kind = NodeKind.INTERFACE
 
+            visibility = infer_visibility(name)
             sym = self._make_node(
                 spec,
                 kind=kind,
                 name=name,
                 fqn=self._make_fqn(name),
                 docstring=self._extract_preceding_comment(spec),
-                visibility=infer_visibility(name),
+                visibility=visibility,
+                exported=visibility == Visibility.PUBLIC,
             )
 
             if type_node is not None:
@@ -849,6 +860,7 @@ class GolangCodeParser(AbstractCodeParser):
             for idn in id_nodes:
                 name = get_node_text(idn)
                 fqn = self._make_fqn(name)
+                visibility = infer_visibility(name)
 
                 sym = self._make_node(
                     spec,
@@ -856,7 +868,8 @@ class GolangCodeParser(AbstractCodeParser):
                     name=name,
                     fqn=fqn,
                     docstring=docstring,
-                    visibility=infer_visibility(name),
+                    visibility=visibility,
+                    exported=visibility == Visibility.PUBLIC,
                 )
                 symbols.append(sym)
 
@@ -898,13 +911,15 @@ class GolangCodeParser(AbstractCodeParser):
             for idn in id_nodes:
                 name = get_node_text(idn)
                 fqn = self._make_fqn(name)
+                visibility = infer_visibility(name)
 
                 sym = self._make_node(spec,
                                         name=name,
                                         fqn=fqn,
                                         kind=NodeKind.VARIABLE,
-                                        visibility=infer_visibility(name),
+                                        visibility=visibility,
                                         docstring=docstring,
+                                        exported=visibility == Visibility.PUBLIC,
                                         )
                 symbols.append(sym)
 
