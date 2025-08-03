@@ -77,6 +77,8 @@ class RecursiveChunker(AbstractChunker):
 
         leaves = []
         for span, s, e in segments:
+            if not span.strip():  # filter empty/whitespace-only segments
+                continue
             if self.token_counter(span) > self.max_tokens:
                 leaves.extend(next_level_fn(span, s, full_text))
             else:
@@ -112,17 +114,8 @@ class RecursiveChunker(AbstractChunker):
         Each Chunk's .children holds the next-deeper level, down to leaves whose
         .text is guaranteed not to exceed *max_tokens*.
         """
-        top_nodes: List[Chunk] = []
-        for para, p_start, p_end in _segments_with_pos(self.paragraph_re, text, 0):
-            if not para.strip():  # skip blank paras
-                continue
-            children = self._split_sentences(para, p_start, text)
-            if len(children) == 1:
-                # The whole paragraph fits into a single chunk (either because it was
-                # small to begin with, or because its pieces were packed into one).
-                top_nodes.append(children[0])
-            else:
-                # The paragraph was split into multiple chunks. Create a parent for them.
-                top_nodes.append(Chunk(p_start, p_end, para, children))
-
-        return top_nodes
+        if not text.strip():
+            return []
+        return self._split_recursively(
+            text, 0, text, self.paragraph_re, self._split_sentences
+        )
