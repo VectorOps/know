@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING, cast, Literal
 
 
 if TYPE_CHECKING:
@@ -39,21 +39,23 @@ def create_chunker_from_project_manager(pm: "ProjectManager") -> "AbstractChunke
     from know.chunking.factory import create_chunker
     from know.settings import TextSettings
 
-    text_settings: Optional[TextSettings] = pm.settings.languages.get("text")
+    text_settings: Optional[TextSettings] = cast(
+        Optional[TextSettings], pm.settings.languages.get("text")
+    )
 
     if pm.embeddings:
         token_counter = pm.embeddings.get_token_count
         max_tokens = pm.embeddings.get_max_context_length()
-        min_tokens = text_settings.min_tokens
+        min_tokens = text_settings.min_tokens if text_settings else 0
     else:
-        token_counter = lambda s: len(s.split())
+        token_counter = lambda text: len(text.split())
         max_tokens = text_settings.max_tokens if text_settings else 512
         min_tokens = 64
 
     chunker_type = text_settings.chunker_type if text_settings else "recursive"
 
     return create_chunker(
-        chunker_type=chunker_type,
+        chunker_type=cast(Literal["recursive"], chunker_type),
         max_tokens=max_tokens,
         min_tokens=min_tokens,
         token_counter=token_counter,
