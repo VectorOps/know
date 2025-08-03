@@ -1053,6 +1053,9 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
             header = sym.signature.raw if sym.signature else (sym.body or "export").strip()
             return IND + header
 
+        elif sym.kind == NodeKind.CALL:
+            return IND + header
+
         elif sym.kind in (NodeKind.FUNCTION, NodeKind.METHOD):
             if not header.endswith("{"):
                 header += " { ... }" if sym.kind == NodeKind.FUNCTION else \
