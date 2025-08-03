@@ -38,37 +38,6 @@ class RecursiveChunker(AbstractChunker):
         self.phrase_re = phrase_re
         self.word_re = word_re
 
-    def _split_words(self, text: str, start: int) -> List[Chunk]:
-        """Final fallback: slice an over-long span on word boundaries."""
-        pieces, matches = [], list(self.word_re.finditer(text))
-        for i in range(0, len(matches), self.max_tokens):
-            s_idx = matches[i].start()
-            e_idx = matches[min(i + self.max_tokens - 1, len(matches) - 1)].end()
-            span = text[s_idx:e_idx]
-            pieces.append(Chunk(start + s_idx, start + e_idx, span))
-        return pieces
-
-    def _split_recursively(
-        self, text_to_split: str, offset: int, regex: Pattern, next_level_fn: Callable
-    ) -> List[Chunk]:
-        """
-        Generic helper to split text by a regex and recursively call the next-level splitter.
-        """
-        segments = list(_segments_with_pos(regex, text_to_split, offset))
-
-        # If the regex doesn't split the text, pass the whole text to the next level.
-        if len(segments) == 1:
-            # segments[0] is a tuple (text, start, end)
-            return next_level_fn(segments[0][0], segments[0][1])
-
-        leaves = []
-        for span, s, e in segments:
-            if self.token_counter(span) > self.max_tokens:
-                leaves.extend(next_level_fn(span, s))
-            else:
-                leaves.append(Chunk(s, e, span))
-        return leaves
-
     def _pack(self, segments: List[Chunk], text: str) -> List[Chunk]:
         """Greedily combine consecutive leaf segments until token cap."""
         if not segments:
@@ -88,22 +57,54 @@ class RecursiveChunker(AbstractChunker):
             packed.append(Chunk(first.start, last.end, text[first.start:last.end], buf))
         return packed
 
-    def _split_phrases(self, sentence: str, sent_start: int) -> List[Chunk]:
-        if self.token_counter(sentence) <= self.max_tokens:
-            return [Chunk(sent_start, sent_start + len(sentence), sentence)]
+    def _split_recursively(
+        self, text_to_split: str, offset: int, full_text: str, regex: Pattern, next_level_fn: Callable
+    ) -> List[Chunk]:
+        """
+        Generic helper to split text by a regex, recursively call the next-level splitter,
+        and then pack the results.
+        """
+        # Optimization: if the whole text is small enough, no need to split.
+        if self.token_counter(text_to_split) <= self.max_tokens:
+            return [Chunk(offset, offset + len(text_to_split), text_to_split)]
 
+        segments = list(_segments_with_pos(regex, text_to_split, offset))
+
+        # If the regex doesn't split the text, pass the whole text to the next level.
+        if len(segments) == 1:
+            # segments[0] is a tuple (text, start, end)
+            return next_level_fn(segments[0][0], segments[0][1], full_text)
+
+        leaves = []
+        for span, s, e in segments:
+            if self.token_counter(span) > self.max_tokens:
+                leaves.extend(next_level_fn(span, s, full_text))
+            else:
+                leaves.append(Chunk(s, e, span))
+        return self._pack(leaves, full_text)
+
+    def _final_fallback(self, text: str, start: int, full_text: str) -> List[Chunk]:
+        """Base case for recursion: text that can't be split further."""
+        # This might be an over-long word. Just create a chunk for it.
+        return [Chunk(start, start + len(text), text)]
+
+    def _split_words(self, text: str, start: int, full_text: str) -> List[Chunk]:
+        """Splits by words, then packs them."""
         return self._split_recursively(
-            sentence, sent_start, self.phrase_re, self._split_words
+            text, start, full_text, self.word_re, self._final_fallback
         )
 
-    def _split_sentences(self, paragraph: str, para_start: int, text: str) -> List[Chunk]:
-        if self.token_counter(paragraph) <= self.max_tokens:
-            return [Chunk(para_start, para_start + len(paragraph), paragraph)]
-
-        leaves = self._split_recursively(
-            paragraph, para_start, self.sentence_re, self._split_phrases
+    def _split_phrases(self, sentence: str, sent_start: int, full_text: str) -> List[Chunk]:
+        """Splits by phrases, then packs them."""
+        return self._split_recursively(
+            sentence, sent_start, full_text, self.phrase_re, self._split_words
         )
-        return self._pack(leaves, text)
+
+    def _split_sentences(self, paragraph: str, para_start: int, full_text: str) -> List[Chunk]:
+        """Splits by sentences, then packs them."""
+        return self._split_recursively(
+            paragraph, para_start, full_text, self.sentence_re, self._split_phrases
+        )
 
     def chunk(self, text: str) -> List[Chunk]:
         """
