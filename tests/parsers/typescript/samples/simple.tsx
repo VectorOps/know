@@ -21,6 +21,10 @@ export function fn(a: number): number {
   return a + 1;
 }
 
+export type Foo = {
+  z: number;
+};
+
 const a = async (b: str) => {
   alert("foo");
 };
