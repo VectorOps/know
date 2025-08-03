@@ -17,28 +17,50 @@ class ProgrammingLanguage(str, Enum):
 
 
 class NodeKind(str, Enum):
+    # Module/package
     MODULE = "module"
+    # Class
     CLASS = "class"
+    # Function
     FUNCTION = "function"
+    # Method
     METHOD = "method"
+    # Method definition without a body
     METHOD_DEF = "method_def"
+    # Class property
     PROPERTY = "property"
+    # Constant
     CONSTANT = "constant"
+    # Variable definition
     VARIABLE = "variable"
-    COMPONENT = "component"
+    # Interface
     INTERFACE = "interface"
+    # Enum
     ENUM = "enum"
+    # Type definition
     TYPE_ALIAS = "type_alias"
+    # Literal symbol, summary emitted as-is
     LITERAL = "literal"
+    # Import
     IMPORT = "import"
+    # Export
     EXPORT = "export"
+    # Try/catch block
     TRYCATCH = "try_catch"
+    # Comment block
     COMMENT = "comment"
+    # Assignment node
     ASSIGNMENT = "assignment"
+    # Namespace
     NAMESPACE = "namespace"
+    # If block
     IF = "if"
+    # Generic block grouping. Usually contains signature for opening/closing symbols.
     BLOCK = "block"
+    # Generic block representing a sequence of child nodes
     EXPRESSION = "expression"
+    # Generic "call" block
+    CALL = "call"
 
 
 class Visibility(str, Enum):

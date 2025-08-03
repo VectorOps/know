@@ -8,6 +8,12 @@ const circle = require('./circle.js');
 export * from './foobar.js';
 export { bar  } from './foobar.js';
 
+export var a = 10;
+
+(function(a) {
+  // foobar
+}(10));
+
 // ------------------------------------------------------------------
 // exported consts / arrow-fn
 export const j1 = 10, f1 = () => {};

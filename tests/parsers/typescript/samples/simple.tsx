@@ -7,9 +7,15 @@ foo = () => {};
 
 export const j1 = 10, f1 = () => {};
 
+export var a = 10;
+
 let a1, b1, c1 = 10;
 
 var e2 = 20, f;
+
+(function(a) {
+  // foobar
+}(10));
 
 export function fn(a: number): number {
   return a + 1;

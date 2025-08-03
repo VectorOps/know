@@ -456,7 +456,9 @@ class JavaScriptCodeParser(AbstractCodeParser):
         if not name:
             return [self._create_literal_symbol(node, parent)]
 
+        print(function_node)
         children = self._process_node(function_node, parent=parent)
+        print(children)
 
         arguments_node = node.child_by_field_name("arguments")
         params_objs: list[NodeParameter] = []
@@ -842,7 +844,10 @@ class JavaScriptCodeParser(AbstractCodeParser):
 
     def _handle_function_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
-        name = get_node_text(name_node) or "anonymous"
+        name = get_node_text(name_node) or None
+        fqn = None
+        if name:
+            fqn=self._make_fqn(name, parent)
         sig = self._build_signature(node, name, prefix="function")
         mods: list[Modifier] = []
         if node.text.lstrip().startswith(b"async"):
@@ -854,7 +859,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                 node,
                 kind=NodeKind.FUNCTION,
                 name=name,
-                fqn=self._make_fqn(name, parent),
+                fqn=fqn,
                 signature=sig,
                 modifiers=mods,
                 exported=exported,
@@ -1102,9 +1107,8 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
             function_summary = ", ".join(child_summaries)
 
             call_signature = ""
-            if sym.signature and sym.signature.parameters:
-                params_str = ", ".join([p.name for p in sym.signature.parameters])
-                call_signature = f"({params_str})"
+            if sym.signature:
+                call_signature = sym.signature.raw
 
             if function_summary:
                 return IND + function_summary + call_signature

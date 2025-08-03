@@ -525,7 +525,10 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     def _handle_function_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
-        name = get_node_text(name_node) or "anonymous"
+        name = get_node_text(name_node) or None
+        fqn = None
+        if name:
+            fqn=self._make_fqn(name, parent)
         sig = self._build_signature(node, name, prefix="function")
         mods: list[Modifier] = []
         if get_node_text(node).lstrip().startswith("async"):
@@ -537,7 +540,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 node,
                 kind=NodeKind.FUNCTION,
                 name=name,
-                fqn=self._make_fqn(name, parent),
+                fqn=fqn,
                 signature=sig,
                 modifiers=mods,
                 exported=exported,
