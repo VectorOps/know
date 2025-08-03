@@ -31,6 +31,14 @@ def test_javascript_parser_on_simple_file():
     assert parsed_file.path == "simple.js"
     assert parsed_file.language == ProgrammingLanguage.JAVASCRIPT
 
+    # check for string literal expression
+    string_expr_node = next((s for s in parsed_file.symbols if s.body.startswith('"use strict"')), None)
+    assert string_expr_node is not None
+    assert string_expr_node.kind == NodeKind.EXPRESSION
+    assert len(string_expr_node.children) == 1
+    assert string_expr_node.children[0].kind == NodeKind.LITERAL
+    assert string_expr_node.children[0].body == '"use strict"'
+
     # imports
     assert len(parsed_file.imports) == 2
     assert parsed_file.imports[0].raw.startswith("import React")
