@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     fqn TEXT,
     body TEXT,
     kind TEXT,
+    subtype TEXT,
     parent_node_id TEXT,
     start_line INTEGER,
     start_col INTEGER,

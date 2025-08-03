@@ -55,9 +55,10 @@ class NodeKind(str, Enum):
     NAMESPACE = "namespace"
     # If block
     IF = "if"
-    # Generic block grouping. Usually contains signature for opening/closing symbols.
+    # Generic block grouping. Usually contains signature for opening/closing symbols stored in Node.subtype field.
     BLOCK = "block"
-    # Generic block representing a sequence of child nodes
+    # Generic block representing a sequence of child nodes. Usually does not have it's own representation
+    # and only used to group things together.
     EXPRESSION = "expression"
     # Generic "call" block
     CALL = "call"
@@ -180,6 +181,7 @@ class Node(BaseModel):
     fqn: Optional[str] = None
     body: str
     kind: Optional[NodeKind] = None
+    subtype: Optional[str] = None
     parent_node_id: Optional[str] = None
 
     start_line: int = 0

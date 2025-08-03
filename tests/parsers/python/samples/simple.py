@@ -94,3 +94,7 @@ d()
 if __name__ == "__main__":
     import foo
     print("123")
+elif __name__ == "__buzz__":
+    pass
+else:
+    print("432")

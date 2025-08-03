@@ -228,13 +228,9 @@ class PythonCodeParser(AbstractCodeParser):
             _process_block_children(consequence, if_block_symbol)
             if_symbol.children.append(if_block_symbol)
 
-        # Handle 'elif' and 'else' clauses by traversing the chain
-        current_node_in_chain = node
-        while current_node_in_chain:
-            alt_node = current_node_in_chain.child_by_field_name("alternative")
-            if not alt_node:
-                break
-
+        # Handle 'elif' and 'else' clauses
+        alternatives = node.children_by_field_name("alternative")
+        for alt_node in alternatives:
             if alt_node.type == "elif_clause":
                 block_node = alt_node.child_by_field_name("consequence")
                 if block_node:
@@ -249,9 +245,11 @@ class PythonCodeParser(AbstractCodeParser):
                     )
                     _process_block_children(block_node, elif_block_symbol)
                     if_symbol.children.append(elif_block_symbol)
-                current_node_in_chain = alt_node
             elif alt_node.type == "else_clause":
-                block_node = alt_node.child_by_field_name("consequence")
+                block_node = alt_node.child_by_field_name("body")
+                if not block_node:
+                    block_node = alt_node.child_by_field_name("consequence")
+
                 if block_node:
                     else_block_symbol = self._make_node(
                         block_node,
@@ -261,11 +259,6 @@ class PythonCodeParser(AbstractCodeParser):
                     )
                     _process_block_children(block_node, else_block_symbol)
                     if_symbol.children.append(else_block_symbol)
-                break  # else clause is always the end of the chain
-            else:
-                # This could be an if_statement inside an else (which is an explicit else-if).
-                # _process_block_children on the else_clause block handles this case, so we can break.
-                break
 
         return [if_symbol]
 
@@ -985,8 +978,6 @@ class PythonLanguageHelper(AbstractLanguageHelper):
                 lines.append(f"{IND}    ...")
 
         elif sym.kind == NodeKind.IF:
-            from devtools import pprint; pprint(sym)
-
             for child in sym.children:
                 if only_children and child not in only_children:
                     continue
