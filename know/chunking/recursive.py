@@ -13,8 +13,7 @@ def _segments_with_pos(regex: Pattern, text: str, offset: int):
     """Split *text* by *regex* while preserving absolute positions."""
     last = 0
     for m in regex.finditer(text):
-        if m.start() > last:
-            yield text[last : m.start()], offset + last, offset + m.start()
+        yield text[last : m.end()], offset + last, offset + m.end()
         last = m.end()
     if last < len(text):
         yield text[last:], offset + last, offset + len(text)
