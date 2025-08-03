@@ -402,18 +402,14 @@ class JavaScriptCodeParser(AbstractCodeParser):
                         if child:
                             children.append(child)
                         continue
-                elif rhs and rhs.type == "call_expression":
-                    alias_node = lhs.child_by_field_name("identifier") or \
-                                 next((c for c in lhs.children if c.type == "identifier"), None)
-                    alias = get_node_text(alias_node) if alias_node else None
-                    self._collect_require_calls(rhs, alias=alias)
                 sym = self._create_variable_symbol(ch, parent=parent)
                 if sym:
                     children.append(sym)
                 continue
-            elif ch.type in ("call_expression", "member_expression", "unary_expression", "string", "ternary_expression"):
-                if ch.type == "call_expression":
-                    self._collect_require_calls(ch)
+            elif ch.type == "call_expression":
+                children.extend(self._handle_call_expression(ch, parent=parent))
+                continue
+            elif ch.type in ("member_expression", "unary_expression", "string", "ternary_expression"):
                 children.append(self._create_literal_symbol(ch, parent))
                 continue
             elif ch.type == "parenthesized_expression":
