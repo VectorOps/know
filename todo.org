@@ -3,7 +3,7 @@
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Optimize chunker to tokenize and then de-tokenize to generate result, as an optimization?
 * [ ] Method to fully reparse the repo in project
-* [ ] Extend Node to have subtype str type (used for block types, etc)
+* [X] Extend Node to have subtype str type (used for block types, etc)
 * [ ] Storage backends
 ** [ ] PostgreSQL backend
 ** [ ] Add sqlite backend
@@ -48,8 +48,8 @@
 *** [X] Add support for member_expression, empty_statement node type
 *** [X] Add support for statement_block, string, ternary_expression
 *** [X] Do not warn on empty_statement
-*** [ ] Add support for ternary_expression
-*** [ ] Add support for call_expression
+*** [X] Add support for ternary_expression
+*** [X] Add support for call_expression
 ** [ ] C
 ** [ ] C#
 ** [ ] Java
