@@ -128,6 +128,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
             return self._handle_export(node, parent=parent)
         elif node.type == "comment":
             return self._handle_comment(node, parent=parent)
+        elif node.type == "empty_statement":
+            return [self._create_literal_symbol(node, parent=parent)]
         elif node.type == "function_declaration":
             return self._handle_function(node, parent=parent)
         elif node.type in ("class_declaration", "abstract_class_declaration"):
