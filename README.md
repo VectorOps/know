@@ -21,7 +21,9 @@ uv sync
 ```
 
 ## **Embeddings**  
-To enable semantic search, install a sentence-transformer model (e.g. `pip install sentence-transformers`) and start tools with `--embedding.enable true`. Provide model to use via `--embedding.model-name`, such as `--embedding.model-name BAAI/bge-code-v1`.
+To enable semantic search, pick a sentence-transformer model and start tools with `--embedding.enable true`. Provide model to use via `--embedding.model-name`, such as `--embedding.model-name BAAI/bge-code-v1`.
+
+It is highly recommended that embeddings are cached and persisted across runs to save on computing costs.
 
 ---
 
