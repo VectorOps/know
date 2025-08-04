@@ -4,11 +4,12 @@ VectorOps *Know* is an extensible code-intelligence helper library. It scans you
 All functionality is available from the command line, through a clean Python API, or via a lightweight **MCP** (Machine-Comprehension Provider) micro-service for chat/LLM workflows.
 
 ## Key Features
-• Multi-language parsing (Python, TypeScript, Go, …)
-• Local (in-memory) or in-memory or on-disk DuckDB metadata store
-• Optional sentence-transformer embeddings for semantic search
-• Rich tool catalogue automatically exported as OpenAI JSON schemas
-• Ready-to-run FastMCP server with zero configuration
+
+ * Multi-language parsing (Python, TypeScript, Go, …)
+ * Local (in-memory) or in-memory or on-disk DuckDB metadata store
+ *  Optional sentence-transformer embeddings for semantic search
+ * Rich tool catalogue automatically exported as OpenAI JSON schemas
+ *  Ready-to-run FastMCP server with zero configuration
 
 ---
 
@@ -19,8 +20,8 @@ cd know
 uv sync
 ```
 
-> **Embeddings**  
-> To enable semantic search, install a sentence-transformer model (e.g. `pip install sentence-transformers`) and start tools with `--embedding.enable true`. Provide model to use via `--embedding.model-name`, such as `--embedding.model-name BAAI/bge-code-v1`.
+## **Embeddings**  
+To enable semantic search, install a sentence-transformer model (e.g. `pip install sentence-transformers`) and start tools with `--embedding.enable true`. Provide model to use via `--embedding.model-name`, such as `--embedding.model-name BAAI/bge-code-v1`.
 
 ---
 
