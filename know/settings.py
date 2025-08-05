@@ -92,6 +92,15 @@ class SearchSettings(BaseModel):
     )
 
 
+class TokenizerSettings(BaseModel):
+    """Settings for tokenization."""
+
+    default: str = Field(
+        default="auto",
+        description="Default tokenizer to use. Options: 'auto', 'noop', 'coding', 'word'.",
+    )
+
+
 class ChunkingSettings(BaseModel):
     """Settings for text chunking."""
 
@@ -192,6 +201,10 @@ class ProjectSettings(BaseSettings):
     chunking: ChunkingSettings = Field(
         default_factory=ChunkingSettings,
         description="Settings for text chunking.",
+    )
+    tokenizer: TokenizerSettings = Field(
+        default_factory=TokenizerSettings,
+        description="Settings for tokenization.",
     )
     tools: ToolSettings = Field(
         default_factory=ToolSettings,
