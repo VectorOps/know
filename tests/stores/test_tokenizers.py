@@ -1,6 +1,6 @@
 import pytest
 
-from know.stores import tokenizers
+from know import tokenizers
 from know.settings import ProjectSettings
 
 
@@ -29,19 +29,19 @@ TOKENIZER_TEST_CASES = [
 ]
 
 
-@pytest.mark.parametrize("src, expected_noop, expected_word, expected_coding", TOKENIZER_TEST_CASES)
-def test_tokenizers(src, expected_noop, expected_word, expected_coding):
+def test_tokenizers():
     # a dummy settings object is needed for the tokenizer functions
     settings = ProjectSettings(project_name="test", repo_name="test")
 
-    # test noop_tokenizer
-    assert tokenizers.noop_tokenizer(settings, src) == expected_noop
+    for src, expected_noop, expected_word, expected_coding in TOKENIZER_TEST_CASES:
+        # test noop_tokenizer
+        assert tokenizers.noop_tokenizer(src) == expected_noop
 
-    # test word_tokenizer
-    assert tokenizers.word_tokenizer(settings, src) == expected_word
+        # test word_tokenizer
+        assert tokenizers.word_tokenizer(src) == expected_word
 
-    # test coding_tokenizer
-    assert tokenizers.coding_tokenizer(settings, src) == expected_coding
+        # test coding_tokenizer
+        assert tokenizers.code_tokenizer(src) == expected_coding
 
-    # test auto_tokenizer (should be same as coding)
-    assert tokenizers.auto_tokenizer(settings, src) == expected_coding
+        # test auto_tokenizer (should be same as coding)
+        assert tokenizers.auto_tokenizer(settings, src) == expected_coding
