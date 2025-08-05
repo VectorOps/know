@@ -7,7 +7,7 @@ from typing import Any, Optional, Set
 from know.data import AbstractNodeRepository, AbstractFileRepository
 from know.models import Node, ProgrammingLanguage
 from know.parsers import CodeParserRegistry
-from know.stores.tokenizers import code_tokenizer
+from know.tokenizers import code_tokenizer
 
 
 class BaseQueueWorker(ABC):
@@ -65,13 +65,15 @@ class BaseQueueWorker(ABC):
 def calc_fts_index(
     node_repo: AbstractNodeRepository,
     file_repo: AbstractFileRepository,
+    language: Optional[ProgrammingLanguage] = None,
     node_id: Optional[str] = None,
     file_id: Optional[str] = None,
     name: Optional[str] = None,
     body: Optional[str] = None,
     docstring: Optional[str] = None,
+    make_word_soup: bool = False,
 ) -> str:
-    _name, _body, _docstring, _language, _file_path = name, body, docstring, None, None
+    _name, _body, _docstring, _language, _file_path = name, body, docstring, language, None
 
     current_node: Optional[Node] = None
     if node_id:
@@ -93,17 +95,32 @@ def calc_fts_index(
         file = file_repo.get_by_id(_file_id)
         if file:
             _file_path = file.path
-            _language = file.language
 
-    helper = CodeParserRegistry.get_helper(_language) if _language else None
+    if not _language and file:
+        _language = file.language
+
+    helper = CodeParserRegistry.get_helper(_language)
     stop_words = helper.get_common_syntax_words() if helper else None
 
-    processed_name = code_tokenizer(_name or "", stop_words)
-    processed_body = code_tokenizer(_body or "", stop_words)
-    processed_docstring = code_tokenizer(_docstring or "", stop_words)
-    processed_path = code_tokenizer(_file_path or "", stop_words)
+    processed_name_str = code_tokenizer(_name or "", stop_words)
+    processed_body_str = code_tokenizer(_body or "", stop_words)
+    processed_docstring_str = code_tokenizer(_docstring or "", stop_words)
+    processed_path_str = code_tokenizer(_file_path or "", stop_words)
 
-    fts_parts = [processed_path, processed_body, processed_docstring]
-    fts_parts.extend([processed_name] * 2)  # name 2x weight
+    if make_word_soup:
+        all_tokens = set()
+        all_tokens.update(processed_name_str.split())
+        all_tokens.update(processed_body_str.split())
+        all_tokens.update(processed_docstring_str.split())
+        all_tokens.update(processed_path_str.split())
+        return " ".join(sorted(list(all_tokens)))
+
+    # name: 3x, path: 2x, body: 1x, docstring: 1x
+    fts_parts = [
+        processed_body_str,
+        processed_docstring_str,
+    ]
+    fts_parts.extend([processed_path_str] * 2)
+    fts_parts.extend([processed_name_str] * 3)
 
     return " ".join(filter(None, fts_parts))
