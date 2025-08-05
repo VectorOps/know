@@ -1,4 +1,5 @@
 from typing import Optional, Iterable, List, Set, Tuple, Type, Any
+from enum import Enum
 
 from pydantic import Field, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -92,12 +93,20 @@ class SearchSettings(BaseModel):
     )
 
 
+class TokenizerType(str, Enum):
+    """Enum for different tokenizer types."""
+
+    NOOP = "noop"
+    CODE = "code"
+    WORD = "word"
+
+
 class TokenizerSettings(BaseModel):
     """Settings for tokenization."""
 
-    default: str = Field(
-        default="auto",
-        description="Default tokenizer to use. Options: 'auto', 'noop', 'coding', 'word'.",
+    default: TokenizerType = Field(
+        default=TokenizerType.CODE,
+        description="Default tokenizer to use.",
     )
 
 
