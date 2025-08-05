@@ -7,7 +7,7 @@ from know.models import (
     NodeRef, NodeRefType,
 )
 from know.project import ProjectManager
-from know.stores.memory import InMemoryDataRepository
+from know.stores.duckdb import DuckDBDataRepository
 from know.scanner import ScanResult
 from know.settings import ProjectSettings
 from know.tools.repomap import RepoMap, RepoMapTool, RepoMapReq
@@ -48,9 +48,8 @@ def _create_ref(repo_id: str, file_id: str, pkg_id: str, name="func"):
 
 # helpers for RepoMapTool test
 def _build_project():
-    dr = InMemoryDataRepository()
-
     settings = ProjectSettings(project_name="test", repo_name="test", repo_path="/dummy")
+    dr = DuckDBDataRepository(settings)
     project = ProjectManager(settings, dr)
 
     repo_id = project.default_repo.id
@@ -85,10 +84,8 @@ def _build_project():
 
 
 def test_repo_map_build_and_refresh():
-    # ── prepare in-memory repo ────────────────────────────────────────────
-    dr = InMemoryDataRepository()
-
     settings = ProjectSettings(project_name="test", repo_name="test", repo_path="/dummy")
+    dr = DuckDBDataRepository(settings)
     project = ProjectManager(settings, dr)
 
     repo_id = project.default_repo.id

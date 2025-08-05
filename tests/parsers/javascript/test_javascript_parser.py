@@ -1,6 +1,7 @@
 from pathlib import Path
 from know.settings import ProjectSettings
-from know.project import init_project, ProjectCache
+from know import init_project
+from know.project import ProjectCache
 from know.lang.javascript import JavaScriptCodeParser
 from know.models import ProgrammingLanguage, NodeKind
 
@@ -12,7 +13,6 @@ def _make_dummy_project(root_dir: Path):
         project_name="test",
         repo_name="test",
         repo_path=str(root_dir),
-        repository_backend="memory",   # lightweight in-mem backend
     )
     return init_project(settings, refresh=False)
 

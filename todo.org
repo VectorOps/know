@@ -1,4 +1,10 @@
 #+title: Todo
+* [ ] Configurable RRF weights
+* [ ] Auto-refresh
+** [ ] Auto-refresh on every tool call
+** [ ] Auto-refresh on tool call, but not more often than every X minutes
+** [ ] Auto-refresh associated repos or primary repo
+* [ ] Repomap should ignore non-default repos in the project
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Optimize chunker to tokenize and then de-tokenize to generate result, as an optimization?
@@ -11,7 +17,12 @@
 * [ ] Generic helper to find references using tree sitter query in a generic way
 * [ ] Add query timeouts to DuckDB to detect lockups
 * [ ] Search tool
-** [ ] Lower weight of literal symbols?
+** [X] Better tokenizer for the fts index (syntax specific?)
+*** [X] Per-language stop words?
+** [ ] Lower weight of literal symbols
+** [ ] Boost final score of functions/methods/symbol definitions
+- Store boost coefficient in the symbol itself when calculating
+** [ ] Figure out field awareness and ranking
 ** [X] Make tool search all symbols, not just public by default
 ** [X] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
 * [ ] Add a inherits field to symbols and use for classes
@@ -66,6 +77,7 @@
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed?
+* [ ] Debug search quality
 * [X] Move data helpers out of data.py
 * [X] Introduce concept of project which is a collection of repositories
 ** [X] Create virtual path for other repos

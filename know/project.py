@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 from know.models import Project, ProjectRepo, Vector, Repo
 from know.data import AbstractDataRepository, NodeSearchQuery
-from know.stores.memory import InMemoryDataRepository
-from know.stores.duckdb import DuckDBDataRepository
 from know.logger import logger
 from know.helpers import parse_gitignore, compute_file_hash, generate_id
 from know.settings import ProjectSettings
@@ -245,47 +243,3 @@ class ProjectCache:
 
     def clear(self) -> None:
         self._cache.clear()
-
-
-def init_project(settings: ProjectSettings, refresh: bool = True) -> ProjectManager:
-    """
-    Initializes the project. Settings object contains project path and/or project id.
-    Then init project checks if Repo exists for the id (if provided) or absolute path.
-    If it does not exist - creates a new Repo and sets that on Project instance that's returned.
-    Finally, kicks off a function to recursively scan the project directory.
-    """
-    # TODO: Move registration out
-    backend = settings.repository_backend or "memory"
-    data: AbstractDataRepository
-    if backend == "duckdb":
-        data = DuckDBDataRepository(db_path=settings.repository_connection)
-    elif backend == "memory":
-        data = InMemoryDataRepository()
-    else:
-        raise ValueError(f"Unsupported repository backend: {backend}")
-
-    embeddings: EmbeddingWorker | None = None
-    if settings.embedding and settings.embedding.enabled:
-        embeddings = EmbeddingWorker(
-            settings.embedding.calculator_type,
-            cache_backend=settings.embedding.cache_backend,
-            cache_path=settings.embedding.cache_path,
-            model_name=settings.embedding.model_name,
-            device=settings.embedding.device,
-            batch_size=settings.embedding.batch_size,
-        )
-
-    pm = ProjectManager(
-        settings,
-        data,
-        embeddings=embeddings,
-    )
-
-    # Recursively scan the project directory and parse source files
-    if refresh:
-        pm.refresh()
-        # enqueue embeddings for symbols that still miss them
-        from know import scanner as _scanner
-        _scanner.schedule_missing_embeddings(pm, pm.default_repo)
-
-    return pm

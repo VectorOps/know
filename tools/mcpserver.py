@@ -6,7 +6,7 @@ from pydantic import Field, AliasChoices, AnyHttpUrl
 from pydantic_settings import SettingsConfigDict
 
 
-from know.project import Project, init_project
+from know import Project, init_project
 from know.settings import ProjectSettings
 from know.tools.base import ToolRegistry
 

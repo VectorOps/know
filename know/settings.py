@@ -173,8 +173,8 @@ class ProjectSettings(BaseSettings):
         description="The root directory of the project to be analyzed. Required for new repositories."
     )
     repository_backend: Optional[str] = Field(
-        default="memory",
-        description='The backend to use for storing metadata. Options are "memory" or "duckdb".',
+        default="duckdb",
+        description='The backend to use for storing metadata. Defaults to "duckdb".',
     )
     repository_connection: Optional[str] = Field(
         default=None,

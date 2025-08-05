@@ -5,7 +5,7 @@ from pydantic import Field, AliasChoices
 from pydantic_settings import SettingsConfigDict
 
 from know.settings import ProjectSettings, print_help
-from know.project import init_project
+from know import init_project
 from know.tools.base import ToolRegistry
 from know.file_summary import SummaryMode
 from know.logger import logger

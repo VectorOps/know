@@ -62,7 +62,7 @@ class BaseQueueWorker(ABC):
             self._thread = None
 
 
-def calc_fts_index(
+def calc_node_fts_index(
     node_repo: AbstractNodeRepository,
     file_repo: AbstractFileRepository,
     s: ProjectSettings,

@@ -1,5 +1,5 @@
+from pathlib import Path
 import pytest
-from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
 from know.models import (
     Repo,
@@ -12,6 +12,7 @@ from know.models import (
 )
 from typing import Dict, Any
 import uuid
+from know.settings import ProjectSettings
 from know.data import NodeSearchQuery, PackageFilter, FileFilter, NodeFilter, ImportEdgeFilter
 
 
@@ -19,11 +20,16 @@ def make_id() -> str:
     return str(uuid.uuid4())
 
 
-@pytest.fixture(params=[InMemoryDataRepository, DuckDBDataRepository])
-def data_repo(request):
+@pytest.fixture(params=[DuckDBDataRepository])
+def data_repo(request, tmp_path: Path):
     """Yield a fresh data-repository instance (in-memory or DuckDB)."""
     cls = request.param
-    return cls()
+    settings = ProjectSettings(
+        project_name="test",
+        repo_name="test",
+        repo_path=str(tmp_path),
+    )
+    return cls(settings)
 
 
 def test_repo_metadata_repository(data_repo):

@@ -1715,3 +1715,14 @@ class TypeScriptLanguageHelper(AbstractLanguageHelper):
 
     def get_import_summary(self, imp: ImportEdge) -> str:
         return imp.raw.strip() if imp.raw else f"import ... from \"{imp.to_package_virtual_path}\""
+
+    def get_common_syntax_words(self) -> set[str]:
+        return {
+            "abstract", "as", "asserts", "break", "case", "catch", "class", "const",
+            "continue", "declare", "default", "do", "else", "export", "extends", "false",
+            "finally", "for", "function", "if", "import", "in", "infinity", "instanceof",
+            "let", "module", "nan", "namespace", "new", "null", "override", "private",
+            "protected", "public", "readonly", "return", "static", "super", "switch",
+            "this", "throw", "true", "try", "typeof", "undefined", "var", "void", "while",
+            "with",
+        }

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from know.settings import ProjectSettings
-from know.project import init_project
+from know import init_project
 from know.parsers import CodeParserRegistry
 from know.lang.python import PythonCodeParser
 from devtools import pprint

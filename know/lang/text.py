@@ -105,3 +105,6 @@ class TextHelper(AbstractLanguageHelper):
 
     def get_import_summary(self, imp: ImportEdge) -> str:
         return ""  # No imports in text files
+
+    def get_common_syntax_words(self) -> set[str]:
+        return set()

@@ -10,7 +10,6 @@ from know.data import (
     NodeFilter,
     ImportEdgeFilter,
 )
-from know.stores.memory import InMemoryDataRepository
 from know.stores.duckdb import DuckDBDataRepository
 from know.models import Repo
 from know.helpers import generate_id
@@ -50,8 +49,7 @@ def _make_project(root: Path) -> ProjectManager:
         repo_name="test",
         repo_path=str(root),
     )
-    #data_repo = InMemoryDataRepository()
-    data_repo = DuckDBDataRepository()
+    data_repo = DuckDBDataRepository(settings)
     CodeParserRegistry.register_parser(PythonCodeParser)
     return ProjectManager(settings, data_repo)
 

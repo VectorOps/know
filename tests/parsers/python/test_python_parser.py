@@ -3,7 +3,8 @@ from pathlib import Path
 from devtools import pprint
 
 from know.settings import ProjectSettings
-from know.project import init_project, ProjectCache
+from know import init_project
+from know.project import ProjectCache
 from know.lang.python import PythonCodeParser
 from know.models import ProgrammingLanguage, NodeKind, Modifier, NodeRefType
 
@@ -17,7 +18,6 @@ def _make_dummy_project(root_dir: Path):
         project_name="test",
         repo_name="test",
         repo_path=str(root_dir),
-        repository_backend="memory",        # use the lightweight backend
     )
     return init_project(settings, refresh=False)
 

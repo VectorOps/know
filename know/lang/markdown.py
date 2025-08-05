@@ -245,3 +245,6 @@ class MarkdownLanguageHelper(AbstractLanguageHelper):
 
     def get_import_summary(self, imp: ImportEdge) -> str:
         return ""  # No imports in markdown
+
+    def get_common_syntax_words(self) -> set[str]:
+        return set()

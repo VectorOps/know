@@ -76,7 +76,8 @@ If you started the server with `--mcp-auth-token`, include `Authorization: Beare
 ## Using the Python API
 
 ```python
-from know.project import init_project, ProjectSettings
+from know import init_project
+from know.settings ProjectSettings
 from know.tools.nodesearch import NodeSearchTool
 from know.tools.repomap   import RepoMapTool
 from know.data import NodeSearchQuery

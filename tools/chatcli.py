@@ -13,7 +13,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 
 from know.logger import logger
 from know.settings import ProjectSettings, print_help
-from know.project import init_project
+from know import init_project
 from know.tools.base import ToolRegistry
 from devtools import pformat
 

@@ -1062,3 +1062,11 @@ class PythonLanguageHelper(AbstractLanguageHelper):
 
         # plain absolute import
         return f"import {path}{alias}".strip()
+
+    def get_common_syntax_words(self) -> set[str]:
+        return {
+            "and", "as", "break", "class", "continue", "def", "del", "elif", "else",
+            "except", "false", "finally", "for", "from", "if", "import", "in", "is",
+            "none", "not", "or", "pass", "raise", "return", "true", "try", "while",
+            "with",
+        }

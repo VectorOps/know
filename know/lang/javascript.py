@@ -1146,3 +1146,12 @@ class JavaScriptLanguageHelper(AbstractLanguageHelper):
 
     def get_import_summary(self, imp: ImportEdge) -> str:
         return imp.raw.strip() if imp.raw else f"import {imp.to_package_virtual_path}"
+
+    def get_common_syntax_words(self) -> set[str]:
+        return {
+            "break", "case", "catch", "class", "const", "continue", "do",
+            "else", "export", "extends", "false", "finally", "for", "function", "if",
+            "import", "in", "infinity", "instanceof", "let", "nan", "new", "null",
+            "return", "super", "switch", "this", "throw", "true", "try", "typeof",
+            "undefined", "var", "void", "while", "with",
+    }

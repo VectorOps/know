@@ -8,7 +8,7 @@ from pydantic import Field, AliasChoices
 from pydantic_settings import SettingsConfigDict
 
 from know.settings import ProjectSettings, EmbeddingSettings, print_help
-from know.project import init_project
+from know import init_project
 from know.file_summary import SummaryMode
 from know.tools.base import ToolRegistry
 from know.tools.repomap import RepoMapScore
@@ -34,11 +34,6 @@ class Settings(ProjectSettings):
     limit: int = Field(
         default=20,
         description="Default result limit for RepoMap runs."
-    )
-
-    repository_backend: str = Field(
-        default="duckdb",
-        description='The backend to use for storing metadata. Options are "memory" or "duckdb".',
     )
 
 

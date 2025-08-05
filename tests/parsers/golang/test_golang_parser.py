@@ -4,7 +4,8 @@ from types import SimpleNamespace
 from devtools import pprint
 
 from know.settings import ProjectSettings
-from know.project import init_project, ProjectCache
+from know import init_project
+from know.project import ProjectCache
 from know.lang.golang import GolangCodeParser
 from know.models import ProgrammingLanguage, NodeKind
 from know.models import NodeRefType
@@ -21,7 +22,6 @@ def _make_dummy_project(root_dir: Path):
         project_name="test",
         repo_name="test",
         repo_path=str(root_dir),
-        repository_backend="memory",
     )
     return init_project(settings, refresh=False)
 

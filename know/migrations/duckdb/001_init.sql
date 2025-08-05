@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     score_coverage DOUBLE,
     score_security_flags TEXT[],
     embedding_code_vec FLOAT[1024],
-    embedding_model TEXT
+    embedding_model TEXT,
+    fts_needle TEXT
 );
 
 CREATE TABLE IF NOT EXISTS import_edges (

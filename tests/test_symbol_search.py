@@ -2,9 +2,9 @@ import pytest
 import math
 
 from know.stores.duckdb import DuckDBDataRepository
-from know.stores.memory import InMemoryDataRepository
 from know.models import Repo, File, Node
 from know.data import NodeSearchQuery
+from know.settings import ProjectSettings
 
 pytest.importorskip("sentence_transformers")
 
@@ -20,15 +20,20 @@ def emb_calc():
     except Exception as ex:
         pytest.skip(f"Couldn't load embedding worker {ex}")
 
-@pytest.fixture(params=["duckdb", "memory"])
+@pytest.fixture(params=["duckdb"])
 def data_repo(request, tmp_path):
-    """Return a fresh data repository – DuckDB or in-memory – per test run."""
+    """Return a fresh data repository"""
     if request.param == "duckdb":
+        settings = ProjectSettings(
+            project_name="test",
+            repo_name="test",
+            repo_path=str(tmp_path),
+        )
         db_path = tmp_path / "ducktest.db"
-        pytest.importorskip("duckdb")            # ensure extension available
-        return DuckDBDataRepository(str(db_path))
-    # memory backend
-    return InMemoryDataRepository()
+        pytest.importorskip("duckdb")
+        return DuckDBDataRepository(settings, str(db_path))
+    raise ValueError()
+
 
 def test_bm25_embedding_search_20cases(data_repo, emb_calc):
     """

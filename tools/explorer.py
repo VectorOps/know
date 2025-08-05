@@ -8,7 +8,7 @@ from flask import request
 from pydantic import Field, AliasChoices
 from pydantic_settings import SettingsConfigDict
 from know.settings import ProjectSettings, EmbeddingSettings, print_help
-from know.project  import init_project, Project
+from know import init_project, Project
 from know.tools.repomap import RepoMapTool
 from know.tools.nodesearch import NodeSearchTool
 from know.models import NodeKind, Visibility

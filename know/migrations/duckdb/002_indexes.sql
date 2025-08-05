@@ -32,4 +32,4 @@ SET hnsw_enable_experimental_persistence = true;
 CREATE INDEX IF NOT EXISTS idx_nodes_code_vec ON nodes USING HNSW (embedding_code_vec) WITH (metric = 'cosine');;
 
 -- Create FTS index
-PRAGMA create_fts_index('nodes', 'id', 'body', 'docstring', 'comment');
+PRAGMA create_fts_index('nodes', 'id', 'fts_needle');

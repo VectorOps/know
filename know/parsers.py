@@ -338,6 +338,14 @@ class AbstractLanguageHelper:
         """
         pass
 
+    @abstractmethod
+    def get_common_syntax_words(self) -> set[str]:
+        """
+        Return common language constructs that make sense removing from search
+        indexes: def, if, else and so on.
+        """
+        ...
+
 
 class CodeParserRegistry:
     """

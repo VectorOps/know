@@ -1175,3 +1175,10 @@ class GolangLanguageHelper(AbstractLanguageHelper):
                 lines.append(f"{IND}{ln.rstrip()}")
 
         return "\n".join(lines)
+
+    def get_common_syntax_words(self) -> set[str]:
+        return {
+            "break", "case", "const", "continue", "default", "else", "false", "for",
+            "func", "if", "import", "interface", "map", "nil", "package", "range",
+            "return", "struct", "switch", "true", "type", "var"
+        }
