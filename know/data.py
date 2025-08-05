@@ -16,6 +16,9 @@ from know.models import (
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List
 
+if TYPE_CHECKING:
+    from know.settings import ProjectSettings
+
 
 class AbstractProjectRepository(ABC):
     @abstractmethod
@@ -217,6 +220,11 @@ class NodeSearchQuery:
 
 
 class AbstractNodeRepository(ABC):
+    @property
+    @abstractmethod
+    def settings(self) -> "ProjectSettings":
+        pass
+
     @abstractmethod
     def get_by_id(self, symbol_id: str) -> Optional[Node]:
         pass
@@ -327,6 +335,11 @@ class AbstractNodeRefRepository(ABC):
 class AbstractDataRepository(ABC):
     @abstractmethod
     def close(self) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def settings(self) -> "ProjectSettings":
         pass
 
     @property

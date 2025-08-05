@@ -13,7 +13,7 @@ from pypika.terms import LiteralValue, ValueWrapper
 from pydantic import BaseModel
 from know.logger import logger
 
-from know.stores.tokenizers import code_tokenizer
+from know.tokenizers import code_tokenizer
 from know.parsers import CodeParserRegistry
 
 from know.models import (
@@ -27,6 +27,7 @@ from know.models import (
     Modifier,
     Project,
 )
+from know.settings import ProjectSettings
 from know.data import (
     AbstractRepoRepository,
     AbstractPackageRepository,
@@ -50,7 +51,7 @@ from know.data_helpers import (
     post_process_search_results,
 )
 from know.helpers import generate_id
-from know.stores.helpers import BaseQueueWorker, calc_fts_index
+from know.stores.helpers import BaseQueueWorker, calc_node_fts_index
 from know.stores.sql import BaseSQLRepository, RawValue, apply_migrations
 
 T = TypeVar("T", bound=BaseModel)
@@ -371,15 +372,21 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     RRF_CODE_WEIGHT: float = 0.5
     RRF_FTS_WEIGHT:  float = 0.5
 
-    def __init__(self, conn: "DuckDBThreadWrapper", file_repo: "DuckDBFileRepo"):
+    def __init__(self, conn: "DuckDBThreadWrapper", file_repo: "DuckDBFileRepo", settings: ProjectSettings):
         super().__init__(conn)
         self.file_repo = file_repo
+        self._settings = settings
+
+    @property
+    def settings(self) -> ProjectSettings:
+        return self._settings
 
     def create(self, item: Node) -> Node:
         data = self._serialize_data(item.model_dump(exclude_none=True))
-        data["fts_needle"] = calc_fts_index(
+        data["fts_needle"] = calc_node_fts_index(
             node_repo=self,
             file_repo=self.file_repo,
+            s=self.settings,
             file_id=item.file_id,
             name=item.name,
             body=item.body,
@@ -396,9 +403,10 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             return self.get_by_id(item_id)
 
         serialized_data = self._serialize_data(data)
-        serialized_data["fts_needle"] = calc_fts_index(
+        serialized_data["fts_needle"] = calc_node_fts_index(
             node_repo=self,
             file_repo=self.file_repo,
+            s=self.settings,
             node_id=item_id,
             file_id=data.get("file_id"),
             name=data.get("name"),
@@ -662,7 +670,7 @@ class DuckDBDataRepository(AbstractDataRepository):
     construction.
     """
 
-    def __init__(self, db_path: str | None = None):
+    def __init__(self, settings: ProjectSettings, db_path: str | None = None):
         """
         Parameters
         ----------
@@ -673,11 +681,12 @@ class DuckDBDataRepository(AbstractDataRepository):
         if db_path is None:
             db_path = ":memory:"
         # ensure parent dir exists for file-based DBs
-        if db_path != ":memory:":
+        if db_path != ":memory__":
             os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
 
         self._conn = DuckDBThreadWrapper(db_path)
         self._conn.start()
+        self._settings = settings
 
         # build repositories (some need cross-references)
         self._project_repo = DuckDBProjectRepo(self._conn)
@@ -685,12 +694,16 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._file_repo = DuckDBFileRepo(self._conn)
         self._package_repo = DuckDBPackageRepo(self._conn, self._file_repo)
         self._repo_repo = DuckDBRepoRepo(self._conn)
-        self._symbol_repo = DuckDBNodeRepo(self._conn, self._file_repo)
+        self._symbol_repo = DuckDBNodeRepo(self._conn, self._file_repo, self._settings)
         self._edge_repo = DuckDBImportEdgeRepo(self._conn)
         self._symbolref_repo = DuckDBNodeRefRepo(self._conn)
 
     def close(self):
         self._conn.close()
+
+    @property
+    def settings(self) -> ProjectSettings:
+        return self._settings
 
     @property
     def project(self) -> AbstractProjectRepository:
