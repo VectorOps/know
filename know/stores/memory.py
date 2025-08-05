@@ -402,7 +402,7 @@ class InMemoryNodeRepository(AbstractNodeRepository):
     @staticmethod
     def _tokenize(text: str) -> list[str]:
         """Lower-case word tokenisation used by BM25 search."""
-        return re.findall(r"\w+", text.lower())
+        return code_tokenizer(text).lower().split()
 
     def _bm25_ranks(
         self,
@@ -443,7 +443,7 @@ class InMemoryNodeRepository(AbstractNodeRepository):
         with self._lock:
             # candidate set: repo + scalar filters
             candidates: list[Node] = [
-                s for s in self._items.values()
+                s.node for s in self._items.values()
             ]
 
             # scalar filters
