@@ -1,6 +1,9 @@
 import re      # for tokenisatio/
 import threading
 from typing import Optional, Dict, Any, List, TypeVar, Generic
+
+from know.parsers import CodeParserRegistry
+from know.stores.tokenizers import code_tokenizer
 from know.models import (
     Repo,
     Package,
@@ -49,13 +52,19 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else -1.0
 
 @dataclass
+class _WrappedNode:
+    node: Node
+    fts_needle: str
+
+
+@dataclass
 class _MemoryTables:
     projects:   dict[str, Project] = field(default_factory=dict)
     project_repos: dict[str, set[str]] = field(default_factory=dict)
     repos:      dict[str, Repo]   = field(default_factory=dict)
     packages:   dict[str, Package]= field(default_factory=dict)
     files:      dict[str, File]   = field(default_factory=dict)
-    symbols:    dict[str, Node] = field(default_factory=dict)
+    symbols:    dict[str, _WrappedNode] = field(default_factory=dict)
     edges:      dict[str, ImportEdge]     = field(default_factory=dict)
     symbolrefs: dict[str, NodeRef]      = field(default_factory=dict)
     lock:       threading.RLock           = field(
@@ -270,21 +279,22 @@ class InMemoryFileRepository(InMemoryBaseRepository[File],
                 and (not flt.package_id or f.package_id == flt.package_id)
             ]
 
-class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepository):
+class InMemoryNodeRepository(AbstractNodeRepository):
     RRF_K: int = 60          # tuning-parameter k (Reciprocal-Rank-Fusion)
-    RRF_CODE_WEIGHT: float = 0.7
-    RRF_FTS_WEIGHT:  float = 0.3
+    RRF_CODE_WEIGHT: float = 0.5
+    RRF_FTS_WEIGHT:  float = 0.5
 
     # minimum cosine similarity for an embedding to participate in ranking
     EMBEDDING_SIM_THRESHOLD: float = 0.4
     EMBEDDING_TOP_K: int = 1000   # how many neighbours to ask FAISS for
 
     # ---------- BM25 params ----------
-    BM25_K1: float = 1.5
+    BM25_K1: float = 1.2
     BM25_B:  float = 0.75
 
     def __init__(self, tables: _MemoryTables):
-        super().__init__(tables.symbols, tables.lock)
+        self._items = tables.symbols
+        self._lock = tables.lock
         self._file_items = tables.files          # needed for package lookup
 
         self._embeddings: dict[str, np.ndarray] = {}
@@ -306,28 +316,105 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
         with self._lock:
             self._embeddings.pop(sid, None)
 
+    def _get_file_by_id(self, file_id: str) -> Optional[File]:
+        return self._file_items.get(file_id)
+
+    def _calc_fts_index(
+        self,
+        node_id: Optional[str] = None,
+        file_id: Optional[str] = None,
+        name: Optional[str] = None,
+        body: Optional[str] = None,
+        docstring: Optional[str] = None,
+    ) -> str:
+        _name, _body, _docstring, _language, _file_path = name, body, docstring, None, None
+
+        current_node: Optional[Node] = None
+        if node_id:
+            current_node = self.get_by_id(node_id)
+
+        _file_id = file_id
+        if not _file_id and current_node:
+            _file_id = current_node.file_id
+
+        if current_node:
+            if _name is None:
+                _name = current_node.name
+            if _body is None:
+                _body = current_node.body
+            if _docstring is None:
+                _docstring = current_node.docstring
+
+        if _file_id:
+            file = self._get_file_by_id(_file_id)
+            if file:
+                _file_path = file.path
+                _language = file.language
+
+        helper = CodeParserRegistry.get_helper(_language) if _language else None
+        stop_words = helper.get_common_syntax_words() if helper else None
+
+        processed_name = code_tokenizer(_name or "", stop_words)
+        processed_body = code_tokenizer(_body or "", stop_words)
+        processed_docstring = code_tokenizer(_docstring or "", stop_words)
+        processed_path = code_tokenizer(_file_path or "", stop_words)
+
+        fts_parts = [processed_path, processed_body, processed_docstring]
+        fts_parts.extend([processed_name] * 2)  # name 2x weight
+
+        return " ".join(filter(None, fts_parts))
+
+    def get_by_id(self, item_id: str) -> Optional[Node]:
+        """Get an item by its ID."""
+        with self._lock:
+            wrapped = self._items.get(item_id)
+            return wrapped.node if wrapped else None
+
     def create(self, item: Node) -> Node:
-        res = super().create(item)
+        fts_needle = self._calc_fts_index(
+            file_id=item.file_id, name=item.name, body=item.body, docstring=item.docstring
+        )
+        wrapped = _WrappedNode(node=item, fts_needle=fts_needle)
+        with self._lock:
+            self._items[item.id] = wrapped
+
         self._index_upsert(item)
-        return res
+        return item
 
     def update(self, item_id: str, data: Dict[str, Any]) -> Optional[Node]:
-        res = super().update(item_id, data)
-        if res:
-            if res.embedding_code_vec:
-                self._index_upsert(res)
+        with self._lock:
+            wrapped = self._items.get(item_id)
+            if not wrapped:
+                return None
+
+            updated_node = wrapped.node.model_copy(update=data)
+
+            fts_needle = self._calc_fts_index(
+                node_id=item_id,
+                file_id=data.get("file_id"),
+                name=data.get("name"),
+                body=data.get("body"),
+                docstring=data.get("docstring"),
+            )
+
+            self._items[item_id] = _WrappedNode(node=updated_node, fts_needle=fts_needle)
+
+            if updated_node.embedding_code_vec:
+                self._index_upsert(updated_node)
             else:
                 self._index_remove(item_id)
-        return res
+        return updated_node
 
     def delete(self, item_id: str) -> bool:
-        ok = super().delete(item_id)
-        if ok:
-            self._index_remove(item_id)
-        return ok
+        with self._lock:
+            ok = self._items.pop(item_id, None) is not None
+            if ok:
+                self._index_remove(item_id)
+            return ok
 
     def get_list_by_ids(self, symbol_ids: list[str]) -> list[Node]:
-        syms = super().get_list_by_ids(symbol_ids)
+        with self._lock:
+            syms = [self._items[iid].node for iid in symbol_ids if iid in self._items]
         resolve_node_hierarchy(syms)
         return syms
 
@@ -338,27 +425,21 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
         """
         with self._lock:
             syms = [
-                s for s in self._items.values()
-                if (not flt.parent_ids or s.parent_node_id in flt.parent_ids)
-                and (not flt.repo_ids    or s.repo_id in flt.repo_ids)
-                and (not flt.file_id    or s.file_id == flt.file_id)
-                and (not flt.package_id or s.package_id == flt.package_id)
-                and (not flt.kind or s.kind == flt.kind)
-                and (not flt.visibility or s.visibility == flt.visibility)
-                and (not flt.top_level_only or s.parent_node_id is None)
+                s.node
+                for s in self._items.values()
+                if (not flt.parent_ids or s.node.parent_node_id in flt.parent_ids)
+                and (not flt.repo_ids or s.node.repo_id in flt.repo_ids)
+                and (not flt.file_id or s.node.file_id == flt.file_id)
+                and (not flt.package_id or s.node.package_id == flt.package_id)
+                and (not flt.kind or s.node.kind == flt.kind)
+                and (not flt.visibility or s.node.visibility == flt.visibility)
+                and (not flt.top_level_only or s.node.parent_node_id is None)
                 and (
                     flt.has_embedding is None
-                    or (flt.has_embedding is True  and s.embedding_code_vec is not None)
-                    or (flt.has_embedding is False and s.embedding_code_vec is None)
+                    or (flt.has_embedding is True and s.node.embedding_code_vec is not None)
+                    or (flt.has_embedding is False and s.node.embedding_code_vec is None)
                 )
             ]
-        offset = flt.offset or 0
-        limit  = flt.limit  or len(syms)
-        syms   = syms[offset : offset + limit]
-
-        resolve_node_hierarchy(syms)
-
-        return syms
 
     @staticmethod
     def _tokenize(text: str) -> list[str]:
@@ -430,16 +511,12 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
 
             # FTS ranks
             if has_fts:
-                q_tokens = self._tokenize(query.doc_needle) # type: ignore
-                docs = [
-                    (
-                        s,
-                        self._tokenize(
-                            f"{s.name or ''} {s.fqn or ''} {s.docstring or ''} {s.comment or ''}"
-                        ),
-                    )
-                    for s in candidates
-                ]
+                q_tokens = self._tokenize(query.doc_needle)  # type: ignore
+                docs = []
+                for s in candidates:
+                    wrapped_node = self._items.get(s.id)
+                    if wrapped_node and wrapped_node.fts_needle:
+                        docs.append((s, self._tokenize(wrapped_node.fts_needle)))
                 fts_rank = self._bm25_ranks(docs, q_tokens)
 
             # embedding ranks
@@ -454,7 +531,7 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
                     sim = float(np.dot(qvec, vec))  # cosine (both normalised)
                     if sim < self.EMBEDDING_SIM_THRESHOLD:
                         continue
-                    sims.append((self._items[sid], sim))
+                    sims.append((self._items[sid].node, sim))
                 sims.sort(key=lambda p: p[1], reverse=True)
                 sims = sims[: self.EMBEDDING_TOP_K]
                 code_rank = {s.id: i + 1 for i, (s, _) in enumerate(sims)}
@@ -504,7 +581,9 @@ class InMemoryNodeRepository(InMemoryBaseRepository[Node], AbstractNodeRepositor
 
     def delete_by_file_id(self, file_id: str) -> None:
         with self._lock:
-            to_delete = [sid for sid, sym in self._items.items() if sym.file_id == file_id]
+            to_delete = [
+                sid for sid, sym in self._items.items() if sym.node.file_id == file_id
+            ]
             for sid in to_delete:
                 self._items.pop(sid, None)
                 self._index_remove(sid)

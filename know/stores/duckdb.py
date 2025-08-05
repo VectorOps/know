@@ -13,6 +13,9 @@ from pypika.terms import LiteralValue, ValueWrapper
 from pydantic import BaseModel
 from know.logger import logger
 
+from know.stores.tokenizers import code_tokenizer
+from know.parsers import CodeParserRegistry
+
 from know.models import (
     Repo,
     Package,
@@ -181,6 +184,11 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
     def create(self, item: T) -> T:
         data = self._serialize_data(item.model_dump(exclude_none=True))
 
+        if isinstance(item, Node):
+            data["fts_needle"] = self._calc_fts_index(
+                file_id=item.file_id, name=item.name, body=item.body, docstring=item.docstring
+            )
+
         keys = data.keys()
         q = Query.into(self._table).columns([self._table[k] for k in keys]).insert([data[k] for k in keys])
         self._execute(q)
@@ -193,6 +201,15 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
 
         # TODO: Unify helpers
         data = self._serialize_data(data)
+
+        if self.model is Node:
+            data["fts_needle"] = self._calc_fts_index(
+                node_id=item_id,
+                file_id=data.get("file_id"),
+                name=data.get("name"),
+                body=data.get("body"),
+                docstring=data.get("docstring"),
+            )
 
         q = Query.update(self._table).where(self._table.id == item_id)
         for k, v in data.items():
@@ -294,7 +311,7 @@ class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
     table = "packages"
     model = Package
 
-    def __init__(self, conn, file_repo: "DuckDBFileRepo"):  # type: ignore
+    def __init__(self, conn: "DuckDBThreadWrapper", file_repo: "DuckDBFileRepo"):  # type: ignore
         super().__init__(conn)
         self._file_repo = file_repo
 
@@ -366,8 +383,57 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     }
 
     RRF_K: int = 60          # tuning-parameter k (see RRF paper)
-    RRF_CODE_WEIGHT: float = 0.7
-    RRF_FTS_WEIGHT:  float = 0.3
+    RRF_CODE_WEIGHT: float = 0.5
+    RRF_FTS_WEIGHT:  float = 0.5
+
+    def __init__(self, conn: "DuckDBThreadWrapper", file_repo: "DuckDBFileRepo"):
+        super().__init__(conn)
+        self.file_repo = file_repo
+
+    def _calc_fts_index(
+        self,
+        node_id: Optional[str] = None,
+        file_id: Optional[str] = None,
+        name: Optional[str] = None,
+        body: Optional[str] = None,
+        docstring: Optional[str] = None,
+    ) -> str:
+        _name, _body, _docstring, _language, _file_path = name, body, docstring, None, None
+
+        current_node: Optional[Node] = None
+        if node_id:
+            current_node = self.get_by_id(node_id)
+
+        _file_id = file_id
+        if not _file_id and current_node:
+            _file_id = current_node.file_id
+
+        if current_node:
+            if _name is None:
+                _name = current_node.name
+            if _body is None:
+                _body = current_node.body
+            if _docstring is None:
+                _docstring = current_node.docstring
+
+        if _file_id:
+            file = self.file_repo.get_by_id(_file_id)
+            if file:
+                _file_path = file.path
+                _language = file.language
+
+        helper = CodeParserRegistry.get_helper(_language) if _language else None
+        stop_words = helper.get_common_syntax_words() if helper else None
+
+        processed_name = code_tokenizer(_name or "", stop_words)
+        processed_body = code_tokenizer(_body or "", stop_words)
+        processed_docstring = code_tokenizer(_docstring or "", stop_words)
+        processed_path = code_tokenizer(_file_path or "", stop_words)
+
+        fts_parts = [processed_path, processed_body, processed_docstring]
+        fts_parts.extend([processed_name] * 2)  # name 2x weight
+
+        return " ".join(filter(None, fts_parts))
 
     def search(self, query: NodeSearchQuery) -> list[Node]:
         q = Query.from_(self._table)
@@ -640,7 +706,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._file_repo = DuckDBFileRepo(self._conn)
         self._package_repo = DuckDBPackageRepo(self._conn, self._file_repo)
         self._repo_repo = DuckDBRepoRepo(self._conn)
-        self._symbol_repo = DuckDBNodeRepo(self._conn)
+        self._symbol_repo = DuckDBNodeRepo(self._conn, self._file_repo)
         self._edge_repo = DuckDBImportEdgeRepo(self._conn)
         self._symbolref_repo = DuckDBNodeRefRepo(self._conn)
 
@@ -683,8 +749,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         try:
             self._conn.execute("PRAGMA drop_fts_index('nodes');")
             self._conn.execute(
-                "PRAGMA create_fts_index('nodes', "
-                "'id', 'body', 'docstring', 'comment');"
+                "PRAGMA create_fts_index('nodes', 'id', 'fts_needle');"
             )
         except Exception as ex:
             logger.debug("Failed to refresh DuckDB FTS index", ex=ex)
