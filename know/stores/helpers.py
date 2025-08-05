@@ -5,9 +5,23 @@ from concurrent.futures import Future
 from typing import Any, Optional, Set
 
 from know.data import AbstractNodeRepository, AbstractFileRepository
-from know.models import Node, ProgrammingLanguage
+from know.models import Node, ProgrammingLanguage, NodeKind
 from know.settings import ProjectSettings
 from know.tokenizers import search_preprocessor_list
+
+
+# TODO: Move to config
+NODE_SEARCH_BOOSTS = {
+    NodeKind.FUNCTION: 2,
+    NodeKind.METHOD: 2,
+    NodeKind.METHOD_DEF: 2,
+    NodeKind.CLASS: 1.5,
+    NodeKind.PROPERTY: 1.3,
+    NodeKind.LITERAL: 0.9,
+}
+
+NODE_SEARCH_NAME_BOOST = 3
+NODE_SEARCH_PATH_BOOST = 2
 
 
 class BaseQueueWorker(ABC):
@@ -62,65 +76,40 @@ class BaseQueueWorker(ABC):
             self._thread = None
 
 
-def calc_node_fts_index(
-    node_repo: AbstractNodeRepository,
+def calc_bm25_fts_index(
     file_repo: AbstractFileRepository,
     s: ProjectSettings,
-    language: Optional[ProgrammingLanguage] = None,
-    node_id: Optional[str] = None,
-    file_id: Optional[str] = None,
-    name: Optional[str] = None,
-    body: Optional[str] = None,
-    docstring: Optional[str] = None,
-    make_word_soup: bool = False,
+    node: Node,
 ) -> str:
-    _name, _body, _docstring, _language, _file_path = name, body, docstring, language, None
+    _language, _file_path = None, None
 
-    current_node: Optional[Node] = None
-    if node_id:
-        current_node = node_repo.get_by_id(node_id)
-
-    _file_id = file_id
-    if not _file_id and current_node:
-        _file_id = current_node.file_id
-
-    if current_node:
-        if _name is None:
-            _name = current_node.name
-        if _body is None:
-            _body = current_node.body
-        if _docstring is None:
-            _docstring = current_node.docstring
-
-    file = None
-    if _file_id:
-        file = file_repo.get_by_id(_file_id)
+    if node.file_id:
+        file = file_repo.get_by_id(node.file_id)
         if file:
             _file_path = file.path
-            if not _language:
-                _language = file.language
+            _language = file.language
 
     if not _language:
         _language = ProgrammingLanguage.TEXT
 
-    processed_name_tokens = search_preprocessor_list(s, _language, _name or "")
-    processed_body_tokens = search_preprocessor_list(s, _language, _body or "")
-    processed_docstring_tokens = search_preprocessor_list(s, _language, _docstring or "")
-    processed_path_tokens = search_preprocessor_list(s, _language, _file_path or "")
+    name = node.name
+    if node.signature and node.signature.raw:
+        name = node.signature.raw
 
-    if make_word_soup:
-        all_tokens = set()
-        all_tokens.update(processed_name_tokens)
-        all_tokens.update(processed_body_tokens)
-        all_tokens.update(processed_docstring_tokens)
-        all_tokens.update(processed_path_tokens)
-        return " ".join(sorted(list(all_tokens)))
+    processed_name_tokens = search_preprocessor_list(s, _language, name or "")
+    processed_fqn_tokens = search_preprocessor_list(s, _language, node.fqn or "")
+    processed_body_tokens = search_preprocessor_list(s, _language, node.body or "")
+    processed_docstring_tokens = search_preprocessor_list(s, _language, node.docstring or "")
+    processed_path_tokens = search_preprocessor_list(s, _language, _file_path or "")
 
     # name: 3x, path: 2x, body: 1x, docstring: 1x
     fts_tokens = []
     fts_tokens.extend(processed_body_tokens)
     fts_tokens.extend(processed_docstring_tokens)
-    fts_tokens.extend(processed_path_tokens * 2)
-    fts_tokens.extend(processed_name_tokens * 3)
+    fts_tokens.extend(processed_fqn_tokens)
+
+    # TODO: could use a better BM25 implementation with individual field boosts
+    fts_tokens.extend(processed_path_tokens * NODE_SEARCH_PATH_BOOST)
+    fts_tokens.extend(processed_name_tokens * NODE_SEARCH_NAME_BOOST)
 
     return " ".join(fts_tokens)

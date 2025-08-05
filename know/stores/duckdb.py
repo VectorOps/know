@@ -51,7 +51,7 @@ from know.data_helpers import (
     post_process_search_results,
 )
 from know.helpers import generate_id
-from know.stores.helpers import BaseQueueWorker, calc_node_fts_index, NODE_SEARCH_BOOSTS
+from know.stores.helpers import BaseQueueWorker, calc_bm25_fts_index, NODE_SEARCH_BOOSTS
 from know.stores.sql import BaseSQLRepository, RawValue, apply_migrations
 
 T = TypeVar("T", bound=BaseModel)
@@ -383,14 +383,10 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
     def create(self, item: Node) -> Node:
         data = self._serialize_data(item.model_dump(exclude_none=True))
-        data["fts_needle"] = calc_node_fts_index(
-            node_repo=self,
+        data["fts_needle"] = calc_bm25_fts_index(
             file_repo=self.file_repo,
             s=self.settings,
-            file_id=item.file_id,
-            name=item.name,
-            body=item.body,
-            docstring=item.docstring,
+            node=item,
         )
 
         keys = data.keys()
@@ -402,16 +398,16 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         if not data:
             return self.get_by_id(item_id)
 
+        current_node = self.get_by_id(item_id)
+        if not current_node:
+            return None
+
+        updated_node = current_node.model_copy(update=data)
         serialized_data = self._serialize_data(data)
-        serialized_data["fts_needle"] = calc_node_fts_index(
-            node_repo=self,
+        serialized_data["fts_needle"] = calc_bm25_fts_index(
             file_repo=self.file_repo,
             s=self.settings,
-            node_id=item_id,
-            file_id=data.get("file_id"),
-            name=data.get("name"),
-            body=data.get("body"),
-            docstring=data.get("docstring"),
+            node=updated_node,
         )
 
         q = Query.update(self._table).where(self._table.id == item_id)
