@@ -51,7 +51,7 @@ from know.data_helpers import (
     post_process_search_results,
 )
 from know.helpers import generate_id
-from know.stores.helpers import BaseQueueWorker, calc_node_fts_index
+from know.stores.helpers import BaseQueueWorker, calc_node_fts_index, NODE_SEARCH_BOOSTS
 from know.stores.sql import BaseSQLRepository, RawValue, apply_migrations
 
 T = TypeVar("T", bound=BaseModel)
@@ -428,7 +428,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         candidates = (
             Query.
             from_(self._table).
-            select(self._table.id, self._table.repo_id, self._table.embedding_code_vec)
+            select(self._table.id, self._table.repo_id, self._table.embedding_code_vec, self._table.kind)
         )
 
         if query.repo_ids:
@@ -542,18 +542,26 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             aliased_fused = AliasedQuery("fused")
 
             score_col = aliased_scores.score
-            if query.boost_repo_id and query.repo_boost_factor != 1.0:
-                score_col = Case().when(
-                    aliased_candidates.repo_id == query.boost_repo_id,
-                    aliased_scores.score * query.repo_boost_factor
-                ).else_(aliased_scores.score)
 
+            # Apply node kind boosts
+            kind_boost_case = Case().else_(1.0)
+            for kind, boost in NODE_SEARCH_BOOSTS.items():
+                kind_boost_case = kind_boost_case.when(aliased_candidates.kind == kind.value, boost)
+            score_col = score_col * kind_boost_case
+
+            if query.boost_repo_id and query.repo_boost_factor != 1.0:
+                repo_boost_case = (
+                    Case()
+                    .when(aliased_candidates.repo_id == query.boost_repo_id, query.repo_boost_factor)
+                    .else_(1.0)
+                )
+                score_col = score_col * repo_boost_case
 
             fused = (
-                Query.
-                from_(aliased_candidates).
-                join(aliased_scores).on(aliased_candidates.id == aliased_scores.id).
-                select(aliased_scores.id, score_col.as_("rrf_score"))
+                Query.from_(aliased_candidates)
+                .join(aliased_scores)
+                .on(aliased_candidates.id == aliased_scores.id)
+                .select(aliased_scores.id, score_col.as_("rrf_score"))
             )
 
             q = (
