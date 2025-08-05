@@ -50,7 +50,7 @@ from know.data_helpers import (
     post_process_search_results,
 )
 from know.helpers import generate_id
-from know.stores.helpers import BaseQueueWorker
+from know.stores.helpers import BaseQueueWorker, calc_fts_index
 from know.stores.sql import BaseSQLRepository, RawValue, apply_migrations
 
 T = TypeVar("T", bound=BaseModel)
@@ -185,7 +185,9 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
         data = self._serialize_data(item.model_dump(exclude_none=True))
 
         if isinstance(item, Node):
-            data["fts_needle"] = self._calc_fts_index(
+            data["fts_needle"] = calc_fts_index(
+                node_repo=self, # type: ignore [arg-type]
+                file_repo=self.file_repo, # type: ignore [attr-defined]
                 file_id=item.file_id, name=item.name, body=item.body, docstring=item.docstring
             )
 
@@ -203,7 +205,9 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
         data = self._serialize_data(data)
 
         if self.model is Node:
-            data["fts_needle"] = self._calc_fts_index(
+            data["fts_needle"] = calc_fts_index(
+                node_repo=self, # type: ignore [arg-type]
+                file_repo=self.file_repo, # type: ignore [attr-defined]
                 node_id=item_id,
                 file_id=data.get("file_id"),
                 name=data.get("name"),
@@ -389,51 +393,6 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     def __init__(self, conn: "DuckDBThreadWrapper", file_repo: "DuckDBFileRepo"):
         super().__init__(conn)
         self.file_repo = file_repo
-
-    def _calc_fts_index(
-        self,
-        node_id: Optional[str] = None,
-        file_id: Optional[str] = None,
-        name: Optional[str] = None,
-        body: Optional[str] = None,
-        docstring: Optional[str] = None,
-    ) -> str:
-        _name, _body, _docstring, _language, _file_path = name, body, docstring, None, None
-
-        current_node: Optional[Node] = None
-        if node_id:
-            current_node = self.get_by_id(node_id)
-
-        _file_id = file_id
-        if not _file_id and current_node:
-            _file_id = current_node.file_id
-
-        if current_node:
-            if _name is None:
-                _name = current_node.name
-            if _body is None:
-                _body = current_node.body
-            if _docstring is None:
-                _docstring = current_node.docstring
-
-        if _file_id:
-            file = self.file_repo.get_by_id(_file_id)
-            if file:
-                _file_path = file.path
-                _language = file.language
-
-        helper = CodeParserRegistry.get_helper(_language) if _language else None
-        stop_words = helper.get_common_syntax_words() if helper else None
-
-        processed_name = code_tokenizer(_name or "", stop_words)
-        processed_body = code_tokenizer(_body or "", stop_words)
-        processed_docstring = code_tokenizer(_docstring or "", stop_words)
-        processed_path = code_tokenizer(_file_path or "", stop_words)
-
-        fts_parts = [processed_path, processed_body, processed_docstring]
-        fts_parts.extend([processed_name] * 2)  # name 2x weight
-
-        return " ".join(filter(None, fts_parts))
 
     def search(self, query: NodeSearchQuery) -> list[Node]:
         q = Query.from_(self._table)

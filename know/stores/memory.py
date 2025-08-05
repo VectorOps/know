@@ -31,6 +31,7 @@ from know.data import (
     RepoFilter,
     NodeRefFilter,
 )
+from know.data import AbstractFileRepository, AbstractNodeRepository
 from know.data_helpers import (
     include_direct_descendants,
     resolve_node_hierarchy,
@@ -40,6 +41,7 @@ from dataclasses import dataclass, field
 import math
 import numpy as np
 from know.embeddings.interface import EMBEDDING_DIM
+from know.stores.helpers import calc_fts_index
 
 def _cosine(a: list[float], b: list[float]) -> float:
     """
@@ -292,10 +294,10 @@ class InMemoryNodeRepository(AbstractNodeRepository):
     BM25_K1: float = 1.2
     BM25_B:  float = 0.75
 
-    def __init__(self, tables: _MemoryTables):
+    def __init__(self, tables: _MemoryTables, file_repo: AbstractFileRepository):
         self._items = tables.symbols
         self._lock = tables.lock
-        self._file_items = tables.files          # needed for package lookup
+        self._file_repo = file_repo
 
         self._embeddings: dict[str, np.ndarray] = {}
 
@@ -316,54 +318,6 @@ class InMemoryNodeRepository(AbstractNodeRepository):
         with self._lock:
             self._embeddings.pop(sid, None)
 
-    def _get_file_by_id(self, file_id: str) -> Optional[File]:
-        return self._file_items.get(file_id)
-
-    def _calc_fts_index(
-        self,
-        node_id: Optional[str] = None,
-        file_id: Optional[str] = None,
-        name: Optional[str] = None,
-        body: Optional[str] = None,
-        docstring: Optional[str] = None,
-    ) -> str:
-        _name, _body, _docstring, _language, _file_path = name, body, docstring, None, None
-
-        current_node: Optional[Node] = None
-        if node_id:
-            current_node = self.get_by_id(node_id)
-
-        _file_id = file_id
-        if not _file_id and current_node:
-            _file_id = current_node.file_id
-
-        if current_node:
-            if _name is None:
-                _name = current_node.name
-            if _body is None:
-                _body = current_node.body
-            if _docstring is None:
-                _docstring = current_node.docstring
-
-        if _file_id:
-            file = self._get_file_by_id(_file_id)
-            if file:
-                _file_path = file.path
-                _language = file.language
-
-        helper = CodeParserRegistry.get_helper(_language) if _language else None
-        stop_words = helper.get_common_syntax_words() if helper else None
-
-        processed_name = code_tokenizer(_name or "", stop_words)
-        processed_body = code_tokenizer(_body or "", stop_words)
-        processed_docstring = code_tokenizer(_docstring or "", stop_words)
-        processed_path = code_tokenizer(_file_path or "", stop_words)
-
-        fts_parts = [processed_path, processed_body, processed_docstring]
-        fts_parts.extend([processed_name] * 2)  # name 2x weight
-
-        return " ".join(filter(None, fts_parts))
-
     def get_by_id(self, item_id: str) -> Optional[Node]:
         """Get an item by its ID."""
         with self._lock:
@@ -371,7 +325,9 @@ class InMemoryNodeRepository(AbstractNodeRepository):
             return wrapped.node if wrapped else None
 
     def create(self, item: Node) -> Node:
-        fts_needle = self._calc_fts_index(
+        fts_needle = calc_fts_index(
+            node_repo=self,
+            file_repo=self._file_repo,
             file_id=item.file_id, name=item.name, body=item.body, docstring=item.docstring
         )
         wrapped = _WrappedNode(node=item, fts_needle=fts_needle)
@@ -389,7 +345,9 @@ class InMemoryNodeRepository(AbstractNodeRepository):
 
             updated_node = wrapped.node.model_copy(update=data)
 
-            fts_needle = self._calc_fts_index(
+            fts_needle = calc_fts_index(
+                node_repo=self,
+                file_repo=self._file_repo,
                 node_id=item_id,
                 file_id=data.get("file_id"),
                 name=data.get("name"),
@@ -632,7 +590,7 @@ class InMemoryDataRepository(AbstractDataRepository):
         self._repo = InMemoryRepoRepository(tables)
         self._file = InMemoryFileRepository(tables)
         self._package = InMemoryPackageRepository(tables)
-        self._symbol = InMemoryNodeRepository(tables)
+        self._symbol = InMemoryNodeRepository(tables, self._file)
         self._importedge = InMemoryImportEdgeRepository(tables)
         self._symbolref  = InMemoryNodeRefRepository(tables)
 
