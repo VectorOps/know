@@ -184,13 +184,6 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
     def create(self, item: T) -> T:
         data = self._serialize_data(item.model_dump(exclude_none=True))
 
-        if isinstance(item, Node):
-            data["fts_needle"] = calc_fts_index(
-                node_repo=self, # type: ignore [arg-type]
-                file_repo=self.file_repo, # type: ignore [attr-defined]
-                file_id=item.file_id, name=item.name, body=item.body, docstring=item.docstring
-            )
-
         keys = data.keys()
         q = Query.into(self._table).columns([self._table[k] for k in keys]).insert([data[k] for k in keys])
         self._execute(q)
@@ -201,19 +194,7 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
         if not data:
             return self.get_by_id(item_id)
 
-        # TODO: Unify helpers
         data = self._serialize_data(data)
-
-        if self.model is Node:
-            data["fts_needle"] = calc_fts_index(
-                node_repo=self, # type: ignore [arg-type]
-                file_repo=self.file_repo, # type: ignore [attr-defined]
-                node_id=item_id,
-                file_id=data.get("file_id"),
-                name=data.get("name"),
-                body=data.get("body"),
-                docstring=data.get("docstring"),
-            )
 
         q = Query.update(self._table).where(self._table.id == item_id)
         for k, v in data.items():
@@ -393,6 +374,44 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
     def __init__(self, conn: "DuckDBThreadWrapper", file_repo: "DuckDBFileRepo"):
         super().__init__(conn)
         self.file_repo = file_repo
+
+    def create(self, item: Node) -> Node:
+        data = self._serialize_data(item.model_dump(exclude_none=True))
+        data["fts_needle"] = calc_fts_index(
+            node_repo=self,
+            file_repo=self.file_repo,
+            file_id=item.file_id,
+            name=item.name,
+            body=item.body,
+            docstring=item.docstring,
+        )
+
+        keys = data.keys()
+        q = Query.into(self._table).columns([self._table[k] for k in keys]).insert([data[k] for k in keys])
+        self._execute(q)
+        return item
+
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[Node]:
+        if not data:
+            return self.get_by_id(item_id)
+
+        serialized_data = self._serialize_data(data)
+        serialized_data["fts_needle"] = calc_fts_index(
+            node_repo=self,
+            file_repo=self.file_repo,
+            node_id=item_id,
+            file_id=data.get("file_id"),
+            name=data.get("name"),
+            body=data.get("body"),
+            docstring=data.get("docstring"),
+        )
+
+        q = Query.update(self._table).where(self._table.id == item_id)
+        for k, v in serialized_data.items():
+            q = q.set(k, v)
+
+        self._execute(q)
+        return self.get_by_id(item_id)
 
     def search(self, query: NodeSearchQuery) -> list[Node]:
         q = Query.from_(self._table)
