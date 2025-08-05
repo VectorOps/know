@@ -6,8 +6,8 @@ from typing import Any, Optional, Set
 
 from know.data import AbstractNodeRepository, AbstractFileRepository
 from know.models import Node, ProgrammingLanguage
-from know.parsers import CodeParserRegistry
-from know.tokenizers import code_tokenizer
+from know.settings import ProjectSettings
+from know.tokenizers import search_preprocessor_list
 
 
 class BaseQueueWorker(ABC):
@@ -65,6 +65,7 @@ class BaseQueueWorker(ABC):
 def calc_fts_index(
     node_repo: AbstractNodeRepository,
     file_repo: AbstractFileRepository,
+    s: ProjectSettings,
     language: Optional[ProgrammingLanguage] = None,
     node_id: Optional[str] = None,
     file_id: Optional[str] = None,
@@ -91,36 +92,35 @@ def calc_fts_index(
         if _docstring is None:
             _docstring = current_node.docstring
 
+    file = None
     if _file_id:
         file = file_repo.get_by_id(_file_id)
         if file:
             _file_path = file.path
+            if not _language:
+                _language = file.language
 
-    if not _language and file:
-        _language = file.language
+    if not _language:
+        _language = ProgrammingLanguage.TEXT
 
-    helper = CodeParserRegistry.get_helper(_language)
-    stop_words = helper.get_common_syntax_words() if helper else None
-
-    processed_name_str = code_tokenizer(_name or "", stop_words)
-    processed_body_str = code_tokenizer(_body or "", stop_words)
-    processed_docstring_str = code_tokenizer(_docstring or "", stop_words)
-    processed_path_str = code_tokenizer(_file_path or "", stop_words)
+    processed_name_tokens = search_preprocessor_list(s, _language, _name or "")
+    processed_body_tokens = search_preprocessor_list(s, _language, _body or "")
+    processed_docstring_tokens = search_preprocessor_list(s, _language, _docstring or "")
+    processed_path_tokens = search_preprocessor_list(s, _language, _file_path or "")
 
     if make_word_soup:
         all_tokens = set()
-        all_tokens.update(processed_name_str.split())
-        all_tokens.update(processed_body_str.split())
-        all_tokens.update(processed_docstring_str.split())
-        all_tokens.update(processed_path_str.split())
+        all_tokens.update(processed_name_tokens)
+        all_tokens.update(processed_body_tokens)
+        all_tokens.update(processed_docstring_tokens)
+        all_tokens.update(processed_path_tokens)
         return " ".join(sorted(list(all_tokens)))
 
     # name: 3x, path: 2x, body: 1x, docstring: 1x
-    fts_parts = [
-        processed_body_str,
-        processed_docstring_str,
-    ]
-    fts_parts.extend([processed_path_str] * 2)
-    fts_parts.extend([processed_name_str] * 3)
+    fts_tokens = []
+    fts_tokens.extend(processed_body_tokens)
+    fts_tokens.extend(processed_docstring_tokens)
+    fts_tokens.extend(processed_path_tokens * 2)
+    fts_tokens.extend(processed_name_tokens * 3)
 
-    return " ".join(filter(None, fts_parts))
+    return " ".join(fts_tokens)
