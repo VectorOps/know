@@ -403,9 +403,11 @@ def iter_settings(
             if hasattr(ann, "__pydantic_generic_metadata__"):  # parametrised generics
                 metadata = getattr(ann, "__pydantic_generic_metadata__")
                 # for List[SomeModel], Dict[str, SomeModel], etc., recurse into SomeModel
-                for arg in metadata[1]:
-                    if isinstance(arg, type) and issubclass(arg, BaseModel):
-                        _walk(arg, path)
+                args = metadata.get("args")
+                if args:
+                    for arg in args:
+                        if isinstance(arg, type) and issubclass(arg, BaseModel):
+                            _walk(arg, path)
             elif isinstance(ann, type) and issubclass(ann, BaseModel):
                 _walk(ann, path)
 
