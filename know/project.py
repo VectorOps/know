@@ -170,6 +170,12 @@ class ProjectManager:
 
         self.refresh_components(scan_result)
 
+    def refresh_all(self) -> None:
+        """Refresh all repositories in the project."""
+        repos_to_refresh = self.data.repo.get_list_by_ids(self.repo_ids)
+        for repo in repos_to_refresh:
+            self.refresh(repo)
+
     def maybe_refresh(self) -> None:
         if not self.settings.refresh.enabled:
             return
@@ -190,9 +196,7 @@ class ProjectManager:
 
         if self.settings.refresh.refresh_all_repos:
             logger.info("Auto-refreshing all associated repositories...")
-            repos_to_refresh = self.data.repo.get_list_by_ids(self.repo_ids)
-            for repo in repos_to_refresh:
-                self.refresh(repo)
+            self.refresh_all()
         else:
             logger.info("Auto-refreshing primary repository...")
             self.refresh()  # Just refreshes default repo
