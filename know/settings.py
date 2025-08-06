@@ -395,13 +395,14 @@ def iter_settings(
             main_flag = all_flags[0]
             aliases = all_flags[1:]
 
+            default_val = field.get_default(call_default_factory=True) if not field.is_required() else ...
             add(
                 CliOption(
                     flag=main_flag,
                     aliases=sorted(aliases),
                     description=desc,
                     is_required=field.is_required(),
-                    default_value=field.get_default() if not field.is_required() else ...,
+                    default_value=default_val,
                 )
             )
 
@@ -443,9 +444,13 @@ def print_help(model: Type[BaseModel], script_name: str, kebab: bool = True):
             details.append("required")
 
         if opt.default_value is not ...:
-            # for multiline defaults, only show the first line
-            default_str = str(opt.default_value).split("\n")[0]
-            details.append(f"default: {default_str!r}")
+            # Don't show a default value for nested models, it's not helpful.
+            if isinstance(opt.default_value, BaseModel):
+                pass
+            else:
+                # for multiline defaults, only show the first line
+                default_str = str(opt.default_value).split("\n")[0]
+                details.append(f"default: {default_str!r}")
 
         if details:
             line += f" [{', '.join(details)}]"
