@@ -70,16 +70,14 @@ def calc_bm25_fts_index(
     s: ProjectSettings,
     node: Node,
 ) -> str:
-    _language, _file_path = None, None
-
+    language = ProgrammingLanguage.TEXT
+    file_path = None
     if node.file_id:
         file = file_repo.get_by_id(node.file_id)
         if file:
-            _file_path = file.path
-            _language = file.language
-
-    if not _language:
-        _language = ProgrammingLanguage.TEXT
+            file_path = file.path
+            if file.language:
+                language = file.language
 
     fts_tokens = []
     field_boosts = s.search.fts_field_boosts
@@ -87,23 +85,22 @@ def calc_bm25_fts_index(
         logger.warning("FTS field boosts are not configured; defaulting to 'body' field only.")
         field_boosts = {"body": 1}
 
+    node_data = node.model_dump()
+    node_data["file_path"] = file_path
+    if node.signature and node.signature.raw:
+        node_data["name"] = node.signature.raw
+
     for field_name, boost in field_boosts.items():
-        field_value: Optional[str] = None
-        if field_name == "file_path":
-            field_value = _file_path
-        elif field_name == "name":
-            name = node.name
-            if node.signature and node.signature.raw:
-                name = node.signature.raw
-            field_value = name
-        elif hasattr(node, field_name):
-            field_value = getattr(node, field_name)
-        else:
-            logger.warning(f"Field '{field_name}' not found on Node model for FTS indexing.")
+        if field_name not in node_data:
+            logger.warning(
+                f"Field '{field_name}' not found on Node model or derived values for FTS indexing."
+            )
             continue
 
+        field_value = node_data[field_name]
+
         if field_value and isinstance(field_value, str):
-            processed_tokens = search_preprocessor_list(s, _language, field_value)
+            processed_tokens = search_preprocessor_list(s, language, field_value)
             fts_tokens.extend(processed_tokens * boost)
 
     return " ".join(fts_tokens)
