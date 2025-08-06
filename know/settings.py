@@ -83,6 +83,26 @@ class RepoMapSettings(BaseModel):
     )
 
 
+class RefreshSettings(BaseModel):
+    """Settings for auto-refreshing project data."""
+
+    enabled: bool = Field(
+        default=True,
+        description="If True, the project will be automatically refreshed periodically.",
+    )
+    cooldown_minutes: int = Field(
+        default=5,
+        description=(
+            "The minimum time in minutes between automatic refreshes. "
+            "Set to 0 to refresh on every relevant action."
+        ),
+    )
+    refresh_all_repos: bool = Field(
+        default=False,
+        description="If True, all associated repositories will be refreshed. If False, only the primary repository is refreshed.",
+    )
+
+
 class SearchSettings(BaseModel):
     """Settings for search-related functionality."""
 
@@ -268,6 +288,10 @@ class ProjectSettings(BaseSettings):
     repomap: RepoMapSettings = Field(
         default_factory=RepoMapSettings,
         description="Settings for the RepoMap tool."
+    )
+    refresh: RefreshSettings = Field(
+        default_factory=RefreshSettings,
+        description="Settings for auto-refreshing project data."
     )
     search: SearchSettings = Field(
         default_factory=SearchSettings,

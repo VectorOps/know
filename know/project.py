@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import os.path as op
+import datetime
 from typing import Any, Optional, Type, Dict, Tuple
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -67,6 +68,7 @@ class ProjectManager:
         self.settings = settings
         self.data = data
         self.embeddings = embeddings
+        self._last_refresh_time: Optional[datetime.datetime] = None
 
         self._init_project()
 
@@ -167,6 +169,35 @@ class ProjectManager:
         scan_result = scanner.scan_repo(self, repo)
 
         self.refresh_components(scan_result)
+
+    def maybe_refresh(self) -> None:
+        if not self.settings.refresh.enabled:
+            return
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cooldown_minutes = self.settings.refresh.cooldown_minutes
+
+        if cooldown_minutes > 0:
+            if self._last_refresh_time:
+                delta = now - self._last_refresh_time
+                if delta < datetime.timedelta(minutes=cooldown_minutes):
+                    logger.debug(
+                        "Skipping auto-refresh due to cooldown.",
+                        since_last_refresh=delta,
+                        cooldown_minutes=cooldown_minutes,
+                    )
+                    return
+
+        if self.settings.refresh.refresh_all_repos:
+            logger.info("Auto-refreshing all associated repositories...")
+            repos_to_refresh = self.data.repo.get_list_by_ids(self.repo_ids)
+            for repo in repos_to_refresh:
+                self.refresh(repo)
+        else:
+            logger.info("Auto-refreshing primary repository...")
+            self.refresh()  # Just refreshes default repo
+
+        self._last_refresh_time = now
 
     def refresh_components(self, scan_result: ScanResult):
         for name, comp in self._components.items():
