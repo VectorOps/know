@@ -77,6 +77,7 @@ def _build_project():
     dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "func"))
 
     project.refresh_components(ScanResult(
+        repo=project.default_repo,
         files_added=["a.py", "b.py", "c.py", "d.py"],
     ))
 
@@ -127,6 +128,7 @@ def test_repo_map_build_and_refresh():
     dr.symbolref.create(_create_ref(repo_id, c_file.id, pkg_id, "func"))
 
     scan = ScanResult(
+        repo=project.default_repo,
         files_added=["c.py"],
         files_updated=["a.py"],
         files_deleted=["b.py", "d.py"],          # d.py never existed → fid None branch
