@@ -81,18 +81,13 @@ def calc_bm25_fts_index(
     if not _language:
         _language = ProgrammingLanguage.TEXT
 
-    name = node.name
-    if node.signature and node.signature.raw:
-        name = node.signature.raw
-
-    processed_name_tokens = search_preprocessor_list(s, _language, name or "")
-    processed_fqn_tokens = search_preprocessor_list(s, _language, node.fqn or "")
-    processed_body_tokens = search_preprocessor_list(s, _language, node.body or "")
-    processed_docstring_tokens = search_preprocessor_list(s, _language, node.docstring or "")
-    processed_path_tokens = search_preprocessor_list(s, _language, _file_path or "")
-
     fts_tokens = []
-    for field_name, boost in s.search.fts_field_boosts.items():
+    field_boosts = s.search.fts_field_boosts
+    if not field_boosts:
+        logger.warning("FTS field boosts are not configured; defaulting to 'body' field only.")
+        field_boosts = {"body": 1}
+
+    for field_name, boost in field_boosts.items():
         field_value: Optional[str] = None
         if field_name == "file_path":
             field_value = _file_path
