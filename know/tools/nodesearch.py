@@ -71,6 +71,8 @@ class NodeSearchTool(BaseTool):
         pm: ProjectManager,
         req: NodeSearchReq,
     ) -> List[NodeSearchResult]:
+        pm.maybe_refresh()
+
         # normalise string / enum inputs
         kind: NodeKind | None = None
         if req.kind is None:

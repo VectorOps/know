@@ -27,6 +27,8 @@ class SummarizeFilesTool(BaseTool):
         req: SummarizeFilesReq,
     ) -> List[FileSummary]:
         """Generate summaries for the requested files."""
+        pm.maybe_refresh()
+
         summary_mode = req.summary_mode
         if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)

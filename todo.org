@@ -1,9 +1,10 @@
 #+title: Todo
 * [X] Configurable RRF weights
-* [ ] Auto-refresh
-** [ ] Auto-refresh on every tool call
-** [ ] Auto-refresh on tool call, but not more often than every X minutes
-** [ ] Auto-refresh associated repos or primary repo
+* [X] Auto-refresh
+** [X] Auto-refresh on every tool call
+** [X] Auto-refresh on tool call, but not more often than every X minutes
+** [X] Auto-refresh associated repos or primary repo
+* [ ] Create project-parsing progress callbacks or iterator-based methods
 * [ ] Repomap should ignore non-default repos in the project
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories

@@ -39,6 +39,8 @@ class ListFilesTool(BaseTool):
         If `patterns` is None or empty, return an empty list. The matching is
         done fnmatch-style.
         """
+        pm.maybe_refresh()
+
         file_repo = pm.data.file
 
         # TODO: Better search

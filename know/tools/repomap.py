@@ -339,6 +339,8 @@ class RepoMapTool(BaseTool):
         pm: ProjectManager,
         req: RepoMapReq,
     ) -> List[RepoMapScore]:
+        pm.maybe_refresh()
+
         summary_mode = req.summary_mode
         if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)
