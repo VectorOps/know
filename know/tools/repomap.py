@@ -506,7 +506,7 @@ class RepoMapTool(BaseTool):
                     },
                     "prompt": {
                         "type": "string",
-                        "description": "A free-text prompt from which to extract additional symbol and file names to use as seeds.",
+                        "description": "A free-text prompt containg symbol or file names.",
                     },
                     "limit": {
                         "type": "integer",
@@ -539,7 +539,7 @@ class RepoMapTool(BaseTool):
                     "exported_only": {
                         "type": "boolean",
                         "default": True,
-                        "description": "If true, consider only exported symbols for ranking.",
+                        "description": "If true, only consider only exported symbols than can be imported from other packages.",
                     },
                 },
             },
