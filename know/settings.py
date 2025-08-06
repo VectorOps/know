@@ -288,6 +288,7 @@ class CliOption(BaseModel):
     description: str
     is_required: bool
     default_value: Any
+    is_group: bool = False
 
 
 def load_settings(
@@ -345,26 +346,24 @@ def iter_settings(
         for name, field in cls.model_fields.items():
             path = f"{dotted}.{name}" if dotted else name
             desc = field.description or ""
-
-            # recurse into nested models
             ann = field.annotation
-            is_nested_model_field = False
+
+            # Determine if the field is a nested model for recursion
+            is_nested_model = False
+            nested_types_for_recursion = []
             if hasattr(ann, "__pydantic_generic_metadata__"):  # parametrised generics
                 metadata = getattr(ann, "__pydantic_generic_metadata__")
-                # for List[SomeModel], Dict[str, SomeModel], etc., recurse into SomeModel
                 args = metadata.get("args")
                 if args:
                     for arg in args:
                         if isinstance(arg, type) and issubclass(arg, BaseModel):
-                            _walk(arg, path)
-                            is_nested_model_field = True
+                            is_nested_model = True
+                            nested_types_for_recursion.append(arg)
             elif isinstance(ann, type) and issubclass(ann, BaseModel):
-                _walk(ann, path)
-                is_nested_model_field = True
+                is_nested_model = True
+                nested_types_for_recursion.append(ann)
 
-            if is_nested_model_field:
-                continue
-
+            # Flag generation logic
             all_flags = []
             path_prefix = ".".join(p.replace("_", "-") for p in dotted.split(".")) if kebab and dotted else ""
             path_prefix_dot = f"{path_prefix}." if path_prefix else ""
@@ -379,30 +378,26 @@ def iter_settings(
             flag_name = ".".join(p.replace("_", "-") for p in path.split(".")) if kebab else path
             if choices:
                 for choice in choices:
-                    # short-form aliases are only for non-nested, single-character names
                     if len(choice) == 1 and not path_prefix:
                         all_flags.append(f"-{choice}")
                     else:
-                        # kebab-casing does not apply to aliases
                         full_name = f"{path_prefix_dot}{choice}"
                         all_flags.append(f"--{full_name}")
             else:
-                # No validation_alias, use field name
                 all_flags.append(f"--{flag_name}")
 
-            # Sort to have a predictable "main" flag (longest, prefer --)
             all_flags.sort(key=lambda x: (x.startswith('--'), len(x)), reverse=True)
             main_flag = all_flags[0]
             aliases = all_flags[1:]
 
-            default_val = field.get_default(call_default_factory=True) if not field.is_required() else ...
             add(
                 CliOption(
                     flag=main_flag,
                     aliases=sorted(aliases),
                     description=desc,
                     is_required=field.is_required(),
-                    default_value=default_val,
+                    default_value=field.get_default() if not field.is_required() else ...,
+                    is_group=is_nested_model,
                 )
             )
 
@@ -417,6 +412,11 @@ def iter_settings(
                         default_value=...,
                     )
                 )
+
+            # Recurse into nested models
+            if is_nested_model:
+                for nested_type in nested_types_for_recursion:
+                    _walk(nested_type, path)
 
     _walk(model)
     return sorted(out, key=lambda o: o.flag)
@@ -443,14 +443,10 @@ def print_help(model: Type[BaseModel], script_name: str, kebab: bool = True):
         if opt.is_required:
             details.append("required")
 
-        if opt.default_value is not ...:
-            # Don't show a default value for nested models, it's not helpful.
-            if isinstance(opt.default_value, BaseModel):
-                pass
-            else:
-                # for multiline defaults, only show the first line
-                default_str = str(opt.default_value).split("\n")[0]
-                details.append(f"default: {default_str!r}")
+        if not opt.is_group and opt.default_value is not ...:
+            # for multiline defaults, only show the first line
+            default_str = str(opt.default_value).split("\n")[0]
+            details.append(f"default: {default_str!r}")
 
         if details:
             line += f" [{', '.join(details)}]"

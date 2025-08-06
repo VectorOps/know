@@ -11,8 +11,6 @@ from know.settings import ProjectSettings
 from know.tokenizers import search_preprocessor_list
 
 
-
-
 class BaseQueueWorker(ABC):
     def __init__(self) -> None:
         self._queue: queue.Queue[Optional[Any]] = queue.Queue()
