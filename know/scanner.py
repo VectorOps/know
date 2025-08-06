@@ -159,11 +159,11 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
     and store parsing results via the project-wide data repository.
     """
     start_time = time.perf_counter()
-    result = ScanResult()
+    result = ScanResult(repo=repo)
     root_path: str | None = repo.root_path
     if not root_path:
         logger.warning("scan_repo skipped – repo path is not set.")
-        return ScanResult()
+        return ScanResult(repo=repo)
 
     processed_paths: set[str] = set()
 
