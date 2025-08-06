@@ -346,6 +346,25 @@ def iter_settings(
             path = f"{dotted}.{name}" if dotted else name
             desc = field.description or ""
 
+            # recurse into nested models
+            ann = field.annotation
+            is_nested_model_field = False
+            if hasattr(ann, "__pydantic_generic_metadata__"):  # parametrised generics
+                metadata = getattr(ann, "__pydantic_generic_metadata__")
+                # for List[SomeModel], Dict[str, SomeModel], etc., recurse into SomeModel
+                args = metadata.get("args")
+                if args:
+                    for arg in args:
+                        if isinstance(arg, type) and issubclass(arg, BaseModel):
+                            _walk(arg, path)
+                            is_nested_model_field = True
+            elif isinstance(ann, type) and issubclass(ann, BaseModel):
+                _walk(ann, path)
+                is_nested_model_field = True
+
+            if is_nested_model_field:
+                continue
+
             all_flags = []
             path_prefix = ".".join(p.replace("_", "-") for p in dotted.split(".")) if kebab and dotted else ""
             path_prefix_dot = f"{path_prefix}." if path_prefix else ""
@@ -357,6 +376,7 @@ def iter_settings(
                 elif hasattr(field.validation_alias, 'choices'):  # AliasChoices
                     choices.extend(map(str, field.validation_alias.choices))
 
+            flag_name = ".".join(p.replace("_", "-") for p in path.split(".")) if kebab else path
             if choices:
                 for choice in choices:
                     # short-form aliases are only for non-nested, single-character names
@@ -368,7 +388,6 @@ def iter_settings(
                         all_flags.append(f"--{full_name}")
             else:
                 # No validation_alias, use field name
-                flag_name = ".".join(p.replace("_", "-") for p in path.split(".")) if kebab else path
                 all_flags.append(f"--{flag_name}")
 
             # Sort to have a predictable "main" flag (longest, prefer --)
@@ -397,19 +416,6 @@ def iter_settings(
                         default_value=...,
                     )
                 )
-
-            # recurse into nested models
-            ann = field.annotation
-            if hasattr(ann, "__pydantic_generic_metadata__"):  # parametrised generics
-                metadata = getattr(ann, "__pydantic_generic_metadata__")
-                # for List[SomeModel], Dict[str, SomeModel], etc., recurse into SomeModel
-                args = metadata.get("args")
-                if args:
-                    for arg in args:
-                        if isinstance(arg, type) and issubclass(arg, BaseModel):
-                            _walk(arg, path)
-            elif isinstance(ann, type) and issubclass(ann, BaseModel):
-                _walk(ann, path)
 
     _walk(model)
     return sorted(out, key=lambda o: o.flag)
