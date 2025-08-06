@@ -51,7 +51,7 @@ from know.data_helpers import (
     post_process_search_results,
 )
 from know.helpers import generate_id
-from know.stores.helpers import BaseQueueWorker, calc_bm25_fts_index, NODE_SEARCH_BOOSTS
+from know.stores.helpers import BaseQueueWorker, calc_bm25_fts_index
 from know.stores.sql import BaseSQLRepository, RawValue, apply_migrations
 
 T = TypeVar("T", bound=BaseModel)
@@ -368,10 +368,6 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
 
-    RRF_K: int = 60          # tuning-parameter k (see RRF paper)
-    RRF_CODE_WEIGHT: float = 0.5
-    RRF_FTS_WEIGHT:  float = 0.5
-
     def __init__(self, conn: "DuckDBThreadWrapper", file_repo: "DuckDBFileRepo", settings: ProjectSettings):
         super().__init__(conn)
         self.file_repo = file_repo
@@ -465,7 +461,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
                 Query.
                 from_(aliased).
                 select(aliased.id, analytics.RowNumber().orderby(aliased.dist, order=Order.desc).as_("code_rank")).
-                where(aliased.dist >= 0.4)
+                where(aliased.dist >= self.settings.search.embedding_similarity_threshold)
             )
 
             q = q.with_(rank_code_scores, "rank_code_scores").with_(rank_code, "rank_code")
@@ -488,9 +484,13 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             rank_fts = (
                 Query.
                 from_(aliased).
-                select(aliased.id, analytics.RowNumber().orderby(aliased.score, order=Order.desc).as_("fts_rank")).
-                where(aliased.score.notnull())
+                select(aliased.id, analytics.RowNumber().orderby(aliased.score, order=Order.desc).as_("fts_rank"))
             )
+            bm25_threshold = self.settings.search.bm25_score_threshold
+            if bm25_threshold is not None:
+                rank_fts = rank_fts.where(aliased.score >= bm25_threshold)
+            else:
+                rank_fts = rank_fts.where(aliased.score.notnull())
 
             q = q.with_(rank_fts_scores, "rank_fts_scores").with_(rank_fts, "rank_fts")
 
@@ -506,7 +506,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
                     from_(aliased).
                     select(
                         aliased.id,
-                        (LiteralValue(self.RRF_CODE_WEIGHT) / (LiteralValue(self.RRF_K) + aliased.code_rank)).as_("score"))
+                        (LiteralValue(self.settings.search.rrf_code_weight) / (LiteralValue(self.settings.search.rrf_k) + aliased.code_rank)).as_("score"))
                 )
 
             if has_fts:
@@ -517,7 +517,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
                     from_(aliased).
                     select(
                         aliased.id,
-                        (LiteralValue(self.RRF_FTS_WEIGHT) / (LiteralValue(self.RRF_K) + aliased.fts_rank)).as_("score")
+                        (LiteralValue(self.settings.search.rrf_fts_weight) / (LiteralValue(self.settings.search.rrf_k) + aliased.fts_rank)).as_("score")
                     )
                 )
 
@@ -541,7 +541,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
             # Apply node kind boosts
             kind_boost_case = Case().else_(1.0)
-            for kind, boost in NODE_SEARCH_BOOSTS.items():
+            for kind, boost in self.settings.search.node_kind_boosts.items():
                 kind_boost_case = kind_boost_case.when(aliased_candidates.kind == kind.value, boost)
             score_col = score_col * kind_boost_case
 

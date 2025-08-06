@@ -4,6 +4,8 @@ from enum import Enum
 from pydantic import Field, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from know.models import NodeKind
+
 
 class EmbeddingSettings(BaseSettings):
     """Settings for managing embeddings."""
@@ -89,6 +91,50 @@ class SearchSettings(BaseModel):
         description=(
             "Boost factor for search results from the default repository. Applied when a free-text `query` "
             "is provided. Values > 1.0 will boost, < 1.0 will penalize."
+        ),
+    )
+    rrf_k: int = Field(
+        default=60,
+        description="Reciprocal Rank Fusion tuning parameter 'k'.",
+    )
+    rrf_code_weight: float = Field(
+        default=0.5,
+        description="Weight for code embedding similarity scores in RRF.",
+    )
+    rrf_fts_weight: float = Field(
+        default=0.5,
+        description="Weight for full-text search scores in RRF.",
+    )
+    embedding_similarity_threshold: float = Field(
+        default=0.4,
+        description="Minimum cosine similarity for a search result to be considered.",
+    )
+    bm25_score_threshold: Optional[float] = Field(
+        default=None,
+        description="Minimum BM25 score for a full-text search result to be considered. If None, no threshold is applied.",
+    )
+    node_kind_boosts: dict[NodeKind, float] = Field(
+        default_factory=lambda: {
+            NodeKind.FUNCTION: 2.0,
+            NodeKind.METHOD: 2.0,
+            NodeKind.METHOD_DEF: 2.0,
+            NodeKind.CLASS: 1.5,
+            NodeKind.PROPERTY: 1.3,
+            NodeKind.LITERAL: 0.9,
+        },
+        description="Boost factors for different node kinds in search results.",
+    )
+    fts_field_boosts: dict[str, int] = Field(
+        default_factory=lambda: {
+            "name": 3,
+            "file_path": 2,
+            "body": 1,
+            "docstring": 1,
+            "fqn": 1,
+        },
+        description=(
+            "Integer boost factors for different fields in full-text search. "
+            "Valid fields are attributes of the `Node` model, plus 'file_path'."
         ),
     )
 

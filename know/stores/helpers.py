@@ -5,23 +5,12 @@ from concurrent.futures import Future
 from typing import Any, Optional, Set
 
 from know.data import AbstractNodeRepository, AbstractFileRepository
+from know.logger import logger
 from know.models import Node, ProgrammingLanguage, NodeKind
 from know.settings import ProjectSettings
 from know.tokenizers import search_preprocessor_list
 
 
-# TODO: Move to config
-NODE_SEARCH_BOOSTS = {
-    NodeKind.FUNCTION: 2,
-    NodeKind.METHOD: 2,
-    NodeKind.METHOD_DEF: 2,
-    NodeKind.CLASS: 1.5,
-    NodeKind.PROPERTY: 1.3,
-    NodeKind.LITERAL: 0.9,
-}
-
-NODE_SEARCH_NAME_BOOST = 3
-NODE_SEARCH_PATH_BOOST = 2
 
 
 class BaseQueueWorker(ABC):
@@ -102,14 +91,24 @@ def calc_bm25_fts_index(
     processed_docstring_tokens = search_preprocessor_list(s, _language, node.docstring or "")
     processed_path_tokens = search_preprocessor_list(s, _language, _file_path or "")
 
-    # name: 3x, path: 2x, body: 1x, docstring: 1x
     fts_tokens = []
-    fts_tokens.extend(processed_body_tokens)
-    fts_tokens.extend(processed_docstring_tokens)
-    fts_tokens.extend(processed_fqn_tokens)
+    for field_name, boost in s.search.fts_field_boosts.items():
+        field_value: Optional[str] = None
+        if field_name == "file_path":
+            field_value = _file_path
+        elif field_name == "name":
+            name = node.name
+            if node.signature and node.signature.raw:
+                name = node.signature.raw
+            field_value = name
+        elif hasattr(node, field_name):
+            field_value = getattr(node, field_name)
+        else:
+            logger.warning(f"Field '{field_name}' not found on Node model for FTS indexing.")
+            continue
 
-    # TODO: could use a better BM25 implementation with individual field boosts
-    fts_tokens.extend(processed_path_tokens * NODE_SEARCH_PATH_BOOST)
-    fts_tokens.extend(processed_name_tokens * NODE_SEARCH_NAME_BOOST)
+        if field_value and isinstance(field_value, str):
+            processed_tokens = search_preprocessor_list(s, _language, field_value)
+            fts_tokens.extend(processed_tokens * boost)
 
     return " ".join(fts_tokens)
