@@ -19,6 +19,7 @@ VIRTUAL_PATH_PREFIX = ".virtual-path"
 @dataclass
 class ScanResult:
     """Result object returned by `scan_project_directory`."""
+    repo: Repo
     files_added:  list[str] = field(default_factory=list)
     files_updated: list[str] = field(default_factory=list)
     files_deleted: list[str] = field(default_factory=list)
@@ -167,7 +168,7 @@ class ProjectManager:
 
         self.refresh_components(scan_result)
 
-    def refresh_components(self, scan_result):
+    def refresh_components(self, scan_result: ScanResult):
         for name, comp in self._components.items():
             try:
                 # TODO: pass repo to refresh

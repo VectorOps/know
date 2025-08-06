@@ -1,5 +1,5 @@
 #+title: Todo
-* [ ] Configurable RRF weights
+* [X] Configurable RRF weights
 * [ ] Auto-refresh
 ** [ ] Auto-refresh on every tool call
 ** [ ] Auto-refresh on tool call, but not more often than every X minutes
@@ -16,13 +16,12 @@
 ** [X] Extract common SQL functionality into helper
 * [ ] Generic helper to find references using tree sitter query in a generic way
 * [ ] Add query timeouts to DuckDB to detect lockups
-* [ ] Search tool
+* [X] Search tool
 ** [X] Better tokenizer for the fts index (syntax specific?)
 *** [X] Per-language stop words?
-** [ ] Lower weight of literal symbols
-** [ ] Boost final score of functions/methods/symbol definitions
-- Store boost coefficient in the symbol itself when calculating
-** [ ] Figure out field awareness and ranking
+** [X] Lower weight of literal symbols
+** [X] Boost final score of functions/methods/symbol definitions
+** [X] Figure out field awareness and ranking
 ** [X] Make tool search all symbols, not just public by default
 ** [X] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
 * [ ] Add a inherits field to symbols and use for classes

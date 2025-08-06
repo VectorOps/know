@@ -215,6 +215,10 @@ class RepoMap(ProjectComponent):
         stays exactly the same as before; we simply call `_rebuild_graph()`
         at the end so that the heterograph is always current.
         """
+        repo = scan.repo
+        if repo.id != self.pm.default_repo.id:
+            return  # repomap only tracks the default repo
+
         file_repo      = self.pm.data.file
         symbol_repo    = self.pm.data.symbol
         symbolref_repo = self.pm.data.symbolref
@@ -234,7 +238,7 @@ class RepoMap(ProjectComponent):
         # ----- additions / updates --------------------------------------
         changed = list(scan.files_added) + list(scan.files_updated)
         for rel_path in changed:
-            fm = file_repo.get_by_path(self.pm.default_repo.id, rel_path)
+            fm = file_repo.get_by_path(repo.id, rel_path)
             if fm is None:
                 continue
             path, fid = fm.path, fm.id
@@ -484,8 +488,8 @@ class RepoMapTool(BaseTool):
         return {
             "name": self.tool_name,
             "description": (
-                "Rank repository files by running a heterogeneous Random-Walk-with-Restart "
-                "starting from the given symbols and/or files."
+                "Find relevant files to a list of files or symbol names. Use for project discovery "
+                "when some of the files or symbols are known."
             ),
             "parameters": {
                 "type": "object",
