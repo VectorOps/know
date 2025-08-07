@@ -29,15 +29,13 @@ uv sync
 
 ## Settings
 
-*Know* uses [`pydantic-settings`](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) to manage configuration. This provides a flexible way to configure the project through environment variables, JSON files, or command-line arguments.
-
-All settings can be provided as environment variables with the `KNOW_` prefix (e.g., `KNOW_PROJECT_NAME=my-project`). Nested settings are separated by a single underscore (e.g., `KNOW_EMBEDDING_ENABLED=true`). When using command-line tools, settings can also be passed as kebab-case flags.
+*Know* exposes all settings via Pydantic BaseModel and it is possible to use  [`pydantic-settings`](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) to manage configuration. This provides a flexible way to configure the project through environment variables, JSON files, or command-line arguments.
 
 ### Key Settings
 
 There are three main settings you'll almost always need to provide:
 
-*   `--project-name`: A name for your project, which can be a collection of multiple repositories. This field is required.
+*   `--project-name`: A name for your project, which represents a collection of multiple source code repositories. This field is required.
 *   `--repo-name`: The name of the repository you are currently working with. This field is required.
 *   `--repo-path`: The local filesystem path to the root of the repository. This is required when first adding a repository to a project.
 
@@ -70,7 +68,7 @@ export KNOW_EMBEDDING_ENABLED=true
 export KNOW_EMBEDDING_MODEL_NAME="BAAI/bge-code-v1"
 
 # Run a tool (no need to pass settings as flags)
-uv run python tools/searchcli.py --query="ProjectManager"
+uv run python tools/searchcli.py
 ```
 
 ## Embeddings
@@ -97,13 +95,13 @@ All tools inherit `BaseTool`.  When the MCP server is started, each tool becomes
 
 ```bash
 # 1 - Search for a class or function
-uv run python tools/searchcli.py --project-path .
+uv run python tools/searchcli.py --project-name "my-org/know" --repo-name "know" --repo-path . --query "ProjectManager"
 
 # 2 - Summarise a file
-uv run python tools/filesummarycli.py --project-path . know/project.py -m summary_full
+uv run python tools/filesummarycli.py --project-name "my-org/know" --repo-name "know" --repo-path . --file-paths know/project.py --summary-mode summary_full
 
 # 3 - Generate a repo relevance map
-uv run python tools/repomapcli.py --project-path .
+uv run python tools/repomapcli.py --project-name "my-org/know" --repo-name "know" --repo-path . --prompt "database connection pooling"
 ```
 
 ---
