@@ -1,9 +1,9 @@
 import sys
 import inspect
 from dataclasses import asdict
-from typing import TYPE_CHECKING
+from typing import Type, Tuple, TYPE_CHECKING
 from pydantic import Field, AliasChoices, AnyHttpUrl
-from pydantic_settings import SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, JsonConfigSettingsSource
 
 
 from know import Project, init_project
@@ -29,20 +29,34 @@ from contextlib import asynccontextmanager
 
 class Settings(ProjectSettings):
     model_config = SettingsConfigDict(
+        json_file="mcp.json",
         env_prefix="KNOW_",
         env_nested_delimiter="_",
     )
 
     mcp_host: str = Field("127.0.0.1", description="MCP server host.")
     mcp_port: int = Field(8000, description="MCP server port.")
-    mcp_auth_token: str | None = Field(None, description="MCP server auth token (optional).")
+
+    # Load settings from mcp.json and then from env
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            JsonConfigSettingsSource(settings_cls),
+            env_settings,
+        )
 
 
 def create_mcp_app() -> tuple["FastMCP", Settings]:
     settings = Settings()
     mcp: FastMCP = FastMCP(
         "vectorops",
-        auth_token=settings.mcp_auth_token,
     )
     project = init_project(settings)
 

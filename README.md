@@ -7,13 +7,20 @@ All functionality is available from the command line, through a clean Python API
 
  * Multi-language parsing (Python, TypeScript, Go, …)
  * Local (in-memory) or in-memory or on-disk DuckDB metadata store
- *  Optional sentence-transformer embeddings for semantic search
+ * Optional sentence-transformer embeddings for semantic search
  * Rich tool catalogue automatically exported as OpenAI JSON schemas
- *  Ready-to-run FastMCP server with zero configuration
+ * Ready-to-run FastMCP server with zero configuration
 
 ---
 
 ## Installation
+
+The project is in active development and an official PyPI release is planned very soon.
+
+Disclaimer: This was not tested on Windows, but Windows support is coming.
+
+For now, clone the repo and use `uv` to play with the tools.
+
 ```bash
 git clone https://github.com/vectorops/know.git
 cd know

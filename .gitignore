@@ -13,6 +13,7 @@ wheels/
 .repomap_history
 .mypy_cache
 *.py.text-chunks
+mcp.json
 
 # Virtual environments
 .venv/
