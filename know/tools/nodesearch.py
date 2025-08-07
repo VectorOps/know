@@ -132,7 +132,7 @@ class NodeSearchTool(BaseTool):
             offset = req.offset,
         )
         
-        syms = pm.data.symbol.search(query)
+        syms = pm.data.node.search(query)
 
         file_repo = pm.data.file
 

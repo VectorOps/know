@@ -89,12 +89,12 @@ def test_file_metadata_repository(data_repo):
     assert file_repo.delete(fid) is True
 
 
-def test_symbol_metadata_repository(data_repo):
+def test_node_metadata_repository(data_repo):
     repo_repo = data_repo.repo
     rid = make_id()
     repo_repo.create(Repo(id=rid, name="test", root_path=f"/tmp/{rid}"))
 
-    sym_repo = data_repo.symbol
+    node_repo = data_repo.node
     fid, sid = make_id(), make_id()
 
     signature = NodeSignature(
@@ -105,7 +105,7 @@ def test_symbol_metadata_repository(data_repo):
     )
 
     # create with signature
-    sym_repo.create(
+    node_repo.create(
         Node(
             id=sid,
             name="sym",
@@ -117,15 +117,15 @@ def test_symbol_metadata_repository(data_repo):
     )
 
     # read back (by id and by file_id) and ensure signature persisted
-    assert sym_repo.get_by_id(sid).signature == signature
-    assert sym_repo.get_list(NodeFilter(file_id=fid))[0].signature == signature
+    assert node_repo.get_by_id(sid).signature == signature
+    assert node_repo.get_list(NodeFilter(file_id=fid))[0].signature == signature
 
     # update signature
     new_sig = NodeSignature(raw="def sym()")
-    assert sym_repo.update(sid, {"signature": new_sig}).signature == new_sig
+    assert node_repo.update(sid, {"signature": new_sig}).signature == new_sig
 
     # delete
-    assert sym_repo.delete(sid) is True
+    assert node_repo.delete(sid) is True
 
 
 def test_import_edge_repository(data_repo):
@@ -140,8 +140,8 @@ def test_import_edge_repository(data_repo):
     assert edge_repo.get_list(ImportEdgeFilter(repo_ids=[rid])) == []
 
 
-def test_symbol_search(data_repo):
-    repo_repo, file_repo, sym_repo = data_repo.repo, data_repo.file, data_repo.symbol
+def test_node_search(data_repo):
+    repo_repo, file_repo, node_repo = data_repo.repo, data_repo.file, data_repo.node
 
     # ---------- minimal repo / file scaffolding ----------
     rid  = make_id()
@@ -149,20 +149,20 @@ def test_symbol_search(data_repo):
     repo_repo.create(Repo(id=rid, name="test", root_path="/tmp/rid"))
     file_repo.create(File(id=fid, repo_id=rid, path="src/a.py"))
 
-    # ---------- seed three symbols ----------
-    sym_repo.create(Node(
+    # ---------- seed three nodes ----------
+    node_repo.create(Node(
         id=make_id(), name="Alpha", repo_id=rid, file_id=fid,
         body='def Alpha(): pass',
         kind="function", visibility="public",
         docstring="Compute foo and bar."
     ))
-    sym_repo.create(Node(
+    node_repo.create(Node(
         id=make_id(), name="Beta", repo_id=rid, file_id=fid,
         body='class Beta(): pass',
         kind="class", visibility="private",
         docstring="Baz qux docs."
     ))
-    sym_repo.create(Node(
+    node_repo.create(Node(
         id=make_id(), name="Gamma", repo_id=rid, file_id=fid,
         body='Gamma = 10',
         kind="variable", visibility="public",
@@ -171,31 +171,31 @@ def test_symbol_search(data_repo):
     data_repo.refresh_full_text_indexes()
 
     # ---------- no-filter search: default ordering (name ASC) ----------
-    res = sym_repo.search(NodeSearchQuery(repo_ids=[rid]))
+    res = node_repo.search(NodeSearchQuery(repo_ids=[rid]))
     assert [s.name for s in res] == ["Alpha", "Beta", "Gamma"]
 
     # ---------- name substring (case-insensitive) ----------
-    assert [s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], symbol_name="alpha"))] == ["Alpha"]
+    assert [s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], symbol_name="alpha"))] == ["Alpha"]
 
     # ---------- kind filter ----------
-    assert [s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], kind="class"))] == ["Beta"]
+    assert [s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], kind="class"))] == ["Beta"]
 
     # ---------- visibility filter ----------
-    assert {s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], visibility="public"))} == {"Alpha", "Gamma"}
+    assert {s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], visibility="public"))} == {"Alpha", "Gamma"}
 
     # ---------- docstring / comment full-text search ----------
-    assert [s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], doc_needle="foo"))] == ["Alpha"]
+    assert [s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], doc_needle="foo"))] == ["Alpha"]
 
     # ---------- pagination ----------
-    assert len(sym_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2))) == 2
-    assert [s.name for s in sym_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2, offset=2))] == ["Gamma"]
+    assert len(node_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2))) == 2
+    assert [s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2, offset=2))] == ["Gamma"]
 
 
 # ---------------------------------------------------------------------------
 # embedding-similarity search
 # ---------------------------------------------------------------------------
 def test_symbol_embedding_search(data_repo):
-    repo_repo, file_repo, sym_repo = data_repo.repo, data_repo.file, data_repo.symbol
+    repo_repo, file_repo, node_repo = data_repo.repo, data_repo.file, data_repo.node
 
     rid = make_id()
     fid = make_id()
@@ -204,21 +204,21 @@ def test_symbol_embedding_search(data_repo):
     file_repo.create(File(id=fid, repo_id=rid, path="src/vec.py"))
 
     # seed three symbols with simple, orthogonal 3-d vectors
-    sym_repo.create(Node(
+    node_repo.create(Node(
         id=make_id(), name="VecA", repo_id=rid, file_id=fid,
         body="def VecA(): pass", embedding_code_vec=[1.0, 0.0, 0.0] + [0] * 1021
     ))
-    sym_repo.create(Node(
+    node_repo.create(Node(
         id=make_id(), name="VecB", repo_id=rid, file_id=fid,
         body="def VecB(): pass", embedding_code_vec=[0.0, 1.0, 0.0] + [0] * 1021
     ))
-    sym_repo.create(Node(
+    node_repo.create(Node(
         id=make_id(), name="VecC", repo_id=rid, file_id=fid,
         body="def VecC(): pass", embedding_code_vec=[0.0, 0.0, 1.0] + [0] * 1021
     ))
 
     # query vector identical to VecA  ->  VecA must rank first
-    res = sym_repo.search(
+    res = node_repo.search(
         NodeSearchQuery(repo_ids=[rid], embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3),
     )
 

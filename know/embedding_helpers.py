@@ -7,10 +7,10 @@ from know.project import ProjectManager
 
 
 # Embedding helpers
-def schedule_symbol_embedding(symbol_repo, emb_calc, sym_id: str, body: str) -> None:
+def schedule_symbol_embedding(node_repo, emb_calc, sym_id: str, body: str) -> None:
     def _on_vec(vec: Vector) -> None:
         try:
-            symbol_repo.update(
+            node_repo.update(
                 sym_id,
                 {
                     "embedding_code_vec": vec,
@@ -32,12 +32,12 @@ def schedule_missing_embeddings(pm: ProjectManager, repo: Repo) -> None:
     emb_calc = pm.embeddings
     if not emb_calc:
         return
-    symbol_repo = pm.data.symbol
+    node_repo = pm.data.node
     repo_id     = repo.id
     PAGE_SIZE = 1_000
     offset = 0
     while True:
-        page = symbol_repo.get_list(
+        page = node_repo.get_list(
             NodeFilter(
                 repo_ids=[repo_id],
                 has_embedding=False,
@@ -50,7 +50,7 @@ def schedule_missing_embeddings(pm: ProjectManager, repo: Repo) -> None:
         for sym in page:
             if sym.body:
                 schedule_symbol_embedding(
-                    symbol_repo,
+                    node_repo,
                     emb_calc,
                     sym_id=sym.id,
                     body=sym.body,
@@ -68,14 +68,14 @@ def schedule_outdated_embeddings(pm: ProjectManager, repo: Repo) -> None:
         return
 
     model_name   = emb_calc.get_model_name()
-    symbol_repo  = pm.data.symbol
+    node_repo  = pm.data.node
     repo_id      = repo.id
     PAGE_SIZE    = 1_000
     offset       = 0
 
     # TODO: Add data filter
     while True:
-        page = symbol_repo.get_list(
+        page = node_repo.get_list(
             NodeFilter(
                 repo_ids=[repo_id],
                 limit=PAGE_SIZE,
@@ -93,7 +93,7 @@ def schedule_outdated_embeddings(pm: ProjectManager, repo: Repo) -> None:
                 and sym.embedding_model != model_name
             ):
                 schedule_symbol_embedding(
-                    symbol_repo,
+                    node_repo,
                     emb_calc,
                     sym_id=sym.id,
                     body=sym.body,

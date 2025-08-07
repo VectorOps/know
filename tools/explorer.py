@@ -76,7 +76,7 @@ def create_app(project) -> Flask:
     def package_detail(package_id):
         pkg = data.package.get_by_id(package_id) or abort(404)
         files = data.file.get_list(FileFilter(package_id=package_id))
-        symbols = data.symbol.get_list(NodeFilter(package_id=package_id))
+        symbols = data.node.get_list(NodeFilter(package_id=package_id))
         importedges  = data.importedge.get_list(
             ImportEdgeFilter(source_package_id=package_id)
         )
@@ -94,7 +94,7 @@ def create_app(project) -> Flask:
     def file_detail(file_id):
         file = data.file.get_by_id(file_id) or abort(404)
 
-        symbols      = data.symbol.get_list(NodeFilter(file_id=file_id))
+        symbols      = data.node.get_list(NodeFilter(file_id=file_id))
         importedges  = data.importedge.get_list(
             ImportEdgeFilter(source_file_id=file_id)
         )
@@ -112,7 +112,7 @@ def create_app(project) -> Flask:
     # ----- symbol -----
     @app.route("/symbols/<symbol_id>")
     def symbol_detail(symbol_id):
-        symbol = data.symbol.get_by_id(symbol_id) or abort(404)
+        symbol = data.node.get_by_id(symbol_id) or abort(404)
         return render_template("explorer/detail_symbol.html",
                                item=symbol)
 

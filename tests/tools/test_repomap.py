@@ -9,7 +9,7 @@ from know.models import (
 from know.project import ProjectManager
 from know.stores.duckdb import DuckDBDataRepository
 from know.scanner import ScanResult
-from know.settings import ProjectSettings
+from know.settings import ProjectSettings, RefreshSettings
 from know.tools.repomap import RepoMap, RepoMapTool, RepoMapReq
 
 
@@ -48,7 +48,14 @@ def _create_ref(repo_id: str, file_id: str, pkg_id: str, name="func"):
 
 # helpers for RepoMapTool test
 def _build_project():
-    settings = ProjectSettings(project_name="test", repo_name="test", repo_path="/dummy")
+    settings = ProjectSettings(
+        project_name="test",
+        repo_name="test",
+        repo_path="/dummy",
+        refresh=RefreshSettings(
+            enabled=False,
+        ),
+    )
     dr = DuckDBDataRepository(settings)
     project = ProjectManager(settings, dr)
 
@@ -61,7 +68,7 @@ def _build_project():
     f_b = _create_file(repo_id, pkg_id, "b.py")      # calls   func
     dr.file.create(f_a); dr.file.create(f_b)
 
-    dr.symbol.create(_create_symbol(repo_id, f_a.id, pkg_id, "func"))
+    dr.node.create(_create_symbol(repo_id, f_a.id, pkg_id, "func"))
     dr.symbolref.create(_create_ref(repo_id, f_b.id, pkg_id, "func"))
 
     # --- extra files and symbols/refs for "beta"
@@ -69,7 +76,7 @@ def _build_project():
     f_d = _create_file(repo_id, pkg_id, "d.py")   # calls   “beta”
     dr.file.create(f_c); dr.file.create(f_d)
 
-    dr.symbol.create(_create_symbol(repo_id, f_c.id, pkg_id, "beta"))
+    dr.node.create(_create_symbol(repo_id, f_c.id, pkg_id, "beta"))
     dr.symbolref.create(_create_ref(repo_id, f_d.id, pkg_id, "beta"))
 
     # make d.py also call “func” → two outgoing edges from d.py,
@@ -85,7 +92,14 @@ def _build_project():
 
 
 def test_repo_map_build_and_refresh():
-    settings = ProjectSettings(project_name="test", repo_name="test", repo_path="/dummy")
+    settings = ProjectSettings(
+        project_name="test",
+        repo_name="test",
+        repo_path="/dummy",
+        refresh=RefreshSettings(
+            enabled=False,
+        ),
+    )
     dr = DuckDBDataRepository(settings)
     project = ProjectManager(settings, dr)
 
@@ -103,7 +117,7 @@ def test_repo_map_build_and_refresh():
 
     # symbol “func” defined in a.py
     s1 = _create_symbol(repo_id, f1.id, pkg_id, "func")
-    dr.symbol.create(s1)
+    dr.node.create(s1)
 
     # reference to “func” inside b.py
     r1 = _create_ref(repo_id, f2.id, pkg_id, "func")
@@ -111,7 +125,7 @@ def test_repo_map_build_and_refresh():
 
     # build project + graph
     rm = RepoMap(project)
-    rm.initialize()                       # RepoMap now builds itself via `initialize`
+    rm.initialize()
 
     # initial assertions
     assert set(rm.G.nodes) == {f1.path, f2.path, 'sym::func'}
@@ -131,7 +145,7 @@ def test_repo_map_build_and_refresh():
         repo=project.default_repo,
         files_added=["c.py"],
         files_updated=["a.py"],
-        files_deleted=["b.py", "d.py"],          # d.py never existed → fid None branch
+        files_deleted=["b.py", "d.py"],
     )
 
     rm.refresh(scan)
@@ -149,6 +163,7 @@ def test_repomap_tool_pagerank_and_boost():
 
     # baseline – a.py should outrank b.py, c.py should outrank d.py
     res = tool.execute(project, RepoMapReq())
+    print(1, res)
     order = [r.file_path for r in res]
     assert order.index(a_path) < order.index(b_path)
     assert order.index(c_path) < order.index(d_path)

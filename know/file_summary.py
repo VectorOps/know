@@ -59,7 +59,7 @@ def build_file_summary(
     include_docs = summary_mode is SummaryMode.FullSummary
 
     file_repo   = pm.data.file
-    symbol_repo = pm.data.symbol
+    node_repo = pm.data.node
     edge_repo   = pm.data.importedge
 
     fm = file_repo.get_by_path(repo.id, rel_path)
@@ -68,7 +68,7 @@ def build_file_summary(
         return None
     helper: AbstractLanguageHelper | None = CodeParserRegistry.get_helper(fm.language) if fm.language else None
 
-    symbols = symbol_repo.get_list(NodeFilter(file_id=fm.id))
+    symbols = node_repo.get_list(NodeFilter(file_id=fm.id))
     top_level = [s for s in symbols if s.parent_ref is None]
     top_level.sort(key=lambda s: (s.start_line, s.start_col))
 

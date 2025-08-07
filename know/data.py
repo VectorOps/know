@@ -369,7 +369,7 @@ class AbstractDataRepository(ABC):
 
     @property
     @abstractmethod
-    def symbol(self) -> AbstractNodeRepository:
+    def node(self) -> AbstractNodeRepository:
         pass
 
     @property

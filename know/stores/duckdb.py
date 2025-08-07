@@ -698,7 +698,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._file_repo = DuckDBFileRepo(self._conn)
         self._package_repo = DuckDBPackageRepo(self._conn, self._file_repo)
         self._repo_repo = DuckDBRepoRepo(self._conn)
-        self._symbol_repo = DuckDBNodeRepo(self._conn, self._file_repo, self._settings)
+        self._node_repo = DuckDBNodeRepo(self._conn, self._file_repo, self._settings)
         self._edge_repo = DuckDBImportEdgeRepo(self._conn)
         self._symbolref_repo = DuckDBNodeRefRepo(self._conn)
 
@@ -730,8 +730,8 @@ class DuckDBDataRepository(AbstractDataRepository):
         return self._file_repo
 
     @property
-    def symbol(self) -> AbstractNodeRepository:
-        return self._symbol_repo
+    def node(self) -> AbstractNodeRepository:
+        return self._node_repo
 
     @property
     def importedge(self) -> AbstractImportEdgeRepository:

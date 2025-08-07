@@ -29,7 +29,7 @@ def test_python_project_scan_populates_repositories():
 
     # ── symbols (spot-check method.go) ───────────────────────────────────
     simple_meta = next(f for f in files if f.path == "m/method.go")
-    symbols = repo_store.symbol.get_list(NodeFilter(package_id=simple_meta.package_id))
+    symbols = repo_store.node.get_list(NodeFilter(package_id=simple_meta.package_id))
     symbol_names = {s.name for s in symbols}
 
     assert {"foobar"}.issubset(symbol_names)

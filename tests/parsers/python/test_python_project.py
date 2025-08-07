@@ -31,7 +31,7 @@ def test_project_scan_populates_repositories():
 
     # ── symbols (spot-check simple.py) ───────────────────────────────────
     simple_meta = next(f for f in files if f.path == "simple.py")
-    symbols = repo_store.symbol.get_list(NodeFilter(file_id=simple_meta.id))
+    symbols = repo_store.node.get_list(NodeFilter(file_id=simple_meta.id))
     symbol_names = {s.name for s in symbols}
     #print(symbol_names)
 

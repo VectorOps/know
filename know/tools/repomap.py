@@ -173,7 +173,7 @@ class RepoMap(ProjectComponent):
             if G.out_degree(n) == 0:
                 G.add_edge(n, n, etype="self", weight=ISOLATED_SELF_WEIGHT)
 
-        self.G = G  # swap in the freshly built graph
+        self.G = G
 
     # ---------- initial build -------------------------------------------
     def initialize(self) -> None:
@@ -184,7 +184,7 @@ class RepoMap(ProjectComponent):
         """Populate _defs / _refs / _name_props / _path_to_fid from scratch."""
         repo_id        = self.pm.default_repo.id
         file_repo      = self.pm.data.file
-        symbol_repo    = self.pm.data.symbol
+        node_repo    = self.pm.data.node
         symbolref_repo = self.pm.data.symbolref
 
         # clear previous state
@@ -198,7 +198,7 @@ class RepoMap(ProjectComponent):
             self._path_to_fid[path] = fid
 
             # defs
-            for sym in symbol_repo.get_list(NodeFilter(file_id=fid)):
+            for sym in node_repo.get_list(NodeFilter(file_id=fid)):
                 if sym.name:
                     self._defs[sym.name].add(path)
                     self._name_props[sym.name] = self._make_props(sym)
@@ -217,10 +217,11 @@ class RepoMap(ProjectComponent):
         """
         repo = scan.repo
         if repo.id != self.pm.default_repo.id:
-            return  # repomap only tracks the default repo
+            # repomap only tracks the default repo
+            return
 
         file_repo      = self.pm.data.file
-        symbol_repo    = self.pm.data.symbol
+        node_repo    = self.pm.data.node
         symbolref_repo = self.pm.data.symbolref
 
         # ----- deletions -------------------------------------------------
@@ -254,7 +255,7 @@ class RepoMap(ProjectComponent):
                 refs.discard(path)
 
             # rebuild caches for this path
-            for sym in symbol_repo.get_list(NodeFilter(file_id=fid)):
+            for sym in node_repo.get_list(NodeFilter(file_id=fid)):
                 if sym.name:
                     self._defs[sym.name].add(path)
                     self._name_props[sym.name] = self._make_props(sym)
@@ -333,7 +334,6 @@ class RepoMapTool(BaseTool):
         ProjectManager.register_component(RepoMap)
         super().__init__(*a, **kw)
 
-    # ------------- public ‘execute’ ----------------------------------
     def execute(
         self,
         pm: ProjectManager,
@@ -398,7 +398,7 @@ class RepoMapTool(BaseTool):
 
         G = repomap.G
         if req.exported_only:
-            nodes_to_keep = set(repomap._path_to_fid.keys())  # all file nodes
+            nodes_to_keep = set(repomap._path_to_fid.keys())
             for name, props in repomap._name_props.items():
                 if props.exported:
                     nodes_to_keep.add(repomap.sym_node(name))
@@ -540,7 +540,7 @@ class RepoMapTool(BaseTool):
                     },
                     "exported_only": {
                         "type": "boolean",
-                        "default": True,
+                        "default": False,
                         "description": "If true, only consider only exported symbols than can be imported from other packages.",
                     },
                 },

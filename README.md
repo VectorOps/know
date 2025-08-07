@@ -99,7 +99,7 @@ for item in RepoMapTool().execute(project, map_req):
 
 # 4. low-level access to repositories
 repo_id = project.default_repo.id
-symbols = project.data_repository.symbol.search(
+symbols = project.data_repository.node.search(
     query=NodeSearchQuery(repo_ids=[repo_id], symbol_name="Project")
 )
 print("Found", len(symbols), "symbols named Project")

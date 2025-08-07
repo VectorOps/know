@@ -43,7 +43,7 @@ def test_bm25_embedding_search_20cases(data_repo, emb_calc):
     """
     repo_repo = data_repo.repo
     file_repo = data_repo.file
-    sym_repo = data_repo.symbol
+    sym_repo = data_repo.node
 
     rid = "repo-BM25-test"
     fid = "file-f"

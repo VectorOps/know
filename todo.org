@@ -77,7 +77,8 @@
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed?
-* [ ] Debug search quality
+* [X] Debug search quality
+* [ ] Rename symbols to nodes
 * [X] Move data helpers out of data.py
 * [X] Introduce concept of project which is a collection of repositories
 ** [X] Create virtual path for other repos

@@ -265,8 +265,8 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
                     result.files_updated.append(res.parsed_file.path)
 
     #  Remove stale metadata for files that have disappeared from disk
-    file_repo   = pm.data.file
-    symbol_repo   = pm.data.symbol
+    file_repo = pm.data.file
+    node_repo = pm.data.node
     symbolref_repo = pm.data.symbolref
     repo_id = repo.id
 
@@ -278,7 +278,7 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
         if fm.path not in processed_paths:
             # 1) delete all symbol-refs & symbols that belonged to the vanished file
             symbolref_repo.delete_by_file_id(fm.id)
-            symbol_repo.delete_by_file_id(fm.id)
+            node_repo.delete_by_file_id(fm.id)
             # 2) delete the file metadata itself
             file_repo.delete(fm.id)
             result.files_deleted.append(fm.path)
@@ -297,10 +297,9 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
 
     if pm.embeddings and state.pending_embeddings:
         logger.debug("Scheduling embeddings for new/updated symbols", count=len(state.pending_embeddings))
-        symbol_repo = pm.data.symbol
         for task in state.pending_embeddings:
             schedule_symbol_embedding(
-                symbol_repo,
+                node_repo,
                 pm.embeddings,
                 sym_id=task.symbol_id,
                 body=task.text,
@@ -425,10 +424,10 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
             import_repo.delete(edge.id)
 
     # Symbols (re-create)
-    symbol_repo = pm.data.symbol
+    node_repo = pm.data.node
 
     # collect existing symbols
-    existing_symbols = symbol_repo.get_list(NodeFilter(file_id=file_meta.id))
+    existing_symbols = node_repo.get_list(NodeFilter(file_id=file_meta.id))
 
     def _get_embedding_text(body: str, docstring: Optional[str]) -> str:
         if docstring:
@@ -469,12 +468,12 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
             schedule_emb = emb_calc is not None
 
         sm = Node(**sm_data)
-        symbol_repo.create(sm)
+        node_repo.create(sm)
 
         if schedule_emb:
             if pm.settings.embedding and pm.settings.embedding.sync_embeddings:
                 schedule_symbol_embedding(
-                    symbol_repo,
+                    node_repo,
                     emb_calc,
                     sym_id=sm.id,
                     body=embedding_text,
@@ -488,7 +487,7 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
 
         return sm.id
 
-    symbol_repo.delete_by_file_id(file_meta.id)
+    node_repo.delete_by_file_id(file_meta.id)
     for sym in parsed_file.symbols:
         _insert_symbol(sym)
 
@@ -526,14 +525,14 @@ def assign_parents_to_orphan_methods(pm: ProjectManager, repo: Repo) -> None:
     to the most specific class / interface (incl. Go struct) in the
     same package, based on FQN prefix matching.
     """
-    symbol_repo = pm.data.symbol
+    node_repo = pm.data.node
     repo_id = repo.id
 
     PAGE_SIZE = 1_000
     orphan_methods: list[Node] = []
     offset = 0
     while True:
-        page = symbol_repo.get_list(
+        page = node_repo.get_list(
             NodeFilter(
                 repo_ids=[repo_id],
                 kind=NodeKind.METHOD,
@@ -562,7 +561,7 @@ def assign_parents_to_orphan_methods(pm: ProjectManager, repo: Repo) -> None:
         if pkg_id is None:
             continue
         candidates = [
-            s for s in symbol_repo.get_list(NodeFilter(package_id=pkg_id))
+            s for s in node_repo.get_list(NodeFilter(package_id=pkg_id))
             if s.kind in parent_kinds and s.fqn
         ]
         if not candidates:
@@ -579,7 +578,7 @@ def assign_parents_to_orphan_methods(pm: ProjectManager, repo: Repo) -> None:
                 if meth.fqn.startswith(pref) and len(cand.fqn) > best_len:
                     best_parent, best_len = cand, len(cand.fqn)
             if best_parent:
-                symbol_repo.update(meth.id, {"parent_node_id": best_parent.id})
+                node_repo.update(meth.id, {"parent_node_id": best_parent.id})
 
 
 def resolve_pending_import_edges(pm: ProjectManager, repo: Repo, state: ParsingState) -> None:
