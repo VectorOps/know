@@ -33,22 +33,17 @@ class Settings(ProjectSettings):
         env_nested_delimiter="_",
     )
 
-    project_path: str = Field(
-        description="Root directory of the project to analyze/assist with.",
-    )
-
     mcp_host: str = Field("127.0.0.1", description="MCP server host.")
     mcp_port: int = Field(8000, description="MCP server port.")
     mcp_auth_token: str | None = Field(None, description="MCP server auth token (optional).")
 
 
-mcp: FastMCP = FastMCP(
-    "vectorops",
-)
-
-
-def init():
+def create_mcp_app() -> tuple["FastMCP", Settings]:
     settings = Settings()
+    mcp: FastMCP = FastMCP(
+        "vectorops",
+        auth_token=settings.mcp_auth_token,
+    )
     project = init_project(settings)
 
     # register all enabled tools with the MCP server
@@ -58,10 +53,15 @@ def init():
         fn = mcp_def.pop("fn")
         mcp.tool(fn, **mcp_def)
 
-    return mcp
+    return mcp, settings
 
-init()
+
+mcp, settings = create_mcp_app()
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    mcp.run(
+        transport="streamable-http",
+        host=settings.mcp_host,
+        port=settings.mcp_port,
+    )
