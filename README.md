@@ -27,7 +27,53 @@ cd know
 uv sync
 ```
 
-## **Embeddings**  
+## Settings
+
+*Know* uses [`pydantic-settings`](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) to manage configuration. This provides a flexible way to configure the project through environment variables, JSON files, or command-line arguments.
+
+All settings can be provided as environment variables with the `KNOW_` prefix (e.g., `KNOW_PROJECT_NAME=my-project`). Nested settings are separated by a single underscore (e.g., `KNOW_EMBEDDING_ENABLED=true`). When using command-line tools, settings can also be passed as kebab-case flags.
+
+### Key Settings
+
+There are three main settings you'll almost always need to provide:
+
+*   `--project-name`: A name for your project, which can be a collection of multiple repositories. This field is required.
+*   `--repo-name`: The name of the repository you are currently working with. This field is required.
+*   `--repo-path`: The local filesystem path to the root of the repository. This is required when first adding a repository to a project.
+
+### Examples
+
+**Using CLI flags:**
+
+All CLI tools accept settings as command-line arguments.
+
+```bash
+# Scan a repository and run a search
+uv run python tools/searchcli.py \
+    --project-name="my-org/know" \
+    --repo-name="know" \
+    --repo-path="." \
+    --search.embedding-similarity-threshold=0.5 \
+    --query="ProjectManager"
+```
+
+**Using Environment Variables:**
+
+This is particularly useful when running the MCP server.
+
+```bash
+# Set environment variables
+export KNOW_PROJECT_NAME="my-org/know"
+export KNOW_REPO_NAME="know"
+export KNOW_REPO_PATH="."
+export KNOW_EMBEDDING_ENABLED=true
+export KNOW_EMBEDDING_MODEL_NAME="BAAI/bge-code-v1"
+
+# Run a tool (no need to pass settings as flags)
+uv run python tools/searchcli.py --query="ProjectManager"
+```
+
+## Embeddings
 To enable semantic search, pick a sentence-transformer model and start tools with `--embedding.enable true`. Provide model to use via `--embedding.model-name`, such as `--embedding.model-name BAAI/bge-code-v1`.
 
 It is highly recommended that embeddings are cached and persisted across runs to save on computing costs.
@@ -115,8 +161,8 @@ from know.tools.repomap   import RepoMapTool
 from know.data import NodeSearchQuery
 
 # 1. bootstrap and scan project
-settings = ProjectSettings(project_path=".")
-project  = init_project(settings)      # first run performs a full scan
+settings = ProjectSettings(project_name="my project", repo_name="know", repo_path=".")
+project  = init_project(settings)
 
 # 2. run a symbol search
 req  = NodeSearchTool.tool_input(symbol_name="refresh", limit=10)
