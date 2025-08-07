@@ -1,11 +1,11 @@
-# VectorOps – *Know*
+# VectorOps - *Know*
 
 VectorOps *Know* is an extensible code-intelligence helper library. It scans your repository, builds a language-aware graph of files / packages / symbols and exposes high-level tooling for search, summarisation, ranking and graph analysis.
 All functionality is available from the command line, through a clean Python API, or via a lightweight **MCP** (Machine-Comprehension Provider) micro-service for chat/LLM workflows.
 
 ## Key Features
 
- * Multi-language parsing (Python, TypeScript, Go, …)
+ * Multi-language parsing (Python, Go, JavaScript, TypeScript, ...)
  * Local (in-memory) or in-memory or on-disk DuckDB metadata store
  * Optional sentence-transformer embeddings for semantic search
  * Rich tool catalogue automatically exported as OpenAI JSON schemas
@@ -38,25 +38,25 @@ It is highly recommended that embeddings are cached and persisted across runs to
 
 | Tool name (API)          | Python class                                    | CLI helper                 | Purpose |
 |--------------------------|-------------------------------------------------|----------------------------|---------|
-| `vectorops_list_files`   | `know.tools.filelist.ListFilesTool`             | – *(used via API/MCP)*     | Return files whose paths match glob patterns |
+| `vectorops_list_files`   | `know.tools.filelist.ListFilesTool`             | - *(used via API/MCP)*     | Return files whose paths match glob patterns |
 | `vectorops_summarize_files` | `know.tools.filesummary.SummarizeFilesTool` | `tools/filesummarycli.py`  | Create import & symbol summaries for files |
 | `vectorops_search`       | `know.tools.nodesearch.NodeSearchTool`          | `tools/searchcli.py`       | Hybrid (text + vector) symbol search |
 | `vectorops_repomap`      | `know.tools.repomap.RepoMapTool`                | `tools/repomapcli.py`      | Rank files with Random-Walk-with-Restart on the code graph |
 
-All tools inherit `BaseTool`.  When the MCP server is started, each tool becomes an HTTP endpoint and is also advertised through an OpenAI‐compatible schema at `/openai.json`.
+All tools inherit `BaseTool`.  When the MCP server is started, each tool becomes an HTTP endpoint and is also advertised through an OpenAI-compatible schema at `/openai.json`.
 
 ---
 
 ## Quick CLI Examples
 
 ```bash
-# 1 – Search for a class or function
+# 1 - Search for a class or function
 uv run python tools/searchcli.py --project-path .
 
-# 2 – Summarise a file
+# 2 - Summarise a file
 uv run python tools/filesummarycli.py --project-path . know/project.py -m summary_full
 
-# 3 – Generate a repo relevance map
+# 3 - Generate a repo relevance map
 uv run python tools/repomapcli.py --project-path .
 ```
 
@@ -143,9 +143,9 @@ project.destroy()                      # graceful shutdown
 
 ## Extending Know
 
-1. **Parsers** – implement `AbstractCodeParser` and register via `CodeParserRegistry`.  
-2. **Tools**   – subclass `BaseTool`; registration is automatic.  
-3. **Components** – derive from `ProjectComponent` and register with `Project.register_component`.
+1. **Parsers** - implement `AbstractCodeParser` and register via `CodeParserRegistry`.  
+2. **Tools**   - subclass `BaseTool`; registration is automatic.  
+3. **Components** - derive from `ProjectComponent` and register with `Project.register_component`.
 
 ---
 
