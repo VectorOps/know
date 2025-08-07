@@ -64,15 +64,40 @@ uv run python tools/repomapcli.py --project-path .
 
 ## MCP Server
 
-Spin up the FastMCP server and expose every tool via HTTP:
-
+To run the MCP server, you first need to install the optional `mcp` dependencies:
 ```bash
-KNOW_PROJECT_PATH=. uv run fastmcp run tools/mcpserver.py
+uv sync --extra mcp
 ```
+
+The server is configured via an `mcp.json` file in the project root, or via environment variables (with a `KNOW_` prefix). Environment variables take precedence over the JSON file. Here is an example `mcp.json`:
+
+```json
+{
+    "project_name": "test",
+    "repo_name": "know",
+    "repo_path": "."
+}
+```
+
+**Development Server**
+
+Spin up a development server with hot-reloading:
+```bash
+uv run fastmcp dev tools/mcpserver.py:mcp
+```
+The app will be available at `http://localhost:8000`.
+
+**Production Server**
+
+To run the streaming-capable production server:
+```bash
+uv run python tools/mcpserver.py
+```
+This will start the server on `http://localhost:8000` by default. You can change host and port via settings (e.g., `KNOW_MCP_HOST`, `KNOW_MCP_PORT` or in `mcp.json`).
 
 Example request:
 ```bash
-curl -X POST http://localhost:8080/vectorops/vectorops_search \
+curl -X POST http://localhost:8000/vectorops/vectorops_search \
      -H "Content-Type: application/json" \
      -d '{"query":"init_project","limit":5}'
 ```
