@@ -1,7 +1,10 @@
 # VectorOps - *Know*
 
 VectorOps *Know* is an extensible code-intelligence helper library. It scans your repository, builds a language-aware graph of files / packages / symbols and exposes high-level tooling for search, summarisation, ranking and graph analysis.
-All functionality is available from the command line, through a clean Python API, or via a lightweight **MCP** (Machine-Comprehension Provider) micro-service for chat/LLM workflows.
+All functionality is available from the command line, through a clean Python API, or via a lightweight **MCP** (Model Communication Protocol) service for chat/LLM workflows.
+
+## Why?
+It is not feasible to pluck all files of a large project to an LLM context and call it a day. Know will try to help LLM to find relevant files, methods, functions, documentation snippets to be able to the task at hand.
 
 ## Key Features
 
