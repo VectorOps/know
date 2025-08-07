@@ -5,7 +5,7 @@
 ** [X] Auto-refresh on tool call, but not more often than every X minutes
 ** [X] Auto-refresh associated repos or primary repo
 * [ ] Create project-parsing progress callbacks or iterator-based methods
-* [ ] Repomap should ignore non-default repos in the project
+* [X] Repomap should ignore non-default repos in the project
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Optimize chunker to tokenize and then de-tokenize to generate result, as an optimization?
@@ -13,7 +13,7 @@
 * [X] Extend Node to have subtype str type (used for block types, etc)
 * [ ] Storage backends
 ** [ ] PostgreSQL backend
-** [ ] Add sqlite backend
+** [ ] Add Sqlite backend
 ** [X] Extract common SQL functionality into helper
 * [ ] Generic helper to find references using tree sitter query in a generic way
 * [ ] Add query timeouts to DuckDB to detect lockups
@@ -61,11 +61,11 @@
 *** [X] Do not warn on empty_statement
 *** [X] Add support for ternary_expression
 *** [X] Add support for call_expression
+** HTML
 ** [ ] C
 ** [ ] C#
 ** [ ] Java
-** [ ] PHP
-* [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash
+* [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash (share embeddings with a team)
 * [ ] Documentation generator
 * [ ] CI/CD pipeline
 * [ ] Do not refresh DuckDB index if project did not change

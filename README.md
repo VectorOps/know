@@ -19,7 +19,7 @@ The project is in active development and an official PyPI release is planned ver
 
 Disclaimer: This was not tested on Windows, but Windows support is coming.
 
-For now, clone the repo and use `uv` to play with the tools.
+For now, clone the repo and use `uv` to play with the tools:
 
 ```bash
 git clone https://github.com/vectorops/know.git
@@ -38,6 +38,8 @@ There are three main settings you'll almost always need to provide:
 *   `--project-name`: A name for your project, which represents a collection of multiple source code repositories. This field is required.
 *   `--repo-name`: The name of the repository you are currently working with. This field is required.
 *   `--repo-path`: The local filesystem path to the root of the repository. This is required when first adding a repository to a project.
+
+Conceptually, multiple repositories can be part of a project. Search tool will look for things in all repositories, but boost local results. Repomap only keep track of current repository.
 
 ### Examples
 
@@ -95,13 +97,13 @@ All tools inherit `BaseTool`.  When the MCP server is started, each tool becomes
 
 ```bash
 # 1 - Search for a class or function
-uv run python tools/searchcli.py --project-name "my-org/know" --repo-name "know" --repo-path . --query "ProjectManager"
+uv run python tools/searchcli.py --project-name "prj" --repo-name "know" --repo-path .
 
 # 2 - Summarise a file
-uv run python tools/filesummarycli.py --project-name "my-org/know" --repo-name "know" --repo-path . --file-paths know/project.py --summary-mode summary_full
+uv run python tools/filesummarycli.py --project-name "prj" --repo-name "know" --repo-path . --file-paths know/project.py --summary-mode summary_full
 
 # 3 - Generate a repo relevance map
-uv run python tools/repomapcli.py --project-name "my-org/know" --repo-name "know" --repo-path . --prompt "database connection pooling"
+uv run python tools/repomapcli.py --project-name "prj" --repo-name "know" --repo-path .
 ```
 
 ---
@@ -113,7 +115,7 @@ To run the MCP server, you first need to install the optional `mcp` dependencies
 uv sync --extra mcp
 ```
 
-The server is configured via an `mcp.json` file in the project root, or via environment variables (with a `KNOW_` prefix). Environment variables take precedence over the JSON file. Here is an example `mcp.json`:
+The server is configured via an `mcp.json` file in the project root, or via environment variables (with a `KNOW_` prefix). Here is an example `mcp.json`:
 
 ```json
 {
@@ -145,7 +147,8 @@ curl -X POST http://localhost:8000/vectorops/vectorops_search \
      -H "Content-Type: application/json" \
      -d '{"query":"init_project","limit":5}'
 ```
-If you started the server with `--mcp-auth-token`, include `Authorization: Bearer <token>`.
+
+By default the server is unprotected, refer to [FastMCP documentation](https://gofastmcp.com/servers/auth/authentication#environment-configuration) to find out how to enable authentication.
 
 ---
 
@@ -159,7 +162,7 @@ from know.tools.repomap   import RepoMapTool
 from know.data import NodeSearchQuery
 
 # 1. bootstrap and scan project
-settings = ProjectSettings(project_name="my project", repo_name="know", repo_path=".")
+settings = ProjectSettings(project_name="prj", repo_name="know", repo_path=".")
 project  = init_project(settings)
 
 # 2. run a symbol search
@@ -169,7 +172,7 @@ for h in hits:
     print(h.name, h.kind, h.file_path)
 
 # 3. create a repo map seeded via prompt
-map_req = RepoMapTool.tool_input(prompt="database connection pooling", limit=15)
+map_req = RepoMapTool.tool_input(prompt="duckdb.py search", limit=15)
 for item in RepoMapTool().execute(project, map_req):
     print(f"{item.score:0.4f}", item.file_path)
 
@@ -180,7 +183,7 @@ symbols = project.data_repository.node.search(
 )
 print("Found", len(symbols), "symbols named Project")
 
-project.destroy()                      # graceful shutdown
+project.destroy()
 ```
 
 ---
