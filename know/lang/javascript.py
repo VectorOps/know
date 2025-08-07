@@ -160,7 +160,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                      type=node.type,
                      path=self.rel_path,
                      line=node.start_point[0] + 1,
-                     text=node.text.decode("utf-8"))
+                     text=node.text.decode("utf-8") if node.text else "")
 
         return [self._create_literal_symbol(node, parent)]
 
@@ -455,7 +455,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
                     path=self.rel_path,
                     node_type=ch.type,
                     line=ch.start_point[0] + 1,
-                    text=ch.text.decode("utf-8"),
+                    text=ch.text.decode("utf-8") if ch.text else "",
                 )
         return [
             self._make_node(
@@ -864,12 +864,15 @@ class JavaScriptCodeParser(AbstractCodeParser):
         )
 
     def _handle_function_expression(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
+        if not node.text:
+            return []
+
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node) or None
         fqn = None
         if name:
             fqn=self._make_fqn(name, parent)
-        sig = self._build_signature(node, name, prefix="function")
+        sig = self._build_signature(node, name or "", prefix="function")
         mods: list[Modifier] = []
         if node.text.lstrip().startswith(b"async"):
             mods.append(Modifier.ASYNC)

@@ -556,7 +556,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
         fqn = None
         if name:
             fqn=self._make_fqn(name, parent)
-        sig = self._build_signature(node, name, prefix="function")
+        sig = self._build_signature(node, name or "", prefix="function")
         mods: list[Modifier] = []
         if get_node_text(node).lstrip().startswith("async"):
             mods.append(Modifier.ASYNC)
@@ -1024,7 +1024,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                     path=self.rel_path,
                     node_type=ch.type,
                     line=ch.start_point[0] + 1,
-                    text=ch.text.decode("utf-8"),
+                    text=ch.text.decode("utf-8") if ch.text else "",
                 )
 
         return [

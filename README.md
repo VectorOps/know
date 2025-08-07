@@ -41,6 +41,8 @@ There are three main settings you'll almost always need to provide:
 
 Conceptually, multiple repositories can be part of a project. Search tool will look for things in all repositories, but boost local results. Repomap only keep track of current repository.
 
+By default parsed results won't persist to disk. Pass the `--repository-connection [filename]` to persist database between tool restarts.
+
 ### Examples
 
 **Using CLI flags:**
@@ -76,7 +78,7 @@ uv run python tools/searchcli.py
 ## Embeddings
 To enable semantic search, pick a sentence-transformer model and start tools with `--embedding.enable true`. Provide model to use via `--embedding.model-name`, such as `--embedding.model-name BAAI/bge-code-v1`.
 
-It is highly recommended that embeddings are cached and persisted across runs to save on computing costs.
+It is highly recommended that embeddings are cached and persisted across runs to save on computing costs. To enable caching, pass `--embedding.cache-backend duckdb --embedding.cache-path cache.duckdb`.
 
 ---
 
@@ -158,7 +160,7 @@ By default the server is unprotected, refer to [FastMCP documentation](https://g
 from know import init_project
 from know.settings ProjectSettings
 from know.tools.nodesearch import NodeSearchTool
-from know.tools.repomap   import RepoMapTool
+from know.tools.repomap import RepoMapTool
 from know.data import NodeSearchQuery
 
 # 1. bootstrap and scan project
@@ -178,9 +180,7 @@ for item in RepoMapTool().execute(project, map_req):
 
 # 4. low-level access to repositories
 repo_id = project.default_repo.id
-symbols = project.data_repository.node.search(
-    query=NodeSearchQuery(repo_ids=[repo_id], symbol_name="Project")
-)
+symbols = project.data_repository.node.search(NodeSearchQuery(repo_ids=[repo_id], symbol_name="Project"))
 print("Found", len(symbols), "symbols named Project")
 
 project.destroy()

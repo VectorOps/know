@@ -2,6 +2,7 @@ from know.stores.duckdb import DuckDBDataRepository
 from know.settings import ProjectSettings
 from know.project import ProjectManager
 from know.embeddings import EmbeddingWorker
+from know.data import AbstractDataRepository
 from know import scanner
 
 

@@ -467,6 +467,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             q = q.with_(rank_code_scores, "rank_code_scores").with_(rank_code, "rank_code")
 
         if has_fts:
+            assert query.doc_needle
             doc_needle = code_tokenizer(query.doc_needle)
             rank_fts_scores = (
                 Query.
@@ -692,7 +693,8 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._conn.start()
         self._settings = settings
 
-        # build repositories (some need cross-references)
+        # build repositories (solmel need cross-references)
+        # s
         self._project_repo = DuckDBProjectRepo(self._conn)
         self._prj_repo_repo = DuckDBProjectRepoRepo(self._conn)
         self._file_repo = DuckDBFileRepo(self._conn)
