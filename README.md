@@ -57,9 +57,7 @@ All CLI tools accept settings as command-line arguments.
 uv run python tools/searchcli.py \
     --project-name="my-org/know" \
     --repo-name="know" \
-    --repo-path="." \
-    --search.embedding-similarity-threshold=0.5 \
-    --query="ProjectManager"
+    --repo-path="."
 ```
 
 **Using Environment Variables:**
