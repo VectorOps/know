@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import re
 from typing import Optional, List, Tuple
 from tree_sitter import Parser, Language
 import tree_sitter_java as tsjava
@@ -42,6 +43,65 @@ class JavaCodeParser(AbstractCodeParser):
         self.source_bytes: bytes = b""
         self.package: ParsedPackage | None = None
         self.parsed_file: ParsedFile | None = None
+        self.source_roots: List[str] = []
+
+    def parse(self, cache: ProjectCache) -> ParsedFile:
+        """
+        Populate source roots before calling parent parser.
+        """
+        self.source_roots = self._load_java_source_roots(cache)
+        return super().parse(cache)
+
+    def _load_java_source_roots(self, cache: ProjectCache) -> List[str]:
+        """
+        Find all unique Java source roots in the repository by inspecting
+        the package declaration of each .java file. Results are cached
+        project-wide for performance.
+        """
+        cache_key = f"java.project.sourceroots::{self.repo.id}"
+        source_roots = cache.get(cache_key)
+        if source_roots is not None:
+            return source_roots
+
+        found_roots = set()
+        if not self.repo.root_path:
+            return []
+
+        for root, _, files in os.walk(self.repo.root_path):
+            for file in files:
+                if not file.endswith(".java"):
+                    continue
+
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        # Read only enough to find a package declaration
+                        content = f.read(4096)
+                        match = re.search(r"^\s*package\s+([\w\.]+)\s*;", content, re.MULTILINE)
+                        if not match:
+                            continue
+
+                        package_name = match.group(1)
+                        package_path = package_name.replace('.', os.sep)
+                        rel_file_path = os.path.relpath(file_path, self.repo.root_path)
+                        dir_path = os.path.dirname(rel_file_path)
+
+                        if dir_path.endswith(package_path):
+                            # Example:
+                            #   dir_path     = src/main/java/com/foo/bar
+                            #   package_path = com/foo/bar
+                            #   -> root      = src/main/java
+                            root_len = len(dir_path) - len(package_path)
+                            source_root = dir_path[:root_len].strip(os.sep)
+                            found_roots.add(source_root)
+
+                except (OSError, UnicodeDecodeError):
+                    continue
+
+        # Sort for deterministic behavior
+        sorted_roots = sorted(list(found_roots))
+        cache.set(cache_key, sorted_roots)
+        return sorted_roots
 
     def _rel_to_virtual_path(self, rel_path: str) -> str:
         """
@@ -225,20 +285,47 @@ class JavaCodeParser(AbstractCodeParser):
             )
             return [self._make_node(node, kind=NodeKind.LITERAL)]
 
-        import_path = get_node_text(path_node)
+        import_path_str = get_node_text(path_node)
         is_wildcard = any(c.type == 'asterisk' for c in node.children)
 
-        if is_wildcard:
-            import_path += ".*"
+        full_import_path = import_path_str + ".*" if is_wildcard else import_path_str
+
+        # --- Local import resolution ---
+        physical_path: Optional[str] = None
+        external = True
+
+        # For "com.foo.Bar" -> "com.foo"; for "com.foo" (from "com.foo.*") -> "com.foo"
+        package_import_path = import_path_str
+        if not is_wildcard and '.' in import_path_str:
+            package_import_path = import_path_str.rpartition('.')[0]
+
+        if package_import_path:
+            package_as_dir = package_import_path.replace('.', os.sep)
+
+            # Check against inferred source roots
+            for src_root in self.source_roots:
+                potential_pkg_dir = os.path.join(self.repo.root_path, src_root, package_as_dir)
+                if os.path.isdir(potential_pkg_dir):
+                    physical_path = os.path.join(src_root, package_as_dir).replace(os.sep, "/")
+                    external = False
+                    break
+
+            # Fallback: check from repo root (for projects with no src/ dir)
+            if external:
+                potential_pkg_dir = os.path.join(self.repo.root_path, package_as_dir)
+                if os.path.isdir(potential_pkg_dir):
+                    physical_path = package_as_dir.replace(os.sep, "/")
+                    external = False
 
         self.parsed_file.imports.append(
             ParsedImportEdge(
-                virtual_path=import_path,
-                external=True,  # Assuming all imports are external for now
+                physical_path=physical_path,
+                virtual_path=full_import_path,
+                external=external,
                 raw=get_node_text(node),
             )
         )
-        return [self._make_node(node, kind=NodeKind.IMPORT, name=import_path)]
+        return [self._make_node(node, kind=NodeKind.IMPORT, name=full_import_path)]
 
     def _handle_class_declaration(self, node) -> List[ParsedNode]:
         name_node = node.child_by_field_name("name")
