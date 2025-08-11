@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+from devtools import pprint
 
 from know.settings import ProjectSettings
 from know import init_project
@@ -59,7 +60,9 @@ def test_java_parser_on_sample_file():
     assert class_node.name == "MyClass"
     assert class_node.kind == NodeKind.CLASS
     assert class_node.visibility == Visibility.PUBLIC
+    assert class_node.docstring.strip().startswith("/**")
     assert "This is a Javadoc for MyClass." in class_node.docstring
+    assert class_node.docstring.strip().endswith("*/")
 
     # Children of MyClass
     child_symbols = {sym.name: sym for sym in class_node.children if sym.name}
@@ -81,7 +84,9 @@ def test_java_parser_on_sample_file():
     constructor = child_symbols["MyClass"]
     assert constructor.kind == NodeKind.METHOD
     assert constructor.visibility == Visibility.PUBLIC
+    assert constructor.docstring.strip().startswith("/**")
     assert "Javadoc for constructor." in constructor.docstring
+    assert constructor.docstring.strip().endswith("*/")
     assert constructor.signature is not None
     assert constructor.signature.return_type is None
     assert constructor.signature.raw == "MyClass(int initialCount)"
@@ -93,7 +98,9 @@ def test_java_parser_on_sample_file():
     greet_method = child_symbols["greet"]
     assert greet_method.kind == NodeKind.METHOD
     assert greet_method.visibility == Visibility.PUBLIC
+    assert greet_method.docstring.strip().startswith("/**")
     assert "A simple method." in greet_method.docstring
+    assert greet_method.docstring.strip().endswith("*/")
     assert greet_method.signature is not None
     assert greet_method.signature.return_type == "String"
     assert greet_method.signature.raw == "String greet(String name)"

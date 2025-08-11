@@ -117,8 +117,7 @@ class JavaCodeParser(AbstractCodeParser):
         # Check for Javadoc style comments /** ... */
         comment_text = get_node_text(prev)
         if comment_text.startswith("/**"):
-            lines = comment_text[3:-2].strip().split('\n')
-            return '\n'.join(line.strip().lstrip('*').strip() for line in lines)
+            return comment_text
         return None
 
     def _parse_parameters(self, params_node) -> List[NodeParameter]:
@@ -342,10 +341,8 @@ class JavaLanguageHelper(AbstractLanguageHelper):
         lines = []
 
         if include_docs and sym.docstring:
-            lines.append(f"{IND}/**")
             for ln in sym.docstring.splitlines():
-                lines.append(f"{IND} * {ln}")
-            lines.append(f"{IND} */")
+                lines.append(f"{IND}{ln}")
 
         header = ""
         visibility = sym.visibility.value if sym.visibility else ""
