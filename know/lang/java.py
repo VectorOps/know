@@ -170,7 +170,18 @@ class JavaCodeParser(AbstractCodeParser):
             return []
         
         if node_type in ("comment", "block_comment", "line_comment"):
-            return [self._make_node(node, kind=NodeKind.COMMENT)]
+            body_text = textwrap.dedent(get_node_text(node))
+            
+            start_col = node.start_point[1]
+            if start_col > 0:
+                lines = self.source_bytes.decode("utf-8", "replace").splitlines()
+                if node.start_point[0] < len(lines):
+                    line = lines[node.start_point[0]]
+                    leading_ws = line[:start_col]
+                    if leading_ws.isspace():
+                        body_text = leading_ws + body_text
+            
+            return [self._make_node(node, kind=NodeKind.COMMENT, body=body_text.rstrip())]
         elif node_type == "package_declaration":
             return [self._make_node(node, kind=NodeKind.MODULE)]
         elif node_type == "import_declaration":
@@ -222,47 +233,28 @@ class JavaCodeParser(AbstractCodeParser):
         prev = node.prev_sibling
         if prev is None or prev.type not in ('comment', 'block_comment'):
             return None
-
+        
         # There should not be more than one blank line between the doc
         # comment and the documented node.
         if node.start_point[0] - prev.end_point[0] > 2:
             return None
 
-        comment_text = get_node_text(prev)
         # Check for Javadoc style comments /** ... */
-        if not comment_text.strip().startswith("/**"):
-            return None
+        comment_text = get_node_text(prev)
+        if comment_text.startswith("/**"):
+            comment_text = textwrap.dedent(comment_text)
 
-        lines = comment_text.splitlines()
-        if not lines:
-            return ""
+            start_col = prev.start_point[1]
+            if start_col > 0:
+                lines = self.source_bytes.decode("utf-8", "replace").splitlines()
+                if prev.start_point[0] < len(lines):
+                    line = lines[prev.start_point[0]]
+                    leading_ws = line[:start_col]
+                    if leading_ws.isspace():
+                        comment_text = leading_ws + comment_text
 
-        # From the first line, remove "/**"
-        first_line = lines[0]
-        start_idx = first_line.find("/**")
-        if start_idx != -1:
-            lines[0] = first_line[:start_idx] + " " * 3 + first_line[start_idx+3:]
-
-        # From the last line, remove "*/"
-        last_line = lines[-1]
-        end_idx = last_line.rfind("*/")
-        if end_idx != -1:
-            lines[-1] = last_line[:end_idx]
-
-        # Remove leading "*" from each line, preserving indentation relative to the star
-        processed_lines = []
-        for line in lines:
-            lstripped = line.lstrip()
-            if lstripped.startswith("*"):
-                indent = len(line) - len(lstripped)
-                content = lstripped[1:]
-                if content.startswith(" "):
-                    content = content[1:]
-                processed_lines.append(" " * indent + content)
-            else:
-                processed_lines.append(line)
-        
-        return textwrap.dedent("\n".join(processed_lines)).strip()
+            return comment_text.rstrip()
+        return None
 
     def _parse_parameters(self, params_node) -> List[NodeParameter]:
         """Parses a `formal_parameters` node into a list of NodeParameters."""
@@ -754,36 +746,12 @@ class JavaLanguageHelper(AbstractLanguageHelper):
         header = ""
         visibility = sym.visibility.value if sym.visibility else ""
         
-        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE):
+        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE, NodeKind.ENUM):
             kind_str = sym.kind.value
             header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
             for child in sym.children:
-                summary = self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs)
-                if summary:
-                    lines.append(summary)
-            lines.append(f"{IND}}}")
-        elif sym.kind == NodeKind.ENUM:
-            kind_str = sym.kind.value
-            header = f"{visibility} {kind_str} {sym.name} {{"
-            lines.append(f"{IND}{header}")
-
-            constants = [child for child in sym.children if child.kind == NodeKind.CONSTANT]
-            other_members = [child for child in sym.children if child.kind != NodeKind.CONSTANT]
-
-            if constants:
-                constants_line = ", ".join([c.body for c in constants])
-                # only add semicolon if there are other members that are not just comments
-                has_non_comment_members = any(m.kind != NodeKind.COMMENT for m in other_members)
-                if has_non_comment_members:
-                    constants_line += ";"
-                lines.append(f"{IND}{' ' * 4}{constants_line}")
-            
-            for member in other_members:
-                summary = self.get_symbol_summary(member, indent + 4, include_comments=include_comments, include_docs=include_docs)
-                if summary:
-                    lines.append(summary)
-
+                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.METHOD:
             sig = sym.signature.raw if sym.signature else f"{sym.name}()"
