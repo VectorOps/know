@@ -1,11 +1,20 @@
 import os
 from pathlib import Path
 import re
-import textwrap
 from typing import Optional, List, Tuple
 from tree_sitter import Parser, Language
 import tree_sitter_java as tsjava
-from know.parsers import AbstractCodeParser, AbstractLanguageHelper, ParsedFile, ParsedPackage, ParsedNode, ParsedImportEdge, ParsedNodeRef, get_node_text
+from know.parsers import (
+    AbstractCodeParser,
+    AbstractLanguageHelper,
+    ParsedFile,
+    ParsedPackage,
+    ParsedNode,
+    ParsedImportEdge,
+    ParsedNodeRef,
+    get_node_text,
+    dedent_comment,
+)
 from know.models import (
     ProgrammingLanguage,
     NodeKind,
@@ -170,7 +179,7 @@ class JavaCodeParser(AbstractCodeParser):
             return []
         
         if node_type in ("comment", "block_comment", "line_comment"):
-            body_text = textwrap.dedent(get_node_text(node))
+            body_text = dedent_comment(get_node_text(node))
             
             start_col = node.start_point[1]
             if start_col > 0:
@@ -242,7 +251,7 @@ class JavaCodeParser(AbstractCodeParser):
         # Check for Javadoc style comments /** ... */
         comment_text = get_node_text(prev)
         if comment_text.startswith("/**"):
-            comment_text = textwrap.dedent(comment_text)
+            comment_text = dedent_comment(comment_text)
 
             start_col = prev.start_point[1]
             if start_col > 0:

@@ -380,6 +380,34 @@ class CodeParserRegistry:
 
 
 # Helpers
+def dedent_comment(text: str) -> str:
+    """
+    Dedents a comment string by calculating the minimum indentation
+    from all non-empty lines and removing it.
+    """
+    lines = text.splitlines()
+    if not lines:
+        return ""
+
+    # Find minimum indentation of non-empty lines
+    min_indent = float('inf')
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped:
+            indent = len(line) - len(stripped)
+            min_indent = min(min_indent, indent)
+
+    if min_indent == float('inf'):
+        return "\n".join(lines)  # all lines are empty or whitespace
+
+    # Remove indentation and reconstruct
+    dedented_lines = []
+    for line in lines:
+        dedented_lines.append(line[min_indent:])
+
+    return "\n".join(dedented_lines)
+
+
 def get_node_text(node) -> str:
     """
     Get text of the tree sitter node
