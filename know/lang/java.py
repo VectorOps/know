@@ -39,13 +39,13 @@ _JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
       name: (identifier) @callee) @call
 
     (object_creation_expression
-      type: (type_identifier) @ctor) @new
+      type: [(type_identifier) (scoped_identifier)] @ctor) @new
 
     (superclass
-      (type_identifier) @type.ref)
+      [(type_identifier) (scoped_identifier)] @type.ref)
 
     (type_list
-      (type_identifier) @type.ref)
+      [(type_identifier) (scoped_identifier)] @type.ref)
 """)
 
 _parser: Optional[Parser] = None
@@ -237,46 +237,24 @@ class JavaCodeParser(AbstractCodeParser):
 
     def _collect_symbol_refs(self, root_node: any) -> List[ParsedNodeRef]:
         refs: list[ParsedNodeRef] = []
-        for _, match_captures in _JAVA_REF_QUERY.matches(root_node):
-            node_target: Optional[ts.Node] = None
-            ref_type: Optional[NodeRefType] = None
-            raw_node: Optional[ts.Node] = None
 
-            captures = {name: node for name, node in match_captures.items()}
-
-            if 'call' in captures:
-                ref_type = NodeRefType.CALL
-                raw_node = captures['call']
-                if 'callee' in captures:
-                    node_target = captures['callee']
-            elif 'new' in captures:
-                ref_type = NodeRefType.TYPE
-                raw_node = captures['new']
-                if 'ctor' in captures:
-                    node_target = captures['ctor']
-            elif 'type.ref' in captures:
-                ref_type = NodeRefType.TYPE
-                node_target = captures['type.ref']
-                raw_node = node_target
-
-            if node_target is None or ref_type is None:
-                continue
-
-            full_name = get_node_text(node_target)
+        def create_ref(raw_node: ts.Node, target_node: ts.Node, ref_type: NodeRefType):
+            full_name = get_node_text(target_node)
             if not full_name:
-                continue
+                return
 
             simple_name = full_name.split(".")[-1]
-
-            raw = ""
-            if raw_node:
-                raw = self.source_bytes[raw_node.start_byte:raw_node.end_byte].decode("utf8")
+            raw = self.source_bytes[raw_node.start_byte:raw_node.end_byte].decode("utf8")
             
             to_pkg_path: str | None = None
             assert self.parsed_file is not None
 
             for imp in self.parsed_file.imports:
                 if imp.virtual_path.endswith("." + full_name):
+                    to_pkg_path = imp.virtual_path.rpartition('.')[0]
+                    break
+                elif imp.virtual_path == full_name:
+                    # Handles direct imports like `import java.io.IOException;`
                     to_pkg_path = imp.virtual_path.rpartition('.')[0]
                     break
                 elif imp.virtual_path.endswith(".*"):
@@ -297,6 +275,22 @@ class JavaCodeParser(AbstractCodeParser):
                     to_package_virtual_path=to_pkg_path,
                 )
             )
+
+        for _, match_map in _JAVA_REF_QUERY.matches(root_node):
+            if 'call' in match_map and 'callee' in match_map:
+                # 'call' and 'callee' can be lists of nodes, iterate through them
+                for raw_node, target_node in zip(match_map['call'], match_map['callee']):
+                    create_ref(raw_node, target_node, NodeRefType.CALL)
+
+            elif 'new' in match_map and 'ctor' in match_map:
+                # 'new' and 'ctor' can be lists of nodes, iterate through them
+                for raw_node, target_node in zip(match_map['new'], match_map['ctor']):
+                    create_ref(raw_node, target_node, NodeRefType.TYPE)
+            
+            elif 'type.ref' in match_map:
+                # 'type.ref' is already the target node, and can be a list
+                for target_node in match_map['type.ref']:
+                    create_ref(target_node, target_node, NodeRefType.TYPE)
 
         return refs
 
