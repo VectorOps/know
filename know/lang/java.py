@@ -138,7 +138,7 @@ class JavaCodeParser(AbstractCodeParser):
             self._make_node(
                 node,
                 kind=NodeKind.BLOCK,
-                subtype=BlockSubType.BRACE,
+                subtype=self.BlockSubType.BRACE,
                 visibility=Visibility.PUBLIC,
                 children=children,
             )
@@ -152,7 +152,7 @@ class JavaCodeParser(AbstractCodeParser):
             self._make_node(
                 node,
                 kind=NodeKind.BLOCK,
-                subtype=BlockSubType.PARENTHESIS,
+                subtype=self.BlockSubType.PARENTHESIS,
                 visibility=Visibility.PUBLIC,
                 children=children,
             )
