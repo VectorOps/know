@@ -2,6 +2,7 @@ import os
 from typing import Optional, List, Dict, Any, Type, Tuple
 from abc import ABC, abstractmethod
 import inspect
+import textwrap
 from pydantic import BaseModel, Field
 from know.models import (
     ProgrammingLanguage,
@@ -283,7 +284,7 @@ class AbstractCodeParser(ABC):
         derived directly from *node*.  Callers may override any value via the
         keyword arguments.
         """
-        body = body if body is not None else get_node_text(node).strip()
+        body = body if body is not None else textwrap.dedent(get_node_text(node)).strip()
         return ParsedNode(
             name=name,
             fqn=fqn,

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import re
+import textwrap
 from typing import Optional, List, Tuple
 from tree_sitter import Parser, Language
 import tree_sitter_java as tsjava
@@ -221,17 +222,47 @@ class JavaCodeParser(AbstractCodeParser):
         prev = node.prev_sibling
         if prev is None or prev.type not in ('comment', 'block_comment'):
             return None
-        
+
         # There should not be more than one blank line between the doc
         # comment and the documented node.
         if node.start_point[0] - prev.end_point[0] > 2:
             return None
 
-        # Check for Javadoc style comments /** ... */
         comment_text = get_node_text(prev)
-        if comment_text.startswith("/**"):
-            return comment_text
-        return None
+        # Check for Javadoc style comments /** ... */
+        if not comment_text.strip().startswith("/**"):
+            return None
+
+        lines = comment_text.splitlines()
+        if not lines:
+            return ""
+
+        # From the first line, remove "/**"
+        first_line = lines[0]
+        start_idx = first_line.find("/**")
+        if start_idx != -1:
+            lines[0] = first_line[:start_idx] + " " * 3 + first_line[start_idx+3:]
+
+        # From the last line, remove "*/"
+        last_line = lines[-1]
+        end_idx = last_line.rfind("*/")
+        if end_idx != -1:
+            lines[-1] = last_line[:end_idx]
+
+        # Remove leading "*" from each line, preserving indentation relative to the star
+        processed_lines = []
+        for line in lines:
+            lstripped = line.lstrip()
+            if lstripped.startswith("*"):
+                indent = len(line) - len(lstripped)
+                content = lstripped[1:]
+                if content.startswith(" "):
+                    content = content[1:]
+                processed_lines.append(" " * indent + content)
+            else:
+                processed_lines.append(line)
+        
+        return textwrap.dedent("\n".join(processed_lines)).strip()
 
     def _parse_parameters(self, params_node) -> List[NodeParameter]:
         """Parses a `formal_parameters` node into a list of NodeParameters."""
