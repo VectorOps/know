@@ -8,7 +8,7 @@ It is not feasible to pluck all files of a large project to an LLM context and c
 
 ## Key Features
 
- * Multi-language parsing (Python, Go, JavaScript, TypeScript, ...)
+ * Multi-language parsing (Python, Go, JavaScript, TypeScript, Java, ...)
  * Local in-memory or on-disk DuckDB metadata store
  * Optional sentence-transformer embeddings for semantic search
  * Rich tool catalogue automatically exported as OpenAI JSON schemas
