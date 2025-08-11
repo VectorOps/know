@@ -122,3 +122,124 @@ def test_java_parser_on_sample_file():
 
     # Symbol refs are not implemented yet for Java
     assert len(parsed_file.symbol_refs) == 0
+
+
+def test_java_parser_on_interface_file():
+    """
+    Parse a sample Java file containing an interface and ensure it's
+    extracted correctly.
+    """
+    # --- setup from static sample files ---
+    samples_dir = Path(__file__).parent / "samples"
+    my_interface_rel_path = "src/main/java/com/example/MyInterface_test.java"
+
+    # Create the dummy interface file
+    interface_path = samples_dir / my_interface_rel_path
+    interface_path.parent.mkdir(parents=True, exist_ok=True)
+    interface_content = """
+package com.example;
+
+import java.util.List;
+import java.io.IOException;
+
+/**
+ * This is a Javadoc for MyInterface.
+ */
+public interface MyInterface {
+    String A_CONSTANT = "some_value";
+
+    /**
+     * An abstract method in the interface.
+     * @param data The data to process.
+     * @return A list of strings.
+     */
+    List<String> process(String data) throws IOException;
+
+    default void log(String message) {
+        // A default method
+    }
+}
+"""
+    interface_path.write_text(interface_content)
+
+    project = _make_dummy_project(samples_dir)
+    cache = ProjectCache()
+
+    parser = JavaCodeParser(project, project.default_repo, my_interface_rel_path)
+    parsed_file = parser.parse(cache)
+
+    # Clean up the dummy file
+    interface_path.unlink()
+    try:
+        # also remove parent dir if empty
+        interface_path.parent.rmdir()
+    except OSError:
+        pass  # not empty, that's fine
+
+    # Basic assertions
+    assert parsed_file.path == my_interface_rel_path
+    assert parsed_file.language == ProgrammingLanguage.JAVA
+
+    # Package
+    assert parsed_file.package is not None
+    assert parsed_file.package.virtual_path == "com.example"
+
+    # MyInterface.java contains two imports
+    assert len(parsed_file.imports) == 2
+    imports = {imp.virtual_path: imp for imp in parsed_file.imports}
+    assert "java.util.List" in imports
+    assert "java.io.IOException" in imports
+
+    # Top-level symbols: package, 2 imports, javadoc, interface decl = 5
+    symbols = parsed_file.symbols
+    assert len(symbols) == 5
+    interface_node = next((s for s in symbols if s.kind == NodeKind.INTERFACE), None)
+    assert interface_node is not None
+
+    assert interface_node.name == "MyInterface"
+    assert interface_node.kind == NodeKind.INTERFACE
+    assert interface_node.visibility == Visibility.PUBLIC
+    assert interface_node.docstring is not None
+    assert "This is a Javadoc for MyInterface." in interface_node.docstring
+
+    # Children of MyInterface
+    assert len(interface_node.children) == 4  # field, comment, and 2 methods
+    child_symbols = {sym.name: sym for sym in interface_node.children if sym.name}
+    assert len(child_symbols) == 3  # A_CONSTANT, process, log
+
+    # Field: A_CONSTANT
+    constant_field = child_symbols["A_CONSTANT"]
+    assert constant_field.kind == NodeKind.PROPERTY
+    assert constant_field.visibility == Visibility.PACKAGE
+    assert not constant_field.modifiers
+
+    # Method: process
+    process_method = child_symbols["process"]
+    assert process_method.kind == NodeKind.METHOD
+    assert process_method.visibility == Visibility.PACKAGE
+    assert not process_method.modifiers
+    assert process_method.docstring is not None
+    assert "An abstract method in the interface." in process_method.docstring
+    assert process_method.signature is not None
+    assert process_method.signature.return_type == "List<String>"
+    assert process_method.signature.raw == "List<String> process(String data) throws IOException"
+    assert process_method.signature.throws == ["IOException"]
+    assert len(process_method.signature.parameters) == 1
+    param = process_method.signature.parameters[0]
+    assert param.name == "data"
+    assert param.type_annotation == "String"
+
+    # Default Method: log
+    log_method = child_symbols["log"]
+    assert log_method.kind == NodeKind.METHOD
+    assert log_method.visibility == Visibility.PACKAGE
+    assert not log_method.modifiers  # 'default' is not a supported Modifier
+    assert log_method.docstring is None
+    assert log_method.signature is not None
+    assert log_method.signature.return_type == "void"
+    assert log_method.signature.raw == "void log(String message)"
+    assert log_method.signature.throws is None
+    assert len(log_method.signature.parameters) == 1
+    param = log_method.signature.parameters[0]
+    assert param.name == "message"
+    assert param.type_annotation == "String"
