@@ -133,13 +133,19 @@ class JavaCodeParser(AbstractCodeParser):
     def _handle_import_declaration(self, node) -> List[ParsedNode]:
         assert self.parsed_file is not None
 
-        name_nodes = node.children_by_field_name("name")
-        if not name_nodes:
+        path_node = next((c for c in node.children if c.type in ["scoped_identifier", "identifier"]), None)
+
+        if not path_node:
+            logger.warning(
+                "Could not find path in Java import statement",
+                path=self.rel_path,
+                line=node.start_point[0] + 1,
+                raw=get_node_text(node),
+            )
             return [self._make_node(node, kind=NodeKind.LITERAL)]
 
-        is_wildcard = node.child_by_field_name("asterisk") is not None
-        import_path_parts = [get_node_text(n) for n in name_nodes]
-        import_path = ".".join(import_path_parts)
+        import_path = get_node_text(path_node)
+        is_wildcard = any(c.type == 'asterisk' for c in node.children)
 
         if is_wildcard:
             import_path += ".*"
