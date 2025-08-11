@@ -73,7 +73,7 @@ class JavaCodeParser(AbstractCodeParser):
         assert self.parsed_file is not None
         node_type = node.type
         
-        if node_type == "comment":
+        if node_type in ("comment", "block_comment", "line_comment"):
             return [self._make_node(node, kind=NodeKind.COMMENT)]
         elif node_type == "package_declaration":
             return [self._make_node(node, kind=NodeKind.MODULE)]
@@ -106,7 +106,7 @@ class JavaCodeParser(AbstractCodeParser):
 
     def _extract_preceding_comment(self, node) -> Optional[str]:
         prev = node.prev_sibling
-        if prev is None or prev.type != 'comment':
+        if prev is None or prev.type not in ('comment', 'block_comment'):
             return None
         
         # There should not be more than one blank line between the doc
