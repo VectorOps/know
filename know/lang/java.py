@@ -198,7 +198,7 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_constant_declaration(node, parent)
         elif node_type == "enum_constant":
             return self._handle_enum_constant(node, parent)
-        elif node_type == "static_initializer":
+        elif node_type in ("static_initializer", "expression_statement", "try_statement"):
             return [self._make_node(node, kind=NodeKind.LITERAL)]
         else:
             logger.warning(
@@ -505,12 +505,6 @@ class JavaCodeParser(AbstractCodeParser):
             signature=signature,
         )
 
-        body_node = node.child_by_field_name("body")
-        if body_node:
-            members = self._process_node(body_node, parent=constructor_node)
-            if members:
-                constructor_node.children.extend(members)
-
         return [constructor_node]
 
     def _handle_method_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
@@ -542,11 +536,6 @@ class JavaCodeParser(AbstractCodeParser):
             docstring=self._extract_preceding_comment(node),
             signature=signature,
         )
-
-        if body_node:
-            members = self._process_node(body_node, parent=method_node)
-            if members:
-                method_node.children.extend(members)
 
         return [method_node]
 

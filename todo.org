@@ -2,7 +2,16 @@
 * [ ] Create project-parsing progress callbacks or iterator-based methods
 * [ ] Write data model documentation
 - signature.raw should include whole signature including name
-* [X] Initial refresh should reset refresh timer, so next tool run would not do another refresh
+* [ ] Batch upsert storage support to reduce update latency
+** [ ] Stores
+*** [ ] Batch insert
+*** [ ] Batch update
+*** [ ] Batch delete
+** [ ] Batch upsert imports
+** [ ] Batch delete imports
+** [ ] Batch insert symbols. Delay embedding scheduling after symbol insert
+** [ ] Batch insert symbolrefs
+* [ ] Initial refresh should reset refresh timer, so next tool run would not do another refresh
 * [X] Add project-level paths
 ** [X] If enabled, all virtual paths are prefixed with repo name
 ** [X] Provide virtual to physical path resolution helper. If not, goes through .virtual-path/ directory
@@ -77,6 +86,9 @@
 *** [ ] Fix docstring identation for methods
 *** [ ] Generics
 *** [ ] Fix enum parsing - methods/constructor should be correctly handled, currently included as literals
+*** [ ] Add support for module_declaration
+module io.netty.testsuite_jpms.main {\n    requires io.netty.common;\n    requires io.netty.buffer;\n    requires io.netty.codec;\n    requires io.netty.codec.http;\n    requires io.netty.handler;\n    requires transitive io.netty.pkitesting;\n    requires io.netty.transport;\n    requires io.netty.transport.classes.kqueue;\n    requires io.netty.transport.classes.epoll;\n    requires io.netty.transport.classes.io_uring;\n    requires io.netty.tcnative.classes.openssl;\n    requires io.netty.codec.http3;\n    requires io.netty.codec.classes.quic;\n    requires org.bouncycastle.provider;\n}
+*** [ ] Add SymbolRef extraction: calls, generic type usage, inheritance
 *** [X] Interfaces
 *** [X] Annotations
 * [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash (share embeddings with a team)

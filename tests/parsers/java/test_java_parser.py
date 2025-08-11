@@ -101,12 +101,6 @@ def test_java_parser_on_sample_file():
     assert constructor.signature.parameters[0].name == "initialCount"
     assert constructor.signature.parameters[0].type_annotation == "int"
     assert constructor.signature.throws is None
-    assert len(constructor.children) == 1
-    constructor_block = constructor.children[0]
-    assert constructor_block.kind == NodeKind.BLOCK
-    assert constructor_block.subtype == "brace"
-    assert len(constructor_block.children) == 2
-    assert all(c.kind == NodeKind.LITERAL for c in constructor_block.children)
 
     # Method: greet
     greet_method = child_symbols["greet"]
@@ -120,12 +114,6 @@ def test_java_parser_on_sample_file():
     assert len(greet_method.signature.parameters) == 1
     assert greet_method.signature.parameters[0].name == "name"
     assert greet_method.signature.parameters[0].type_annotation == "String"
-    assert len(greet_method.children) == 1
-    greet_block = greet_method.children[0]
-    assert greet_block.kind == NodeKind.BLOCK
-    assert greet_block.subtype == "brace"
-    assert len(greet_block.children) == 1
-    assert greet_block.children[0].kind == NodeKind.LITERAL
 
     # Method: doSomething
     do_something_method = child_symbols["doSomething"]
@@ -135,12 +123,6 @@ def test_java_parser_on_sample_file():
     assert do_something_method.signature.decorators == ["@Override"]
     assert do_something_method.signature.return_type == "void"
     assert do_something_method.signature.raw == "@Override public void doSomething()"
-    assert len(do_something_method.children) == 1
-    do_something_block = do_something_method.children[0]
-    assert do_something_block.kind == NodeKind.BLOCK
-    assert do_something_block.subtype == "brace"
-    assert len(do_something_block.children) == 1
-    assert do_something_block.children[0].kind == NodeKind.COMMENT
 
     # Assertions for MyInterface
     interface_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.INTERFACE and s.name == "MyInterface"), None)
