@@ -169,6 +169,7 @@ class ProjectManager:
         scan_result = scanner.scan_repo(self, repo)
 
         self.refresh_components(scan_result)
+        self._last_refresh_time = datetime.datetime.now(datetime.timezone.utc)
 
     def refresh_all(self) -> None:
         """Refresh all repositories in the project."""
@@ -180,11 +181,11 @@ class ProjectManager:
         if not self.settings.refresh.enabled:
             return
 
-        now = datetime.datetime.now(datetime.timezone.utc)
         cooldown_minutes = self.settings.refresh.cooldown_minutes
 
         if cooldown_minutes > 0:
             if self._last_refresh_time:
+                now = datetime.datetime.now(datetime.timezone.utc)
                 delta = now - self._last_refresh_time
                 if delta < datetime.timedelta(minutes=cooldown_minutes):
                     logger.debug(
@@ -200,8 +201,6 @@ class ProjectManager:
         else:
             logger.info("Auto-refreshing primary repository...")
             self.refresh()  # Just refreshes default repo
-
-        self._last_refresh_time = now
 
     def refresh_components(self, scan_result: ScanResult):
         for name, comp in self._components.items():
