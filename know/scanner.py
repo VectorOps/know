@@ -239,7 +239,7 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
                     fm = File(
                         id=generate_id(),
                         repo_id=repo.id,
-                        package_id=None,  # no package context
+                        package_id=None,
                         path=res.rel_path,
                         file_hash=res.file_hash,
                         last_updated=res.mod_time,

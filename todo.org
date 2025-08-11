@@ -1,6 +1,12 @@
 #+title: Todo
-* [ ] Initial refresh should reset refresh timer, so next tool run would not do another refresh
 * [ ] Create project-parsing progress callbacks or iterator-based methods
+* [ ] Write data model documentation
+- signature.raw should include whole signature including name
+* [X] Initial refresh should reset refresh timer, so next tool run would not do another refresh
+* [X] Add project-level paths
+** [X] If enabled, all virtual paths are prefixed with repo name
+** [X] Provide virtual to physical path resolution helper. If not, goes through .virtual-path/ directory
+* [X] File summary should return full file if file is not summarized
 * [ ] Add a way to fully disable a tool so it won't register any components
 * [X] Configurable RRF weights
 * [X] Auto-refresh
@@ -64,10 +70,14 @@
 *** [X] Do not warn on empty_statement
 *** [X] Add support for ternary_expression
 *** [X] Add support for call_expression
-** HTML
+** [ ] HTML
 ** [ ] C
 ** [ ] C#
 ** [ ] Java
+*** [ ] Fix docstring identation for methods
+*** [ ] Generics
+*** [X] Interfaces
+*** [X] Annotations
 * [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash (share embeddings with a team)
 * [ ] Documentation generator
 * [ ] CI/CD pipeline

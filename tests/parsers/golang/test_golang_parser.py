@@ -40,8 +40,6 @@ def test_golang_parser_on_sample_file():
     parser      = GolangCodeParser(project, project.default_repo, "main.go")
     parsed_file = parser.parse(cache)
 
-    #pprint(parsed_file)
-
     # Basic assertions
     assert parsed_file.path == "main.go"
     assert parsed_file.language == ProgrammingLanguage.GO

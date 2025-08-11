@@ -55,7 +55,7 @@ def build_file_summary(
 
     # If there is no language or package, we can't generate a summary,
     # so we return the full file content instead.
-    if (summary_mode is SummaryMode.Full) or (fm.language is None and fm.package_id is None):
+    if (summary_mode is SummaryMode.Full) or (fm.language is None):
         abs_path = os.path.join(repo.root_path, rel_path)
         try:
             with open(abs_path, "r", encoding="utf-8") as f:
