@@ -162,9 +162,9 @@ class SearchSettings(BaseModel):
 class PathsSettings(BaseModel):
     """Settings for path management."""
 
-    use_repo_name_in_virtual_path: bool = Field(
+    enable_project_paths: bool = Field(
         default=False,
-        description="If True, all virtual paths will be prefixed with the repository name.",
+        description="If True, use project paths which prefix all virtual paths with the repository name.",
     )
 
 
