@@ -32,6 +32,11 @@ def _get_parser():
     return _parser
 
 
+class BlockSubType(str, Enum):
+    BRACE = "brace"
+    PARENTHESIS = "parenthesis"
+
+
 class JavaCodeParser(AbstractCodeParser):
     language = ProgrammingLanguage.JAVA
     extensions = (".java",)
@@ -126,10 +131,6 @@ class JavaCodeParser(AbstractCodeParser):
             imports=[],
         )
 
-    class BlockSubType(str, Enum):
-        BRACE = "brace"
-        PARENTHESIS = "parenthesis"
-
     def _handle_block(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
         children = []
         for child_node in node.named_children:
@@ -137,8 +138,7 @@ class JavaCodeParser(AbstractCodeParser):
         return [
             self._make_node(
                 node,
-                kind=NodeKind.BLOCK,
-                subtype=self.BlockSubType.BRACE,
+                kind=NodeKind.BLOCK, subtype=BlockSubType.BRACE,
                 visibility=Visibility.PUBLIC,
                 children=children,
             )
@@ -151,8 +151,7 @@ class JavaCodeParser(AbstractCodeParser):
         return [
             self._make_node(
                 node,
-                kind=NodeKind.BLOCK,
-                subtype=self.BlockSubType.PARENTHESIS,
+                kind=NodeKind.BLOCK, subtype=BlockSubType.PARENTHESIS,
                 visibility=Visibility.PUBLIC,
                 children=children,
             )
@@ -505,6 +504,13 @@ class JavaCodeParser(AbstractCodeParser):
             docstring=self._extract_preceding_comment(node),
             signature=signature,
         )
+
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            members = self._process_node(body_node, parent=constructor_node)
+            if members:
+                constructor_node.children.extend(members)
+
         return [constructor_node]
 
     def _handle_method_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
@@ -533,6 +539,13 @@ class JavaCodeParser(AbstractCodeParser):
             docstring=self._extract_preceding_comment(node),
             signature=signature,
         )
+
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            members = self._process_node(body_node, parent=method_node)
+            if members:
+                method_node.children.extend(members)
+
         return [method_node]
 
     def _handle_field_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
