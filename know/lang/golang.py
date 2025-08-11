@@ -509,24 +509,21 @@ class GolangCodeParser(AbstractCodeParser):
             else None
         )
 
-        # ---- generics -------------------------------------------------
+        # ---- generics & signature assembly ----------------------------
         type_param_node = next(
             (c for c in node.children if c.type == "type_parameter_list"),
             None,
         )
-        if type_param_node is not None:
-            if signature_obj is None:
-                signature_obj = NodeSignature(raw="")
-            
-            type_param_raw = get_node_text(type_param_node).strip()
+        if signature_obj is not None:
+            type_param_raw = ""
+            if type_param_node is not None:
+                type_param_raw = get_node_text(type_param_node).strip()
+                signature_obj.type_parameters = type_param_raw
 
-            signature_obj.type_parameters = type_param_raw
-
-            # Pre-pend the generic type-parameter list to the raw signature
+            parts = ["func", f"{name}{type_param_raw}"]
             if signature_obj.raw:
-                signature_obj.raw = f"{type_param_raw} {signature_obj.raw}".strip()
-            else:
-                signature_obj.raw = type_param_raw
+                parts.append(signature_obj.raw)
+            signature_obj.raw = " ".join(parts)
 
         fqn = self._make_fqn(name)
         visibility = infer_visibility(name)
@@ -597,22 +594,19 @@ class GolangCodeParser(AbstractCodeParser):
             else NodeSignature(raw="")
         )
 
-        # prepend "(recv) <Name>" to the raw signature and remember the receiver
-        signature_obj.raw = f"{receiver_raw} {name}{(' ' + signature_obj.raw) if signature_obj.raw else ''}".strip()
         signature_obj.receiver = receiver_raw
 
         # ---- generics -------------------------------------------------
+        type_param_raw = ""
         if type_param_node is not None:
             type_param_raw = get_node_text(type_param_node).strip()
-
             signature_obj.type_parameters = type_param_raw
 
-            old_raw  = signature_obj.raw
-            prefix   = f"{receiver_raw} {name}"
-            tail     = old_raw[len(prefix):].lstrip()
-            signature_obj.raw = (
-                f"{prefix}{type_param_raw}{(' ' + tail) if tail else ''}"
-            ).strip()
+        # ---- assemble full signature --------------------------------------
+        parts = ["func", receiver_raw, f"{name}{type_param_raw}"]
+        if signature_obj.raw:
+            parts.append(signature_obj.raw)
+        signature_obj.raw = " ".join(parts)
 
         # --- misc. metadata ------------------------------------------------
         docstring = self._extract_preceding_comment(node)
