@@ -72,6 +72,9 @@ class JavaCodeParser(AbstractCodeParser):
     ) -> List[ParsedNode]:
         assert self.parsed_file is not None
         node_type = node.type
+
+        if node_type in ("{", "}"):
+            return []
         
         if node_type in ("comment", "block_comment", "line_comment"):
             return [self._make_node(node, kind=NodeKind.COMMENT)]
