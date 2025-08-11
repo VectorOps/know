@@ -150,6 +150,8 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_method_declaration(node, parent)
         elif node_type == "field_declaration":
             return self._handle_field_declaration(node, parent)
+        elif node_type == "static_initializer":
+            return [self._make_node(node, kind=NodeKind.LITERAL)]
         else:
             logger.warning(
                 "Unknown Java node – stored as literal symbol",
