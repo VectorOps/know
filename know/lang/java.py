@@ -179,12 +179,7 @@ class JavaCodeParser(AbstractCodeParser):
             return []
         
         if node_type in ("comment", "block_comment", "line_comment"):
-            body_text = dedent_comment(get_node_text(node))
-
-            leading_ws = self._get_leading_whitespace(node)
-            body_text = leading_ws + body_text
-
-            return [self._make_node(node, kind=NodeKind.COMMENT, body=body_text.rstrip())]
+            return [self._make_node(node, kind=NodeKind.COMMENT)]
         elif node_type == "package_declaration":
             return [self._make_node(node, kind=NodeKind.MODULE)]
         elif node_type == "import_declaration":
@@ -213,7 +208,7 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_constant_declaration(node, parent)
         elif node_type == "enum_constant":
             return self._handle_enum_constant(node, parent)
-        elif node_type in ("static_initializer", "expression_statement", "try_statement"):
+        elif node_type in ("static_initializer", "expression_statement", "try_statement", "module_declaration"):
             return [self._make_node(node, kind=NodeKind.LITERAL)]
         else:
             logger.warning(
@@ -273,10 +268,10 @@ class JavaCodeParser(AbstractCodeParser):
         # Check for Javadoc style comments /** ... */
         comment_text = get_node_text(prev)
         if comment_text.startswith("/**"):
-            comment_text = dedent_comment(comment_text)
-
             leading_ws = self._get_leading_whitespace(prev)
             comment_text = leading_ws + comment_text
+
+            comment_text = dedent_comment(comment_text)
 
             return comment_text.rstrip()
         return None
@@ -520,7 +515,6 @@ class JavaCodeParser(AbstractCodeParser):
         if body_node:
             for child in body_node.children:
                 if child.type == "enum_body_declarations":
-                    print(child)
                     for member_child in child.children:
                         members = self._process_node(member_child, parent=enum_node)
                         if members:
@@ -765,8 +759,6 @@ class JavaLanguageHelper(AbstractLanguageHelper):
         # include_comments is also true, because in that case it will be
         # handled as a separate comment node.
         if include_docs and not include_comments and sym.docstring:
-            print('-------')
-            print(repr(sym.docstring))
             for ln in sym.docstring.splitlines():
                 lines.append(f"{IND}{ln}")
 
