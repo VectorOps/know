@@ -171,6 +171,7 @@ class NodeSignature(BaseModel):
     receiver: Optional[str] = None
     lexical_type: Optional[str] = None
     type_parameters: Optional[str] = None   # raw "[T any, U comparable]" etc.
+    throws: Optional[List[str]] = None
 
 
 class Node(BaseModel):

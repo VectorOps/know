@@ -152,7 +152,14 @@ class JavaCodeParser(AbstractCodeParser):
 
         type_params_text = get_node_text(type_params_node) if type_params_node else None
         params_text = get_node_text(params_node) if params_node else "()"
-        throws_text = get_node_text(throws_node) if throws_node else ""
+        
+        throws_list = []
+        throws_text = ""
+        if throws_node:
+            throws_text = get_node_text(throws_node)
+            for child in throws_node.children:
+                if child.is_named:
+                    throws_list.append(get_node_text(child))
 
         raw_parts = []
         if type_params_text:
@@ -175,6 +182,7 @@ class JavaCodeParser(AbstractCodeParser):
             parameters=parameters,
             return_type=return_type,
             type_parameters=type_params_text,
+            throws=throws_list or None,
         )
 
     def _parse_modifiers(self, node) -> Tuple[Visibility, List[Modifier]]:
@@ -355,9 +363,8 @@ class JavaLanguageHelper(AbstractLanguageHelper):
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.METHOD:
             modifiers = " ".join([m.value for m in sym.modifiers])
-            sig = sym.signature.raw if sym.signature else "()"
-            return_type = sym.signature.return_type if sym.signature and sym.signature.return_type else "void"
-            header = f"{visibility} {modifiers} {return_type} {sym.name}{sig} {{...}}".replace("  ", " ").strip()
+            sig = sym.signature.raw if sym.signature else f"{sym.name}()"
+            header = f"{visibility} {modifiers} {sig} {{...}}".replace("  ", " ").strip()
             lines.append(f"{IND}{header}")
         elif sym.kind == NodeKind.PROPERTY:
             modifiers = " ".join([m.value for m in sym.modifiers])
