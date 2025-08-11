@@ -133,7 +133,7 @@ class JavaCodeParser(AbstractCodeParser):
         assert self.parsed_file is not None
         node_type = node.type
 
-        if node_type in ("{", "}", ";"):
+        if node_type in ("{", "}", ";", ","):
             return []
         
         if node_type in ("comment", "block_comment", "line_comment"):
@@ -146,12 +146,16 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_class_declaration(node)
         elif node_type == "interface_declaration":
             return self._handle_interface_declaration(node)
+        elif node_type == "annotation_type_declaration":
+            return self._handle_annotation_type_declaration(node)
         elif node_type == "enum_declaration":
             return self._handle_enum_declaration(node)
         elif node_type == "constructor_declaration":
             return self._handle_constructor_declaration(node, parent)
         elif node_type == "method_declaration":
             return self._handle_method_declaration(node, parent)
+        elif node_type == "annotation_type_element_declaration":
+            return self._handle_annotation_type_element_declaration(node, parent)
         elif node_type == "field_declaration":
             return self._handle_field_declaration(node, parent)
         elif node_type == "constant_declaration":
@@ -220,6 +224,7 @@ class JavaCodeParser(AbstractCodeParser):
         visibility: Visibility,
         modifiers: List[Modifier],
         return_type: Optional[str] = None,
+        annotations: Optional[List[str]] = None,
     ) -> NodeSignature:
         type_params_node = node.child_by_field_name("type_parameters")
         params_node = node.child_by_field_name("parameters")
@@ -237,6 +242,8 @@ class JavaCodeParser(AbstractCodeParser):
                     throws_list.append(get_node_text(child))
 
         raw_parts = []
+        if annotations:
+            raw_parts.extend(annotations)
         if visibility != Visibility.PACKAGE:
             raw_parts.append(visibility.value)
 
@@ -263,23 +270,27 @@ class JavaCodeParser(AbstractCodeParser):
             raw=raw_signature,
             parameters=parameters,
             return_type=return_type,
+            decorators=annotations or [],
             type_parameters=type_params_text,
             throws=throws_list or None,
         )
 
-    def _parse_modifiers(self, node) -> Tuple[Visibility, List[Modifier]]:
+    def _parse_modifiers(self, node) -> Tuple[Visibility, List[Modifier], List[str]]:
         visibility = Visibility.PACKAGE # Default for Java
         modifiers = []
+        annotations = []
         modifiers_node = next((c for c in node.children if c.type == "modifiers"), None)
         if not modifiers_node:
-            return visibility, modifiers
+            return visibility, modifiers, annotations
             
         for child in modifiers_node.children:
             if child.type in ["public", "private", "protected"]:
                 visibility = Visibility(child.type)
             elif child.type in ["static", "abstract", "final", "async"]:
                 modifiers.append(Modifier(child.type))
-        return visibility, modifiers
+            elif child.type.endswith("annotation"):
+                annotations.append(get_node_text(child))
+        return visibility, modifiers, annotations
 
     def _handle_import_declaration(self, node) -> List[ParsedNode]:
         assert self.parsed_file is not None
@@ -344,7 +355,9 @@ class JavaCodeParser(AbstractCodeParser):
         
         name = get_node_text(name_node)
         fqn = self._make_fqn(name)
-        visibility, modifiers = self._parse_modifiers(node)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
+
+        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
 
         class_node = self._make_node(
             node,
@@ -353,7 +366,8 @@ class JavaCodeParser(AbstractCodeParser):
             fqn=fqn,
             visibility=visibility,
             modifiers=modifiers,
-            docstring=self._extract_preceding_comment(node)
+            docstring=self._extract_preceding_comment(node),
+            signature=signature,
         )
 
         body_node = node.child_by_field_name("body")
@@ -372,7 +386,9 @@ class JavaCodeParser(AbstractCodeParser):
         
         name = get_node_text(name_node)
         fqn = self._make_fqn(name)
-        visibility, modifiers = self._parse_modifiers(node)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
+
+        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
 
         interface_node = self._make_node(
             node,
@@ -381,7 +397,8 @@ class JavaCodeParser(AbstractCodeParser):
             fqn=fqn,
             visibility=visibility,
             modifiers=modifiers,
-            docstring=self._extract_preceding_comment(node)
+            docstring=self._extract_preceding_comment(node),
+            signature=signature,
         )
 
         body_node = node.child_by_field_name("body")
@@ -400,7 +417,9 @@ class JavaCodeParser(AbstractCodeParser):
         
         name = get_node_text(name_node)
         fqn = self._make_fqn(name)
-        visibility, modifiers = self._parse_modifiers(node)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
+
+        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
 
         enum_node = self._make_node(
             node,
@@ -409,7 +428,8 @@ class JavaCodeParser(AbstractCodeParser):
             fqn=fqn,
             visibility=visibility,
             modifiers=modifiers,
-            docstring=self._extract_preceding_comment(node)
+            docstring=self._extract_preceding_comment(node),
+            signature=signature,
         )
 
         body_node = node.child_by_field_name("body")
@@ -434,9 +454,9 @@ class JavaCodeParser(AbstractCodeParser):
 
         name = get_node_text(name_node)
         fqn = self._make_fqn(name, parent)
-        visibility, modifiers = self._parse_modifiers(node)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
 
-        signature = self._parse_signature(node, name=name, visibility=visibility, modifiers=modifiers, return_type=None)
+        signature = self._parse_signature(node, name=name, visibility=visibility, modifiers=modifiers, return_type=None, annotations=annotations)
 
         constructor_node = self._make_node(
             node,
@@ -457,12 +477,14 @@ class JavaCodeParser(AbstractCodeParser):
 
         name = get_node_text(name_node)
         fqn = self._make_fqn(name, parent)
-        visibility, modifiers = self._parse_modifiers(node)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
         
         return_type_node = node.child_by_field_name("type")
         return_type = get_node_text(return_type_node) if return_type_node else None
 
-        signature = self._parse_signature(node, name=name, visibility=visibility, modifiers=modifiers, return_type=return_type)
+        signature = self._parse_signature(
+            node, name=name, visibility=visibility, modifiers=modifiers, return_type=return_type, annotations=annotations
+        )
         
         method_node = self._make_node(
             node,
@@ -477,9 +499,11 @@ class JavaCodeParser(AbstractCodeParser):
         return [method_node]
 
     def _handle_field_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
-        visibility, modifiers = self._parse_modifiers(node)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
         docstring = self._extract_preceding_comment(node)
         
+        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
+
         nodes = []
         for var_declarator in (c for c in node.children if c.type == "variable_declarator"):
             name_node = var_declarator.child_by_field_name("name")
@@ -496,14 +520,17 @@ class JavaCodeParser(AbstractCodeParser):
                 fqn=fqn,
                 visibility=visibility,
                 modifiers=modifiers,
-                docstring=docstring
+                docstring=docstring,
+                signature=signature,
             )
             nodes.append(field_node)
         return nodes
 
     def _handle_constant_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
-        visibility, modifiers = self._parse_modifiers(node)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
         docstring = self._extract_preceding_comment(node)
+
+        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
 
         nodes = []
         for var_declarator in (c for c in node.children if c.type == "variable_declarator"):
@@ -522,6 +549,7 @@ class JavaCodeParser(AbstractCodeParser):
                 visibility=visibility,
                 modifiers=modifiers,
                 docstring=docstring,
+                signature=signature,
             )
             nodes.append(field_node)
         return nodes
@@ -530,6 +558,9 @@ class JavaCodeParser(AbstractCodeParser):
         name_node = next((c for c in node.children if c.type == "identifier"), None)
         if not name_node:
             return []
+
+        annotations = [get_node_text(c) for c in node.children if c.type.endswith("annotation")]
+        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
 
         name = get_node_text(name_node)
         fqn = self._make_fqn(name, parent)
@@ -542,8 +573,82 @@ class JavaCodeParser(AbstractCodeParser):
             visibility=Visibility.PUBLIC,
             modifiers=[],
             docstring=self._extract_preceding_comment(node),
+            signature=signature,
         )
         return [constant_node]
+
+    def _handle_annotation_type_declaration(self, node) -> List[ParsedNode]:
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return []
+        
+        name = get_node_text(name_node)
+        fqn = self._make_fqn(name)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
+        
+        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
+        
+        annotation_node = self._make_node(
+            node,
+            kind=NodeKind.INTERFACE,
+            name=name,
+            fqn=fqn,
+            visibility=visibility,
+            modifiers=modifiers,
+            docstring=self._extract_preceding_comment(node),
+            signature=signature,
+        )
+
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            for child in body_node.children:
+                members = self._process_node(child, parent=annotation_node)
+                if members:
+                    annotation_node.children.extend(members)
+
+        return [annotation_node]
+
+    def _handle_annotation_type_element_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return []
+        
+        name = get_node_text(name_node)
+        fqn = self._make_fqn(name, parent)
+        visibility, modifiers, annotations = self._parse_modifiers(node)
+
+        return_type_node = node.child_by_field_name("type")
+        return_type = get_node_text(return_type_node) if return_type_node else None
+
+        raw_sig_parts = []
+        if annotations:
+            raw_sig_parts.extend(annotations)
+        if visibility != Visibility.PACKAGE:
+            raw_sig_parts.append(visibility.value)
+        for mod in modifiers:
+            raw_sig_parts.append(mod.value)
+        if return_type:
+            raw_sig_parts.append(return_type)
+        raw_sig_parts.append(f"{name}()")
+
+        raw_signature = " ".join(raw_sig_parts)
+        signature = NodeSignature(
+            raw=raw_signature,
+            return_type=return_type,
+            decorators=annotations,
+        )
+
+        method_node = self._make_node(
+            node,
+            kind=NodeKind.METHOD_DEF,
+            name=name,
+            fqn=fqn,
+            visibility=visibility,
+            modifiers=modifiers,
+            docstring=self._extract_preceding_comment(node),
+            signature=signature,
+        )
+        return [method_node]
 
 
 class JavaLanguageHelper(AbstractLanguageHelper):

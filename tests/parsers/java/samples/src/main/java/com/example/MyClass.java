@@ -6,10 +6,19 @@ import java.util.Map;
 import com.example.util.AnotherClass;
 
 /**
+ * A custom annotation.
+ */
+@interface MyAnnotation {
+    String value();
+}
+
+/**
  * This is a Javadoc for MyClass.
  */
-public class MyClass {
+@MyAnnotation("class-level")
+public class MyClass implements MyInterface {
     private static final String GREETING = "Hello";
+    @Deprecated
     protected int count;
     private AnotherClass ac;
 
@@ -28,6 +37,11 @@ public class MyClass {
      */
     public String greet(String name) throws java.io.IOException {
         return GREETING + ", " + name;
+    }
+
+    @Override
+    public void doSomething() {
+        // empty
     }
 }
 

@@ -56,8 +56,8 @@ def test_java_parser_on_sample_file():
     assert "java.io.IOException" in imports
     assert imports["java.io.IOException"].external is True
 
-    # Top-level symbols: package, 4 imports, class javadoc, class decl, iface javadoc, iface decl, enum javadoc, enum decl = 11
-    assert len(parsed_file.symbols) == 11
+    # Top-level symbols: package, 4 imports, custom annotation + javadoc, class + javadoc, iface + javadoc, enum + javadoc = 13
+    assert len(parsed_file.symbols) == 13
 
     # Assertions for MyClass
     class_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.CLASS), None)
@@ -68,10 +68,12 @@ def test_java_parser_on_sample_file():
     assert class_node.docstring.strip().startswith("/**")
     assert "This is a Javadoc for MyClass." in class_node.docstring
     assert class_node.docstring.strip().endswith("*/")
+    assert class_node.signature is not None
+    assert class_node.signature.decorators == ['@MyAnnotation("class-level")']
 
     # Children of MyClass
     child_symbols = {sym.name: sym for sym in class_node.children if sym.name}
-    assert len(child_symbols) == 5  # GREETING, count, ac, MyClass (constructor), greet
+    assert len(child_symbols) == 6  # GREETING, count, ac, MyClass (constructor), greet, doSomething
 
     # Field: GREETING
     greeting_field = child_symbols["GREETING"]
@@ -84,6 +86,8 @@ def test_java_parser_on_sample_file():
     count_field = child_symbols["count"]
     assert count_field.kind == NodeKind.PROPERTY
     assert count_field.visibility == Visibility.PROTECTED
+    assert count_field.signature is not None
+    assert count_field.signature.decorators == ["@Deprecated"]
 
     # Constructor: MyClass
     constructor = child_symbols["MyClass"]
@@ -111,8 +115,17 @@ def test_java_parser_on_sample_file():
     assert greet_method.signature.parameters[0].name == "name"
     assert greet_method.signature.parameters[0].type_annotation == "String"
 
+    # Method: doSomething
+    do_something_method = child_symbols["doSomething"]
+    assert do_something_method.kind == NodeKind.METHOD
+    assert do_something_method.visibility == Visibility.PUBLIC
+    assert do_something_method.signature is not None
+    assert do_something_method.signature.decorators == ["@Override"]
+    assert do_something_method.signature.return_type == "void"
+    assert do_something_method.signature.raw == "@Override public void doSomething()"
+
     # Assertions for MyInterface
-    interface_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.INTERFACE), None)
+    interface_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.INTERFACE and s.name == "MyInterface"), None)
     assert interface_node is not None
     assert interface_node.name == "MyInterface"
     assert interface_node.visibility == Visibility.PACKAGE  # default visibility
@@ -168,6 +181,19 @@ def test_java_parser_on_sample_file():
     assert get_mass_method.visibility == Visibility.PUBLIC
     assert get_mass_method.signature.return_type == "int"
     assert "Javadoc for enum method." in get_mass_method.docstring
+
+    # Assertions for @interface MyAnnotation
+    annotation_node = next((s for s in parsed_file.symbols if s.name == "MyAnnotation"), None)
+    assert annotation_node is not None
+    assert annotation_node.kind == NodeKind.INTERFACE
+    assert "A custom annotation" in annotation_node.docstring
+    assert len(annotation_node.children) == 1
+    
+    value_method = annotation_node.children[0]
+    assert value_method.name == "value"
+    assert value_method.kind == NodeKind.METHOD_DEF
+    assert value_method.signature is not None
+    assert value_method.signature.return_type == "String"
 
     # Symbol refs are not implemented yet for Java
     assert len(parsed_file.symbol_refs) == 0
