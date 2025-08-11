@@ -19,6 +19,7 @@ from know.models import (
 )
 from know.project import ProjectManager, ProjectCache
 from know.logger import logger
+from enum import Enum
 
 
 JAVA_LANGUAGE = Language(tsjava.language())
@@ -125,6 +126,38 @@ class JavaCodeParser(AbstractCodeParser):
             imports=[],
         )
 
+    class BlockSubType(str, Enum):
+        BRACE = "brace"
+        PARENTHESIS = "parenthesis"
+
+    def _handle_block(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
+        children = []
+        for child_node in node.named_children:
+            children.extend(self._process_node(child_node, parent=parent))
+        return [
+            self._make_node(
+                node,
+                kind=NodeKind.BLOCK,
+                subtype=BlockSubType.BRACE,
+                visibility=Visibility.PUBLIC,
+                children=children,
+            )
+        ]
+
+    def _handle_parenthesized_expression(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
+        children = []
+        for child_node in node.named_children:
+            children.extend(self._process_node(child_node, parent=parent))
+        return [
+            self._make_node(
+                node,
+                kind=NodeKind.BLOCK,
+                subtype=BlockSubType.PARENTHESIS,
+                visibility=Visibility.PUBLIC,
+                children=children,
+            )
+        ]
+
     def _process_node(
         self,
         node,
@@ -142,6 +175,10 @@ class JavaCodeParser(AbstractCodeParser):
             return [self._make_node(node, kind=NodeKind.MODULE)]
         elif node_type == "import_declaration":
             return self._handle_import_declaration(node)
+        elif node_type == "block":
+            return self._handle_block(node, parent)
+        elif node_type == "parenthesized_expression":
+            return self._handle_parenthesized_expression(node, parent)
         elif node_type == "class_declaration":
             return self._handle_class_declaration(node)
         elif node_type == "interface_declaration":
