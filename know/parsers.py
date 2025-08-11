@@ -284,7 +284,7 @@ class AbstractCodeParser(ABC):
         derived directly from *node*.  Callers may override any value via the
         keyword arguments.
         """
-        body = body if body is not None else textwrap.dedent(get_node_text(node)).strip()
+        body = body if body is not None else get_node_text(node).strip()
         return ParsedNode(
             name=name,
             fqn=fqn,
@@ -389,15 +389,19 @@ def dedent_comment(text: str) -> str:
     if not lines:
         return ""
 
+    min_indent: Optional[int] = None
+
     # Find minimum indentation of non-empty lines
-    min_indent = float('inf')
     for line in lines:
         stripped = line.lstrip()
         if stripped:
             indent = len(line) - len(stripped)
-            min_indent = min(min_indent, indent)
+            if min_indent is None:
+                min_indent = indent
+            else:
+                min_indent = min(min_indent, indent)
 
-    if min_indent == float('inf'):
+    if min_indent is None:
         return "\n".join(lines)  # all lines are empty or whitespace
 
     # Remove indentation and reconstruct
