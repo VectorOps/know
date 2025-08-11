@@ -472,6 +472,7 @@ class JavaCodeParser(AbstractCodeParser):
         if body_node:
             for child in body_node.children:
                 if child.type == "enum_body_declarations":
+                    print(child)
                     for member_child in child.children:
                         members = self._process_node(member_child, parent=enum_node)
                         if members:
@@ -722,7 +723,7 @@ class JavaLanguageHelper(AbstractLanguageHelper):
         header = ""
         visibility = sym.visibility.value if sym.visibility else ""
         
-        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE):
+        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE, NodeKind.ENUM):
             kind_str = sym.kind.value
             header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
