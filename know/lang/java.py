@@ -132,18 +132,23 @@ class JavaCodeParser(AbstractCodeParser):
 
     def _handle_import_declaration(self, node) -> List[ParsedNode]:
         assert self.parsed_file is not None
-        path_node = next((c for c in node.children if c.type in ["scoped_identifier", "asterisk"]), None)
-        if not path_node:
+
+        name_nodes = node.children_by_field_name("name")
+        if not name_nodes:
             return [self._make_node(node, kind=NodeKind.LITERAL)]
 
-        is_wildcard = path_node.type == "asterisk"
-        import_path = get_node_text(node.child_by_field_name("name")) if not is_wildcard else get_node_text(node.child_by_field_name("package")) + ".*"
-        
+        is_wildcard = node.child_by_field_name("asterisk") is not None
+        import_path_parts = [get_node_text(n) for n in name_nodes]
+        import_path = ".".join(import_path_parts)
+
+        if is_wildcard:
+            import_path += ".*"
+
         self.parsed_file.imports.append(
             ParsedImportEdge(
                 virtual_path=import_path,
-                external=True, # Assuming all imports are external for now
-                raw=get_node_text(node)
+                external=True,  # Assuming all imports are external for now
+                raw=get_node_text(node),
             )
         )
         return [self._make_node(node, kind=NodeKind.IMPORT, name=import_path)]
