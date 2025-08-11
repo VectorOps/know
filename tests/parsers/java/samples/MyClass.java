@@ -22,7 +22,7 @@ public class MyClass {
      * @param name The name to greet.
      * @return A greeting string.
      */
-    public String greet(String name) {
+    public String greet(String name) throws IOException {
         return GREETING + ", " + name;
     }
 }

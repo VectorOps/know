@@ -89,7 +89,7 @@ def test_java_parser_on_sample_file():
     assert constructor.docstring.strip().endswith("*/")
     assert constructor.signature is not None
     assert constructor.signature.return_type is None
-    assert constructor.signature.raw == "MyClass(int initialCount)"
+    assert constructor.signature.raw == "public MyClass(int initialCount)"
     assert len(constructor.signature.parameters) == 1
     assert constructor.signature.parameters[0].name == "initialCount"
     assert constructor.signature.parameters[0].type_annotation == "int"
@@ -104,7 +104,7 @@ def test_java_parser_on_sample_file():
     assert greet_method.docstring.strip().endswith("*/")
     assert greet_method.signature is not None
     assert greet_method.signature.return_type == "String"
-    assert greet_method.signature.raw == "String greet(String name) throws IOException"
+    assert greet_method.signature.raw == "public String greet(String name) throws IOException"
     assert greet_method.signature.throws == ["IOException"]
     assert len(greet_method.signature.parameters) == 1
     assert greet_method.signature.parameters[0].name == "name"

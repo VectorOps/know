@@ -144,6 +144,8 @@ class JavaCodeParser(AbstractCodeParser):
         self,
         node,
         name: str,
+        visibility: Visibility,
+        modifiers: List[Modifier],
         return_type: Optional[str] = None,
     ) -> NodeSignature:
         type_params_node = node.child_by_field_name("type_parameters")
@@ -152,7 +154,7 @@ class JavaCodeParser(AbstractCodeParser):
 
         type_params_text = get_node_text(type_params_node) if type_params_node else None
         params_text = get_node_text(params_node) if params_node else "()"
-        
+
         throws_list = []
         throws_text = ""
         if throws_node:
@@ -162,6 +164,12 @@ class JavaCodeParser(AbstractCodeParser):
                     throws_list.append(get_node_text(child))
 
         raw_parts = []
+        if visibility != Visibility.PACKAGE:
+            raw_parts.append(visibility.value)
+
+        for modifier in modifiers:
+            raw_parts.append(modifier.value)
+
         if type_params_text:
             raw_parts.append(type_params_text)
 
@@ -172,8 +180,9 @@ class JavaCodeParser(AbstractCodeParser):
 
         if throws_text:
             raw_parts.append(throws_text)
-        
-        raw_signature = " ".join(raw_parts).strip()
+
+        raw_signature = " ".join(raw_parts)
+        raw_signature = " ".join(raw_signature.split())
 
         parameters = self._parse_parameters(params_node)
 
@@ -265,7 +274,7 @@ class JavaCodeParser(AbstractCodeParser):
         fqn = self._make_fqn(name, parent)
         visibility, modifiers = self._parse_modifiers(node)
 
-        signature = self._parse_signature(node, name=name, return_type=None)
+        signature = self._parse_signature(node, name=name, visibility=visibility, modifiers=modifiers, return_type=None)
 
         constructor_node = self._make_node(
             node,
@@ -291,7 +300,7 @@ class JavaCodeParser(AbstractCodeParser):
         return_type_node = node.child_by_field_name("type")
         return_type = get_node_text(return_type_node) if return_type_node else None
 
-        signature = self._parse_signature(node, name=name, return_type=return_type)
+        signature = self._parse_signature(node, name=name, visibility=visibility, modifiers=modifiers, return_type=return_type)
         
         method_node = self._make_node(
             node,
