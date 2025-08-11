@@ -121,6 +121,49 @@ class JavaCodeParser(AbstractCodeParser):
             return '\n'.join(line.strip().lstrip('*').strip() for line in lines)
         return None
 
+    def _parse_parameters(self, params_node) -> List[NodeParameter]:
+        """Parses a `formal_parameters` node into a list of NodeParameters."""
+        parameters = []
+        if not params_node:
+            return parameters
+
+        for param_node in params_node.children:
+            if param_node.type in ("formal_parameter", "spread_parameter"):
+                type_node = param_node.child_by_field_name("type")
+                name_node = param_node.child_by_field_name("name")
+
+                param_name = get_node_text(name_node) if name_node else ""
+                param_type = get_node_text(type_node) if type_node else ""
+
+                if param_node.type == "spread_parameter":
+                    param_type += "..."
+
+                parameters.append(NodeParameter(name=param_name, type_annotation=param_type))
+        return parameters
+
+    def _parse_signature(
+        self,
+        node,
+        return_type: Optional[str] = None,
+    ) -> NodeSignature:
+        params_node = node.child_by_field_name("parameters")
+        throws_node = node.child_by_field_name("throws")
+
+        raw_parts = []
+        if params_node:
+            raw_parts.append(get_node_text(params_node))
+
+        if throws_node:
+            raw_parts.append(get_node_text(throws_node))
+
+        parameters = self._parse_parameters(params_node)
+
+        return NodeSignature(
+            raw=" ".join(raw_parts).strip(),
+            parameters=parameters,
+            return_type=return_type,
+        )
+
     def _parse_modifiers(self, node) -> Tuple[Visibility, List[Modifier]]:
         visibility = Visibility.PACKAGE # Default for Java
         modifiers = []
@@ -201,12 +244,7 @@ class JavaCodeParser(AbstractCodeParser):
         fqn = self._make_fqn(name, parent)
         visibility, modifiers = self._parse_modifiers(node)
 
-        params_node = node.child_by_field_name("parameters")
-        signature = NodeSignature(
-            raw=get_node_text(params_node),
-            parameters=[],  # TODO: parse parameters
-            return_type=None,
-        )
+        signature = self._parse_signature(node, return_type=None)
 
         constructor_node = self._make_node(
             node,
@@ -232,12 +270,7 @@ class JavaCodeParser(AbstractCodeParser):
         return_type_node = node.child_by_field_name("type")
         return_type = get_node_text(return_type_node) if return_type_node else None
 
-        params_node = node.child_by_field_name("parameters")
-        signature = NodeSignature(
-            raw=get_node_text(params_node),
-            parameters=[], # TODO: parse parameters
-            return_type=return_type
-        )
+        signature = self._parse_signature(node, return_type=return_type)
         
         method_node = self._make_node(
             node,
