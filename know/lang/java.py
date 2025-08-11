@@ -109,6 +109,11 @@ class JavaCodeParser(AbstractCodeParser):
         if prev is None or prev.type != 'comment':
             return None
         
+        # There should not be more than one blank line between the doc
+        # comment and the documented node.
+        if node.start_point[0] - prev.end_point[0] > 2:
+            return None
+
         # Check for Javadoc style comments /** ... */
         comment_text = get_node_text(prev)
         if comment_text.startswith("/**"):
