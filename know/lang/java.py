@@ -84,9 +84,9 @@ class JavaCodeParser(AbstractCodeParser):
         elif node_type == "constructor_declaration":
             return self._handle_constructor_declaration(node, parent)
         elif node_type == "method_declaration":
-            return self._handle_method_declaration(node)
+            return self._handle_method_declaration(node, parent)
         elif node_type == "field_declaration":
-            return self._handle_field_declaration(node)
+            return self._handle_field_declaration(node, parent)
         else:
             logger.warning(
                 "Unknown Java node – stored as literal symbol",
@@ -302,7 +302,7 @@ class JavaLanguageHelper(AbstractLanguageHelper):
             header = f"{visibility} class {sym.name} {{"
             lines.append(f"{IND}{header}")
             for child in sym.children:
-                lines.append(self.get_symbol_summary(child, indent + 4))
+                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.METHOD:
             modifiers = " ".join([m.value for m in sym.modifiers])
