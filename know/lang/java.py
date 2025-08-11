@@ -144,6 +144,8 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_import_declaration(node)
         elif node_type == "class_declaration":
             return self._handle_class_declaration(node)
+        elif node_type == "interface_declaration":
+            return self._handle_interface_declaration(node)
         elif node_type == "constructor_declaration":
             return self._handle_constructor_declaration(node, parent)
         elif node_type == "method_declaration":
@@ -357,6 +359,34 @@ class JavaCodeParser(AbstractCodeParser):
         
         return [class_node]
 
+    def _handle_interface_declaration(self, node) -> List[ParsedNode]:
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return []
+        
+        name = get_node_text(name_node)
+        fqn = self._make_fqn(name)
+        visibility, modifiers = self._parse_modifiers(node)
+
+        interface_node = self._make_node(
+            node,
+            kind=NodeKind.INTERFACE,
+            name=name,
+            fqn=fqn,
+            visibility=visibility,
+            modifiers=modifiers,
+            docstring=self._extract_preceding_comment(node)
+        )
+
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            for child in body_node.children:
+                members = self._process_node(child, parent=interface_node)
+                if members:
+                    interface_node.children.extend(members)
+        
+        return [interface_node]
+
     def _handle_constructor_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
         name_node = node.child_by_field_name("name")
         if not name_node:
@@ -462,8 +492,9 @@ class JavaLanguageHelper(AbstractLanguageHelper):
         header = ""
         visibility = sym.visibility.value if sym.visibility else ""
         
-        if sym.kind == NodeKind.CLASS:
-            header = f"{visibility} class {sym.name} {{"
+        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE):
+            kind_str = sym.kind.value
+            header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
             for child in sym.children:
                 lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
