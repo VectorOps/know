@@ -1,5 +1,6 @@
 package com.example;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import com.example.util.AnotherClass;
@@ -28,4 +29,16 @@ public class MyClass {
     public String greet(String name) throws java.io.IOException {
         return GREETING + ", " + name;
     }
+}
+
+/**
+ * A test interface.
+ */
+interface MyInterface {
+    int MY_CONSTANT = 42;
+
+    /**
+     * A method in the interface.
+     */
+    void doSomething();
 }

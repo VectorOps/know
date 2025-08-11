@@ -152,6 +152,8 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_method_declaration(node, parent)
         elif node_type == "field_declaration":
             return self._handle_field_declaration(node, parent)
+        elif node_type == "constant_declaration":
+            return self._handle_constant_declaration(node, parent)
         elif node_type == "static_initializer":
             return [self._make_node(node, kind=NodeKind.LITERAL)]
         else:
@@ -457,6 +459,31 @@ class JavaCodeParser(AbstractCodeParser):
                 visibility=visibility,
                 modifiers=modifiers,
                 docstring=docstring
+            )
+            nodes.append(field_node)
+        return nodes
+
+    def _handle_constant_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
+        visibility, modifiers = self._parse_modifiers(node)
+        docstring = self._extract_preceding_comment(node)
+
+        nodes = []
+        for var_declarator in (c for c in node.children if c.type == "variable_declarator"):
+            name_node = var_declarator.child_by_field_name("name")
+            if not name_node:
+                continue
+
+            name = get_node_text(name_node)
+            fqn = self._make_fqn(name, parent)
+
+            field_node = self._make_node(
+                node,
+                kind=NodeKind.CONSTANT,
+                name=name,
+                fqn=fqn,
+                visibility=visibility,
+                modifiers=modifiers,
+                docstring=docstring,
             )
             nodes.append(field_node)
         return nodes

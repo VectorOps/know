@@ -48,15 +48,16 @@ def test_java_parser_on_sample_file():
     assert parsed_file.package.virtual_path == "com.example"
 
     # Imports
-    assert len(parsed_file.imports) == 3
+    assert len(parsed_file.imports) == 4
     imports = {imp.virtual_path: imp for imp in parsed_file.imports}
+    assert "com.example.util.AnotherClass" in imports
     assert "java.util.List" in imports
     assert "java.util.Map" in imports
     assert "java.io.IOException" in imports
     assert imports["java.io.IOException"].external is True
 
-    # Top-level symbols: package, 3 imports, class javadoc, class decl, iface javadoc, iface decl = 8
-    assert len(parsed_file.symbols) == 8
+    # Top-level symbols: package, 3 imports, class javadoc, class decl, iface javadoc, iface decl, interface = 8
+    assert len(parsed_file.symbols) == 9
 
     # Assertions for MyClass
     class_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.CLASS), None)
@@ -70,7 +71,7 @@ def test_java_parser_on_sample_file():
 
     # Children of MyClass
     child_symbols = {sym.name: sym for sym in class_node.children if sym.name}
-    assert len(child_symbols) == 4  # GREETING, count, MyClass (constructor), greet
+    assert len(child_symbols) == 5  # GREETING, count, AnotherClass, MyClass (constructor), greet
 
     # Field: GREETING
     greeting_field = child_symbols["GREETING"]
@@ -104,8 +105,8 @@ def test_java_parser_on_sample_file():
     assert "A simple method." in greet_method.docstring
     assert greet_method.signature is not None
     assert greet_method.signature.return_type == "String"
-    assert greet_method.signature.raw == "public String greet(String name) throws IOException"
-    assert greet_method.signature.throws == ["IOException"]
+    assert greet_method.signature.raw == "public String greet(String name) throws java.io.IOException"
+    assert greet_method.signature.throws == ["java.io.IOException"]
     assert len(greet_method.signature.parameters) == 1
     assert greet_method.signature.parameters[0].name == "name"
     assert greet_method.signature.parameters[0].type_annotation == "String"
@@ -116,7 +117,12 @@ def test_java_parser_on_sample_file():
     assert interface_node.name == "MyInterface"
     assert interface_node.visibility == Visibility.PACKAGE  # default visibility
     assert "A test interface" in interface_node.docstring
-    assert len(interface_node.children) == 2  # docstring + method
+    assert len(interface_node.children) == 3  # constant + docstring + method
+
+    constant_node = next((s for s in interface_node.children if s.kind == NodeKind.CONSTANT), None)
+    assert constant_node is not None
+    assert constant_node.name == "MY_CONSTANT"
+    assert constant_node.visibility == Visibility.PACKAGE
 
     method_node = next((s for s in interface_node.children if s.kind == NodeKind.METHOD), None)
     assert method_node is not None
