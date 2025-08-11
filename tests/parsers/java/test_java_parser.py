@@ -24,61 +24,16 @@ def _make_dummy_project(root_dir: Path):
 
 
 # Tests
-def test_java_parser_on_sample_file(tmp_path):
+def test_java_parser_on_sample_file():
     """
     Parse a sample Java file and ensure that all imports (including local ones),
     classes, fields, and methods are extracted correctly.
     """
-    # Setup a realistic directory structure
-    src_root = tmp_path / "src" / "main" / "java"
-    pkg_dir = src_root / "com" / "example"
-    pkg_dir.mkdir(parents=True)
-
+    # --- setup from static sample files ---
+    samples_dir = Path(__file__).parent / "samples"
     my_class_rel_path = "src/main/java/com/example/MyClass.java"
-    my_class_abs_path = tmp_path / my_class_rel_path
-    my_class_abs_path.write_text("""
-package com.example;
 
-import java.util.List;
-import java.util.Map;
-import com.example.util.AnotherClass;
-
-/**
- * This is a Javadoc for MyClass.
- */
-public class MyClass {
-    private static final String GREETING = "Hello";
-    protected int count;
-    private AnotherClass ac;
-
-    /**
-     * Javadoc for constructor.
-     */
-    public MyClass(int initialCount) {
-        this.count = initialCount;
-        this.ac = new AnotherClass();
-    }
-
-    /**
-     * A simple method.
-     * @param name The name to greet.
-     * @return A greeting string.
-     */
-    public String greet(String name) throws java.io.IOException {
-        return GREETING + ", " + name;
-    }
-}
-""")
-
-    util_dir = pkg_dir / "util"
-    util_dir.mkdir()
-    (util_dir / "AnotherClass.java").write_text("""
-package com.example.util;
-
-public class AnotherClass {}
-""")
-
-    project = _make_dummy_project(tmp_path)
+    project = _make_dummy_project(samples_dir)
     cache = ProjectCache()
 
     parser = JavaCodeParser(project, project.default_repo, my_class_rel_path)
