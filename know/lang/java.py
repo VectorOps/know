@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 from typing import Optional, List, Tuple
 from tree_sitter import Parser, Language
+import tree_sitter as ts
 import tree_sitter_java as tsjava
 from know.parsers import (
     AbstractCodeParser,
@@ -33,6 +34,19 @@ from enum import Enum
 
 
 JAVA_LANGUAGE = Language(tsjava.language())
+_JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
+    (method_invocation
+      name: (identifier) @callee) @call
+
+    (object_creation_expression
+      type: (type_identifier) @ctor) @new
+
+    (superclass
+      (type_identifier) @type.ref)
+
+    (type_list
+      (type_identifier) @type.ref)
+""")
 
 _parser: Optional[Parser] = None
 def _get_parser():
@@ -222,7 +236,69 @@ class JavaCodeParser(AbstractCodeParser):
             return [self._make_node(node, kind=NodeKind.LITERAL)]
 
     def _collect_symbol_refs(self, root_node: any) -> List[ParsedNodeRef]:
-        return [] # TODO: implement symbol reference collection
+        refs: list[ParsedNodeRef] = []
+        for _, match_captures in _JAVA_REF_QUERY.matches(root_node):
+            node_target: Optional[ts.Node] = None
+            ref_type: Optional[NodeRefType] = None
+            raw_node: Optional[ts.Node] = None
+
+            captures = {name: node for name, node in match_captures.items()}
+
+            if 'call' in captures:
+                ref_type = NodeRefType.CALL
+                raw_node = captures['call']
+                if 'callee' in captures:
+                    node_target = captures['callee']
+            elif 'new' in captures:
+                ref_type = NodeRefType.TYPE
+                raw_node = captures['new']
+                if 'ctor' in captures:
+                    node_target = captures['ctor']
+            elif 'type.ref' in captures:
+                ref_type = NodeRefType.TYPE
+                node_target = captures['type.ref']
+                raw_node = node_target
+
+            if node_target is None or ref_type is None:
+                continue
+
+            full_name = get_node_text(node_target)
+            if not full_name:
+                continue
+
+            simple_name = full_name.split(".")[-1]
+
+            raw = ""
+            if raw_node:
+                raw = self.source_bytes[raw_node.start_byte:raw_node.end_byte].decode("utf8")
+            
+            to_pkg_path: str | None = None
+            assert self.parsed_file is not None
+
+            for imp in self.parsed_file.imports:
+                if imp.virtual_path.endswith("." + full_name):
+                    to_pkg_path = imp.virtual_path.rpartition('.')[0]
+                    break
+                elif imp.virtual_path.endswith(".*"):
+                    if not to_pkg_path:
+                        to_pkg_path = imp.virtual_path.rpartition('.')[0]
+            
+            if to_pkg_path is None:
+                if '.' in full_name:
+                    to_pkg_path = full_name.rpartition('.')[0]
+                elif self.package:
+                    to_pkg_path = self.package.virtual_path
+
+            refs.append(
+                ParsedNodeRef(
+                    name=simple_name,
+                    raw=raw,
+                    type=ref_type,
+                    to_package_virtual_path=to_pkg_path,
+                )
+            )
+
+        return refs
 
     def _handle_file(self, root_node: any) -> None:
         pass

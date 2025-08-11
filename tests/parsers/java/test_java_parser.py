@@ -6,7 +6,7 @@ from know.settings import ProjectSettings
 from know import init_project
 from know.project import ProjectCache
 from know.lang.java import JavaCodeParser
-from know.models import ProgrammingLanguage, NodeKind, Visibility, Modifier
+from know.models import ProgrammingLanguage, NodeKind, Visibility, Modifier, NodeRefType
 
 
 # Helpers
@@ -38,6 +38,8 @@ def test_java_parser_on_sample_file():
 
     parser = JavaCodeParser(project, project.default_repo, my_class_rel_path)
     parsed_file = parser.parse(cache)
+
+    #from devtools import pprint; pprint(parsed_file); raise
 
     # Basic assertions
     assert parsed_file.path == my_class_rel_path
@@ -195,5 +197,18 @@ def test_java_parser_on_sample_file():
     assert value_method.signature is not None
     assert value_method.signature.return_type == "String"
 
-    # Symbol refs are not implemented yet for Java
-    assert len(parsed_file.symbol_refs) == 0
+    # Symbol refs
+    assert len(parsed_file.symbol_refs) == 3
+
+    refs_by_name = {r.name: r for r in parsed_file.symbol_refs}
+    assert "MyInterface" in refs_by_name
+    assert refs_by_name["MyInterface"].type == NodeRefType.TYPE
+    assert refs_by_name["MyInterface"].to_package_virtual_path == "com.example"
+
+    assert "AnotherClass" in refs_by_name
+    assert refs_by_name["AnotherClass"].type == NodeRefType.TYPE
+    assert refs_by_name["AnotherClass"].to_package_virtual_path == "com.example.util"
+
+    assert "IOException" in refs_by_name
+    assert refs_by_name["IOException"].type == NodeRefType.TYPE
+    assert refs_by_name["IOException"].to_package_virtual_path == "java.io"
