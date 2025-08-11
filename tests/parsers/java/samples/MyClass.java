@@ -27,3 +27,13 @@ public class MyClass {
         return GREETING + ", " + name;
     }
 }
+
+/**
+ * A test interface.
+ */
+interface MyInterface {
+    /**
+     * A method in the interface.
+     */
+    void doSomething();
+}
