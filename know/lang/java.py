@@ -81,6 +81,8 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_import_declaration(node)
         elif node_type == "class_declaration":
             return self._handle_class_declaration(node)
+        elif node_type == "constructor_declaration":
+            return self._handle_constructor_declaration(node, parent)
         elif node_type == "method_declaration":
             return self._handle_method_declaration(node)
         elif node_type == "field_declaration":
@@ -173,6 +175,34 @@ class JavaCodeParser(AbstractCodeParser):
                     class_node.children.extend(members)
         
         return [class_node]
+
+    def _handle_constructor_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return []
+
+        name = get_node_text(name_node)
+        fqn = self._make_fqn(name, parent)
+        visibility, modifiers = self._parse_modifiers(node)
+
+        params_node = node.child_by_field_name("parameters")
+        signature = NodeSignature(
+            raw=get_node_text(params_node),
+            parameters=[],  # TODO: parse parameters
+            return_type=None,
+        )
+
+        constructor_node = self._make_node(
+            node,
+            kind=NodeKind.METHOD,
+            name=name,
+            fqn=fqn,
+            visibility=visibility,
+            modifiers=modifiers,
+            docstring=self._extract_preceding_comment(node),
+            signature=signature,
+        )
+        return [constructor_node]
 
     def _handle_method_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
         name_node = node.child_by_field_name("name")
