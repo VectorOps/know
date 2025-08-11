@@ -86,6 +86,14 @@ class JavaCodeParser(AbstractCodeParser):
         elif node_type == "field_declaration":
             return self._handle_field_declaration(node)
         else:
+            logger.warning(
+                "Unknown Java node – stored as literal symbol",
+                path=self.parsed_file.path,
+                type=node_type,
+                line=node.start_point[0] + 1,
+                byte_offset=node.start_byte,
+                raw=get_node_text(node),
+            )
             return [self._make_node(node, kind=NodeKind.LITERAL)]
 
     def _collect_symbol_refs(self, root_node: any) -> List[ParsedNodeRef]:
