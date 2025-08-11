@@ -133,7 +133,7 @@ class JavaCodeParser(AbstractCodeParser):
         assert self.parsed_file is not None
         node_type = node.type
 
-        if node_type in ("{", "}"):
+        if node_type in ("{", "}", ";"):
             return []
         
         if node_type in ("comment", "block_comment", "line_comment"):
@@ -146,6 +146,8 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_class_declaration(node)
         elif node_type == "interface_declaration":
             return self._handle_interface_declaration(node)
+        elif node_type == "enum_declaration":
+            return self._handle_enum_declaration(node)
         elif node_type == "constructor_declaration":
             return self._handle_constructor_declaration(node, parent)
         elif node_type == "method_declaration":
@@ -154,6 +156,8 @@ class JavaCodeParser(AbstractCodeParser):
             return self._handle_field_declaration(node, parent)
         elif node_type == "constant_declaration":
             return self._handle_constant_declaration(node, parent)
+        elif node_type == "enum_constant":
+            return self._handle_enum_constant(node, parent)
         elif node_type == "static_initializer":
             return [self._make_node(node, kind=NodeKind.LITERAL)]
         else:
@@ -389,6 +393,34 @@ class JavaCodeParser(AbstractCodeParser):
         
         return [interface_node]
 
+    def _handle_enum_declaration(self, node) -> List[ParsedNode]:
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return []
+        
+        name = get_node_text(name_node)
+        fqn = self._make_fqn(name)
+        visibility, modifiers = self._parse_modifiers(node)
+
+        enum_node = self._make_node(
+            node,
+            kind=NodeKind.ENUM,
+            name=name,
+            fqn=fqn,
+            visibility=visibility,
+            modifiers=modifiers,
+            docstring=self._extract_preceding_comment(node)
+        )
+
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            for child in body_node.children:
+                members = self._process_node(child, parent=enum_node)
+                if members:
+                    enum_node.children.extend(members)
+        
+        return [enum_node]
+
     def _handle_constructor_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
         name_node = node.child_by_field_name("name")
         if not name_node:
@@ -487,6 +519,25 @@ class JavaCodeParser(AbstractCodeParser):
             )
             nodes.append(field_node)
         return nodes
+
+    def _handle_enum_constant(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
+        name_node = next((c for c in node.children if c.type == "identifier"), None)
+        if not name_node:
+            return []
+
+        name = get_node_text(name_node)
+        fqn = self._make_fqn(name, parent)
+
+        constant_node = self._make_node(
+            node,
+            kind=NodeKind.CONSTANT,
+            name=name,
+            fqn=fqn,
+            visibility=Visibility.PUBLIC,
+            modifiers=[],
+            docstring=self._extract_preceding_comment(node),
+        )
+        return [constant_node]
 
 
 class JavaLanguageHelper(AbstractLanguageHelper):

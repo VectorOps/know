@@ -32,6 +32,35 @@ public class MyClass {
 }
 
 /**
+ * A test enum.
+ */
+public enum Planet {
+    MERCURY,
+    VENUS,
+    EARTH,
+    MARS;
+
+    /**
+     * Javadoc for field.
+     */
+    private int mass;
+
+    /**
+     * Javadoc for enum constructor.
+     */
+    Planet() {
+        this.mass = 1;
+    }
+
+    /**
+     * Javadoc for enum method.
+     */
+    public int getMass() {
+        return this.mass;
+    }
+}
+
+/**
  * A test interface.
  */
 interface MyInterface {

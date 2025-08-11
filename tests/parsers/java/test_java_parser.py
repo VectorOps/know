@@ -56,8 +56,8 @@ def test_java_parser_on_sample_file():
     assert "java.io.IOException" in imports
     assert imports["java.io.IOException"].external is True
 
-    # Top-level symbols: package, 3 imports, class javadoc, class decl, iface javadoc, iface decl, interface = 8
-    assert len(parsed_file.symbols) == 9
+    # Top-level symbols: package, 4 imports, class javadoc, class decl, iface javadoc, iface decl, enum javadoc, enum decl = 11
+    assert len(parsed_file.symbols) == 11
 
     # Assertions for MyClass
     class_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.CLASS), None)
@@ -71,7 +71,7 @@ def test_java_parser_on_sample_file():
 
     # Children of MyClass
     child_symbols = {sym.name: sym for sym in class_node.children if sym.name}
-    assert len(child_symbols) == 5  # GREETING, count, AnotherClass, MyClass (constructor), greet
+    assert len(child_symbols) == 5  # GREETING, count, ac, MyClass (constructor), greet
 
     # Field: GREETING
     greeting_field = child_symbols["GREETING"]
@@ -129,6 +129,45 @@ def test_java_parser_on_sample_file():
     assert method_node.name == "doSomething"
     assert "A method in the interface" in method_node.docstring
     assert method_node.signature.return_type == "void"
+
+    # Assertions for Planet enum
+    enum_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.ENUM), None)
+    assert enum_node is not None
+    assert enum_node.name == "Planet"
+    assert enum_node.kind == NodeKind.ENUM
+    assert enum_node.visibility == Visibility.PUBLIC
+    assert "A test enum." in enum_node.docstring
+
+    # Children of Planet: 4 constants, field+doc, constructor+doc, method+doc = 10
+    assert len(enum_node.children) == 10
+
+    # Enum constants
+    constants = [c for c in enum_node.children if c.kind == NodeKind.CONSTANT]
+    assert len(constants) == 4
+    constant_names = {c.name for c in constants}
+    assert constant_names == {"MERCURY", "VENUS", "EARTH", "MARS"}
+    
+    mercury = next(c for c in constants if c.name == "MERCURY")
+    assert mercury.visibility == Visibility.PUBLIC
+    
+    # Field
+    mass_field = next((c for c in enum_node.children if c.kind == NodeKind.PROPERTY and c.name == "mass"), None)
+    assert mass_field is not None
+    assert mass_field.visibility == Visibility.PRIVATE
+    assert "Javadoc for field." in mass_field.docstring
+    
+    # Constructor
+    enum_constructor = next((c for c in enum_node.children if c.kind == NodeKind.METHOD and c.name == "Planet"), None)
+    assert enum_constructor is not None
+    assert enum_constructor.signature.return_type is None # It's a constructor
+    assert "Javadoc for enum constructor." in enum_constructor.docstring
+
+    # Method
+    get_mass_method = next((c for c in enum_node.children if c.kind == NodeKind.METHOD and c.name == "getMass"), None)
+    assert get_mass_method is not None
+    assert get_mass_method.visibility == Visibility.PUBLIC
+    assert get_mass_method.signature.return_type == "int"
+    assert "Javadoc for enum method." in get_mass_method.docstring
 
     # Symbol refs are not implemented yet for Java
     assert len(parsed_file.symbol_refs) == 0
