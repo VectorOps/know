@@ -529,9 +529,12 @@ class JavaCodeParser(AbstractCodeParser):
             node, name=name, visibility=visibility, modifiers=modifiers, return_type=return_type, annotations=annotations
         )
         
+        body_node = node.child_by_field_name("body")
+        kind = NodeKind.METHOD if body_node else NodeKind.METHOD_DEF
+        
         method_node = self._make_node(
             node,
-            kind=NodeKind.METHOD,
+            kind=kind,
             name=name,
             fqn=fqn,
             visibility=visibility,
@@ -540,7 +543,6 @@ class JavaCodeParser(AbstractCodeParser):
             signature=signature,
         )
 
-        body_node = node.child_by_field_name("body")
         if body_node:
             members = self._process_node(body_node, parent=method_node)
             if members:

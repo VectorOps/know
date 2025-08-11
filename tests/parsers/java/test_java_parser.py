@@ -155,7 +155,7 @@ def test_java_parser_on_sample_file():
     assert constant_node.name == "MY_CONSTANT"
     assert constant_node.visibility == Visibility.PACKAGE
 
-    method_node = next((s for s in interface_node.children if s.kind == NodeKind.METHOD), None)
+    method_node = next((s for s in interface_node.children if s.kind == NodeKind.METHOD_DEF), None)
     assert method_node is not None
     assert method_node.name == "doSomething"
     assert "A method in the interface" in method_node.docstring
