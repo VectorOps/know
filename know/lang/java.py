@@ -415,9 +415,15 @@ class JavaCodeParser(AbstractCodeParser):
         body_node = node.child_by_field_name("body")
         if body_node:
             for child in body_node.children:
-                members = self._process_node(child, parent=enum_node)
-                if members:
-                    enum_node.children.extend(members)
+                if child.type == "enum_body_declarations":
+                    for member_child in child.children:
+                        members = self._process_node(member_child, parent=enum_node)
+                        if members:
+                            enum_node.children.extend(members)
+                else:
+                    members = self._process_node(child, parent=enum_node)
+                    if members:
+                        enum_node.children.extend(members)
         
         return [enum_node]
 
