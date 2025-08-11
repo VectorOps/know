@@ -51,9 +51,10 @@ def test_java_parser_on_sample_file():
     assert "java.util.Map" in imports
     assert imports["java.util.List"].external is True
 
-    # Top-level symbols (should be just the class)
-    assert len(parsed_file.symbols) == 1
-    class_node = parsed_file.symbols[0]
+    # Top-level symbols
+    assert len(parsed_file.symbols) == 5
+    class_node = next((s for s in parsed_file.symbols if s.kind == NodeKind.CLASS), None)
+    assert class_node is not None
 
     assert class_node.name == "MyClass"
     assert class_node.kind == NodeKind.CLASS
