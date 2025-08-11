@@ -150,7 +150,7 @@ class JavaCodeParser(AbstractCodeParser):
     ) -> NodeSignature:
         type_params_node = node.child_by_field_name("type_parameters")
         params_node = node.child_by_field_name("parameters")
-        throws_node = node.child_by_field_name("throws")
+        throws_node = next((c for c in node.children if c.type == "throws"), None)
 
         type_params_text = get_node_text(type_params_node) if type_params_node else None
         params_text = get_node_text(params_node) if params_node else "()"
