@@ -76,6 +76,7 @@
 ** [ ] Java
 *** [ ] Fix docstring identation for methods
 *** [ ] Generics
+*** [ ] Fix enum parsing - methods/constructor should be correctly handled, currently included as literals
 *** [X] Interfaces
 *** [X] Annotations
 * [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash (share embeddings with a team)
