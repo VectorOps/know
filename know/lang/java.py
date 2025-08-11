@@ -444,10 +444,16 @@ class JavaLanguageHelper(AbstractLanguageHelper):
                            include_comments: bool = False,
                            include_docs: bool = False,
                            ) -> str:
+        if sym.kind == NodeKind.COMMENT and not include_comments:
+            return ""
+
         IND = " " * indent
         lines = []
 
-        if include_docs and sym.docstring:
+        # The docstring is included if include_docs is true, but NOT if
+        # include_comments is also true, because in that case it will be
+        # handled as a separate comment node.
+        if include_docs and not include_comments and sym.docstring:
             for ln in sym.docstring.splitlines():
                 lines.append(f"{IND}{ln}")
 
