@@ -12,6 +12,7 @@ class ProgrammingLanguage(str, Enum):
     GO = "go"
     TYPESCRIPT = "typescript"
     JAVASCRIPT = "javascript"
+    JAVA = "java"
     MARKDOWN = "markdown"
     TEXT = "text"
 
