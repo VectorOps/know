@@ -689,13 +689,15 @@ class JavaLanguageHelper(AbstractLanguageHelper):
                 lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.METHOD:
-            modifiers = " ".join([m.value for m in sym.modifiers])
             sig = sym.signature.raw if sym.signature else f"{sym.name}()"
-            header = f"{visibility} {modifiers} {sig} {{...}}".replace("  ", " ").strip()
+            header = f"{sig} {{...}}".replace("  ", " ").strip()
             lines.append(f"{IND}{header}")
         elif sym.kind == NodeKind.PROPERTY:
             modifiers = " ".join([m.value for m in sym.modifiers])
-            header = f"{visibility} {modifiers} {sym.name};".replace("  ", " ").strip()
+            annotations = ""
+            if sym.signature and sym.signature.decorators:
+                annotations = " ".join(sym.signature.decorators)
+            header = f"{annotations} {visibility} {modifiers} {sym.name};".replace("  ", " ").strip()
             lines.append(f"{IND}{header}")
         else:
             return f"{IND}{sym.body or ''}"
