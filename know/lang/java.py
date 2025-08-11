@@ -723,12 +723,36 @@ class JavaLanguageHelper(AbstractLanguageHelper):
         header = ""
         visibility = sym.visibility.value if sym.visibility else ""
         
-        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE, NodeKind.ENUM):
+        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE):
             kind_str = sym.kind.value
             header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
             for child in sym.children:
-                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+                summary = self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs)
+                if summary:
+                    lines.append(summary)
+            lines.append(f"{IND}}}")
+        elif sym.kind == NodeKind.ENUM:
+            kind_str = sym.kind.value
+            header = f"{visibility} {kind_str} {sym.name} {{"
+            lines.append(f"{IND}{header}")
+
+            constants = [child for child in sym.children if child.kind == NodeKind.CONSTANT]
+            other_members = [child for child in sym.children if child.kind != NodeKind.CONSTANT]
+
+            if constants:
+                constants_line = ", ".join([c.body for c in constants])
+                # only add semicolon if there are other members that are not just comments
+                has_non_comment_members = any(m.kind != NodeKind.COMMENT for m in other_members)
+                if has_non_comment_members:
+                    constants_line += ";"
+                lines.append(f"{IND}{' ' * 4}{constants_line}")
+            
+            for member in other_members:
+                summary = self.get_symbol_summary(member, indent + 4, include_comments=include_comments, include_docs=include_docs)
+                if summary:
+                    lines.append(summary)
+
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.METHOD:
             sig = sym.signature.raw if sym.signature else f"{sym.name}()"
