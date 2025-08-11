@@ -41,25 +41,50 @@ _JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
 
     ; Object creations: e.g., `new MyClass()`
     (object_creation_expression
-      type: (type_identifier) @ctor) @new
+      type: [
+        (type_identifier) @ctor
+        (scoped_type_identifier) @ctor
+        (generic_type name: (type_identifier) @ctor)
+        (generic_type name: (scoped_type_identifier) @ctor)
+      ]) @new
 
     ; Type references in `extends` clause: e.g., `class A extends B`
     (class_declaration
-      superclass: (type_identifier) @type.ref)
+      superclass: (superclass [
+        (type_identifier) @type.ref
+        (scoped_type_identifier) @type.ref
+        (generic_type name: (type_identifier) @type.ref)
+        (generic_type name: (scoped_type_identifier) @type.ref)
+      ]))
 
     ; Type references in `implements` clause: e.g., `class A implements B, C`
     (class_declaration
-      super_interfaces: (type_list (type_identifier) @type.ref))
+      interfaces: (super_interfaces (type_list [
+        (type_identifier) @type.ref
+        (scoped_type_identifier) @type.ref
+        (generic_type name: (type_identifier) @type.ref)
+        (generic_type name: (scoped_type_identifier) @type.ref)
+      ])))
 
     ; Type references in `throws` clause for methods: e.g., `void method() throws IOException`
     (method_declaration
-      method_header: (method_header_declarator
-        throws: (throws (type_identifier) @type.ref)))
+      header: (method_header
+        declarator: (method_header_declarator
+          throws: (throws (type_list [
+            (type_identifier) @type.ref
+            (scoped_type_identifier) @type.ref
+            (generic_type name: (type_identifier) @type.ref)
+            (generic_type name: (scoped_type_identifier) @type.ref)
+          ])))))
 
     ; Type references in `throws` clause for constructors: e.g., `MyClass() throws MyException`
     (constructor_declaration
-      constructor_declarator: (constructor_declarator
-        throws: (throws (type_identifier) @type.ref)))
+      throws: (throws (type_list [
+        (type_identifier) @type.ref
+        (scoped_type_identifier) @type.ref
+        (generic_type name: (type_identifier) @type.ref)
+        (generic_type name: (scoped_type_identifier) @type.ref)
+      ])))
 """)
 
 _parser: Optional[Parser] = None
