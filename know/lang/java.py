@@ -180,16 +180,10 @@ class JavaCodeParser(AbstractCodeParser):
         
         if node_type in ("comment", "block_comment", "line_comment"):
             body_text = dedent_comment(get_node_text(node))
-            
-            start_col = node.start_point[1]
-            if start_col > 0:
-                lines = self.source_bytes.decode("utf-8", "replace").splitlines()
-                if node.start_point[0] < len(lines):
-                    line = lines[node.start_point[0]]
-                    leading_ws = line[:start_col]
-                    if leading_ws.isspace():
-                        body_text = leading_ws + body_text
-            
+
+            leading_ws = self._get_leading_whitespace(node)
+            body_text = leading_ws + body_text
+
             return [self._make_node(node, kind=NodeKind.COMMENT, body=body_text.rstrip())]
         elif node_type == "package_declaration":
             return [self._make_node(node, kind=NodeKind.MODULE)]
@@ -238,6 +232,34 @@ class JavaCodeParser(AbstractCodeParser):
     def _handle_file(self, root_node: any) -> None:
         pass
 
+    def _get_leading_whitespace(self, node) -> str:
+        """
+        Get leading whitespace for a node on its starting line without
+        splitting the source file into lines.
+        """
+        start_byte = node.start_byte
+        if start_byte == 0:
+            return ""
+
+        # Find the beginning of the line by searching backwards for a newline.
+        line_start_byte = self.source_bytes.rfind(b"\n", 0, start_byte)
+        if line_start_byte == -1:
+            line_start_byte = 0
+        else:
+            line_start_byte += 1  # Move past the newline character.
+
+        leading_bytes = self.source_bytes[line_start_byte:start_byte]
+
+        try:
+            leading_text = leading_bytes.decode("utf-8")
+            if leading_text.isspace():
+                return leading_text
+        except UnicodeDecodeError:
+            # Not valid UTF-8, so not whitespace.
+            pass
+
+        return ""
+
     def _extract_preceding_comment(self, node) -> Optional[str]:
         prev = node.prev_sibling
         if prev is None or prev.type not in ('comment', 'block_comment'):
@@ -253,14 +275,8 @@ class JavaCodeParser(AbstractCodeParser):
         if comment_text.startswith("/**"):
             comment_text = dedent_comment(comment_text)
 
-            start_col = prev.start_point[1]
-            if start_col > 0:
-                lines = self.source_bytes.decode("utf-8", "replace").splitlines()
-                if prev.start_point[0] < len(lines):
-                    line = lines[prev.start_point[0]]
-                    leading_ws = line[:start_col]
-                    if leading_ws.isspace():
-                        comment_text = leading_ws + comment_text
+            leading_ws = self._get_leading_whitespace(prev)
+            comment_text = leading_ws + comment_text
 
             return comment_text.rstrip()
         return None
@@ -749,18 +765,42 @@ class JavaLanguageHelper(AbstractLanguageHelper):
         # include_comments is also true, because in that case it will be
         # handled as a separate comment node.
         if include_docs and not include_comments and sym.docstring:
+            print('-------')
+            print(repr(sym.docstring))
             for ln in sym.docstring.splitlines():
                 lines.append(f"{IND}{ln}")
 
         header = ""
         visibility = sym.visibility.value if sym.visibility else ""
         
-        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE, NodeKind.ENUM):
+        if sym.kind in (NodeKind.CLASS, NodeKind.INTERFACE):
             kind_str = sym.kind.value
             header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
             for child in sym.children:
                 lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+            lines.append(f"{IND}}}")
+        elif sym.kind == NodeKind.ENUM:
+            kind_str = sym.kind.value
+            header = f"{visibility} {kind_str} {sym.name} {{"
+            lines.append(f"{IND}{header}")
+
+            constants = [child for child in sym.children if child.kind == NodeKind.CONSTANT]
+            other_members = [child for child in sym.children if child.kind != NodeKind.CONSTANT]
+
+            if constants:
+                constants_line = ", ".join([c.body for c in constants])
+                # only add semicolon if there are other members that are not just comments
+                has_non_comment_members = any(m.kind != NodeKind.COMMENT for m in other_members)
+                if has_non_comment_members:
+                    constants_line += ";"
+                lines.append(f"{IND}{' ' * 4}{constants_line}")
+
+            for member in other_members:
+                summary = self.get_symbol_summary(member, indent + 4, include_comments=include_comments, include_docs=include_docs)
+                if summary:
+                    lines.append(summary)
+
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.METHOD:
             sig = sym.signature.raw if sym.signature else f"{sym.name}()"
