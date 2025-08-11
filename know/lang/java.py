@@ -35,21 +35,31 @@ from enum import Enum
 
 JAVA_LANGUAGE = Language(tsjava.language())
 _JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
+    ; Method calls: e.g., `obj.method()`
     (method_invocation
       name: (identifier) @callee) @call
 
+    ; Object creations: e.g., `new MyClass()`
     (object_creation_expression
-      type: [(type_identifier) (scoped_identifier)] @ctor) @new
+      type: (type_name) @ctor) @new
 
-    (superclass
-      [(type_identifier) (scoped_identifier)] @type.ref)
+    ; Type references in `extends` clause: e.g., `class A extends B`
+    (class_declaration
+      superclass: (type_name) @type.ref)
 
-    (type_list
-      [(type_identifier) (scoped_identifier)] @type.ref)
-    
-    ; Add the following line to capture types in 'throws' clauses
-    (throws
-      [(type_identifier) (scoped_identifier)] @type.ref)
+    ; Type references in `implements` clause: e.g., `class A implements B, C`
+    (class_declaration
+      super_interfaces: (type_list (type_name) @type.ref))
+
+    ; Type references in `throws` clause for methods: e.g., `void method() throws IOException`
+    (method_declaration
+      method_header: (method_header_declarator
+        throws: (throws (type_name) @type.ref)))
+
+    ; Type references in `throws` clause for constructors: e.g., `MyClass() throws MyException`
+    (constructor_declaration
+      constructor_declarator: (constructor_declarator
+        throws: (throws (type_name) @type.ref)))
 """)
 
 _parser: Optional[Parser] = None
@@ -280,20 +290,31 @@ class JavaCodeParser(AbstractCodeParser):
                 )
             )
 
-        for _, match_map in _JAVA_REF_QUERY.matches(root_node):
-            if 'call' in match_map and 'callee' in match_map:
-                # 'call' and 'callee' can be lists of nodes, iterate through them
-                for raw_node, target_node in zip(match_map['call'], match_map['callee']):
-                    create_ref(raw_node, target_node, NodeRefType.CALL)
+        for match in _JAVA_REF_QUERY.matches(root_node):
+            # Group captures by name for easier access within this match
+            captures_map = {}
+            for node, name in match.captures:
+                if name not in captures_map:
+                    captures_map[name] = []
+                captures_map[name].append(node)
 
-            elif 'new' in match_map and 'ctor' in match_map:
-                # 'new' and 'ctor' can be lists of nodes, iterate through them
-                for raw_node, target_node in zip(match_map['new'], match_map['ctor']):
-                    create_ref(raw_node, target_node, NodeRefType.TYPE)
+            if 'call' in captures_map and 'callee' in captures_map:
+                # For `method_invocation` patterns, we expect one 'call' and one 'callee' node per match
+                raw_node = captures_map['call'][0]
+                target_node = captures_map['callee'][0]
+                create_ref(raw_node, target_node, NodeRefType.CALL)
+
+            elif 'new' in captures_map and 'ctor' in captures_map:
+                # For `object_creation_expression` patterns, we expect one 'new' and one 'ctor' node per match
+                raw_node = captures_map['new'][0]
+                target_node = captures_map['ctor'][0]
+                create_ref(raw_node, target_node, NodeRefType.TYPE)
             
-            elif 'type.ref' in match_map:
-                # 'type.ref' is already the target node, and can be a list
-                for target_node in match_map['type.ref']:
+            elif 'type.ref' in captures_map:
+                # For patterns capturing `type.ref`, there might be multiple type nodes
+                # within a single logical match (e.g., multiple interfaces in `implements`).
+                # Each captured `type_name` node is the target node itself.
+                for target_node in captures_map['type.ref']:
                     create_ref(target_node, target_node, NodeRefType.TYPE)
 
         return refs
