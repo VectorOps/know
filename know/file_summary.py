@@ -47,7 +47,15 @@ def build_file_summary(
     if summary_mode is SummaryMode.Skip:
         return None
 
-    if summary_mode is SummaryMode.Full:
+    file_repo = pm.data.file
+    fm = file_repo.get_by_path(repo.id, rel_path)
+    if not fm:
+        logger.warning("File not found in repository – skipped.", path=rel_path)
+        return None
+
+    # If there is no language or package, we can't generate a summary,
+    # so we return the full file content instead.
+    if (summary_mode is SummaryMode.Full) or (fm.language is None and fm.package_id is None):
         abs_path = os.path.join(repo.root_path, rel_path)
         try:
             with open(abs_path, "r", encoding="utf-8") as f:
@@ -58,14 +66,8 @@ def build_file_summary(
 
     include_docs = summary_mode is SummaryMode.FullSummary
 
-    file_repo   = pm.data.file
     node_repo = pm.data.node
-    edge_repo   = pm.data.importedge
-
-    fm = file_repo.get_by_path(repo.id, rel_path)
-    if not fm:
-        logger.warning("File not found in repository – skipped.", path=rel_path)
-        return None
+    edge_repo = pm.data.importedge
     helper: AbstractLanguageHelper | None = CodeParserRegistry.get_helper(fm.language) if fm.language else None
 
     symbols = node_repo.get_list(NodeFilter(file_id=fm.id))
