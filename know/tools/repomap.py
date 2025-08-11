@@ -463,7 +463,11 @@ class RepoMapTool(BaseTool):
                 tokens_used += summary_tokens
 
             results.append(
-                RepoMapScore(file_path=path, score=score, summary=summary)
+                RepoMapScore(
+                    file_path=pm.construct_virtual_path(pm.default_repo.id, path),
+                    score=score,
+                    summary=summary,
+                )
             )
 
         _elapsed = time.perf_counter() - _t_start

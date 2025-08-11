@@ -60,11 +60,11 @@ def test_markdown_parser_on_readme():
     # Check section names (headings for sections, node type for others)
     # This list might change as the README evolves. We check for a few
     # core sections that should always be there.
-    expected_headings = set((
-        "VectorOps – *Know*",
+    expected_headings = {
+        "Built-in Tools",
         "Installation",
         "License",
-    ))
+    }
     actual_headings = {s.docstring for s in symbols}
     assert expected_headings.issubset(actual_headings)
 
@@ -74,7 +74,7 @@ def test_markdown_parser_on_readme():
 
     # Check that terminal sections (those without sub-sections) have no parsed
     # children, while non-terminal sections do.
-    non_terminal_node = next(s for s in symbols if s.docstring == "VectorOps – *Know*")
+    non_terminal_node = next(s for s in symbols if s.docstring == "VectorOps - *Know*")
     assert len(non_terminal_node.children) > 0
 
     terminal_node = next(s for s in symbols if s.docstring == "Key Features")
