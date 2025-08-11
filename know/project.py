@@ -138,6 +138,12 @@ class ProjectManager:
 
     # Virtual path helpers
     def construct_virtual_path(self, repo_id: str, path: str) -> str:
+        if self.settings.paths.use_repo_name_in_virtual_path:
+            repo = self.data.repo.get_by_id(repo_id)
+            if repo is None:
+                raise ValueError("Repository was not found.")
+            return op.join(repo.name, path)
+
         if repo_id == self.default_repo.id:
             return path
 
@@ -148,17 +154,42 @@ class ProjectManager:
         return op.join(VIRTUAL_PATH_PREFIX, repo.name, path)
 
     def deconstruct_virtual_path(self, path) -> Optional[Tuple[Repo, str]]:
+        if self.settings.paths.use_repo_name_in_virtual_path:
+            parts = path.split(os.sep, 1)
+            repo_name = parts[0]
+            repo = self.data.repo.get_by_name(repo_name)
+
+            if repo and repo.id in self.repo_ids:
+                relative_path = parts[1] if len(parts) > 1 else ""
+                return (repo, relative_path)
+
+            return None
+
         if not path.startswith(VIRTUAL_PATH_PREFIX):
             return (self.default_repo, path)
 
-        path = path[len(VIRTUAL_PATH_PREFIX) + 1:]
+        path = path[len(VIRTUAL_PATH_PREFIX) + 1 :]
         parts = path.split(os.sep, 1)
+        if not parts or not parts[0]:
+            return None
 
         repo = self.data.repo.get_by_name(parts[0])
         if repo is None:
             return None
 
-        return (repo, parts[1])
+        relative_path = parts[1] if len(parts) > 1 else ""
+        return (repo, relative_path)
+
+    def get_physical_path(self, virtual_path: str) -> Optional[str]:
+        deconstructed = self.deconstruct_virtual_path(virtual_path)
+        if deconstructed is None:
+            return None
+
+        repo, relative_path = deconstructed
+        if repo.root_path is None:
+            return None
+
+        return op.join(repo.root_path, relative_path)
 
     # Single repo refresh helper
     def refresh(self, repo=None):

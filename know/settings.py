@@ -159,6 +159,15 @@ class SearchSettings(BaseModel):
     )
 
 
+class PathsSettings(BaseModel):
+    """Settings for path management."""
+
+    use_repo_name_in_virtual_path: bool = Field(
+        default=False,
+        description="If True, all virtual paths will be prefixed with the repository name.",
+    )
+
+
 class TokenizerType(str, Enum):
     """Enum for different tokenizer types."""
 
@@ -296,6 +305,10 @@ class ProjectSettings(BaseSettings):
     search: SearchSettings = Field(
         default_factory=SearchSettings,
         description="Settings for search-related functionality.",
+    )
+    paths: PathsSettings = Field(
+        default_factory=PathsSettings,
+        description="Settings for path management.",
     )
     languages: dict[str, LanguageSettings] = Field(
         default_factory=_get_default_languages,
