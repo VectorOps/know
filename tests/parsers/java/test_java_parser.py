@@ -84,7 +84,7 @@ def test_java_parser_on_sample_file():
     assert "Javadoc for constructor." in constructor.docstring
     assert constructor.signature is not None
     assert constructor.signature.return_type is None
-    assert constructor.signature.raw == "(int initialCount)"
+    assert constructor.signature.raw == "MyClass(int initialCount)"
     assert len(constructor.signature.parameters) == 1
     assert constructor.signature.parameters[0].name == "initialCount"
     assert constructor.signature.parameters[0].type_annotation == "int"
@@ -96,7 +96,7 @@ def test_java_parser_on_sample_file():
     assert "A simple method." in greet_method.docstring
     assert greet_method.signature is not None
     assert greet_method.signature.return_type == "String"
-    assert greet_method.signature.raw == "(String name)"
+    assert greet_method.signature.raw == "String greet(String name)"
     assert len(greet_method.signature.parameters) == 1
     assert greet_method.signature.parameters[0].name == "name"
     assert greet_method.signature.parameters[0].type_annotation == "String"
