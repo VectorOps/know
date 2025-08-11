@@ -46,6 +46,10 @@ _JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
 
     (type_list
       [(type_identifier) (scoped_identifier)] @type.ref)
+    
+    ; Add the following line to capture types in 'throws' clauses
+    (throws
+      [(type_identifier) (scoped_identifier)] @type.ref)
 """)
 
 _parser: Optional[Parser] = None
