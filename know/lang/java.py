@@ -925,12 +925,29 @@ class JavaLanguageHelper(AbstractLanguageHelper):
                            indent: int = 0,
                            include_comments: bool = False,
                            include_docs: bool = False,
+                           include_parents: bool = False,
+                           child_stack: Optional[List[List[Node]]] = None,
                            ) -> str:
+        # Get to the top of the stack and then generate symbols down
+        if include_parents:
+            if sym.parent_ref:
+                return self.get_symbol_summary(
+                    sym.parent_ref,
+                    indent,
+                    include_comments,
+                    include_docs,
+                    include_parents,
+                    (child_stack or []) + [[sym]])
+            else:
+                include_parents = False
+
         if sym.kind == NodeKind.COMMENT and not include_comments:
             return ""
 
         IND = " " * indent
         lines = []
+
+        only_children = child_stack.pop() if child_stack else None
 
         # The docstring is included if include_docs is true, but NOT if
         # include_comments is also true, because in that case it will be
@@ -947,15 +964,27 @@ class JavaLanguageHelper(AbstractLanguageHelper):
             header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
             for child in sym.children:
-                lines.append(self.get_symbol_summary(child, indent + 4, include_comments=include_comments, include_docs=include_docs))
+                if only_children and child not in only_children:
+                    continue
+                lines.append(self.get_symbol_summary(
+                    child,
+                    indent + 4,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                    child_stack=child_stack,
+                ))
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.ENUM:
             kind_str = sym.kind.value
             header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
 
-            constants = [child for child in sym.children if child.kind == NodeKind.CONSTANT]
-            other_members = [child for child in sym.children if child.kind != NodeKind.CONSTANT]
+            children_to_process = sym.children
+            if only_children:
+                children_to_process = [c for c in sym.children if c in only_children]
+
+            constants = [child for child in children_to_process if child.kind == NodeKind.CONSTANT]
+            other_members = [child for child in children_to_process if child.kind != NodeKind.CONSTANT]
 
             if constants:
                 constants_line = ", ".join([c.body for c in constants])
@@ -966,7 +995,13 @@ class JavaLanguageHelper(AbstractLanguageHelper):
                 lines.append(f"{IND}{' ' * 4}{constants_line}")
 
             for member in other_members:
-                summary = self.get_symbol_summary(member, indent + 4, include_comments=include_comments, include_docs=include_docs)
+                summary = self.get_symbol_summary(
+                    member,
+                    indent + 4,
+                    include_comments=include_comments,
+                    include_docs=include_docs,
+                    child_stack=child_stack
+                )
                 if summary:
                     lines.append(summary)
 
