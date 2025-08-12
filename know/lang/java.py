@@ -257,44 +257,6 @@ class JavaCodeParser(AbstractCodeParser):
     def _collect_symbol_refs(self, root_node: any) -> List[ParsedNodeRef]:
         refs: list[ParsedNodeRef] = []
 
-        def create_ref(raw_node: ts.Node, target_node: ts.Node, ref_type: NodeRefType):
-            full_name = get_node_text(target_node)
-            if not full_name:
-                return
-
-            simple_name = full_name.split(".")[-1]
-            raw = self.source_bytes[raw_node.start_byte:raw_node.end_byte].decode("utf8")
-            
-            to_pkg_path: str | None = None
-            assert self.parsed_file is not None
-
-            for imp in self.parsed_file.imports:
-                if imp.virtual_path.endswith("." + full_name):
-                    to_pkg_path = imp.virtual_path.rpartition('.')[0]
-                    break
-                elif imp.virtual_path == full_name:
-                    # Handles direct imports like `import java.io.IOException;`
-                    to_pkg_path = imp.virtual_path.rpartition('.')[0]
-                    break
-                elif imp.virtual_path.endswith(".*"):
-                    if not to_pkg_path:
-                        to_pkg_path = imp.virtual_path.rpartition('.')[0]
-            
-            if to_pkg_path is None:
-                if '.' in full_name:
-                    to_pkg_path = full_name.rpartition('.')[0]
-                elif self.package:
-                    to_pkg_path = self.package.virtual_path
-
-            refs.append(
-                ParsedNodeRef(
-                    name=simple_name,
-                    raw=raw,
-                    type=ref_type,
-                    to_package_virtual_path=to_pkg_path,
-                )
-            )
-
         for _, captures in _JAVA_REF_QUERY.matches(root_node):
             # Group captures by name for easier access within this match
             captures_map = {}
@@ -303,24 +265,57 @@ class JavaCodeParser(AbstractCodeParser):
                     captures_map[name] = []
                 captures_map[name].append(node)
 
+            refs_to_create: list[tuple[ts.Node, ts.Node, NodeRefType]] = []
+
             if 'call' in captures_map and 'callee' in captures_map:
-                # For `method_invocation` patterns, we expect one 'call' and one 'callee' node per match
                 raw_node = captures_map['call'][0]
                 target_node = captures_map['callee'][0]
-                create_ref(raw_node, target_node, NodeRefType.CALL)
-
+                refs_to_create.append((raw_node, target_node, NodeRefType.CALL))
             elif 'new' in captures_map and 'ctor' in captures_map:
-                # For `object_creation_expression` patterns, we expect one 'new' and one 'ctor' node per match
                 raw_node = captures_map['new'][0]
                 target_node = captures_map['ctor'][0]
-                create_ref(raw_node, target_node, NodeRefType.TYPE)
-            
+                refs_to_create.append((raw_node, target_node, NodeRefType.TYPE))
             elif 'type.ref' in captures_map:
-                # For patterns capturing `type.ref`, there might be multiple type nodes
-                # within a single logical match (e.g., multiple interfaces in `implements`).
-                # Each captured `type_name` node is the target node itself.
                 for target_node in captures_map['type.ref']:
-                    create_ref(target_node, target_node, NodeRefType.TYPE)
+                    refs_to_create.append((target_node, target_node, NodeRefType.TYPE))
+
+            for raw_node, target_node, ref_type in refs_to_create:
+                full_name = get_node_text(target_node)
+                if not full_name:
+                    continue
+
+                simple_name = full_name.split(".")[-1]
+                raw = self.source_bytes[raw_node.start_byte:raw_node.end_byte].decode("utf8")
+
+                to_pkg_path: str | None = None
+                assert self.parsed_file is not None
+
+                for imp in self.parsed_file.imports:
+                    if imp.virtual_path.endswith("." + full_name):
+                        to_pkg_path = imp.virtual_path.rpartition('.')[0]
+                        break
+                    elif imp.virtual_path == full_name:
+                        # Handles direct imports like `import java.io.IOException;`
+                        to_pkg_path = imp.virtual_path.rpartition('.')[0]
+                        break
+                    elif imp.virtual_path.endswith(".*"):
+                        if not to_pkg_path:
+                            to_pkg_path = imp.virtual_path.rpartition('.')[0]
+
+                if to_pkg_path is None:
+                    if '.' in full_name:
+                        to_pkg_path = full_name.rpartition('.')[0]
+                    elif self.package:
+                        to_pkg_path = self.package.virtual_path
+
+                refs.append(
+                    ParsedNodeRef(
+                        name=simple_name,
+                        raw=raw,
+                        type=ref_type,
+                        to_package_virtual_path=to_pkg_path,
+                    )
+                )
 
         return refs
 
