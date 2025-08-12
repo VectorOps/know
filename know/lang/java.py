@@ -399,6 +399,75 @@ class JavaCodeParser(AbstractCodeParser):
                 annotations.append(get_node_text(child))
         return visibility, modifiers, annotations
 
+    def _collect_symbol_refs(self, root: ts.Node) -> List[ParsedNodeRef]:
+        refs: List[ParsedNodeRef] = []
+        assert self.package is not None
+        assert self.parsed_file is not None
+
+        for _, match in _JAVA_REF_QUERY.matches(root):
+            raw_node: Optional[ts.Node] = None
+            ref_type: Optional[NodeRefType] = None
+            full_name: Optional[str] = None
+            node_target: Optional[ts.Node] = None
+
+            for cap, nodes in match.items():
+                for node in nodes:
+                    if cap == "call":
+                        ref_type = NodeRefType.CALL
+                        raw_node = node
+                        name_node = node.child_by_field_name("name")
+                        object_node = node.child_by_field_name("object")
+                        simple_name_in_call = get_node_text(name_node)
+                        if object_node:
+                            full_name = f"{get_node_text(object_node)}.{simple_name_in_call}"
+                        else:
+                            full_name = simple_name_in_call
+                    elif cap == "new":
+                        ref_type = NodeRefType.TYPE
+                        raw_node = node
+                    elif cap == "ctor":
+                        node_target = node
+                    elif cap == "type.ref":
+                        ref_type = NodeRefType.TYPE
+                        raw_node = node
+                        node_target = node
+
+            if node_target:
+                full_name = get_node_text(node_target)
+
+            if not full_name or not ref_type:
+                continue
+
+            simple_name = full_name.split('.')[-1]
+            raw = ""
+            if raw_node:
+                raw = self.source_bytes[raw_node.start_byte : raw_node.end_byte].decode("utf8")
+
+            # Resolve package
+            to_pkg_path: Optional[str] = None
+            if ref_type == NodeRefType.TYPE and "." in full_name:
+                to_pkg_path = full_name.rpartition('.')[0]
+            else:
+                # For calls or simple type names, resolve the root of the expression
+                type_to_resolve = full_name.split('.')[0]
+                for imp in self.parsed_file.imports:
+                    if imp.virtual_path.endswith("." + type_to_resolve):
+                        to_pkg_path = imp.virtual_path.rpartition('.')[0]
+                        break
+
+            if not to_pkg_path:
+                to_pkg_path = self.package.virtual_path
+
+            refs.append(
+                ParsedNodeRef(
+                    name=simple_name,
+                    raw=raw,
+                    type=ref_type,
+                    to_package_virtual_path=to_pkg_path,
+                )
+            )
+        return refs
+
     def _handle_import_declaration(self, node) -> List[ParsedNode]:
         assert self.parsed_file is not None
 
