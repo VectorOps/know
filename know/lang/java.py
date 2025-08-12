@@ -38,25 +38,25 @@ _JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
     (method_invocation) @call
 
     (object_creation_expression
-      type: [(type_identifier) (scoped_identifier)] @ctor) @new
+      type: [(type_identifier) (scoped_type_identifier)] @ctor) @new
 
     (superclass
-      [(type_identifier) (scoped_identifier)] @type.ref)
+      [(type_identifier) (scoped_type_identifier)] @type.ref)
 
     (type_list
-      [(type_identifier) (scoped_identifier)] @type.ref)
+      [(type_identifier) (scoped_type_identifier)] @type.ref)
 
     (throws
-      [(type_identifier) (scoped_identifier)] @type.ref)
+      [(type_identifier) (scoped_type_identifier)] @type.ref)
 
     (formal_parameter
-      type: [(type_identifier) (scoped_identifier)] @type.ref)
+      type: [(type_identifier) (scoped_type_identifier)] @type.ref)
 
     (field_declaration
-      type: [(type_identifier) (scoped_identifier)] @type.ref)
+      type: [(type_identifier) (scoped_type_identifier)] @type.ref)
 
     (method_declaration
-      type: [(type_identifier) (scoped_identifier)] @type.ref)
+      type: [(type_identifier) (scoped_type_identifier)] @type.ref)
 
     (marker_annotation
       name: [(identifier) (scoped_identifier)] @type.ref)
@@ -648,6 +648,8 @@ class JavaCodeParser(AbstractCodeParser):
         return [constructor_node]
 
     def _handle_method_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
+        print(node)
+
         name_node = node.child_by_field_name("name")
         if not name_node:
             return []
