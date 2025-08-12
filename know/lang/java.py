@@ -412,15 +412,17 @@ class JavaCodeParser(AbstractCodeParser):
         # extends (for class)
         superclass_node = node.child_by_field_name("superclass")
         if superclass_node:
-            raw_parts.append("extends")
             raw_parts.append(get_node_text(superclass_node))
 
-        # implements (for class) / extends (for interface)
+        # implements (for class)
         interfaces_node = node.child_by_field_name("interfaces")
         if interfaces_node:
-            keyword = "implements" if kind == NodeKind.CLASS else "extends"
-            raw_parts.append(keyword)
             raw_parts.append(get_node_text(interfaces_node))
+
+        # extends (for interface)
+        extends_interfaces_node = node.child_by_field_name("extends_interfaces")
+        if extends_interfaces_node:
+            raw_parts.append(get_node_text(extends_interfaces_node))
 
         raw_signature = " ".join(raw_parts)
         raw_signature = " ".join(raw_signature.split())
