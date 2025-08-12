@@ -403,9 +403,11 @@ class JavaCodeParser(AbstractCodeParser):
             raw_parts.append(modifier.value)
 
         raw_parts.append(kind.value)
-        raw_parts.append(name)
+        
+        name_with_generics = name
         if type_params_text:
-            raw_parts.append(type_params_text)
+            name_with_generics += type_params_text
+        raw_parts.append(name_with_generics)
 
         # extends (for class)
         superclass_node = node.child_by_field_name("superclass")
