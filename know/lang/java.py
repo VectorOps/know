@@ -648,8 +648,6 @@ class JavaCodeParser(AbstractCodeParser):
         return [constructor_node]
 
     def _handle_method_declaration(self, node, parent: Optional[ParsedNode] = None) -> List[ParsedNode]:
-        print(node)
-
         name_node = node.child_by_field_name("name")
         if not name_node:
             return []

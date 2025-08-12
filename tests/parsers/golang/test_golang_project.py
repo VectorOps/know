@@ -24,7 +24,6 @@ def test_python_project_scan_populates_repositories():
 
     # ── packages ─────────────────────────────────────────────────────────
     pkg_ids = {f.package_id for f in files if f.package_id}
-    print(repo_store.package.get_list(PackageFilter(repo_ids=[repo_meta.id])))
     assert len(pkg_ids) == 2
 
     # ── symbols (spot-check method.go) ───────────────────────────────────

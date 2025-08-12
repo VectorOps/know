@@ -182,8 +182,6 @@ class TypeScriptCodeParser(AbstractCodeParser):
         elif node.type in self._GENERIC_STATEMENT_NODES:
             return self._handle_generic_statement(node, parent)
 
-        print(node, parent)
-
         logger.debug(
             "TS parser: unhandled node",
             type=node.type,

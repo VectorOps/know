@@ -34,6 +34,7 @@
 ** [ ] Add Sqlite backend
 ** [X] Extract common SQL functionality into helper
 * [ ] Generic helper to find references using tree sitter query in a generic way
+** [ ] Figure out if we want to merge similar references or not
 * [ ] Add query timeouts to DuckDB to detect lockups
 * [X] Search tool
 ** [X] Better tokenizer for the fts index (syntax specific?)
@@ -83,10 +84,10 @@
 ** [ ] C
 ** [ ] C#
 ** [ ] Java
-*** [ ] Fix docstring identation for methods
+*** [X] Fix docstring identation for methods
 *** [ ] Generics
-*** [ ] Fix enum parsing - methods/constructor should be correctly handled, currently included as literals
-*** [ ] Add support for module_declaration
+*** [X] Fix enum parsing - methods/constructor should be correctly handled, currently included as literals
+*** [X] Add support for module_declaration
 module io.netty.testsuite_jpms.main {\n    requires io.netty.common;\n    requires io.netty.buffer;\n    requires io.netty.codec;\n    requires io.netty.codec.http;\n    requires io.netty.handler;\n    requires transitive io.netty.pkitesting;\n    requires io.netty.transport;\n    requires io.netty.transport.classes.kqueue;\n    requires io.netty.transport.classes.epoll;\n    requires io.netty.transport.classes.io_uring;\n    requires io.netty.tcnative.classes.openssl;\n    requires io.netty.codec.http3;\n    requires io.netty.codec.classes.quic;\n    requires org.bouncycastle.provider;\n}
 *** [ ] Add SymbolRef extraction: calls, generic type usage, inheritance
 *** [X] Interfaces

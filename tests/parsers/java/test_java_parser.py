@@ -202,8 +202,6 @@ def test_java_parser_on_sample_file():
     # String (x3), IOException, Override
     assert len(parsed_file.symbol_refs) == 10
 
-    pprint(parsed_file.symbol_refs)
-
     # MyInterface
     my_interface_ref = next((r for r in parsed_file.symbol_refs if r.name == "MyInterface"), None)
     assert my_interface_ref is not None

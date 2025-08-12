@@ -163,7 +163,6 @@ def test_repomap_tool_pagerank_and_boost():
 
     # baseline – a.py should outrank b.py, c.py should outrank d.py
     res = tool.execute(project, RepoMapReq())
-    print(1, res)
     order = [r.file_path for r in res]
     assert order.index(a_path) < order.index(b_path)
     assert order.index(c_path) < order.index(d_path)
