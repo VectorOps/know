@@ -382,6 +382,56 @@ class JavaCodeParser(AbstractCodeParser):
             throws=throws_list or None,
         )
 
+    def _parse_class_signature(
+        self,
+        node,
+        kind: NodeKind,
+        name: str,
+        visibility: Visibility,
+        modifiers: List[Modifier],
+        annotations: List[str],
+    ) -> NodeSignature:
+        type_params_node = node.child_by_field_name("type_parameters")
+        type_params_text = get_node_text(type_params_node) if type_params_node else None
+
+        raw_parts = []
+        if annotations:
+            raw_parts.extend(annotations)
+        if visibility != Visibility.PACKAGE:
+            raw_parts.append(visibility.value)
+        for modifier in modifiers:
+            raw_parts.append(modifier.value)
+
+        raw_parts.append(kind.value)
+        raw_parts.append(name)
+        if type_params_text:
+            raw_parts.append(type_params_text)
+
+        # extends (for class)
+        superclass_node = node.child_by_field_name("superclass")
+        if superclass_node:
+            raw_parts.append("extends")
+            raw_parts.append(get_node_text(superclass_node))
+
+        # implements (for class) / extends (for interface)
+        interfaces_node = node.child_by_field_name("interfaces")
+        if interfaces_node:
+            keyword = "implements" if kind == NodeKind.CLASS else "extends"
+            raw_parts.append(keyword)
+            raw_parts.append(get_node_text(interfaces_node))
+
+        raw_signature = " ".join(raw_parts)
+        raw_signature = " ".join(raw_signature.split())
+
+        return NodeSignature(
+            raw=raw_signature,
+            parameters=[], # Classes and interfaces don't have parameters in their primary signature
+            return_type=None,
+            decorators=annotations,
+            type_parameters=type_params_text,
+            throws=None,
+        )
+
     def _parse_modifiers(self, node) -> Tuple[Visibility, List[Modifier], List[str]]:
         visibility = Visibility.PACKAGE # Default for Java
         modifiers = []
@@ -533,7 +583,17 @@ class JavaCodeParser(AbstractCodeParser):
         fqn = self._make_fqn(name)
         visibility, modifiers, annotations = self._parse_modifiers(node)
 
-        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
+        signature = self._parse_class_signature(
+            node,
+            kind=NodeKind.CLASS,
+            name=name,
+            visibility=visibility,
+            modifiers=modifiers,
+            annotations=annotations,
+        )
+
+        if signature.type_parameters:
+            modifiers.append(Modifier.GENERIC)
 
         class_node = self._make_node(
             node,
@@ -564,7 +624,17 @@ class JavaCodeParser(AbstractCodeParser):
         fqn = self._make_fqn(name)
         visibility, modifiers, annotations = self._parse_modifiers(node)
 
-        signature = NodeSignature(raw=" ".join(annotations), decorators=annotations) if annotations else None
+        signature = self._parse_class_signature(
+            node,
+            kind=NodeKind.INTERFACE,
+            name=name,
+            visibility=visibility,
+            modifiers=modifiers,
+            annotations=annotations,
+        )
+
+        if signature.type_parameters:
+            modifiers.append(Modifier.GENERIC)
 
         interface_node = self._make_node(
             node,
@@ -634,6 +704,9 @@ class JavaCodeParser(AbstractCodeParser):
 
         signature = self._parse_signature(node, name=name, visibility=visibility, modifiers=modifiers, return_type=None, annotations=annotations)
 
+        if signature.type_parameters:
+            modifiers.append(Modifier.GENERIC)
+
         constructor_node = self._make_node(
             node,
             kind=NodeKind.METHOD,
@@ -663,6 +736,9 @@ class JavaCodeParser(AbstractCodeParser):
             node, name=name, visibility=visibility, modifiers=modifiers, return_type=return_type, annotations=annotations
         )
         
+        if signature.type_parameters:
+            modifiers.append(Modifier.GENERIC)
+
         body_node = node.child_by_field_name("body")
         kind = NodeKind.METHOD if body_node else NodeKind.METHOD_DEF
         
