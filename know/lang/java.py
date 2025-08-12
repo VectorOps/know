@@ -47,7 +47,7 @@ _JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
       [(type_identifier) (scoped_identifier)] @type.ref)
 
     (throws
-      [(type_identifier) (scoped_identifier)] @type.ref)
+      type: (_) @type.ref)
 
     (formal_parameter
       type: [(type_identifier) (scoped_identifier)] @type.ref)

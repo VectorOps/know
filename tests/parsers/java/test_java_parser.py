@@ -198,9 +198,11 @@ def test_java_parser_on_sample_file():
     assert value_method.signature.return_type == "String"
 
     # Symbol refs
-    # Total should be 9: MyAnnotation, MyInterface, Deprecated, AnotherClass (x2),
-    # String (x2), IOException, Override
-    assert len(parsed_file.symbol_refs) == 9
+    # Total should be 10: MyAnnotation, MyInterface, Deprecated, AnotherClass (x2),
+    # String (x3), IOException, Override
+    assert len(parsed_file.symbol_refs) == 10
+
+    pprint(parsed_file.symbol_refs)
 
     # MyInterface
     my_interface_ref = next((r for r in parsed_file.symbol_refs if r.name == "MyInterface"), None)
@@ -240,6 +242,6 @@ def test_java_parser_on_sample_file():
 
     # String (from java.lang)
     string_refs = [r for r in parsed_file.symbol_refs if r.name == "String"]
-    assert len(string_refs) == 2
+    assert len(string_refs) == 3
     assert all(r.type == NodeRefType.TYPE for r in string_refs)
     assert all(r.to_package_virtual_path == "com.example" for r in string_refs)  # Falls back
