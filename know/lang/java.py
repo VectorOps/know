@@ -35,8 +35,7 @@ from enum import Enum
 
 JAVA_LANGUAGE = Language(tsjava.language())
 _JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
-    (method_invocation
-      name: (identifier) @callee) @call
+    (method_invocation) @call
 
     (object_creation_expression
       type: [(type_identifier) (scoped_identifier)] @ctor) @new
@@ -47,7 +46,6 @@ _JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
     (type_list
       [(type_identifier) (scoped_identifier)] @type.ref)
 
-    ; Add the following line to capture types in 'throws' clauses
     (throws
       [(type_identifier) (scoped_identifier)] @type.ref)
 
@@ -253,71 +251,6 @@ class JavaCodeParser(AbstractCodeParser):
                 raw=get_node_text(node),
             )
             return [self._make_node(node, kind=NodeKind.LITERAL)]
-
-    def _collect_symbol_refs(self, root_node: any) -> List[ParsedNodeRef]:
-        refs: list[ParsedNodeRef] = []
-
-        for _, captures in _JAVA_REF_QUERY.matches(root_node):
-            # Group captures by name for easier access within this match
-            captures_map = {}
-            for node, name in captures:
-                if name not in captures_map:
-                    captures_map[name] = []
-                captures_map[name].append(node)
-
-            refs_to_create: list[tuple[ts.Node, ts.Node, NodeRefType]] = []
-
-            if 'call' in captures_map and 'callee' in captures_map:
-                raw_node = captures_map['call'][0]
-                target_node = captures_map['callee'][0]
-                refs_to_create.append((raw_node, target_node, NodeRefType.CALL))
-            elif 'new' in captures_map and 'ctor' in captures_map:
-                raw_node = captures_map['new'][0]
-                target_node = captures_map['ctor'][0]
-                refs_to_create.append((raw_node, target_node, NodeRefType.TYPE))
-            elif 'type.ref' in captures_map:
-                for target_node in captures_map['type.ref']:
-                    refs_to_create.append((target_node, target_node, NodeRefType.TYPE))
-
-            for raw_node, target_node, ref_type in refs_to_create:
-                full_name = get_node_text(target_node)
-                if not full_name:
-                    continue
-
-                simple_name = full_name.split(".")[-1]
-                raw = self.source_bytes[raw_node.start_byte:raw_node.end_byte].decode("utf8")
-
-                to_pkg_path: str | None = None
-                assert self.parsed_file is not None
-
-                for imp in self.parsed_file.imports:
-                    if imp.virtual_path.endswith("." + full_name):
-                        to_pkg_path = imp.virtual_path.rpartition('.')[0]
-                        break
-                    elif imp.virtual_path == full_name:
-                        # Handles direct imports like `import java.io.IOException;`
-                        to_pkg_path = imp.virtual_path.rpartition('.')[0]
-                        break
-                    elif imp.virtual_path.endswith(".*"):
-                        if not to_pkg_path:
-                            to_pkg_path = imp.virtual_path.rpartition('.')[0]
-
-                if to_pkg_path is None:
-                    if '.' in full_name:
-                        to_pkg_path = full_name.rpartition('.')[0]
-                    elif self.package:
-                        to_pkg_path = self.package.virtual_path
-
-                refs.append(
-                    ParsedNodeRef(
-                        name=simple_name,
-                        raw=raw,
-                        type=ref_type,
-                        to_package_virtual_path=to_pkg_path,
-                    )
-                )
-
-        return refs
 
     def _handle_file(self, root_node: any) -> None:
         pass
