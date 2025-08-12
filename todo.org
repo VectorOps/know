@@ -11,6 +11,8 @@
 ** [ ] Batch delete imports
 ** [ ] Batch insert symbols. Delay embedding scheduling after symbol insert
 ** [ ] Batch insert symbolrefs
+* [ ] Symbol boosting in search query makes it slow as we need to apply boost each and every field
+Optimize by denormalizing boost into separate column. Figure out per-repo boosting.
 * [ ] Initial refresh should reset refresh timer, so next tool run would not do another refresh
 * [X] Add project-level paths
 ** [X] If enabled, all virtual paths are prefixed with repo name
@@ -58,6 +60,7 @@
 *** [X] Fix to_package_path for python
         to_package_path='os', for 'os.path.join'
 *** [ ] Fix summary generator to not include module docstring if level is short summary - add special handling to _handle_expression_string and new node type for documentation
+*** [ ] Fix: Parser handled node but produced no symbols line=73 node_type=expression_statement path=tools/mcpserver.py raw='mcp, settings = create_mcp_app()'
 *** [X] Add support for for_statement, raise_statement, with_statement
 ** [X] Golang
 *** [X] When parsing golang methods, link these symbols back to structure that should be defined in the same package.
@@ -83,13 +86,13 @@
 ** [ ] HTML
 ** [ ] C
 ** [ ] C#
-** [ ] Java
+** [X] Java
 *** [X] Fix docstring identation for methods
-*** [ ] Generics
+*** [X] Generics
 *** [X] Fix enum parsing - methods/constructor should be correctly handled, currently included as literals
 *** [X] Add support for module_declaration
 module io.netty.testsuite_jpms.main {\n    requires io.netty.common;\n    requires io.netty.buffer;\n    requires io.netty.codec;\n    requires io.netty.codec.http;\n    requires io.netty.handler;\n    requires transitive io.netty.pkitesting;\n    requires io.netty.transport;\n    requires io.netty.transport.classes.kqueue;\n    requires io.netty.transport.classes.epoll;\n    requires io.netty.transport.classes.io_uring;\n    requires io.netty.tcnative.classes.openssl;\n    requires io.netty.codec.http3;\n    requires io.netty.codec.classes.quic;\n    requires org.bouncycastle.provider;\n}
-*** [ ] Add SymbolRef extraction: calls, generic type usage, inheritance
+*** [X] Add SymbolRef extraction: calls, generic type usage, inheritance
 *** [X] Interfaces
 *** [X] Annotations
 * [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash (share embeddings with a team)
