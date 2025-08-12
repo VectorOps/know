@@ -39,8 +39,6 @@ def test_java_parser_on_sample_file():
     parser = JavaCodeParser(project, project.default_repo, my_class_rel_path)
     parsed_file = parser.parse(cache)
 
-    #from devtools import pprint; pprint(parsed_file); raise
-
     # Basic assertions
     assert parsed_file.path == my_class_rel_path
     assert parsed_file.language == ProgrammingLanguage.JAVA
@@ -243,3 +241,70 @@ def test_java_parser_on_sample_file():
     assert len(string_refs) == 3
     assert all(r.type == NodeRefType.TYPE for r in string_refs)
     assert all(r.to_package_virtual_path == "com.example" for r in string_refs)  # Falls back
+
+
+def test_java_parser_on_generics():
+    """
+    Parse a Java file with generics and ensure type parameters are extracted correctly.
+    """
+    # --- setup from static sample files ---
+    samples_dir = Path(__file__).parent / "samples"
+    generics_rel_path = "src/main/java/com/example/Generics.java"
+
+    project = _make_dummy_project(samples_dir)
+    cache = ProjectCache()
+
+    parser = JavaCodeParser(project, project.default_repo, generics_rel_path)
+    parsed_file = parser.parse(cache)
+
+    symbols_by_name = {s.name: s for s in parsed_file.symbols if s.name}
+
+    # Generic class: Box<T>
+    box_class = symbols_by_name["Box"]
+    assert box_class.kind == NodeKind.CLASS
+    assert box_class.signature is not None
+    assert box_class.signature.type_parameters == "<T>"
+    assert Modifier.GENERIC in box_class.modifiers
+    assert box_class.signature.raw == "public class Box<T>"
+
+    # Generic interface: Pair<K, V>
+    pair_interface = symbols_by_name["Pair"]
+    assert pair_interface.kind == NodeKind.INTERFACE
+    assert pair_interface.signature is not None
+    assert pair_interface.signature.type_parameters == "<K, V>"
+    assert Modifier.GENERIC in pair_interface.modifiers
+    assert pair_interface.signature.raw == "interface Pair<K, V>"
+
+    # Class with generics: OrderedPair<K, V>
+    ordered_pair_class = symbols_by_name["OrderedPair"]
+    assert ordered_pair_class.kind == NodeKind.CLASS
+    assert ordered_pair_class.signature is not None
+    assert ordered_pair_class.signature.type_parameters == "<K, V>"
+    assert Modifier.GENERIC in ordered_pair_class.modifiers
+    assert ordered_pair_class.signature.raw == "class OrderedPair<K, V> implements Pair<K, V>"
+
+    # Generic method in non-generic class: Util.compare
+    util_class = symbols_by_name["Util"]
+    compare_method = next(c for c in util_class.children if c.name == "compare")
+    assert compare_method.kind == NodeKind.METHOD
+    assert compare_method.signature is not None
+    assert compare_method.signature.type_parameters == "<K, V>"
+    assert Modifier.GENERIC in compare_method.modifiers
+    assert compare_method.signature.raw == "public static <K, V> boolean compare(Pair<K, V> p1, Pair<K, V> p2)"
+
+    # Bounded type parameters: BoundedBox<T extends Number>
+    bounded_box_class = symbols_by_name["BoundedBox"]
+    assert bounded_box_class.kind == NodeKind.CLASS
+    assert bounded_box_class.signature is not None
+    assert bounded_box_class.signature.type_parameters == "<T extends Number>"
+    assert Modifier.GENERIC in bounded_box_class.modifiers
+    assert bounded_box_class.signature.raw == "class BoundedBox<T extends Number>"
+
+    # Generic constructor
+    generic_ctor_class = symbols_by_name["MyGenericCtor"]
+    ctor = next(c for c in generic_ctor_class.children if c.kind == NodeKind.METHOD)
+    assert ctor.name == "MyGenericCtor"
+    assert ctor.signature is not None
+    assert ctor.signature.type_parameters == "<T extends Number>"
+    assert Modifier.GENERIC in ctor.modifiers
+    assert ctor.signature.raw == "<T extends Number> MyGenericCtor(T t)"
