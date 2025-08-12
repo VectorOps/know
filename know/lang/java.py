@@ -963,47 +963,76 @@ class JavaLanguageHelper(AbstractLanguageHelper):
             kind_str = sym.kind.value
             header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
+            if only_children:
+                lines.append(f"{IND}    ...")
+
+            body_symbols_added = False
             for child in sym.children:
                 if only_children and child not in only_children:
                     continue
-                lines.append(self.get_symbol_summary(
+
+                summary = self.get_symbol_summary(
                     child,
                     indent + 4,
                     include_comments=include_comments,
                     include_docs=include_docs,
                     child_stack=child_stack,
-                ))
+                )
+                if summary.strip():
+                    lines.append(summary)
+                    body_symbols_added = True
+
+            if not body_symbols_added and sym.children:
+                lines.append(f"{IND}    ...")
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.ENUM:
             kind_str = sym.kind.value
             header = f"{visibility} {kind_str} {sym.name} {{"
             lines.append(f"{IND}{header}")
 
-            children_to_process = sym.children
             if only_children:
-                children_to_process = [c for c in sym.children if c in only_children]
+                lines.append(f"{IND}    ...")
 
-            constants = [child for child in children_to_process if child.kind == NodeKind.CONSTANT]
-            other_members = [child for child in children_to_process if child.kind != NodeKind.CONSTANT]
+                body_symbols_added = False
+                for child in sym.children:
+                    if child not in only_children:
+                        continue
 
-            if constants:
-                constants_line = ", ".join([c.body for c in constants])
-                # only add semicolon if there are other members that are not just comments
-                has_non_comment_members = any(m.kind != NodeKind.COMMENT for m in other_members)
-                if has_non_comment_members:
-                    constants_line += ";"
-                lines.append(f"{IND}{' ' * 4}{constants_line}")
+                    summary = self.get_symbol_summary(
+                        child,
+                        indent + 4,
+                        include_comments=include_comments,
+                        include_docs=include_docs,
+                        child_stack=child_stack
+                    )
+                    if summary.strip():
+                        lines.append(summary)
+                        body_symbols_added = True
 
-            for member in other_members:
-                summary = self.get_symbol_summary(
-                    member,
-                    indent + 4,
-                    include_comments=include_comments,
-                    include_docs=include_docs,
-                    child_stack=child_stack
-                )
-                if summary:
-                    lines.append(summary)
+                if not body_symbols_added and sym.children:
+                    lines.append(f"{IND}    ...")
+            else:
+                # Original logic
+                constants = [child for child in sym.children if child.kind == NodeKind.CONSTANT]
+                other_members = [child for child in sym.children if child.kind != NodeKind.CONSTANT]
+
+                if constants:
+                    constants_line = ", ".join([c.body for c in constants])
+                    has_non_comment_members = any(m.kind != NodeKind.COMMENT for m in other_members)
+                    if has_non_comment_members:
+                        constants_line += ";"
+                    lines.append(f"{IND}{' ' * 4}{constants_line}")
+
+                for member in other_members:
+                    summary = self.get_symbol_summary(
+                        member,
+                        indent + 4,
+                        include_comments=include_comments,
+                        include_docs=include_docs,
+                        child_stack=child_stack
+                    )
+                    if summary:
+                        lines.append(summary)
 
             lines.append(f"{IND}}}")
         elif sym.kind == NodeKind.METHOD:
