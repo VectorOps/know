@@ -198,17 +198,48 @@ def test_java_parser_on_sample_file():
     assert value_method.signature.return_type == "String"
 
     # Symbol refs
-    assert len(parsed_file.symbol_refs) == 3
+    # Total should be 9: MyAnnotation, MyInterface, Deprecated, AnotherClass (x2),
+    # String (x2), IOException, Override
+    assert len(parsed_file.symbol_refs) == 9
 
-    refs_by_name = {r.name: r for r in parsed_file.symbol_refs}
-    assert "MyInterface" in refs_by_name
-    assert refs_by_name["MyInterface"].type == NodeRefType.TYPE
-    assert refs_by_name["MyInterface"].to_package_virtual_path == "com.example"
+    # MyInterface
+    my_interface_ref = next((r for r in parsed_file.symbol_refs if r.name == "MyInterface"), None)
+    assert my_interface_ref is not None
+    assert my_interface_ref.type == NodeRefType.TYPE
+    assert my_interface_ref.to_package_virtual_path == "com.example"
 
-    assert "AnotherClass" in refs_by_name
-    assert refs_by_name["AnotherClass"].type == NodeRefType.TYPE
-    assert refs_by_name["AnotherClass"].to_package_virtual_path == "com.example.util"
+    # AnotherClass (field type and constructor call)
+    another_class_refs = [r for r in parsed_file.symbol_refs if r.name == "AnotherClass"]
+    assert len(another_class_refs) == 2
+    assert all(r.type == NodeRefType.TYPE for r in another_class_refs)
+    assert all(r.to_package_virtual_path == "com.example.util" for r in another_class_refs)
 
-    assert "IOException" in refs_by_name
-    assert refs_by_name["IOException"].type == NodeRefType.TYPE
-    assert refs_by_name["IOException"].to_package_virtual_path == "java.io"
+    # IOException
+    io_exception_ref = next((r for r in parsed_file.symbol_refs if r.name == "IOException"), None)
+    assert io_exception_ref is not None
+    assert io_exception_ref.type == NodeRefType.TYPE
+    assert io_exception_ref.to_package_virtual_path == "java.io"
+
+    # MyAnnotation
+    my_annotation_ref = next((r for r in parsed_file.symbol_refs if r.name == "MyAnnotation"), None)
+    assert my_annotation_ref is not None
+    assert my_annotation_ref.type == NodeRefType.TYPE
+    assert my_annotation_ref.to_package_virtual_path == "com.example"
+
+    # Deprecated (from java.lang)
+    deprecated_ref = next((r for r in parsed_file.symbol_refs if r.name == "Deprecated"), None)
+    assert deprecated_ref is not None
+    assert deprecated_ref.type == NodeRefType.TYPE
+    assert deprecated_ref.to_package_virtual_path == "com.example"  # Falls back to current package
+
+    # Override (from java.lang)
+    override_ref = next((r for r in parsed_file.symbol_refs if r.name == "Override"), None)
+    assert override_ref is not None
+    assert override_ref.type == NodeRefType.TYPE
+    assert override_ref.to_package_virtual_path == "com.example"  # Falls back to current package
+
+    # String (from java.lang)
+    string_refs = [r for r in parsed_file.symbol_refs if r.name == "String"]
+    assert len(string_refs) == 2
+    assert all(r.type == NodeRefType.TYPE for r in string_refs)
+    assert all(r.to_package_virtual_path == "com.example" for r in string_refs)  # Falls back
