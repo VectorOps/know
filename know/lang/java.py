@@ -295,10 +295,10 @@ class JavaCodeParser(AbstractCodeParser):
                 )
             )
 
-        for match in _JAVA_REF_QUERY.matches(root_node):
+        for _, captures in _JAVA_REF_QUERY.matches(root_node):
             # Group captures by name for easier access within this match
             captures_map = {}
-            for node, name in match.captures:
+            for node, name in captures:
                 if name not in captures_map:
                     captures_map[name] = []
                 captures_map[name].append(node)
