@@ -172,6 +172,7 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
     cache = ProjectCache()
     state = ParsingState()
     timing_stats: defaultdict[str, dict[str, int | float]] = defaultdict(lambda: {"count": 0, "total_time": 0.0})
+    upsert_timing_stats: defaultdict[str, float] = defaultdict(float)
     timing_stats_lock = threading.Lock()
 
     parser_map = _get_parser_map(pm)
@@ -258,7 +259,7 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
 
             elif res.status == ProcessFileStatus.PARSED_FILE:
                 assert res.parsed_file is not None
-                upsert_parsed_file(pm, repo, state, res.parsed_file)
+                upsert_parsed_file(pm, repo, state, res.parsed_file, upsert_timing_stats, timing_stats_lock)
                 if res.existing_meta is None:
                     result.files_added.append(res.parsed_file.path)
                 else:
@@ -331,16 +332,57 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
                 f"Avg: {avg_time * 1000:>8.2f} ms/file"
             )
 
+    if upsert_timing_stats:
+        logger.debug("Upsert performance summary:")
+        total_upserts = int(upsert_timing_stats.get("total_upsert_count", 0))
+        if total_upserts > 0:
+            total_time = upsert_timing_stats["total_upsert_time"]
+            avg_total_time_ms = total_time / total_upserts * 1000
+            logger.debug(
+                f"  - Total upserted files: {total_upserts}, "
+                f"Total time: {total_time:.3f}s, "
+                f"Avg time: {avg_total_time_ms:.2f} ms/file"
+            )
+
+            breakdown = {
+                "Package": upsert_timing_stats["upsert_package_time"],
+                "File": upsert_timing_stats["upsert_file_time"],
+                "Import Edges": upsert_timing_stats["upsert_import_edge_time"],
+                "Symbols": upsert_timing_stats["upsert_symbol_time"],
+                "Symbol Refs": upsert_timing_stats["upsert_symbol_ref_time"],
+            }
+            if total_time > 0:
+                for name, time_val in breakdown.items():
+                    if time_val > 0:
+                        avg_time_ms = time_val / total_upserts * 1000
+                        percentage = (time_val / total_time) * 100
+                        logger.debug(
+                            f"    - {name:<15}: "
+                            f"Total: {time_val:>7.3f}s | "
+                            f"Avg: {avg_time_ms:>8.2f} ms/file | "
+                            f"Percentage: {percentage:.2f}%"
+                        )
+
     return result
 
 
-def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, parsed_file: ParsedFile) -> None:
+def upsert_parsed_file(
+    pm: ProjectManager,
+    repo: Repo,
+    state: ParsingState,
+    parsed_file: ParsedFile,
+    stats: defaultdict[str, float],
+    lock: threading.Lock,
+) -> None:
     """
     Persist *parsed_file* (package → file → symbols) into the
     project's data-repository. If an entity already exists it is
     updated, otherwise it is created (“upsert”).
     """
+    upsert_start_time = time.perf_counter()
+
     # Package
+    t_start = time.perf_counter()
     pkg_meta: Optional[Package] = None
     if parsed_file.package:
         pkg_meta = pm.data.package.get_by_virtual_path(repo.id, parsed_file.package.virtual_path)
@@ -368,6 +410,7 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
     else:
         file_meta = File(id=generate_id(), **file_data)
         file_meta = pm.data.file.create(file_meta)
+    t_file = time.perf_counter()
 
     # Import edges (package-level)
     import_repo = pm.data.importedge
@@ -422,6 +465,7 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
     for edge_key, edge in existing_by_key.items():
         if edge_key not in new_keys:
             import_repo.delete(edge.id)
+    t_imp = time.perf_counter()
 
     # Symbols (re-create)
     node_repo = pm.data.node
@@ -490,6 +534,7 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
     node_repo.delete_by_file_id(file_meta.id)
     for sym in parsed_file.symbols:
         _insert_symbol(sym)
+    t_sym = time.perf_counter()
 
     # ── Symbol References ───────────────────────────────────────────────────
     symbolref_repo = pm.data.symbolref
@@ -517,6 +562,17 @@ def upsert_parsed_file(pm: ProjectManager, repo: Repo, state: ParsingState, pars
             }
         )
         symbolref_repo.create(NodeRef(id=generate_id(), **ref_data))
+
+
+    t_ref = time.perf_counter()
+    with lock:
+        stats["total_upsert_count"] += 1
+        stats["total_upsert_time"] += t_ref - upsert_start_time
+        stats["upsert_package_time"] += t_pkg - t_start
+        stats["upsert_file_time"] += t_file - t_pkg
+        stats["upsert_import_edge_time"] += t_imp - t_file
+        stats["upsert_symbol_time"] += t_sym - t_imp
+        stats["upsert_symbol_ref_time"] += t_ref - t_sym
 
 
 def assign_parents_to_orphan_methods(pm: ProjectManager, repo: Repo) -> None:
