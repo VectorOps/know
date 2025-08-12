@@ -395,6 +395,7 @@ def upsert_parsed_file(
         else:
             pkg_meta = Package(id=generate_id(), **pkg_data)
             pkg_meta = pm.data.package.create(pkg_meta)
+    t_pkg = time.perf_counter()
 
     # File
     file_meta = pm.data.file.get_by_path(repo.id, parsed_file.path)
