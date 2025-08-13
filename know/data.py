@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TypeVar, Generic
 from abc import ABC, abstractmethod
 from know.models import (
     Project,
@@ -14,33 +14,38 @@ from know.models import (
     Vector,
 )
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from know.settings import ProjectSettings
 
 
-class AbstractProjectRepository(ABC):
+T = TypeVar("T")
+
+
+class AbstractCRUDRepository(ABC, Generic[T]):
     @abstractmethod
-    def get_by_id(self, project_id: str) -> Optional[Project]:
+    def get_by_id(self, item_id: str) -> Optional[T]:
         pass
 
     @abstractmethod
-    def get_list_by_ids(self, project_ids: List[str]) -> List[Project]:
+    def get_list_by_ids(self, item_ids: List[str]) -> List[T]:
         pass
 
     @abstractmethod
-    def create(self, prj: Project) -> Project:
+    def create(self, item: T) -> T:
         pass
 
     @abstractmethod
-    def update(self, prj_id: str, data: Dict[str, Any]) -> Optional[Project]:
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[T]:
         pass
 
     @abstractmethod
-    def delete(self, prj_id: str) -> bool:
+    def delete(self, item_id: str) -> bool:
         pass
 
+
+class AbstractProjectRepository(AbstractCRUDRepository[Project]):
     @abstractmethod
     def get_by_name(self, name) -> Optional[Project]:
         pass
@@ -61,29 +66,9 @@ class RepoFilter:
     project_id: Optional[str] = None
 
 
-class AbstractRepoRepository(ABC):
-    @abstractmethod
-    def get_by_id(self, repo_id: str) -> Optional[Repo]:
-        pass
-
-    @abstractmethod
-    def get_list_by_ids(self, repo_ids: List[str]) -> List[Repo]:
-        pass
-
+class AbstractRepoRepository(AbstractCRUDRepository[Repo]):
     @abstractmethod
     def get_list(self, flt: RepoFilter) -> List[Repo]:
-        pass
-
-    @abstractmethod
-    def create(self, repo: Repo) -> Repo:
-        pass
-
-    @abstractmethod
-    def update(self, repo_id: str, data: Dict[str, Any]) -> Optional[Repo]:
-        pass
-
-    @abstractmethod
-    def delete(self, repo_id: str) -> bool:
         pass
 
     @abstractmethod
@@ -102,15 +87,7 @@ class PackageFilter:
     repo_ids: Optional[List[str]] = None
 
 
-class AbstractPackageRepository(ABC):
-    @abstractmethod
-    def get_by_id(self, package_id: str) -> Optional[Package]:
-        pass
-
-    @abstractmethod
-    def get_list_by_ids(self, package_ids: List[str]) -> List[Package]:
-        pass
-
+class AbstractPackageRepository(AbstractCRUDRepository[Package]):
     @abstractmethod
     def get_list(self, flt: PackageFilter) -> List[Package]:
         pass
@@ -129,18 +106,6 @@ class AbstractPackageRepository(ABC):
     def delete_orphaned(self) -> None:
         pass
 
-    @abstractmethod
-    def create(self, pkg: Package) -> Package:
-        pass
-
-    @abstractmethod
-    def update(self, package_id: str, data: Dict[str, Any]) -> Optional[Package]:
-        pass
-
-    @abstractmethod
-    def delete(self, package_id: str) -> bool:
-        pass
-
 
 @dataclass
 class FileFilter:
@@ -148,27 +113,7 @@ class FileFilter:
     package_id: Optional[str] = None
 
 
-class AbstractFileRepository(ABC):
-    @abstractmethod
-    def get_by_id(self, file_id: str) -> Optional[File]:
-        pass
-
-    @abstractmethod
-    def get_list_by_ids(self, file_ids: List[str]) -> List[File]:
-        pass
-
-    @abstractmethod
-    def create(self, file: File) -> File:
-        pass
-
-    @abstractmethod
-    def update(self, file_id: str, data: Dict[str, Any]) -> Optional[File]:
-        pass
-
-    @abstractmethod
-    def delete(self, file_id: str) -> bool:
-        pass
-
+class AbstractFileRepository(AbstractCRUDRepository[File]):
     @abstractmethod
     def get_by_path(self, repo_id: str, path: str) -> Optional[File]:
         """Get a file by its project-relative path."""
@@ -219,18 +164,10 @@ class NodeSearchQuery:
     offset: Optional[int] = None
 
 
-class AbstractNodeRepository(ABC):
+class AbstractNodeRepository(AbstractCRUDRepository[Node]):
     @property
     @abstractmethod
     def settings(self) -> "ProjectSettings":
-        pass
-
-    @abstractmethod
-    def get_by_id(self, symbol_id: str) -> Optional[Node]:
-        pass
-
-    @abstractmethod
-    def get_list_by_ids(self, item_ids: List[str]) -> List[Node]:
         pass
 
     @abstractmethod
@@ -245,18 +182,6 @@ class AbstractNodeRepository(ABC):
     def search(self, query: NodeSearchQuery) -> List[Node]:
         pass
 
-    @abstractmethod
-    def create(self, symbol: Node) -> Node:
-        pass
-
-    @abstractmethod
-    def update(self, symbol_id: str, data: Dict[str, Any]) -> Optional[Node]:
-        pass
-
-    @abstractmethod
-    def delete(self, symbol_id: str) -> bool:
-        pass
-
 
 @dataclass
 class ImportEdgeFilter:
@@ -265,29 +190,9 @@ class ImportEdgeFilter:
     source_file_id: Optional[str] = None
 
 
-class AbstractImportEdgeRepository(ABC):
-    @abstractmethod
-    def get_by_id(self, edge_id: str) -> Optional[ImportEdge]:
-        pass
-
-    @abstractmethod
-    def get_list_by_ids(self, edge_ids: List[str]) -> List[ImportEdge]:
-        pass
-
+class AbstractImportEdgeRepository(AbstractCRUDRepository[ImportEdge]):
     @abstractmethod
     def get_list(self, flt: ImportEdgeFilter) -> List[ImportEdge]:
-        pass
-
-    @abstractmethod
-    def create(self, edge: ImportEdge) -> ImportEdge:
-        pass
-
-    @abstractmethod
-    def update(self, edge_id: str, data: Dict[str, Any]) -> Optional[ImportEdge]:
-        pass
-
-    @abstractmethod
-    def delete(self, edge_id: str) -> bool:
         pass
 
 
@@ -298,29 +203,9 @@ class NodeRefFilter:
     package_id: Optional[str] = None
 
 
-class AbstractNodeRefRepository(ABC):
-    @abstractmethod
-    def get_by_id(self, ref_id: str) -> Optional[NodeRef]:
-        pass
-
-    @abstractmethod
-    def get_list_by_ids(self, ref_ids: List[str]) -> List[NodeRef]:
-        pass
-
+class AbstractNodeRefRepository(AbstractCRUDRepository[NodeRef]):
     @abstractmethod
     def get_list(self, flt: NodeRefFilter) -> List[NodeRef]:
-        pass
-
-    @abstractmethod
-    def create(self, ref: NodeRef) -> NodeRef:
-        pass
-
-    @abstractmethod
-    def update(self, ref_id: str, data: Dict[str, Any]) -> Optional[NodeRef]:
-        pass
-
-    @abstractmethod
-    def delete(self, ref_id: str) -> bool:
         pass
 
     @abstractmethod
