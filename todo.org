@@ -2,58 +2,27 @@
 * [ ] Create project-parsing progress callbacks or iterator-based methods
 * [ ] Write data model documentation
 - signature.raw should include whole signature including name
-* [ ] Batch upsert storage support to reduce update latency
-** [ ] Stores
-*** [ ] Batch insert
-*** [ ] Batch update
-*** [ ] Batch delete
-** [ ] Batch upsert imports
-** [ ] Batch delete imports
-** [ ] Batch insert symbols. Delay embedding scheduling after symbol insert
-** [ ] Batch insert symbolrefs
-* [ ] Symbol boosting in search query makes it slow as we need to apply boost each and every field
-Optimize by denormalizing boost into separate column. Figure out per-repo boosting.
-* [ ] Initial refresh should reset refresh timer, so next tool run would not do another refresh
-* [X] Add project-level paths
-** [X] If enabled, all virtual paths are prefixed with repo name
-** [X] Provide virtual to physical path resolution helper. If not, goes through .virtual-path/ directory
-* [X] File summary should return full file if file is not summarized
+* [X] Initial refresh should reset refresh timer, so next tool run would not do another refresh
 * [ ] Add a way to fully disable a tool so it won't register any components
-* [X] Configurable RRF weights
-* [X] Auto-refresh
-** [X] Auto-refresh on every tool call
-** [X] Auto-refresh on tool call, but not more often than every X minutes
-** [X] Auto-refresh associated repos or primary repo
-* [ ] Investigate Go parser performace
-* [X] Repomap should ignore non-default repos in the project
+* [X] Investigate Go parser performace
 * [ ] Add a way to initialize project, but only scan and work from a subpath
 ** [ ] Search should be scoped to files in subdirectories
 * [ ] Optimize chunker to tokenize and then de-tokenize to generate result, as an optimization?
 * [ ] Method to fully reparse the repo in project
-* [X] Extend Node to have subtype str type (used for block types, etc)
 * [ ] Storage backends
 ** [ ] PostgreSQL backend
 ** [ ] Add Sqlite backend
 ** [X] Extract common SQL functionality into helper
 * [ ] Generic helper to find references using tree sitter query in a generic way
-** [ ] Figure out if we want to merge similar references or not
+** [ ] Figure out if we want to merge similar references or[fn:1] not
 * [ ] Add query timeouts to DuckDB to detect lockups
-* [X] Search tool
-** [X] Better tokenizer for the fts index (syntax specific?)
-*** [X] Per-language stop words?
-** [X] Lower weight of literal symbols
-** [X] Boost final score of functions/methods/symbol definitions
-** [X] Figure out field awareness and ranking
-** [X] Make tool search all symbols, not just public by default
-** [X] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
 * [ ] Add a inherits field to symbols and use for classes
 ** [ ] Update SymbolRef to use these too
 * [ ] When parsing references from files, skip duplicate names?
 * [ ] Add a way to override file mapping. For example, .h might point to C or ObjC parser.
-* [X] Move some tool parameters to project settings
 * [ ] Language support
-** [ ] Text
-*** [ ] Recursive splitter by paragraph and then sentence-based splitters.
+** [X] Text
+*** [X] Recursive splitter by paragraph and then sentence-based splitters.
 ** [X] Markdown
 ** [-] Python
 *** [X] Test module path resolution
@@ -91,10 +60,14 @@ Optimize by denormalizing boost into separate column. Figure out per-repo boosti
 *** [X] Generics
 *** [X] Fix enum parsing - methods/constructor should be correctly handled, currently included as literals
 *** [X] Add support for module_declaration
-module io.netty.testsuite_jpms.main {\n    requires io.netty.common;\n    requires io.netty.buffer;\n    requires io.netty.codec;\n    requires io.netty.codec.http;\n    requires io.netty.handler;\n    requires transitive io.netty.pkitesting;\n    requires io.netty.transport;\n    requires io.netty.transport.classes.kqueue;\n    requires io.netty.transport.classes.epoll;\n    requires io.netty.transport.classes.io_uring;\n    requires io.netty.tcnative.classes.openssl;\n    requires io.netty.codec.http3;\n    requires io.netty.codec.classes.quic;\n    requires org.bouncycastle.provider;\n}
 *** [X] Add SymbolRef extraction: calls, generic type usage, inheritance
 *** [X] Interfaces
 *** [X] Annotations
+* [ ] Parser fixes
+DEBUG:know:2025-08-12 22:10:17 [debug    ] Unknown node                   byte_offset=2674 line=88 path=django/utils/translation/__init__.py raw='del Trans' type=delete_statement
+WARNING:know:2025-08-12 22:10:17 [warning  ] Parser handled node but produced no symbols line=84 node_type=expression_statement path=django/contrib/admin/options.py raw='HORIZONTAL, VERTICAL = 1, 2'
+DEBUG:know:2025-08-12 22:10:19 [debug    ] No parser registered for path – storing bare File. path=tests/generic_views/templates/generic_views/book_archive_week.html
+WARNING:know:2025-08-12 22:10:19 [warning  ] JS parser: unknown class body node class_name=GeometryTypeControl line=4 node_type=comment path=django/contrib/gis/static/gis/js/OLMapWidget.js
 * [ ] A server with simple API to insert embedding value for a hash and get multiple embedding values for a hash (share embeddings with a team)
 * [ ] Documentation generator
 * [ ] CI/CD pipeline
@@ -107,8 +80,39 @@ module io.netty.testsuite_jpms.main {\n    requires io.netty.common;\n    requir
 * [ ] When including child symbols, pass visibility mode from parent query. Do not include private methods for publicly requested symbols.
 * [ ] Add git support
 ** [ ]  Use git to quickly find what files have changed?
-* [X] Debug search quality
 * [ ] Rename symbols to nodes
+* [X] Batch upsert storage support to reduce update latency
+** [X] Stores
+*** [X] Batch insert
+*** [X] Batch update
+*** [X] Batch delete
+** [X] Batch upsert imports
+** [X] Batch delete imports
+** [X] Batch insert symbols. Delay embedding scheduling after symbol insert
+** [X] Batch insert symbolrefs
+* [X] Symbol boosting in search query makes it slow as we need to apply boost each and every field
+Optimize by denormalizing boost into separate column. Figure out per-repo boosting.
+* [X] Add project-level paths
+** [X] If enabled, all virtual paths are prefixed with repo name
+** [X] Provide virtual to physical path resolution helper. If not, goes through .virtual-path/ directory
+* [X] File summary should return full file if file is not summarized
+* [X] Configurable RRF weights
+* [X] Auto-refresh
+** [X] Auto-refresh on every tool call
+** [X] Auto-refresh on tool call, but not more often than every X minutes
+** [X] Auto-refresh associated repos or primary repo
+* [X] Repomap should ignore non-default repos in the project
+* [X] Extend Node to have subtype str type (used for block types, etc)
+* [X] Search tool
+** [X] Better tokenizer for the fts index (syntax specific?)
+*** [X] Per-language stop words?
+** [X] Lower weight of literal symbols
+** [X] Boost final score of functions/methods/symbol definitions
+** [X] Figure out field awareness and ranking
+** [X] Make tool search all symbols, not just public by default
+** [X] Do not crash if input enums are wrong. ValueError: 'identifier' is not a valid SymbolKind.
+* [X] Move some tool parameters to project settings
+* [X] Debug search quality
 * [X] Move data helpers out of data.py
 * [X] Introduce concept of project which is a collection of repositories
 ** [X] Create virtual path for other repos
