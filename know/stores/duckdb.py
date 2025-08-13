@@ -210,6 +210,13 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
         self._execute(q)
         return True
 
+    def delete_many(self, item_ids: list[str]) -> bool:
+        if not item_ids:
+            return True
+        q = Query.from_(self._table).where(self._table.id.isin(item_ids)).delete()
+        self._execute(q)
+        return True
+
     def create_many(self, items: list[T]) -> list[T]:
         if not items:
             return []

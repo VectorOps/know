@@ -45,6 +45,10 @@ class AbstractCRUDRepository(ABC, Generic[T]):
         pass
 
     @abstractmethod
+    def delete_many(self, item_ids: List[str]) -> bool:
+        pass
+
+    @abstractmethod
     def create_many(self, items: List[T]) -> List[T]:
         pass
 
