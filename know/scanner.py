@@ -434,6 +434,8 @@ def upsert_parsed_file(
         pkg = pm.data.package.get_by_virtual_path(repo.id, parsed_imp.virtual_path)
         return pkg.id if pkg else None
 
+    updates: list[tuple[str, dict[str, Any]]] = []
+    creates: list[ImportEdge] = []
     new_keys: set[tuple[str | None, str | None, bool]] = set()
 
     for imp in parsed_file.imports:
@@ -442,7 +444,6 @@ def upsert_parsed_file(
 
         to_pkg_id: str | None = _resolve_to_package_id(imp)
 
-        # Build kwargs from ParsedImportEdge while mapping to ImportEdge fields
         kwargs = imp.to_dict()
         kwargs.update(
             {
@@ -454,18 +455,20 @@ def upsert_parsed_file(
         )
 
         if key in existing_by_key:
-            edge = import_repo.update(existing_by_key[key].id, kwargs)
+            updates.append((existing_by_key[key].id, kwargs))
         else:
-            edge = import_repo.create(ImportEdge(id=generate_id(), **kwargs))
+            creates.append(ImportEdge(id=generate_id(), **kwargs))
 
-        # (Re-)schedule internal edges that are still unresolved
-        if edge and not edge.external and edge.to_package_id is None:
+    updated_edges = import_repo.update_many(updates) if updates else []
+    created_edges = import_repo.create_many(creates) if creates else []
+
+    for edge in [*updated_edges, *created_edges]:
+        if not edge.external and edge.to_package_id is None:
             state.pending_import_edges.append(edge)
 
-    # Delete edges that no longer exist
-    for edge_key, edge in existing_by_key.items():
-        if edge_key not in new_keys:
-            import_repo.delete(edge.id)
+    obsolete_ids = [edge.id for edge_key, edge in existing_by_key.items() if edge_key not in new_keys]
+    if obsolete_ids:
+        import_repo.delete_many(obsolete_ids)
     t_imp = time.perf_counter()
 
     # Symbols (re-create)
@@ -484,6 +487,8 @@ def upsert_parsed_file(
     }
 
     emb_calc = pm.embeddings
+
+    nodes_to_create: list[Node] = []
 
     def _insert_symbol(psym: ParsedNode,
                        parent_id: str | None = None) -> str:
@@ -513,7 +518,7 @@ def upsert_parsed_file(
             schedule_emb = emb_calc is not None
 
         sm = Node(**sm_data)
-        node_repo.create(sm)
+        nodes_to_create.append(sm)
 
         if schedule_emb:
             if pm.settings.embedding and pm.settings.embedding.sync_embeddings:
@@ -535,6 +540,8 @@ def upsert_parsed_file(
     node_repo.delete_by_file_id(file_meta.id)
     for sym in parsed_file.symbols:
         _insert_symbol(sym)
+    if nodes_to_create:
+        node_repo.create_many(nodes_to_create)
     t_sym = time.perf_counter()
 
     # ── Symbol References ───────────────────────────────────────────────────
@@ -551,6 +558,7 @@ def upsert_parsed_file(
         return pkg.id if pkg else None
 
     # (re)create refs from the freshly parsed data
+    refs_to_create: list[NodeRef] = []
     for ref in parsed_file.symbol_refs:
         ref_data = ref.to_dict()
         to_pkg_id = _resolve_pkg_id(ref_data.pop("to_package_virtual_path"))
@@ -562,8 +570,9 @@ def upsert_parsed_file(
                 "to_package_id": to_pkg_id,
             }
         )
-        symbolref_repo.create(NodeRef(id=generate_id(), **ref_data))
-
+        refs_to_create.append(NodeRef(id=generate_id(), **ref_data))
+    if refs_to_create:
+        symbolref_repo.create_many(refs_to_create)
 
     t_ref = time.perf_counter()
     with lock:
