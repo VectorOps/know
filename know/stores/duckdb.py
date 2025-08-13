@@ -495,9 +495,15 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
         # Candidates
         candidates = (
-            Query.
-            from_(self._table).
-            select(self._table.id, self._table.repo_id, self._table.embedding_code_vec, self._table.kind)
+            Query
+            .from_(self._table)
+            .select(
+                self._table.id,
+                self._table.repo_id,
+                self._table.embedding_code_vec,
+                self._table.kind,
+                self._table.search_boost,
+            )
         )
 
         if query.repo_ids:

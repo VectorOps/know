@@ -503,6 +503,13 @@ def upsert_parsed_file(
             "package_id": pkg_meta.id if pkg_meta else None,
             "parent_node_id": parent_id,
         })
+        kind_val = sm_data.get("kind")
+        if kind_val is not None:
+            kind_key = kind_val.value if hasattr(kind_val, "value") else str(kind_val)
+            boost = pm.settings.search.node_kind_boosts.get(kind_key, 1.0)
+        else:
+            boost = 1.0
+        sm_data["search_boost"] = boost
 
         # reuse embedding if we had an identical symbol earlier
         embedding_text = _get_embedding_text(psym.body, psym.docstring)
@@ -572,7 +579,7 @@ def upsert_parsed_file(
         symbolref_repo.create_many(refs_to_create)
 
     t_ref = time.perf_counter()
-    if stats:
+    if stats is not None:
         stats["total_upsert_count"] += 1
         stats["total_upsert_time"] += t_ref - upsert_start_time
         stats["upsert_package_time"] += t_pkg - t_start

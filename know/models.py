@@ -204,6 +204,9 @@ class Node(BaseModel):
     embedding_code_vec: Optional[Vector] = None
     embedding_model: Optional[str] = None
 
+    # Search boost (persisted)
+    search_boost: float = 1.0
+
     # Quality scores
     score_lint: Optional[float] = None
     score_complexity: Optional[int] = None
