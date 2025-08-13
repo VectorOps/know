@@ -463,7 +463,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
                     keys.append(k)
         q = Query.into(self._table).columns([self._table[k] for k in keys])
         for d in data_list:
-            values = [d.get(k, RawValue("NULL")) for k in keys]
+            values = [d.get(k) for k in keys]
             q = q.insert(values)
         self._execute(q)
         return items

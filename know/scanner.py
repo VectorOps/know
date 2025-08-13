@@ -173,7 +173,6 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
     state = ParsingState()
     timing_stats: defaultdict[str, dict[str, int | float]] = defaultdict(lambda: {"count": 0, "total_time": 0.0})
     upsert_timing_stats: defaultdict[str, float] = defaultdict(float)
-    timing_stats_lock = threading.Lock()
 
     parser_map = _get_parser_map(pm)
 
@@ -223,9 +222,8 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
                 continue
 
             # Update timing stats for all processed files (error, bare, parsed)
-            with timing_stats_lock:
-                timing_stats[res.suffix]["count"] += 1
-                timing_stats[res.suffix]["total_time"] += res.duration
+            timing_stats[res.suffix]["count"] += 1
+            timing_stats[res.suffix]["total_time"] += res.duration
 
             if res.status == ProcessFileStatus.ERROR:
                 logger.error("Failed to parse file", path=res.rel_path, exc=res.exception)
@@ -259,7 +257,7 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
 
             elif res.status == ProcessFileStatus.PARSED_FILE:
                 assert res.parsed_file is not None
-                upsert_parsed_file(pm, repo, state, res.parsed_file, upsert_timing_stats, timing_stats_lock)
+                upsert_parsed_file(pm, repo, state, res.parsed_file, upsert_timing_stats)
                 if res.existing_meta is None:
                     result.files_added.append(res.parsed_file.path)
                 else:
@@ -371,8 +369,7 @@ def upsert_parsed_file(
     repo: Repo,
     state: ParsingState,
     parsed_file: ParsedFile,
-    stats: defaultdict[str, float],
-    lock: threading.Lock,
+    stats: Optional[defaultdict[str, float]] = None,
 ) -> None:
     """
     Persist *parsed_file* (package → file → symbols) into the
@@ -575,7 +572,7 @@ def upsert_parsed_file(
         symbolref_repo.create_many(refs_to_create)
 
     t_ref = time.perf_counter()
-    with lock:
+    if stats:
         stats["total_upsert_count"] += 1
         stats["total_upsert_time"] += t_ref - upsert_start_time
         stats["upsert_package_time"] += t_pkg - t_start
