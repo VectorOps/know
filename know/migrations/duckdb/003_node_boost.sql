@@ -1,6 +1,5 @@
 -- 003_node_boost.sql - add precomputed search boost column to nodes
-ALTER TABLE nodes ADD COLUMN IF NOT EXISTS search_boost DOUBLE;
-ALTER TABLE nodes ALTER COLUMN search_boost SET DEFAULT 1.0;
+ALTER TABLE nodes ADD COLUMN IF NOT EXISTS search_boost DOUBLE DEFAULT 1.0;
 UPDATE nodes
 SET search_boost = CASE kind
     WHEN 'function' THEN 2.0
