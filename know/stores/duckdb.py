@@ -5,7 +5,7 @@ import pandas as pd
 import math
 import queue
 from concurrent.futures import Future
-from typing import Optional, Dict, Any, List, Generic, TypeVar, Callable
+from typing import Optional, Dict, Any, List, Generic, TypeVar, Callable, Tuple
 import importlib.resources as pkg_resources
 from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order, Case
 from pypika.terms import LiteralValue, ValueWrapper
@@ -210,6 +210,30 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
         self._execute(q)
         return True
 
+    def create_many(self, items: list[T]) -> list[T]:
+        if not items:
+            return []
+        data_list = [self._serialize_data(i.model_dump(exclude_none=True)) for i in items]
+        keys: list[str] = []
+        for d in data_list:
+            for k in d.keys():
+                if k not in keys:
+                    keys.append(k)
+        q = Query.into(self._table).columns([self._table[k] for k in keys])
+        for d in data_list:
+            values = [d.get(k, RawValue("NULL")) for k in keys]
+            q = q.insert(values)
+        self._execute(q)
+        return items
+
+    def update_many(self, updates: List[Tuple[str, Dict[str, Any]]]) -> list[T]:
+        out: list[T] = []
+        for item_id, data in updates:
+            updated = self.update(item_id, data)
+            if updated is not None:
+                out.append(updated)
+        return out
+
 class DuckDBProjectRepo(_DuckDBBaseRepo[Project], AbstractProjectRepository):
     table = "projects"
     model = Project
@@ -412,6 +436,52 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
         self._execute(q)
         return self.get_by_id(item_id)
+
+    def create_many(self, items: list[Node]) -> list[Node]:
+        if not items:
+            return []
+        data_list: list[dict[str, Any]] = []
+        for item in items:
+            d = self._serialize_data(item.model_dump(exclude_none=True))
+            d["fts_needle"] = calc_bm25_fts_index(
+                file_repo=self.file_repo,
+                s=self.settings,
+                node=item,
+            )
+            data_list.append(d)
+        keys: list[str] = []
+        for d in data_list:
+            for k in d.keys():
+                if k not in keys:
+                    keys.append(k)
+        q = Query.into(self._table).columns([self._table[k] for k in keys])
+        for d in data_list:
+            values = [d.get(k, RawValue("NULL")) for k in keys]
+            q = q.insert(values)
+        self._execute(q)
+        return items
+
+    def update_many(self, updates: list[Tuple[str, Dict[str, Any]]]) -> list[Node]:
+        updated_nodes: list[Node] = []
+        for item_id, changes in updates:
+            current = self.get_by_id(item_id)
+            if current is None:
+                continue
+            updated_node = current.model_copy(update=changes)
+            serialized = self._serialize_data(changes)
+            serialized["fts_needle"] = calc_bm25_fts_index(
+                file_repo=self.file_repo,
+                s=self.settings,
+                node=updated_node,
+            )
+            q = Query.update(self._table).where(self._table.id == item_id)
+            for k, v in serialized.items():
+                q = q.set(k, v)
+            self._execute(q)
+            refreshed = self.get_by_id(item_id)
+            if refreshed is not None:
+                updated_nodes.append(refreshed)
+        return updated_nodes
 
     def search(self, query: NodeSearchQuery) -> list[Node]:
         q = Query.from_(self._table)

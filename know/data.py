@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List, TypeVar, Generic
+from typing import Optional, Dict, Any, List, TypeVar, Generic, Tuple
 from abc import ABC, abstractmethod
 from know.models import (
     Project,
@@ -42,6 +42,14 @@ class AbstractCRUDRepository(ABC, Generic[T]):
 
     @abstractmethod
     def delete(self, item_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    def create_many(self, items: List[T]) -> List[T]:
+        pass
+
+    @abstractmethod
+    def update_many(self, updates: List[Tuple[str, Dict[str, Any]]]) -> List[T]:
         pass
 
 
