@@ -621,13 +621,7 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             aliased_scores = AliasedQuery("rrf_final")
             aliased_fused = AliasedQuery("fused")
 
-            score_col = aliased_scores.score
-
-            # Apply node kind boosts
-            kind_boost_case = Case().else_(1.0)
-            for kind, boost in self.settings.search.node_kind_boosts.items():
-                kind_boost_case = kind_boost_case.when(aliased_candidates.kind == kind.value, boost)
-            score_col = score_col * kind_boost_case
+            score_col = aliased_scores.score * functions.Coalesce(aliased_candidates.search_boost, LiteralValue(1.0))
 
             if query.boost_repo_id and query.repo_boost_factor != 1.0:
                 repo_boost_case = (
