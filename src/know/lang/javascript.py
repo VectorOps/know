@@ -63,7 +63,7 @@ class JavaScriptCodeParser(AbstractCodeParser):
         "identifier",
         "member_expression",
     }
-    _JS_REF_QUERY = JS_LANGUAGE.query(r"""
+    _JS_REF_QUERY = ts.Query(JS_LANGUAGE, r"""
         (call_expression
             function: [(identifier) (member_expression)] @callee) @call
         (new_expression

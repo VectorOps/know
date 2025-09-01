@@ -1,4 +1,8 @@
 #+title: Todo
+* [ ] Create async API
+** [ ] Spin a new thead for the project
+** [ ] Create async thread wrappers (use library from Code)
+
 * [ ] Create project-parsing progress callbacks or iterator-based methods
 * [ ] Write data model documentation
 - signature.raw should include whole signature including name

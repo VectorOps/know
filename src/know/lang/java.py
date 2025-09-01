@@ -34,7 +34,7 @@ from enum import Enum
 
 
 JAVA_LANGUAGE = Language(tsjava.language())
-_JAVA_REF_QUERY = JAVA_LANGUAGE.query(r"""
+_JAVA_REF_QUERY = ts.Query(JAVA_LANGUAGE, r"""
     (method_invocation) @call
 
     (object_creation_expression
