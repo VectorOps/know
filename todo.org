@@ -6,6 +6,7 @@
 * [ ] Create project-parsing progress callbacks or iterator-based methods
 * [ ] Write data model documentation
 - signature.raw should include whole signature including name
+* [ ] Fix BaseTool definition to accept and return BaseModel (or list of BaseModel for return)
 * [X] Initial refresh should reset refresh timer, so next tool run would not do another refresh
 * [ ] Add a way to fully disable a tool so it won't register any components
 * [X] Investigate Go parser performace
