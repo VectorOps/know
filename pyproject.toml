@@ -57,3 +57,18 @@ dev = [
     "pandas-stubs>=2.3.0.250703",
     "types-networkx>=3.5.0.20250728",
 ]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["know*"]
+
+[tool.setuptools.package-data]
+know = ["migrations/**/*.sql"]
