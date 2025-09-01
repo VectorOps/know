@@ -770,8 +770,7 @@ class DuckDBDataRepository(AbstractDataRepository):
         self._conn.start()
         self._settings = settings
 
-        # build repositories (solmel need cross-references)
-        # s
+        # build repositories
         self._project_repo = DuckDBProjectRepo(self._conn)
         self._prj_repo_repo = DuckDBProjectRepoRepo(self._conn)
         self._file_repo = DuckDBFileRepo(self._conn)
