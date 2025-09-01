@@ -44,7 +44,6 @@ class NodeSearchReq(BaseModel):
 
 
 class NodeSearchResult(BaseModel):
-    symbol_id: str = Field(description="Unique identifier for the symbol.")
     fqn: Optional[str] = Field(default=None, description="The fully-qualified name of the symbol.")
     name: Optional[str] = Field(default=None, description="The short name of the symbol.")
     kind: Optional[str] = Field(
@@ -58,6 +57,10 @@ class NodeSearchResult(BaseModel):
     )
     body: Optional[str] = Field(
         default=None, description="The summary or body of the symbol, depending on the summary_mode."
+    )
+    summary_mode: SummaryMode = Field(
+        ...,
+        description="Summary granularity used to produce 'body' (summary_short, summary_full, or full).",
     )
 
 
@@ -167,13 +170,13 @@ class NodeSearchTool(BaseTool):
 
             results.append(
                 NodeSearchResult(
-                    symbol_id  = s.id,
                     fqn        = s.fqn,
                     name       = s.name,
                     kind       = s.kind,
                     visibility = s.visibility,
                     file_path  = file_path,
                     body       = sym_body,
+                    summary_mode = summary_mode,
                 )
             )
         return results
