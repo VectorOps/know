@@ -56,7 +56,7 @@ class SummarizeFilesTool(BaseTool):
         return {
             "name": self.tool_name,
             "description": (
-                "Return a text summary for each supplied file, consisting of its "
+                "Return a summary for each supplied file, consisting of its "
                 "import statements and top-level symbol definitions. Use this tool "
                 "to get an overview of interesting files. Prefer the default "
                 "`summary_short` mode, but request `full` if needed."
@@ -75,7 +75,8 @@ class SummarizeFilesTool(BaseTool):
                         "default": SummaryMode.ShortSummary.value,
                         "description": (
                             "Level of detail for the generated summary "
-                            "(`skip`, `summary_short`, or `full`)."
+                            "(`skip`, `summary_short`, or `full`). "
+                            "`full` returns the whole file."
                         ),
                     },
                 },
