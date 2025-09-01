@@ -76,7 +76,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
 
     _RESOLVE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx")
 
-    _TS_REF_QUERY = TS_LANGUAGE.query(r"""
+    _TS_REF_QUERY = ts.Query(TS_LANGUAGE, r"""
     (call_expression
         function: [(identifier) (member_expression)] @callee) @call
     (new_expression
