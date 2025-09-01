@@ -1,6 +1,7 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional, Any, Type
+from typing import Optional, Any, Type, Callable
+from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import threading
@@ -32,6 +33,15 @@ from know.embedding_helpers import schedule_missing_embeddings, schedule_outdate
 class EmbeddingTask:
     symbol_id: str
     text: str
+
+class ScanProgress(BaseModel):
+    repo_id: str
+    total_files: int
+    processed_files: int
+    files_added: int
+    files_updated: int
+    files_deleted: int
+    elapsed_seconds: float
 
 
 class ParsingState:
@@ -153,7 +163,7 @@ def _process_file(
         )
 
 
-def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
+def scan_repo(pm: ProjectManager, repo: Repo, progress_callback: Optional[Callable[[BaseModel], None]] = None) -> ScanResult:
     """
     Recursively walk the project directory, parse every supported source file
     and store parsing results via the project-wide data repository.
@@ -212,11 +222,28 @@ def scan_repo(pm: ProjectManager, repo: Repo) -> ScanResult:
             futures.append(executor.submit(_process_file, pm, repo, path, root, gitignore, cache, parser_map))
 
         total_tasks = len(futures)
+        processed = 0
         for idx, future in enumerate(as_completed(futures)):
             if (idx + 1) % 100 == 0:
                 logger.debug("processing...", num=idx + 1, total=total_tasks)
 
             res: ProcessFileResult = future.result()
+            processed += 1
+            if progress_callback and (processed % 100 == 0):
+                try:
+                    progress_callback(
+                        ScanProgress(
+                            repo_id=repo.id,
+                            total_files=total_tasks,
+                            processed_files=processed,
+                            files_added=len(result.files_added),
+                            files_updated=len(result.files_updated),
+                            files_deleted=len(result.files_deleted),
+                            elapsed_seconds=time.perf_counter() - start_time,
+                        )
+                    )
+                except Exception as cb_exc:
+                    logger.error("Progress callback failed", exc=cb_exc)
 
             if res.status == ProcessFileStatus.SKIPPED:
                 continue
