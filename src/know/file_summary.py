@@ -18,9 +18,13 @@ class SummaryMode(str, Enum):
 
 
 class FileSummary(BaseModel):
-    """Represents the summary of a single file."""
+    """Represents a generated summary for a single file and the mode used to produce it."""
     path: str = Field(..., description="The project-relative path of the file.")
     content: str = Field(..., description="The generated summary content of the file.")
+    summary_mode: SummaryMode = Field(
+        ...,
+        description="Summary granularity used to produce the content. One of: 'summary_short', 'summary_full', or 'full'.",
+    )
 
 
 def _symbol_to_text(sym: Node, include_docs: bool = False) -> str:
@@ -59,7 +63,7 @@ def build_file_summary(
         abs_path = os.path.join(repo.root_path, rel_path)
         try:
             with open(abs_path, "r", encoding="utf-8") as f:
-                return FileSummary(path=rel_path, content=f.read())
+                return FileSummary(path=rel_path, content=f.read(), summary_mode=summary_mode)
         except OSError as exc:
             logger.error("Unable to read file", path=abs_path, exc=exc)
             return None
@@ -83,4 +87,4 @@ def build_file_summary(
         else [_symbol_to_text(s, include_docs=include_docs) for s in top_level]
     )
 
-    return FileSummary(path=rel_path, content="\n".join(sections))
+    return FileSummary(path=rel_path, content="\n".join(sections), summary_mode=summary_mode)
