@@ -26,7 +26,7 @@ class Settings(ProjectSettings):
     )
 
     summary_mode: SummaryMode = Field(
-        default=SummaryMode.ShortSummary,
+        default=SummaryMode.Definition,
         description="Detail level for summaries.",
         validation_alias=AliasChoices("summary-mode", "m"),
     )

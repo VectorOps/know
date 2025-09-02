@@ -12,9 +12,9 @@ from know.data import ImportEdgeFilter, NodeFilter
 
 class SummaryMode(str, Enum):
     Skip = "skip"
-    ShortSummary = "summary_short"
-    FullSummary = "summary_full"
-    Full = "full"
+    Definition = "definition"
+    Documentation = "documentation"
+    Source = "source"
 
 
 class FileSummary(BaseModel):
@@ -23,7 +23,7 @@ class FileSummary(BaseModel):
     content: str = Field(..., description="The generated summary content of the file.")
     summary_mode: SummaryMode = Field(
         ...,
-        description="Summary granularity used to produce the content. One of: 'summary_short', 'summary_full', or 'full'.",
+        description="Summary granularity used to produce the content. One of: 'definition', 'documentation', or 'source'.",
     )
 
 
@@ -42,7 +42,7 @@ def build_file_summary(
     pm: ProjectManager,
     repo: Repo,
     rel_path: str,
-    summary_mode: SummaryMode = SummaryMode.ShortSummary,
+    summary_mode: SummaryMode = SummaryMode.Definition,
 ) -> Optional[FileSummary]:
     """
     Return a FileSummary for *rel_path* or ``None`` when the file is
@@ -59,7 +59,7 @@ def build_file_summary(
 
     # If there is no language or package, we can't generate a summary,
     # so we return the full file content instead.
-    if (summary_mode is SummaryMode.Full) or (fm.language is None):
+    if (summary_mode is SummaryMode.Source) or (fm.language is None):
         abs_path = os.path.join(repo.root_path, rel_path)
         try:
             with open(abs_path, "r", encoding="utf-8") as f:
@@ -68,7 +68,7 @@ def build_file_summary(
             logger.error("Unable to read file", path=abs_path, exc=exc)
             return None
 
-    include_docs = summary_mode is SummaryMode.FullSummary
+    include_docs = summary_mode is SummaryMode.Documentation
 
     node_repo = pm.data.node
     edge_repo = pm.data.importedge

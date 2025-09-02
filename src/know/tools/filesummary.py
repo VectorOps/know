@@ -12,7 +12,7 @@ from know.models import Visibility
 class SummarizeFilesReq(BaseModel):
     """Request model for the SummarizeFilesTool."""
     paths: Sequence[str]
-    summary_mode: SummaryMode | str = SummaryMode.ShortSummary
+    summary_mode: SummaryMode | str = SummaryMode.Definition
 
 
 class SummarizeFilesTool(BaseTool):
@@ -72,11 +72,10 @@ class SummarizeFilesTool(BaseTool):
                     "summary_mode": {
                         "type": "string",
                         "enum": summary_enum,
-                        "default": SummaryMode.ShortSummary.value,
+                        "default": SummaryMode.Definition.value,
                         "description": (
                             "Level of detail for the generated summary "
-                            "(`skip`, `summary_short`, or `full`). "
-                            "`full` returns the whole file."
+                            "(`definition`, `documentation`). "
                         ),
                     },
                 },

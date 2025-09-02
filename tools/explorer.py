@@ -98,7 +98,7 @@ def create_app(project) -> Flask:
         importedges  = data.importedge.get_list(
             ImportEdgeFilter(source_file_id=file_id)
         )
-        file_summary_obj = build_file_summary(project, file.path, summary_mode=SummaryMode.ShortSummary)
+        file_summary_obj = build_file_summary(project, file.path, summary_mode=SummaryMode.Definition)
         summary = file_summary_obj.content if file_summary_obj else "Could not generate summary."
 
         return render_template(
@@ -155,7 +155,7 @@ def create_app(project) -> Flask:
             limit = int(form_data.get("limit") or 20)
             restart_prob = float(form_data.get("restart_prob") or 0.15)
             min_symbol_len = int(form_data.get("min_symbol_len") or 3)
-            summary_mode = SummaryMode(form_data.get("summary_mode", SummaryMode.ShortSummary.value))
+            summary_mode = SummaryMode(form_data.get("summary_mode", SummaryMode.Definition.value))
             
             token_limit_count_str = form_data.get("token_limit_count")
             token_limit_count = int(token_limit_count_str) if token_limit_count_str else None
@@ -210,7 +210,7 @@ def create_app(project) -> Flask:
                     visibility=form_data.get("visibility") or "public",
                     query=form_data.get("query") or None,
                     limit=int(form_data.get("limit") or 20),
-                    summary_mode=SummaryMode(form_data.get("summary_mode", SummaryMode.ShortSummary.value)),
+                    summary_mode=SummaryMode(form_data.get("summary_mode", SummaryMode.Definition.value)),
                 )
             )
 

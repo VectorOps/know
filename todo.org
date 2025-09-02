@@ -1,4 +1,6 @@
 #+title: Todo
+* [ ] Change summary API to not return whole file - remove enum.
+* [ ] Create a new read file tool
 * [ ] Create async API
 ** [ ] Spin a new thead for the project
 ** [ ] Create async thread wrappers (use library from Code)

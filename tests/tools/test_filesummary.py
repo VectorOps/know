@@ -43,7 +43,7 @@ def test_filesummary_returns_expected_content(tmp_path):
 
     res = SummarizeFilesTool().execute(project, SummarizeFilesReq(
         paths=["foo.py"],
-        summary_mode=SummaryMode.FullSummary,
+        summary_mode=SummaryMode.Documentation,
     ))
     assert len(res) == 1
 

@@ -69,7 +69,7 @@ def main() -> None:
     prompt_text:  str | None = None
     token_limit_count: int | None = None
     token_limit_model: str | None = None
-    summary_mode: SummaryMode = SummaryMode.ShortSummary
+    summary_mode: SummaryMode = SummaryMode.Definition
 
     print("RepoMap interactive CLI.  Type '/help' for commands, '/exit' to quit.")
     session: PromptSession = PromptSession(history=FileHistory(".repomap_history"))
@@ -152,7 +152,7 @@ def main() -> None:
 
                 elif cmd == "/summary":
                     if arg.lower() in {"on", "yes"}:
-                        summary_mode = SummaryMode.ShortSummary
+                        summary_mode = SummaryMode.Definition
                     elif arg.lower() in {"off", "no"}:
                         summary_mode = SummaryMode.Skip
                     print(f"Summaries {summary_mode}.")

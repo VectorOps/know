@@ -38,7 +38,7 @@ class NodeSearchReq(BaseModel):
     limit: int | None = Field(default=20, description="Maximum number of results to return.")
     offset: int | None = Field(default=0, description="Number of results to skip. Used for pagination.")
     summary_mode: SummaryMode | str = Field(
-        default=SummaryMode.ShortSummary,
+        default=SummaryMode.Definition,
         description="Amount of source code to include with each match",
     )
 
@@ -60,7 +60,7 @@ class NodeSearchResult(BaseModel):
     )
     summary_mode: SummaryMode = Field(
         ...,
-        description="Summary granularity used to produce 'body' (summary_short, summary_full, or full).",
+        description="Summary granularity used to produce 'body' (skip, definition, documentation or source).",
     )
 
 
@@ -158,11 +158,11 @@ class NodeSearchTool(BaseTool):
 
             sym_body = None
             if summary_mode != SummaryMode.Skip:
-                if summary_mode == SummaryMode.Full:
+                if summary_mode == SummaryMode.Source:
                     sym_body = s.body
                 elif helper is not None:
-                    include_docs = summary_mode == SummaryMode.FullSummary
-                    include_comments = summary_mode == SummaryMode.FullSummary
+                    include_docs = summary_mode == SummaryMode.Documentation
+                    include_comments = summary_mode == SummaryMode.Documentation
                     sym_body  = helper.get_symbol_summary(s,
                                                           include_comments=include_comments,
                                                           include_docs=include_docs,
@@ -237,7 +237,7 @@ class NodeSearchTool(BaseTool):
                     "summary_mode": {
                         "type": "string",
                         "enum": summary_enum,
-                        "default": SummaryMode.ShortSummary.value,
+                        "default": SummaryMode.Definition.value,
                         "description": (
                             "Amount of source code to include with each match"
                         ),

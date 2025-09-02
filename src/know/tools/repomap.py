@@ -286,7 +286,7 @@ class RepoMapReq(BaseModel):
         default=LIMIT_DEFAULT, description="The maximum number of files to return."
     )
     summary_mode: SummaryMode | str = Field(
-        default=SummaryMode.ShortSummary,
+        default=SummaryMode.Definition,
         description="The level of detail for the summary of each file.",
     )
     skip_mentioned_summary: bool = Field(
@@ -513,10 +513,10 @@ class RepoMapTool(BaseTool):
                     "summary_mode": {
                         "type": "string",
                         "enum": summary_enum,
-                        "default": SummaryMode.ShortSummary.value,
+                        "default": SummaryMode.Definition.value,
                         "description": (
                             "The level of detail for the summary of each file "
-                            "(`skip`/`summary_short`/`summary_full`/`full`)."
+                            "(`skip`, `definition`, `documentation`, `source`)."
                         ),
                     },
                     "skip_mentioned_summary": {
