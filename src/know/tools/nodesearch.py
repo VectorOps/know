@@ -35,7 +35,7 @@ class NodeSearchReq(BaseModel):
             "full-text and vector search. Use when you don’t know the exact name."
         ),
     )
-    limit: int | None = Field(default=20, description="Maximum number of results to return.")
+    limit: int | None = Field(default=10, description="Maximum number of results to return.")
     offset: int | None = Field(default=0, description="Number of results to skip. Used for pagination.")
     summary_mode: SummaryMode | str = Field(
         default=SummaryMode.Definition,
@@ -225,7 +225,7 @@ class NodeSearchTool(BaseTool):
                     "limit": {
                         "type": "integer",
                         "minimum": 1,
-                        "default": 20,
+                        "default": 10,
                         "description": "Maximum number of results to return."
                     },
                     "offset": {
