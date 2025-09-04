@@ -731,7 +731,8 @@ class JavaScriptCodeParser(AbstractCodeParser):
 
     def _collect_symbol_refs(self, root: ts.Node) -> list[ParsedNodeRef]:
         refs: list[ParsedNodeRef] = []
-        for _, match in self._JS_REF_QUERY.matches(root):
+        cursor = ts.QueryCursor(self._JS_REF_QUERY)
+        for _, match in cursor.matches(root):        
             node_call = node_ctor = node_type = None
             node_target: Optional[ts.Node] = None
             ref_type = None
