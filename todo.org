@@ -1,11 +1,12 @@
 #+title: Todo
+* [ ] Do not return minimized/compressed JS files
 * [ ] Change summary API to not return whole file - remove enum.
-* [ ] Create a new read file tool
+* [X] Create a new read file tool
+* [ ] Create an API to notify what files have changed and only refresh them
 * [ ] Create async API
 ** [ ] Spin a new thead for the project
 ** [ ] Create async thread wrappers (use library from Code)
-
-* [ ] Create project-parsing progress callbacks or iterator-based methods
+* [X] Create project-parsing progress callbacks or iterator-based methods
 * [ ] Write data model documentation
 - signature.raw should include whole signature including name
 * [ ] Fix BaseTool definition to accept and return BaseModel (or list of BaseModel for return)
