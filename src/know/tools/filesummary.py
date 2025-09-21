@@ -34,6 +34,11 @@ class SummarizeFilesTool(BaseTool):
         if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)
 
+        if summary_mode is SummaryMode.Source:
+            raise ValueError(
+                "summary_mode 'source' is not supported. To read the whole file, use a file reading tool."
+            )
+
         summaries: list[FileSummary] = []
         for path in req.paths:
             deconstructed = pm.deconstruct_virtual_path(path)
@@ -59,13 +64,15 @@ class SummarizeFilesTool(BaseTool):
         """Return the OpenAI schema for the tool."""
         summary_enum = [m.value for m in SummaryMode]
 
+        summary_enum = [m.value for m in SummaryMode if m not in (SummaryMode.Source, SummaryMode.Skip)]
+
         return {
             "name": self.tool_name,
             "description": (
                 "Return a summary for each supplied file, consisting of its "
                 "import statements and top-level symbol definitions. Use this tool "
                 "to get an overview of interesting files. Prefer the default "
-                "`summary_short` mode, but request `full` if needed."
+                "`definition` mode, but request `documentation` if more detail (like docstrings) is needed."
             ),
             "parameters": {
                 "type": "object",
