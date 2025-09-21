@@ -1,4 +1,5 @@
 import sys
+import json
 from typing import List
 
 from pydantic import Field, AliasChoices
@@ -7,7 +8,7 @@ from pydantic_settings import SettingsConfigDict
 from know.settings import ProjectSettings, print_help
 from know import init_project
 from know.tools.base import ToolRegistry
-from know.file_summary import SummaryMode
+from know.file_summary import SummaryMode, FileSummary
 from know.logger import logger
 
 class Settings(ProjectSettings):
@@ -49,13 +50,19 @@ def main() -> None:
 
     summarize_tool = ToolRegistry.get("vectorops_summarize_files")
 
-    summaries = summarize_tool.execute(
+    json_result = summarize_tool.execute(
         project,
         summarize_tool.tool_input(
             paths=settings.files,
             summary_mode=settings.summary_mode,
         )
     )
+    try:
+        data = json.loads(json_result)
+        summaries = [FileSummary(**item) for item in data]
+    except Exception as e:
+        logger.error(f"Failed to parse filesummary output as JSON: {e}")
+        sys.exit(1)
 
     for s in summaries:
         print(f"── {s.path}")
