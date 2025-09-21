@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from know.project import ProjectManager
 from know.settings import ProjectSettings
-from typing import Dict, Type, Any, List, Type
+from typing import Any, Dict, List, Type  # keep existing
+import json  # NEW
 import inspect
 from enum import Enum
 from pydantic import BaseModel
@@ -18,7 +19,7 @@ class MCPToolDefinition:
 class BaseTool(ABC):
     tool_name: str
     tool_input: Type[BaseModel]
-    tool_output: Type[BaseModel | List[BaseModel]]
+    tool_output: Type[str] | None
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -63,6 +64,16 @@ class BaseTool(ABC):
     # convenience instance wrapper
     def to_python(self, obj: Any) -> Any:
         return self._convert_to_python(obj)
+
+    def encode_output(self, obj: Any) -> str:
+        """
+        Convert a tool's execute() return value into a string to send as tool output.
+        Default: JSON encode of Pydantic/Enums/collections; override in tools for non‑JSON.
+        """
+        try:
+            return json.dumps(self._convert_to_python(obj), ensure_ascii=False)
+        except Exception:
+            return str(obj)
 
 
 class ToolRegistry:

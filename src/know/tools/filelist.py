@@ -26,7 +26,7 @@ class ListFilesTool(BaseTool):
     """Tool to list files in the project matching glob patterns."""
     tool_name = "vectorops_list_files"
     tool_input = ListFilesReq
-    tool_output = List[FileListItem]
+    tool_output = str
 
     def execute(
         self,

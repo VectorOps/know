@@ -29,7 +29,7 @@ class ReadFilesTool(BaseTool):
     """Tool to read whole files by path. Accepts a list of paths."""
     tool_name = "vectorops_read_files"
     tool_input = ReadFileReq
-    tool_output = List[ReadFileItem]
+    tool_output = str
 
     def execute(
         self,

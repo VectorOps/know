@@ -19,7 +19,7 @@ class SummarizeFilesTool(BaseTool):
     """Tool to generate summaries for a list of files."""
     tool_name = "vectorops_summarize_files"
     tool_input = SummarizeFilesReq
-    tool_output = List[FileSummary]
+    tool_output = str
 
     def execute(
         self,

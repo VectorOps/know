@@ -116,16 +116,16 @@ async def _chat(settings: Settings, project):
                     print(pformat(args))
 
                     data = tool.execute(project, tool.tool_input(**args))
-                    result = tool.to_python(data)
+                    result_text = tool.encode_output(data)
 
                     print(f"Tool call response {call.function.name}")
-                    print(pformat(result))
+                    print(result_text)
 
                     messages.append({
                         "role": "tool",
                         "tool_call_id": call.id,
                         "name": call.function.name,
-                        "content": json.dumps(result),
+                        "content": result_text,
                     })
                 # run another completion to let the model consume the tool output
                 print(f"[usage] prompt={prompt_toks}  completion={completion_toks} "

@@ -323,7 +323,7 @@ class RepoMapTool(BaseTool):
     """
     tool_name = "vectorops_repomap"
     tool_input = RepoMapReq
-    tool_output = List[RepoMapScore]
+    tool_output = str
 
     def __init__(self, *a, **kw):
         from know.project import ProjectManager

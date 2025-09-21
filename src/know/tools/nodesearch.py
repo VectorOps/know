@@ -67,7 +67,7 @@ class NodeSearchResult(BaseModel):
 class NodeSearchTool(BaseTool):
     tool_name = "vectorops_search"
     tool_input = NodeSearchReq
-    tool_output = List[NodeSearchResult]
+    tool_output = str
 
     def execute(
         self,
