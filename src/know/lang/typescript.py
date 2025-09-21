@@ -1437,7 +1437,8 @@ class TypeScriptCodeParser(AbstractCodeParser):
         """
         refs: list[ParsedNodeRef] = []
 
-        for _, match in self._TS_REF_QUERY.matches(root):
+        cursor = ts.QueryCursor(self._TS_REF_QUERY)
+        for _, match in cursor.matches(root):
             # initialise
             node_call = node_ctor = node_type = None
             node_target = None
