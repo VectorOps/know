@@ -9,6 +9,7 @@ from .base import BaseTool, MCPToolDefinition
 from know.file_summary import SummaryMode
 from know.parsers import CodeParserRegistry, AbstractCodeParser, AbstractLanguageHelper
 from know.models import File
+from know.settings import ToolOutput
 
 
 class NodeSearchReq(BaseModel):
@@ -44,6 +45,7 @@ class NodeSearchReq(BaseModel):
 
 
 class NodeSearchResult(BaseModel):
+    symbol_id: str = Field(..., description="The unique identifier of the symbol.")
     fqn: Optional[str] = Field(default=None, description="The fully-qualified name of the symbol.")
     name: Optional[str] = Field(default=None, description="The short name of the symbol.")
     kind: Optional[str] = Field(
@@ -67,6 +69,7 @@ class NodeSearchResult(BaseModel):
 class NodeSearchTool(BaseTool):
     tool_name = "vectorops_search"
     tool_input = NodeSearchReq
+    default_output = ToolOutput.STRUCTURED_TEXT
 
     def execute(
         self,
@@ -169,6 +172,7 @@ class NodeSearchTool(BaseTool):
 
             results.append(
                 NodeSearchResult(
+                    symbol_id  = s.id,
                     fqn        = s.fqn,
                     name       = s.name,
                     kind       = s.kind,
@@ -178,7 +182,7 @@ class NodeSearchTool(BaseTool):
                     summary_mode = summary_mode,
                 )
             )
-        return self.encode_output(results)
+        return self.encode_output(results, settings=pm.settings)
 
     def get_openai_schema(self) -> dict:
         kind_enum        = [k.value for k in NodeKind]

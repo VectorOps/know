@@ -8,6 +8,7 @@ import inspect
 from enum import Enum
 from pydantic import BaseModel
 import re
+from know.settings import ToolOutput
 
 
 FENCE_START_RE = re.compile(r"(?m)^`+")

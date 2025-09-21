@@ -1,4 +1,5 @@
 import sys
+import json
 from typing import List, Dict, Any
 
 from pydantic import Field, AliasChoices
@@ -7,7 +8,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
-from know.settings import ProjectSettings, print_help
+from know.settings import ProjectSettings, print_help, ToolOutput
 from know import init_project
 from know.tools.base import ToolRegistry
 from know.tools.nodesearch import NodeSearchResult
@@ -61,10 +62,13 @@ def main() -> None:
         print(f"Error: Invalid settings.\n{e}", file=sys.stderr)
         sys.exit(1)
 
-    project = init_project(settings)
-
     # obtain tool instance from registry
     search_tool = ToolRegistry.get("vectorops_search")
+
+    # Force JSON output for the CLI tool
+    settings.tools.outputs[search_tool.tool_name] = ToolOutput.JSON
+
+    project = init_project(settings)
 
     print("Interactive symbol search.  Type '/exit' or Ctrl-D to quit.")
     session: PromptSession = PromptSession(history=FileHistory(".symbol_search_history"))
@@ -81,7 +85,7 @@ def main() -> None:
                 break
 
             try:
-                results = search_tool.execute(
+                results_str = search_tool.execute(
                     project,
                     search_tool.tool_input(
                         query=query,
@@ -89,6 +93,8 @@ def main() -> None:
                         offset=settings.offset,
                     )
                 )
+                results_data = json.loads(results_str)
+                results = [NodeSearchResult(**r) for r in results_data]
                 _print_results(results)
             except Exception as exc:        # noqa: BLE001
                 logger.error("Search failed: %s", exc)
