@@ -11,7 +11,7 @@ class ReadFileReq(BaseModel):
     path: str = Field(description="Project file path (virtual or plain) to read.")
 
 
-class ReadFileTool(BaseTool):
+class ReadFilesTool(BaseTool):
     """Tool to read a whole file by path."""
     tool_name = "vectorops_read_file"
     tool_input = ReadFileReq
