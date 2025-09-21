@@ -1,4 +1,5 @@
 import pytest
+import json
 
 from know.helpers import generate_id
 from know.models import (
@@ -10,7 +11,7 @@ from know.project import ProjectManager
 from know.stores.duckdb import DuckDBDataRepository
 from know.scanner import ScanResult
 from know.settings import ProjectSettings, RefreshSettings
-from know.tools.repomap import RepoMap, RepoMapTool, RepoMapReq
+from know.tools.repomap import RepoMap, RepoMapTool, RepoMapReq, RepoMapScore
 
 
 def _create_file(repo_id: str, pkg_id: str, path: str):
@@ -162,7 +163,8 @@ def test_repomap_tool_pagerank_and_boost():
     project, a_path, b_path, c_path, d_path = _build_project()
 
     # baseline – a.py should outrank b.py, c.py should outrank d.py
-    res = tool.execute(project, RepoMapReq())
+    res_json = tool.execute(project, RepoMapReq())
+    res = [RepoMapScore.model_validate(obj) for obj in json.loads(res_json)]
     order = [r.file_path for r in res]
     assert order.index(a_path) < order.index(b_path)
     assert order.index(c_path) < order.index(d_path)
@@ -174,12 +176,14 @@ def test_repomap_tool_pagerank_and_boost():
     assert score_c > score_d
 
     # boost edges incident to d.py – outgoing-edge boost elevates *target* (c.py)
-    res_boost = tool.execute(project, RepoMapReq(file_paths=[d_path]))
+    res_boost_json = tool.execute(project, RepoMapReq(file_paths=[d_path]))
+    res_boost = [RepoMapScore.model_validate(obj) for obj in json.loads(res_boost_json)]
     order_boost = [r.file_path for r in res_boost]
     assert order_boost.index(c_path) < order_boost.index(d_path)   # outgoing-edge boost elevates *target* (c.py)
 
     # boost edges incident to b.py – a.py now ranks highest
-    res_boost = tool.execute(project, RepoMapReq(file_paths=[b_path]))
+    res_boost_json = tool.execute(project, RepoMapReq(file_paths=[b_path]))
+    res_boost = [RepoMapScore.model_validate(obj) for obj in json.loads(res_boost_json)]
     assert res_boost[0].file_path == a_path                     # a.py now ranks highest
     score_boost_a = res_boost[0].score
     score_boost_b = next(r.score for r in res_boost if r.file_path == b_path)
@@ -188,7 +192,8 @@ def test_repomap_tool_pagerank_and_boost():
     # ------------------------------------------------------------------
     # boost by symbol name – edges carrying “beta” are multiplied (*10)
     # - definition file c.py must outrank a.py after the boost
-    res_sym_boost = tool.execute(project, RepoMapReq(symbol_names=["beta"]))
+    res_sym_boost_json = tool.execute(project, RepoMapReq(symbol_names=["beta"]))
+    res_sym_boost = [RepoMapScore.model_validate(obj) for obj in json.loads(res_sym_boost_json)]
     order_sym_boost = [r.file_path for r in res_sym_boost]
     assert order_sym_boost.index(c_path) < order_sym_boost.index(a_path)
 
@@ -203,15 +208,17 @@ def test_repomap_tool_prompt_parsing():
     project, a_path, b_path, c_path, d_path = _build_project()
 
     # --- prompt mentions a *symbol* (“beta”) ----------------------------
-    res_prompt_sym = tool.execute(project,
-                                  RepoMapReq(prompt="We should refactor the beta function soon."))
+    res_prompt_sym_json = tool.execute(project,
+                                      RepoMapReq(prompt="We should refactor the beta function soon."))
+    res_prompt_sym = [RepoMapScore.model_validate(obj) for obj in json.loads(res_prompt_sym_json)]
     order_sym = [r.file_path for r in res_prompt_sym]
     # “beta” boost must make its definition file (c.py) outrank a.py
     assert order_sym.index(c_path) < order_sym.index(a_path)
 
     # --- prompt mentions a *file* (“d.py”) ------------------------------
-    res_prompt_file = tool.execute(project,
-                                   RepoMapReq(prompt=f"Please review the logic in {d_path}."))
+    res_prompt_file_json = tool.execute(project,
+                                       RepoMapReq(prompt=f"Please review the logic in {d_path}."))
+    res_prompt_file = [RepoMapScore.model_validate(obj) for obj in json.loads(res_prompt_file_json)]
     order_file = [r.file_path for r in res_prompt_file]
     # outgoing-edge boost from d.py must elevate its target (c.py)
     assert order_file.index(c_path) < order_file.index(d_path)
@@ -223,13 +230,14 @@ def test_repomap_tool_token_budget():
     project, *_ = _build_project()
 
     # very small token budget – force tool to trim output
-    res = tool.execute(
+    res_json = tool.execute(
         project,
         RepoMapReq(
             token_limit_count=5,               # tiny budget
             token_limit_model="gpt-3.5-turbo"  # arbitrary model name
         )
     )
+    res = [RepoMapScore.model_validate(obj) for obj in json.loads(res_json)]
 
     # helper replicating fallback logic in _count_tokens
     total_tokens = sum(

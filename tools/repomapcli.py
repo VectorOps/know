@@ -1,4 +1,5 @@
 import sys
+import json
 from typing import List, Dict, Any, Optional
 
 from prompt_toolkit import PromptSession
@@ -177,7 +178,7 @@ def main() -> None:
 
                 elif cmd == "/run":
                     try:
-                        res = repomap_tool.execute(
+                        res_json = repomap_tool.execute(
                             project,
                             repomap_tool.tool_input(
                                 symbol_names=symbol_seeds or None,
@@ -189,7 +190,8 @@ def main() -> None:
                                 token_limit_model=token_limit_model,
                             )
                         )
-                        _print_scores(res)
+                        scores = [RepoMapScore.model_validate(obj) for obj in json.loads(res_json)]
+                        _print_scores(scores)
                     except Exception as exc:             # noqa: BLE001
                         logger.error("RepoMap run failed: %s", exc)
 
