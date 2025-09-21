@@ -7,6 +7,10 @@ import json  # NEW
 import inspect
 from enum import Enum
 from pydantic import BaseModel
+import re
+
+
+FENCE_START_RE = re.compile(r"(?m)^`+")
 
 
 @dataclass
@@ -173,12 +177,10 @@ class BaseTool(ABC):
                 if "\n" in s:
                     # choose a fence that won’t collide with content
                     max_ticks = 3
-                    import re
                     # Only increase fence size if a code fence is at the start of a line
-                    if re.search(r"(?m)^`{3,}", s):
-                        # Count longest run of backticks at start of a line and add one
-                        runs = [len(m.group(0)) for m in re.finditer(r"(?m)^`+", s)]
-                        max_ticks = (max(runs) + 1) if runs else 4
+                    runs = [len(m.group(0)) for m in FENCE_START_RE.finditer(s)]
+                    if any(r >= 3 for r in runs):
+                        max_ticks = max(runs) + 1
                     fence = "`" * max(max_ticks, 3)
                     lines.append(f"{k}:\n{fence}text\n{s}\n{fence}")
                 else:
