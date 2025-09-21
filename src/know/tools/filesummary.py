@@ -46,7 +46,7 @@ class SummarizeFilesTool(BaseTool):
                 fs.path = path
                 summaries.append(fs)
 
-        return self.encode_output(summaries)
+        return self.encode_output(summaries, settings=pm.settings)
 
     def get_openai_schema(self) -> dict:
         """Return the OpenAI schema for the tool."""

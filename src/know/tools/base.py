@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from know.project import ProjectManager
-from know.settings import ProjectSettings
+from know.settings import ProjectSettings, ToolOutput
 from typing import Any, Dict, List, Type  # keep existing
 import json  # NEW
 import inspect
@@ -19,6 +19,8 @@ class MCPToolDefinition:
 class BaseTool(ABC):
     tool_name: str
     tool_input: Type[BaseModel]
+    # Tool's own default output format; can be overridden per-tool in settings.tools.outputs
+    default_output: ToolOutput = ToolOutput.JSON
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -64,15 +66,65 @@ class BaseTool(ABC):
     def to_python(self, obj: Any) -> Any:
         return self._convert_to_python(obj)
 
-    def encode_output(self, obj: Any) -> str:
+    def encode_output(self, obj: Any, *, settings: ProjectSettings | None = None) -> str:
         """
         Convert a tool's execute() return value into a string to send as tool output.
-        Default: JSON encode of Pydantic/Enums/collections; override in tools for non‑JSON.
+        Uses settings.tools.outputs[tool_name] if provided; otherwise falls back to the tool's
+        default_output (usually JSON).
         """
+        # Resolve output encoding
+        encoding = None
+        if settings is not None:
+            try:
+                encoding = settings.tools.outputs.get(self.tool_name)
+            except Exception:
+                encoding = None
+        if encoding is None:
+            encoding = getattr(self, "default_output", ToolOutput.JSON)
+
+        # Encode by selected format
+        if encoding == ToolOutput.STRUCTURED_TEXT:
+            return self._format_structured_text(obj)
+
+        # Default JSON
         try:
             return json.dumps(self._convert_to_python(obj), ensure_ascii=False)
         except Exception:
             return str(obj)
+
+    def _format_structured_text(self, obj: Any) -> str:
+        """
+        Structured text: serialize to dict or list[dict] and print key:value pairs.
+        Between records, add an object separator line.
+        """
+        def stringify(value: Any) -> str:
+            # For nested collections, JSON-encode value; else str()
+            if isinstance(value, (dict, list, tuple, set)):
+                try:
+                    return json.dumps(value, ensure_ascii=False)
+                except Exception:
+                    return str(value)
+            return str(value)
+
+        converted = self._convert_to_python(obj)
+        # Normalize to list[dict]
+        records: list[dict[str, Any]] = []
+        if isinstance(converted, dict):
+            records = [converted]
+        elif isinstance(converted, list):
+            for item in converted:
+                if isinstance(item, dict):
+                    records.append(item)
+                else:
+                    records.append({"value": item})
+        else:
+            records = [{"value": converted}]
+
+        chunks: list[str] = []
+        for rec in records:
+            lines = [f"{k}: {stringify(v)}" for k, v in rec.items()]
+            chunks.append("\n".join(lines))
+        return "\n---\n".join(chunks)
 
 
 class ToolRegistry:

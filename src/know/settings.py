@@ -68,6 +68,13 @@ class ToolSettings(BaseSettings):
     disabled: set[str] = Field(
         default_factory=set, description="A set of tool names that should be disabled."
     )
+    outputs: dict[str, ToolOutput] = Field(
+        default_factory=dict,
+        description=(
+            "Per-tool output format overrides by tool name. "
+            'Allowed values: "json", "structured_text".'
+        ),
+    )
 
 
 class RepoMapSettings(BaseModel):
@@ -174,6 +181,11 @@ class TokenizerType(str, Enum):
     NOOP = "noop"
     CODE = "code"
     WORD = "word"
+
+
+class ToolOutput(str, Enum):
+    JSON = "json"
+    STRUCTURED_TEXT = "structured_text"
 
 
 class TokenizerSettings(BaseModel):
