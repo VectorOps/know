@@ -116,7 +116,7 @@ async def _chat(settings: Settings, project):
                     print(pformat(args))
 
                     data = tool.execute(project, tool.tool_input(**args))
-                    result_text = tool.encode_output(data)
+                    result_text = data  # tools now return a string payload
 
                     print(f"Tool call response {call.function.name}")
                     print(result_text)

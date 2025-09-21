@@ -1,4 +1,4 @@
-from typing import List, Sequence, Optional
+from typing import Sequence, Optional
 
 from pydantic import BaseModel, Field
 
@@ -67,13 +67,12 @@ class NodeSearchResult(BaseModel):
 class NodeSearchTool(BaseTool):
     tool_name = "vectorops_search"
     tool_input = NodeSearchReq
-    tool_output = str
 
     def execute(
         self,
         pm: ProjectManager,
         req: NodeSearchReq,
-    ) -> List[NodeSearchResult]:
+    ) -> str:
         pm.maybe_refresh()
 
         # normalise string / enum inputs
@@ -179,7 +178,7 @@ class NodeSearchTool(BaseTool):
                     summary_mode = summary_mode,
                 )
             )
-        return results
+        return self.encode_output(results)
 
     def get_openai_schema(self) -> dict:
         kind_enum        = [k.value for k in NodeKind]
@@ -247,7 +246,7 @@ class NodeSearchTool(BaseTool):
         }
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
-        def symbolsearch(req: NodeSearchReq) -> List[NodeSearchResult]:
+        def symbolsearch(req: NodeSearchReq) -> str:
             return self.execute(pm, req)
 
         schema = self.get_openai_schema()

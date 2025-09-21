@@ -1,5 +1,5 @@
 
-from typing import Sequence, List
+from typing import Sequence
 from .base import BaseTool, MCPToolDefinition
 from pydantic import BaseModel
 
@@ -19,13 +19,12 @@ class SummarizeFilesTool(BaseTool):
     """Tool to generate summaries for a list of files."""
     tool_name = "vectorops_summarize_files"
     tool_input = SummarizeFilesReq
-    tool_output = str
 
     def execute(
         self,
         pm: ProjectManager,
         req: SummarizeFilesReq,
-    ) -> List[FileSummary]:
+    ) -> str:
         """Generate summaries for the requested files."""
         pm.maybe_refresh()
 
@@ -47,7 +46,7 @@ class SummarizeFilesTool(BaseTool):
                 fs.path = path
                 summaries.append(fs)
 
-        return summaries
+        return self.encode_output(summaries)
 
     def get_openai_schema(self) -> dict:
         """Return the OpenAI schema for the tool."""
@@ -85,7 +84,7 @@ class SummarizeFilesTool(BaseTool):
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP definition for the tool."""
-        def filesummary(req: SummarizeFilesReq) -> List[FileSummary]:
+        def filesummary(req: SummarizeFilesReq) -> str:
             return self.execute(pm, req)
 
         schema = self.get_openai_schema()

@@ -29,13 +29,12 @@ class ReadFilesTool(BaseTool):
     """Tool to read whole files by path. Accepts a list of paths."""
     tool_name = "vectorops_read_files"
     tool_input = ReadFileReq
-    tool_output = str
 
     def execute(
         self,
         pm: ProjectManager,
         req: ReadFileReq,
-    ) -> List[ReadFileItem]:
+    ) -> str:
         """
         Read and return contents of files whose paths are provided.
         Paths may be virtual (prefixed with VIRTUAL_PATH_PREFIX and repo name) or
@@ -98,7 +97,7 @@ class ReadFilesTool(BaseTool):
                 )
             )
 
-        return results
+        return self.encode_output(results)
 
     def get_openai_schema(self) -> dict:
         """Return the OpenAI schema for this tool."""
@@ -128,7 +127,7 @@ class ReadFilesTool(BaseTool):
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP tool definition for this tool."""
-        def readfiles(req: ReadFileReq) -> List[ReadFileItem]:
+        def readfiles(req: ReadFileReq) -> str:
             """Read and return full contents of the specified files."""
             return self.execute(pm, req)
 

@@ -2,7 +2,7 @@ import math, re, os
 import time
 from dataclasses import dataclass
 from collections import defaultdict
-from typing import Dict, Optional, Sequence, Set, List
+from typing import Dict, Optional, Sequence, Set
 from litellm import token_counter
 import networkx as nx
 
@@ -323,7 +323,6 @@ class RepoMapTool(BaseTool):
     """
     tool_name = "vectorops_repomap"
     tool_input = RepoMapReq
-    tool_output = str
 
     def __init__(self, *a, **kw):
         from know.project import ProjectManager
@@ -334,7 +333,7 @@ class RepoMapTool(BaseTool):
         self,
         pm: ProjectManager,
         req: RepoMapReq,
-    ) -> List[RepoMapScore]:
+    ) -> str:
         pm.maybe_refresh()
 
         summary_mode = req.summary_mode
@@ -475,7 +474,7 @@ class RepoMapTool(BaseTool):
                      duration_sec=round(_elapsed, 4),
                      results=len(results))
 
-        return results
+        return self.encode_output(results)
 
     # ---------- OpenAI schema ----------
     def get_openai_schema(self) -> dict:
@@ -537,7 +536,7 @@ class RepoMapTool(BaseTool):
         }
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
-        def repomap(req: RepoMapReq) -> List[RepoMapScore]:
+        def repomap(req: RepoMapReq) -> str:
             return self.execute(pm, req)
 
         schema = self.get_openai_schema()

@@ -1,5 +1,5 @@
 import fnmatch
-from typing import Sequence, List, Optional
+from typing import Sequence, Optional
 
 from pydantic import BaseModel, Field
 
@@ -26,13 +26,12 @@ class ListFilesTool(BaseTool):
     """Tool to list files in the project matching glob patterns."""
     tool_name = "vectorops_list_files"
     tool_input = ListFilesReq
-    tool_output = str
 
     def execute(
         self,
         pm: ProjectManager,
         req: ListFilesReq,
-    ) -> List[FileListItem]:
+    ) -> str:
         """
         Return files whose path matches any of the supplied glob patterns.
 
@@ -48,16 +47,17 @@ class ListFilesTool(BaseTool):
 
         pats = list(req.patterns) if req.patterns else []
         if not pats:
-            return []
+            return self.encode_output([])
 
         def _matches(path: str) -> bool:
             return any(fnmatch.fnmatch(path, pat) for pat in pats)
 
-        return [
+        items = [
             FileListItem(path=vpath, language=fm.language)
             for fm in all_files
             if _matches(vpath := pm.construct_virtual_path(fm.repo_id, fm.path))
         ]
+        return self.encode_output(items)
 
     def get_openai_schema(self) -> dict:
         """Return the OpenAI schema for this tool."""
@@ -86,7 +86,7 @@ class ListFilesTool(BaseTool):
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP tool definition for this tool."""
-        def filelist(req: ListFilesReq) -> List[FileListItem]:
+        def filelist(req: ListFilesReq) -> str:
             """List files in the project matching glob patterns."""
             return self.execute(pm, req)
 

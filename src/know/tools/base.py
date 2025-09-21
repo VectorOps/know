@@ -19,7 +19,6 @@ class MCPToolDefinition:
 class BaseTool(ABC):
     tool_name: str
     tool_input: Type[BaseModel]
-    tool_output: Type[str] | None
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
