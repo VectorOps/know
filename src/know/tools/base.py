@@ -19,7 +19,6 @@ class MCPToolDefinition:
 class BaseTool(ABC):
     tool_name: str
     tool_input: Type[BaseModel]
-    # Tool's own default output format; can be overridden per-tool in settings.tools.outputs
     default_output: ToolOutput = ToolOutput.JSON
 
     def __init_subclass__(cls, **kw):
@@ -58,8 +57,12 @@ class BaseTool(ABC):
             return obj.value
         if isinstance(obj, dict):
             return {k: BaseTool._convert_to_python(v) for k, v in obj.items()}
-        if isinstance(obj, (list, tuple, set)):
+        if isinstance(obj, list):
             return [BaseTool._convert_to_python(v) for v in obj]
+        if isinstance(obj, tuple):
+            return [BaseTool._convert_to_python(v) for v in obj]
+        if isinstance(obj, set):
+            return sorted(BaseTool._convert_to_python(v) for v in obj)
         return obj
 
     # convenience instance wrapper
@@ -80,7 +83,7 @@ class BaseTool(ABC):
             except Exception:
                 encoding = None
         if encoding is None:
-            encoding = getattr(self, "default_output", ToolOutput.JSON)
+            encoding = self.default_output
 
         # Encode by selected format
         if encoding == ToolOutput.STRUCTURED_TEXT:
