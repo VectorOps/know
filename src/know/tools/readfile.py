@@ -1,8 +1,7 @@
 import os
 import base64
 import mimetypes
-from typing import Sequence, List, Optional
-
+from typing import Sequence, Optional
 from pydantic import BaseModel, Field
 
 from know.project import ProjectManager, VIRTUAL_PATH_PREFIX
