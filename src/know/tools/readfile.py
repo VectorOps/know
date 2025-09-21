@@ -1,7 +1,5 @@
 import os
 import base64
-import mimetypes
-from typing import Sequence, Optional
 from pydantic import BaseModel, Field
 
 from know.project import ProjectManager, VIRTUAL_PATH_PREFIX
@@ -9,24 +7,13 @@ from .base import BaseTool, MCPToolDefinition
 
 
 class ReadFileReq(BaseModel):
-    """Request model for reading files."""
-    paths: Sequence[str] = Field(description="List of project file paths (virtual or plain) to read.")
+    """Request model for reading a file."""
+    path: str = Field(description="Project file path (virtual or plain) to read.")
 
 
-class ReadFileItem(BaseModel):
-    """Represents a file and its content."""
-    path: str = Field(description="The path of the file relative to the project root (virtual path).")
-    raw: str = Field(description="Raw file payload. For binary files, this is base64-encoded.")
-    content_type: str = Field(description="MIME type of the file derived from its extension.")
-    content_transfer_encoding: Optional[str] = Field(
-        default=None,
-        description="Content transfer encoding (e.g., 'base64') when the payload is encoded."
-    )
-
-
-class ReadFilesTool(BaseTool):
-    """Tool to read whole files by path. Accepts a list of paths."""
-    tool_name = "vectorops_read_files"
+class ReadFileTool(BaseTool):
+    """Tool to read a whole file by path."""
+    tool_name = "vectorops_read_file"
     tool_input = ReadFileReq
 
     def execute(
@@ -35,105 +22,80 @@ class ReadFilesTool(BaseTool):
         req: ReadFileReq,
     ) -> str:
         """
-        Read and return contents of files whose paths are provided.
-        Paths may be virtual (prefixed with VIRTUAL_PATH_PREFIX and repo name) or
-        plain (default repo).
+        Read and return content of a file whose path is provided.
+        Path may be virtual (prefixed with VIRTUAL_PATH_PREFIX and repo name) or
+        plain (default repo). Returns file content verbatim for text files, or
+        base64-encoded for binary files. Returns an empty string if the file
+        cannot be read.
         """
         pm.maybe_refresh()
 
         file_repo = pm.data.file
-        results: list[ReadFileItem] = []
+        raw_path = req.path
+        if not raw_path:
+            return ""
 
-        for raw_path in req.paths or []:
-            if not raw_path:
-                continue
+        decon = pm.deconstruct_virtual_path(raw_path)
+        if not decon:
+            # Unable to resolve path into (repo, rel_path)
+            return ""
 
-            decon = pm.deconstruct_virtual_path(raw_path)
-            if not decon:
-                # Unable to resolve path into (repo, rel_path); skip
-                continue
+        repo, rel_path = decon
 
-            repo, rel_path = decon
+        # Verify file exists in indexed repo metadata
+        fm = file_repo.get_by_path(repo.id, rel_path)
+        if not fm:
+            return ""
 
-            # Verify file exists in indexed repo metadata
-            fm = file_repo.get_by_path(repo.id, rel_path)
-            if not fm:
-                continue
+        abs_path = os.path.join(repo.root_path, rel_path)
+        try:
+            with open(abs_path, "rb") as f:
+                data = f.read()
+        except OSError:
+            # If file cannot be read
+            return ""
 
-            abs_path = os.path.join(repo.root_path, rel_path)
-            try:
-                with open(abs_path, "rb") as f:
-                    data = f.read()
-            except OSError:
-                # If file cannot be read, skip it
-                continue
-
-            # Determine MIME type from file extension
-            mime, _ = mimetypes.guess_type(abs_path)
-            # Decide if text (valid UTF-8) or binary
-            try:
-                text = data.decode("utf-8")
-                is_text = True
-            except UnicodeDecodeError:
-                is_text = False
-
-            if is_text:
-                raw = text
-                content_type = mime or "text/plain"
-                cte = None
-            else:
-                raw = base64.b64encode(data).decode("ascii")
-                content_type = mime or "application/octet-stream"
-                cte = "base64"
-
-            vpath = pm.construct_virtual_path(repo.id, rel_path)
-            results.append(
-                ReadFileItem(
-                    path=vpath,
-                    raw=raw,
-                    content_type=content_type,
-                    content_transfer_encoding=cte,
-                )
-            )
-
-        return self.encode_output(results)
+        # Decide if text (valid UTF-8) or binary
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError:
+            return base64.b64encode(data).decode("ascii")
 
     def get_openai_schema(self) -> dict:
         """Return the OpenAI schema for this tool."""
         return {
             "name": self.tool_name,
             "description": (
-                "Read and return the full contents of the specified project files. "
-                "Paths may be plain (default repo) or virtual and prefixed with "
+                "Read and return the full contents of the specified project file. "
+                "Path may be plain (default repo) or virtual and prefixed with "
                 f"'{VIRTUAL_PATH_PREFIX}/<repo_name>'. "
-                "Binary files are base64-encoded and return content_transfer_encoding='base64'."
+                "Binary file content is returned base64-encoded."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "paths": {
-                        "type": "array",
-                        "items": {"type": "string"},
+                    "path": {
+                        "type": "string",
                         "description": (
-                            "List of file paths to read. Supports glob-like virtual paths "
+                            "File path to read. Supports virtual paths "
                             f"using '{VIRTUAL_PATH_PREFIX}/<repo_name>/...'"
                         ),
                     }
                 },
-                "required": ["paths"],
+                "required": ["path"],
             },
         }
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP tool definition for this tool."""
-        def readfiles(req: ReadFileReq) -> str:
-            """Read and return full contents of the specified files."""
+        def readfile(req: ReadFileReq) -> str:
+            """Read and return full contents of the specified file."""
             return self.execute(pm, req)
 
         schema = self.get_openai_schema()
 
         return MCPToolDefinition(
-            fn=readfiles,
+            fn=readfile,
             name=self.tool_name,
             description=schema.get("description"),
         )
