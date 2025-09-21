@@ -84,7 +84,7 @@ class BaseTool(ABC):
 
         # Encode by selected format
         if encoding == ToolOutput.STRUCTURED_TEXT:
-            return self._format_structured_text(obj)
+            return self.format_structured_text(obj)
 
         # Default JSON
         try:
@@ -92,45 +92,99 @@ class BaseTool(ABC):
         except Exception:
             return str(obj)
 
-    def _format_structured_text(self, obj: Any) -> str:
+    def format_structured_text(
+        self,
+        obj: Any,
+        *,
+        max_scalar_len: int | None = None,
+        record_sep: str = "\n---\n",
+    ) -> str:
         """
         Structured text: serialize to dict or list[dict] and print key:value pairs.
         Between records, add an object separator line.
         """
+
+        def _default(o: Any):
+            import datetime, decimal, base64
+            if isinstance(o, (datetime.date, datetime.datetime)):
+                return o.isoformat()
+            if isinstance(o, decimal.Decimal):
+                return str(o)
+            if isinstance(o, (bytes, bytearray, memoryview)):
+                # small, readable fallback; switch to base64 if you prefer
+                return {"__bytes__": base64.b64encode(bytes(o)).decode("ascii")}
+            if isinstance(o, set):
+                return sorted(o)
+            if isinstance(o, tuple):
+                return list(o)
+            return str(o)
+
+        def _json_dumps(val: Any) -> str:
+            try:
+                return json.dumps(
+                    val,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    allow_nan=False,
+                    default=_default,
+                )
+            except Exception:
+                return str(val)
+
         def stringify(value: Any) -> str:
-            # For nested collections, JSON-encode value; else str()
+            # Normalize nested collections to JSON; simple scalars to str
             if isinstance(value, (dict, list, tuple, set)):
-                try:
-                    return json.dumps(value, ensure_ascii=False)
-                except Exception:
-                    return str(value)
-            return str(value)
+                s = _json_dumps(value)
+            else:
+                s = str(value)
+            # Normalize newlines
+            return s.replace("\r\n", "\n").replace("\r", "\n")
 
         converted = self._convert_to_python(obj)
+
         # Normalize to list[dict]
         records: list[dict[str, Any]] = []
         if isinstance(converted, dict):
             records = [converted]
         elif isinstance(converted, list):
-            for item in converted:
-                if isinstance(item, dict):
-                    records.append(item)
-                else:
-                    records.append({"value": item})
+            if all(isinstance(it, dict) for it in converted):
+                records = converted  # list of mappings
+            else:
+                # list of scalars/mixed
+                records = [{"idx": i, "value": it} for i, it in enumerate(converted)]
         else:
             records = [{"value": converted}]
 
+        # Sort keys for deterministic output
+        def _sorted_items(d: dict[str, Any]):
+            try:
+                return sorted(d.items(), key=lambda kv: kv[0])
+            except Exception:
+                return d.items()
+
         chunks: list[str] = []
+
         for rec in records:
             lines: list[str] = []
-            for k, v in rec.items():
+            for k, v in _sorted_items(rec):
                 s = stringify(v)
+                if max_scalar_len is not None and "\n" not in s and len(s) > max_scalar_len:
+                    s = s[:max_scalar_len] + "…"
                 if "\n" in s:
-                    lines.append(f"{k}:\n```\n{s}\n```")
+                    # choose a fence that won’t collide with content
+                    max_ticks = 3
+                    if "```" in s:
+                        # Count longest run of backticks and add one
+                        import re
+                        runs = [len(m.group(0)) for m in re.finditer(r"`+", s)]
+                        max_ticks = (max(runs) + 1) if runs else 4
+                    fence = "`" * max(max_ticks, 3)
+                    lines.append(f"{k}:\n{fence}text\n{s}\n{fence}")
                 else:
                     lines.append(f"{k}: {s}")
             chunks.append("\n".join(lines))
-        return "\n---\n".join(chunks)
+
+        return record_sep.join(chunks)
 
 
 class ToolRegistry:
