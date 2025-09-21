@@ -42,7 +42,7 @@ class ReadFilesTool(BaseTool):
         pm.maybe_refresh()
 
         file_repo = pm.data.file
-        results: List[ReadFileItem] = []
+        results: list[ReadFileItem] = []
 
         for raw_path in req.paths or []:
             if not raw_path:
