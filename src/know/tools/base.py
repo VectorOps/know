@@ -122,7 +122,13 @@ class BaseTool(ABC):
 
         chunks: list[str] = []
         for rec in records:
-            lines = [f"{k}: {stringify(v)}" for k, v in rec.items()]
+            lines: list[str] = []
+            for k, v in rec.items():
+                s = stringify(v)
+                if "\n" in s:
+                    lines.append(f"{k}:\n```\n{s}\n```")
+                else:
+                    lines.append(f"{k}: {s}")
             chunks.append("\n".join(lines))
         return "\n---\n".join(chunks)
 
