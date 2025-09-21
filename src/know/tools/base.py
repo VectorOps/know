@@ -173,10 +173,11 @@ class BaseTool(ABC):
                 if "\n" in s:
                     # choose a fence that won’t collide with content
                     max_ticks = 3
-                    if "```" in s:
-                        # Count longest run of backticks and add one
-                        import re
-                        runs = [len(m.group(0)) for m in re.finditer(r"`+", s)]
+                    import re
+                    # Only increase fence size if a code fence is at the start of a line
+                    if re.search(r"(?m)^`{3,}", s):
+                        # Count longest run of backticks at start of a line and add one
+                        runs = [len(m.group(0)) for m in re.finditer(r"(?m)^`+", s)]
                         max_ticks = (max(runs) + 1) if runs else 4
                     fence = "`" * max(max_ticks, 3)
                     lines.append(f"{k}:\n{fence}text\n{s}\n{fence}")
