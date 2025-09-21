@@ -13,7 +13,7 @@ class ReadFileReq(BaseModel):
 
 class ReadFilesTool(BaseTool):
     """Tool to read a whole file by path."""
-    tool_name = "vectorops_read_file"
+    tool_name = "vectorops_read_files"
     tool_input = ReadFileReq
 
     def execute(
