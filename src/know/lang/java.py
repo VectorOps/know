@@ -458,7 +458,8 @@ class JavaCodeParser(AbstractCodeParser):
         assert self.package is not None
         assert self.parsed_file is not None
 
-        for _, match in _JAVA_REF_QUERY.matches(root):
+        cursor = ts.QueryCursor(_JAVA_REF_QUERY)
+        for _, match in cursor.matches(root):
             raw_node: Optional[ts.Node] = None
             ref_type: Optional[NodeRefType] = None
             full_name: Optional[str] = None
