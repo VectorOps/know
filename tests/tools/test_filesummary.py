@@ -1,8 +1,10 @@
 import textwrap
 import json
+import pytest
+import re
 
 from know import init_project
-from know.settings import ProjectSettings
+from know.settings import ProjectSettings, ToolOutput
 from know.file_summary import SummaryMode, FileSummary
 from know.tools.filesummary import SummarizeFilesTool, SummarizeFilesReq
 
@@ -71,3 +73,24 @@ def test_filesummary_skips_unknown_files(tmp_path):
     # Only one valid summary expected
     assert len(res) == 1
     assert res[0].path == "foo.py"
+
+
+def test_filesummary_structured_text_output(tmp_path):
+    project = _setup_project(tmp_path)
+    # Force structured text output for this tool
+    project.settings.tools.outputs["vectorops_summarize_files"] = ToolOutput.STRUCTURED_TEXT
+
+    res_text = SummarizeFilesTool().execute(
+        project,
+        SummarizeFilesReq(paths=["foo.py"], summary_mode=SummaryMode.Documentation),
+    )
+
+    # Contains the path line
+    assert "path: foo.py" in res_text
+
+    # Multiline content must be rendered as a fenced block
+    assert re.search(r"^content:\n```[\s\S]*Function docstring[\s\S]*```", res_text, re.M)
+
+    # Should not be valid JSON
+    with pytest.raises(Exception):
+        json.loads(res_text)
