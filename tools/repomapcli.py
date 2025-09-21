@@ -8,7 +8,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from pydantic import Field, AliasChoices
 from pydantic_settings import SettingsConfigDict
 
-from know.settings import ProjectSettings, EmbeddingSettings, print_help
+from know.settings import ProjectSettings, EmbeddingSettings, print_help, ToolOutput, ToolSettings
 from know import init_project
 from know.file_summary import SummaryMode
 from know.tools.base import ToolRegistry
@@ -30,6 +30,11 @@ class Settings(ProjectSettings):
         cli_enforce_required=True,
         env_prefix="KNOW_",
         env_nested_delimiter="_",
+    )
+
+    tools: ToolSettings = Field(
+        default_factory=lambda: ToolSettings(outputs={"vectorops_repomap": ToolOutput.JSON}),
+        exclude=True,
     )
 
     limit: int = Field(

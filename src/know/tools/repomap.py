@@ -13,6 +13,7 @@ from know.project import ProjectManager, ScanResult, ProjectComponent
 from know.models import Node, Visibility
 from know.file_summary import SummaryMode, build_file_summary
 from know.data import FileFilter, NodeFilter, NodeRefFilter
+from know.settings import ToolOutput
 
 
 EDGE_W_DEF             = 3.0
@@ -323,6 +324,7 @@ class RepoMapTool(BaseTool):
     """
     tool_name = "vectorops_repomap"
     tool_input = RepoMapReq
+    default_output = ToolOutput.STRUCTURED_TEXT
 
     def __init__(self, *a, **kw):
         from know.project import ProjectManager
@@ -474,7 +476,7 @@ class RepoMapTool(BaseTool):
                      duration_sec=round(_elapsed, 4),
                      results=len(results))
 
-        return self.encode_output(results)
+        return self.encode_output(results, settings=pm.settings)
 
     # ---------- OpenAI schema ----------
     def get_openai_schema(self) -> dict:

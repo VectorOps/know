@@ -10,7 +10,7 @@ from know.models import (
 from know.project import ProjectManager
 from know.stores.duckdb import DuckDBDataRepository
 from know.scanner import ScanResult
-from know.settings import ProjectSettings, RefreshSettings
+from know.settings import ProjectSettings, RefreshSettings, ToolOutput, ToolSettings
 from know.tools.repomap import RepoMap, RepoMapTool, RepoMapReq, RepoMapScore
 
 
@@ -56,6 +56,7 @@ def _build_project():
         refresh=RefreshSettings(
             enabled=False,
         ),
+        tools=ToolSettings(outputs={"vectorops_repomap": ToolOutput.JSON}),
     )
     dr = DuckDBDataRepository(settings)
     project = ProjectManager(settings, dr)
