@@ -1,10 +1,11 @@
 import os
+import base64
+import mimetypes
 from typing import Sequence, List, Optional
 
 from pydantic import BaseModel, Field
 
 from know.project import ProjectManager, VIRTUAL_PATH_PREFIX
-from know.models import ProgrammingLanguage
 from .base import BaseTool, MCPToolDefinition
 
 
@@ -16,9 +17,11 @@ class ReadFileReq(BaseModel):
 class ReadFileItem(BaseModel):
     """Represents a file and its content."""
     path: str = Field(description="The path of the file relative to the project root (virtual path).")
-    content: str = Field(description="The full contents of the file.")
-    language: Optional[ProgrammingLanguage] = Field(
-        default=None, description="The programming language of the file, if identified."
+    raw: str = Field(description="Raw file payload. For binary files, this is base64-encoded.")
+    content_type: str = Field(description="MIME type of the file derived from its extension.")
+    content_transfer_encoding: Optional[str] = Field(
+        default=None,
+        description="Content transfer encoding (e.g., 'base64') when the payload is encoded."
     )
 
 
@@ -61,14 +64,39 @@ class ReadFilesTool(BaseTool):
 
             abs_path = os.path.join(repo.root_path, rel_path)
             try:
-                with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
-                    content = f.read()
+                with open(abs_path, "rb") as f:
+                    data = f.read()
             except OSError:
                 # If file cannot be read, skip it
                 continue
 
+            # Determine MIME type from file extension
+            mime, _ = mimetypes.guess_type(abs_path)
+            # Decide if text (valid UTF-8) or binary
+            try:
+                text = data.decode("utf-8")
+                is_text = True
+            except UnicodeDecodeError:
+                is_text = False
+
+            if is_text:
+                raw = text
+                content_type = mime or "text/plain"
+                cte = None
+            else:
+                raw = base64.b64encode(data).decode("ascii")
+                content_type = mime or "application/octet-stream"
+                cte = "base64"
+
             vpath = pm.construct_virtual_path(repo.id, rel_path)
-            results.append(ReadFileItem(path=vpath, content=content, language=fm.language))
+            results.append(
+                ReadFileItem(
+                    path=vpath,
+                    raw=raw,
+                    content_type=content_type,
+                    content_transfer_encoding=cte,
+                )
+            )
 
         return results
 
@@ -79,7 +107,8 @@ class ReadFilesTool(BaseTool):
             "description": (
                 "Read and return the full contents of the specified project files. "
                 "Paths may be plain (default repo) or virtual and prefixed with "
-                f"'{VIRTUAL_PATH_PREFIX}/<repo_name>'."
+                f"'{VIRTUAL_PATH_PREFIX}/<repo_name>'. "
+                "Binary files are base64-encoded and return content_transfer_encoding='base64'."
             ),
             "parameters": {
                 "type": "object",
