@@ -105,14 +105,11 @@ class BaseTool(ABC):
         """
 
         def _default(o: Any):
-            import datetime, decimal, base64
+            import datetime, decimal
             if isinstance(o, (datetime.date, datetime.datetime)):
                 return o.isoformat()
             if isinstance(o, decimal.Decimal):
                 return str(o)
-            if isinstance(o, (bytes, bytearray, memoryview)):
-                # small, readable fallback; switch to base64 if you prefer
-                return {"__bytes__": base64.b64encode(bytes(o)).decode("ascii")}
             if isinstance(o, set):
                 return sorted(o)
             if isinstance(o, tuple):

@@ -76,7 +76,7 @@ def test_structured_text_nested_json_encoding_and_defaults():
     }
     out = t.format_structured_text(obj)
     # Bytes converted via default() into a JSON object with __bytes__
-    assert '"__bytes__"' in out
+    assert '"__bytes__"' not in out
     # Sets sorted to lists
     assert '"tags": ["a", "b"]' in out
     # Tuples rendered as lists
