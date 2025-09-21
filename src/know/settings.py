@@ -62,6 +62,11 @@ class EmbeddingSettings(BaseSettings):
     )
 
 
+class ToolOutput(str, Enum):
+    JSON = "json"
+    STRUCTURED_TEXT = "structured_text"
+
+
 class ToolSettings(BaseSettings):
     """Settings for configuring tools."""
 
