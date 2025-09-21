@@ -43,6 +43,7 @@ def _setup_project(tmp_path):
 
 def test_filesummary_returns_expected_content(tmp_path):
     project = _setup_project(tmp_path)
+    project.settings.tools.outputs["vectorops_summarize_files"] = ToolOutput.JSON  # force JSON
 
     res_json = SummarizeFilesTool().execute(project, SummarizeFilesReq(
         paths=["foo.py"],
@@ -65,6 +66,7 @@ def test_filesummary_returns_expected_content(tmp_path):
 
 def test_filesummary_skips_unknown_files(tmp_path):
     project = _setup_project(tmp_path)
+    project.settings.tools.outputs["vectorops_summarize_files"] = ToolOutput.JSON  # force JSON
 
     # add an additional, non-existing path
     res_json = SummarizeFilesTool().execute(project, SummarizeFilesReq(paths=["foo.py", "does_not_exist.py"]))

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from know.file_summary import FileSummary, SummaryMode, build_file_summary
 
+from know.settings import ToolOutput
 from know.project import ProjectManager
 from know.models import Visibility
 
@@ -19,6 +20,7 @@ class SummarizeFilesTool(BaseTool):
     """Tool to generate summaries for a list of files."""
     tool_name = "vectorops_summarize_files"
     tool_input = SummarizeFilesReq
+    default_output = ToolOutput.STRUCTURED_TEXT  # new
 
     def execute(
         self,
@@ -45,6 +47,11 @@ class SummarizeFilesTool(BaseTool):
             if fs:
                 fs.path = path
                 summaries.append(fs)
+
+        # Ensure default output is STRUCTURED_TEXT if not explicitly set
+        outputs = pm.settings.tools.outputs
+        if self.tool_name not in outputs:
+            outputs[self.tool_name] = ToolOutput.STRUCTURED_TEXT
 
         return self.encode_output(summaries, settings=pm.settings)
 
