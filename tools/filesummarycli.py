@@ -5,7 +5,7 @@ from typing import List
 from pydantic import Field, AliasChoices
 from pydantic_settings import SettingsConfigDict
 
-from know.settings import ProjectSettings, print_help
+from know.settings import ProjectSettings, print_help, ToolOutput
 from know import init_project
 from know.tools.base import ToolRegistry
 from know.file_summary import SummaryMode, FileSummary
@@ -49,6 +49,7 @@ def main() -> None:
     project = init_project(settings)
 
     summarize_tool = ToolRegistry.get("vectorops_summarize_files")
+    project.settings.tools.outputs[summarize_tool.tool_name] = ToolOutput.JSON
 
     json_result = summarize_tool.execute(
         project,
