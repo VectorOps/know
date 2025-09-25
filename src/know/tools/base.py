@@ -74,6 +74,32 @@ class BaseTool(ABC):
     def to_python(self, obj: Any) -> Any:
         return self._convert_to_python(obj)
 
+    def get_output_format(
+        self,
+        *,
+        pm: ProjectManager | None = None,
+        settings: ProjectSettings | None = None,
+    ) -> ToolOutput:
+        """
+        Resolve the effective output format for this tool:
+        - settings.tools.outputs[tool_name] if available
+        - otherwise tool's default_output
+        """
+        if settings is None and pm is not None:
+            try:
+                settings = pm.data.settings
+            except Exception:
+                settings = None
+
+        encoding = None
+        if settings is not None:
+            try:
+                encoding = settings.tools.outputs.get(self.tool_name)
+            except Exception:
+                encoding = None
+
+        return encoding or self.default_output
+
     def encode_output(self, obj: Any, *, settings: ProjectSettings | None = None) -> str:
         """
         Convert a tool's execute() return value into a string to send as tool output.
@@ -81,14 +107,7 @@ class BaseTool(ABC):
         default_output (usually JSON).
         """
         # Resolve output encoding
-        encoding = None
-        if settings is not None:
-            try:
-                encoding = settings.tools.outputs.get(self.tool_name)
-            except Exception:
-                encoding = None
-        if encoding is None:
-            encoding = self.default_output
+        encoding = self.get_output_format(settings=settings)
 
         # Encode by selected format
         if encoding == ToolOutput.STRUCTURED_TEXT:
