@@ -1,6 +1,7 @@
 #+title: Todo
 * [ ] Do not return minimized/compressed JS files
-* [ ] Change summary API to not return whole file - remove enum.
+* [X] Make read file tool to return an error if file does not exist
+* [X] Change summary API to not return whole file - remove enum.
 * [X] Create a new read file tool
 * [ ] Create an API to notify what files have changed and only refresh them
 * [ ] Create async API
