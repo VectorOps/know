@@ -1,6 +1,7 @@
 import os
 import base64
 import mimetypes
+import json
 from pydantic import BaseModel, Field
 
 from know.project import ProjectManager, VIRTUAL_PATH_PREFIX
@@ -13,6 +14,14 @@ class ReadFileReq(BaseModel):
     path: str = Field(description="Project file path (virtual or plain) to read.")
 
 
+class ReadFileResp(BaseModel):
+    status: int
+    content_type: str | None = Field(default=None, alias="content-type")
+    content_encoding: str | None = Field(default=None, alias="content-encoding")
+    body: str | None = None
+    error: str | None = None
+
+
 class ReadFilesTool(BaseTool):
     """Tool to read a file and return an HTTP-like response (JSON or text)."""
     tool_name = "vectorops_read_files"
@@ -22,7 +31,7 @@ class ReadFilesTool(BaseTool):
         self,
         pm: ProjectManager,
         req: ReadFileReq,
-    ) -> dict:
+    ) -> ReadFileResp:
         """
         Read a file and return an HTTP-like response dictionary:
         {
@@ -38,30 +47,30 @@ class ReadFilesTool(BaseTool):
         file_repo = pm.data.file
         raw_path = req.path or ""
         if not raw_path:
-            return {"status": 400, "content-type": None, "content-encoding": None, "body": None, "error": "Empty path"}
+            return ReadFileResp(status=400, content_type=None, content_encoding=None, body=None, error="Empty path")
 
         decon = pm.deconstruct_virtual_path(raw_path)
         if not decon:
-            return {"status": 404, "content-type": None, "content-encoding": None, "body": None, "error": "Path not found"}
+            return ReadFileResp(status=404, content_type=None, content_encoding=None, body=None, error="Path not found")
 
         repo, rel_path = decon
 
         fm = file_repo.get_by_path(repo.id, rel_path)
         if not fm:
-            return {"status": 404, "content-type": None, "content-encoding": None, "body": None, "error": "File not indexed"}
+            return ReadFileResp(status=404, content_type=None, content_encoding=None, body=None, error="File not indexed")
 
         abs_path = os.path.join(repo.root_path, rel_path)
         try:
             with open(abs_path, "rb") as f:
                 data = f.read()
         except OSError as e:
-            return {
-                "status": 500,
-                "content-type": None,
-                "content-encoding": None,
-                "body": None,
-                "error": f"Failed to read file: {e}",
-            }
+            return ReadFileResp(
+                status=500,
+                content_type=None,
+                content_encoding=None,
+                body=None,
+                error=f"Failed to read file: {e}",
+            )
 
         # Determine MIME type
         mime, _ = mimetypes.guess_type(rel_path)
@@ -76,28 +85,31 @@ class ReadFilesTool(BaseTool):
                 mime = "text/plain; charset=utf-8"
             elif "charset=" not in mime and mime.startswith("text/"):
                 mime = f"{mime}; charset=utf-8"
-            return {
-                "status": 200,
-                "content-type": mime,
-                "content-encoding": "identity",
-                "body": text,
-                "error": None,
-            }
+            return ReadFileResp(
+                status=200,
+                content_type=mime,
+                content_encoding=None,  # omit for identity
+                body=text,
+                error=None,
+            )
         except UnicodeDecodeError:
             # Binary; return base64
             b64 = base64.b64encode(data).decode("ascii")
-            return {
-                "status": 200,
-                "content-type": mime,
-                "content-encoding": "base64",
-                "body": b64,
-                "error": None,
-            }
+            return ReadFileResp(
+                status=200,
+                content_type=mime,
+                content_encoding="base64",
+                body=b64,
+                error=None,
+            )
 
-    def encode_output(self, obj: dict, *, settings: ProjectSettings | None = None) -> str:
+    def encode_output(self, obj: ReadFileResp, *, settings: ProjectSettings | None = None) -> str:
         fmt = self.get_output_format(settings=settings)
         if fmt == ToolOutput.JSON:
-            return super().encode_output(obj, settings=settings)
+            return json.dumps(
+                obj.model_dump(by_alias=True, exclude_none=True),
+                ensure_ascii=False,
+            )
 
         # Text mode: render headers then body
         def _reason(code: int) -> str:
@@ -108,12 +120,12 @@ class ReadFilesTool(BaseTool):
                 500: "Internal Server Error",
             }.get(code, "Unknown")
 
-        status = int(obj.get("status", 500))
+        status = int(obj.status)
         reason = _reason(status)
-        ct = obj.get("content-type")
-        ce = obj.get("content-encoding")
-        body = obj.get("body")
-        err = obj.get("error")
+        ct = obj.content_type
+        ce = obj.content_encoding
+        body = obj.body
+        err = obj.error
 
         lines = [f"Status: {status} {reason}"]
         if ct:
@@ -138,11 +150,9 @@ class ReadFilesTool(BaseTool):
                 "Path may be plain (default repo) or virtual and prefixed with "
                 f"'{VIRTUAL_PATH_PREFIX}/<repo_name>'. "
                 "Response fields: status, content-type, content-encoding, and body (the file). "
-                "In JSON mode, the tool returns a JSON object with these fields. "
-                "In text mode, it returns header lines (Status, Content-Type, Content-Encoding) "
-                "followed by a blank line and then the body. "
-                "If content-encoding is 'base64', the body is base64-encoded; otherwise 'identity' means plain text. "
-                "On errors, status is a non-200 code and an 'error' message is provided instead of the file body."
+                "Interpretation: read the header lines (Status, Content-Type, Content-Encoding) followed by a blank line "
+                "and then the body. If content-encoding is 'base64', the body is base64-encoded; if omitted, the body is plain text. "
+                "On errors, status is a non-200 code and an 'error' message explains the failure."
             ),
             "parameters": {
                 "type": "object",
