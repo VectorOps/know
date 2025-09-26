@@ -8,7 +8,6 @@ import inspect
 from enum import Enum
 from pydantic import BaseModel
 import re
-from know.settings import ToolOutput
 
 
 FENCE_START_RE = re.compile(r"(?m)^`+")
@@ -57,7 +56,7 @@ class BaseTool(ABC):
         """
 
         if isinstance(obj, BaseModel):
-            return obj.model_dump()
+            return obj.model_dump(by_alias=True, exclude_none=True)
         if isinstance(obj, Enum):
             return obj.value
         if isinstance(obj, dict):
@@ -115,7 +114,11 @@ class BaseTool(ABC):
 
         # Default JSON
         try:
-            return json.dumps(self._convert_to_python(obj), ensure_ascii=False)
+            if isinstance(obj, BaseModel):
+                payload = obj.model_dump(by_alias=True, exclude_none=True)
+            else:
+                payload = self._convert_to_python(obj)
+            return json.dumps(payload, ensure_ascii=False)
         except Exception:
             return str(obj)
 
