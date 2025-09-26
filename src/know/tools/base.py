@@ -31,7 +31,7 @@ class BaseTool(ABC):
             ToolRegistry.register_tool(cls)
 
     @abstractmethod
-    def execute(self, pm: ProjectManager, req: Any) -> Any:
+    def execute(self, pm: ProjectManager, req: Any) -> str:
         pass
 
     @abstractmethod
