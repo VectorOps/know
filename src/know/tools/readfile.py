@@ -34,9 +34,10 @@ class ReadFilesTool(BaseTool):
         self,
         pm: ProjectManager,
         req: ReadFileReq,
-    ) -> ReadFileResp:
+    ) -> str:
         """
-        Read a file and return an HTTP-like response dictionary:
+        Read a file and return an HTTP-like response string (JSON or structured text),
+        representing an HTTP-like response:
         {
           "status": <int>,                     # HTTP-style status code
           "content-type": <str> | None,        # e.g. "text/plain; charset=utf-8"
@@ -47,37 +48,51 @@ class ReadFilesTool(BaseTool):
         """
         pm.maybe_refresh()
 
+        try:
+            settings = pm.data.settings
+        except Exception:
+            settings = None
+
         file_repo = pm.data.file
         raw_path = req.path or ""
         if not raw_path:
-            return ReadFileResp(
-                status=400,
-                content_type=None,
-                content_encoding=None,
-                body=None,
-                error="Empty path",
+            return self.encode_output(
+                ReadFileResp(
+                    status=400,
+                    content_type=None,
+                    content_encoding=None,
+                    body=None,
+                    error="Empty path",
+                ),
+                settings=settings,
             )
 
         decon = pm.deconstruct_virtual_path(raw_path)
         if not decon:
-            return ReadFileResp(
-                status=404,
-                content_type=None,
-                content_encoding=None,
-                body=None,
-                error="Path not found",
+            return self.encode_output(
+                ReadFileResp(
+                    status=404,
+                    content_type=None,
+                    content_encoding=None,
+                    body=None,
+                    error="Path not found",
+                ),
+                settings=settings,
             )
 
         repo, rel_path = decon
 
         fm = file_repo.get_by_path(repo.id, rel_path)
         if not fm:
-            return ReadFileResp(
-                status=404,
-                content_type=None,
-                content_encoding=None,
-                body=None,
-                error="File not indexed",
+            return self.encode_output(
+                ReadFileResp(
+                    status=404,
+                    content_type=None,
+                    content_encoding=None,
+                    body=None,
+                    error="File not indexed",
+                ),
+                settings=settings,
             )
 
         abs_path = os.path.join(repo.root_path, rel_path)
@@ -85,12 +100,15 @@ class ReadFilesTool(BaseTool):
             with open(abs_path, "rb") as f:
                 data = f.read()
         except OSError as e:
-            return ReadFileResp(
-                status=500,
-                content_type=None,
-                content_encoding=None,
-                body=None,
-                error=f"Failed to read file: {e}",
+            return self.encode_output(
+                ReadFileResp(
+                    status=500,
+                    content_type=None,
+                    content_encoding=None,
+                    body=None,
+                    error=f"Failed to read file: {e}",
+                ),
+                settings=settings,
             )
 
         # Determine MIME type
@@ -106,22 +124,28 @@ class ReadFilesTool(BaseTool):
                 mime = "text/plain; charset=utf-8"
             elif "charset=" not in mime and mime.startswith("text/"):
                 mime = f"{mime}; charset=utf-8"
-            return ReadFileResp(
-                status=200,
-                content_type=mime,
-                content_encoding=None,  # omit for identity
-                body=text,
-                error=None,
+            return self.encode_output(
+                ReadFileResp(
+                    status=200,
+                    content_type=mime,
+                    content_encoding=None,  # omit for identity
+                    body=text,
+                    error=None,
+                ),
+                settings=settings,
             )
         except UnicodeDecodeError:
             # Binary; return base64
             b64 = base64.b64encode(data).decode("ascii")
-            return ReadFileResp(
-                status=200,
-                content_type=mime,
-                content_encoding="base64",
-                body=b64,
-                error=None,
+            return self.encode_output(
+                ReadFileResp(
+                    status=200,
+                    content_type=mime,
+                    content_encoding="base64",
+                    body=b64,
+                    error=None,
+                ),
+                settings=settings,
             )
 
     def encode_output(
@@ -197,13 +221,7 @@ class ReadFilesTool(BaseTool):
 
         def readfile(req: ReadFileReq) -> str:
             """Read and return the file as an HTTP-like response (JSON or text)."""
-            res = self.execute(pm, req)
-            # Use project settings to decide JSON vs text formatting
-            try:
-                settings = pm.data.settings
-            except Exception:
-                settings = None
-            return self.encode_output(res, settings=settings)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
 
