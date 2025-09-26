@@ -99,7 +99,9 @@ class BaseTool(ABC):
 
         return encoding or self.default_output
 
-    def encode_output(self, obj: Any, *, settings: ProjectSettings | None = None) -> str:
+    def encode_output(
+        self, obj: Any, *, settings: ProjectSettings | None = None
+    ) -> str:
         """
         Convert a tool's execute() return value into a string to send as tool output.
         Uses settings.tools.outputs[tool_name] if provided; otherwise falls back to the tool's
@@ -136,6 +138,7 @@ class BaseTool(ABC):
 
         def _default(o: Any):
             import datetime, decimal
+
             if isinstance(o, (datetime.date, datetime.datetime)):
                 return o.isoformat()
             if isinstance(o, decimal.Decimal):
@@ -195,7 +198,11 @@ class BaseTool(ABC):
             lines: list[str] = []
             for k, v in _sorted_items(rec):
                 s = stringify(v)
-                if max_scalar_len is not None and "\n" not in s and len(s) > max_scalar_len:
+                if (
+                    max_scalar_len is not None
+                    and "\n" not in s
+                    and len(s) > max_scalar_len
+                ):
                     s = s[:max_scalar_len] + "…"
                 if "\n" in s:
                     # choose a fence that won’t collide with content
@@ -221,7 +228,7 @@ class ToolRegistry:
         name = getattr(tool_cls, "tool_name", None)
         if not name:
             raise ValueError(f"{tool_cls.__name__} missing `tool_name`")
-        if name not in cls._tools:           # keep singletons
+        if name not in cls._tools:  # keep singletons
             cls._tools[name] = tool_cls()
 
     @classmethod
@@ -231,7 +238,4 @@ class ToolRegistry:
     @classmethod
     def get_enabled_tools(cls, settings: ProjectSettings) -> list["BaseTool"]:
         disabled_tools = settings.tools.disabled
-        return [
-            tool for name, tool in cls._tools.items()
-            if name not in disabled_tools
-        ]
+        return [tool for name, tool in cls._tools.items() if name not in disabled_tools]

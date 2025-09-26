@@ -1,4 +1,3 @@
-
 from typing import Sequence
 from .base import BaseTool, MCPToolDefinition
 from pydantic import BaseModel
@@ -12,12 +11,14 @@ from know.models import Visibility
 
 class SummarizeFilesReq(BaseModel):
     """Request model for the SummarizeFilesTool."""
+
     paths: Sequence[str]
     summary_mode: SummaryMode | str = SummaryMode.Definition
 
 
 class SummarizeFilesTool(BaseTool):
     """Tool to generate summaries for a list of files."""
+
     tool_name = "vectorops_summarize_files"
     tool_input = SummarizeFilesReq
     default_output = ToolOutput.STRUCTURED_TEXT  # new
@@ -46,9 +47,7 @@ class SummarizeFilesTool(BaseTool):
                 continue
 
             repo, rel_path = deconstructed
-            fs = build_file_summary(
-                pm, repo, rel_path, summary_mode=summary_mode
-            )
+            fs = build_file_summary(pm, repo, rel_path, summary_mode=summary_mode)
             if fs:
                 fs.path = path
                 summaries.append(fs)
@@ -64,12 +63,16 @@ class SummarizeFilesTool(BaseTool):
         """Return the OpenAI schema for the tool."""
         summary_enum = [m.value for m in SummaryMode]
 
-        summary_enum = [m.value for m in SummaryMode if m not in (SummaryMode.Source, SummaryMode.Skip)]
+        summary_enum = [
+            m.value
+            for m in SummaryMode
+            if m not in (SummaryMode.Source, SummaryMode.Skip)
+        ]
 
         return {
             "name": self.tool_name,
             "description": (
-                "Return a summary for each supplied file, consisting of its "
+                "Return a partial summary for each supplied file, consisting of its "
                 "import statements and top-level symbol definitions. Use this tool "
                 "to get an overview of interesting files. Prefer the default "
                 "`definition` mode, but request `documentation` if more detail (like docstrings) is needed."
@@ -98,6 +101,7 @@ class SummarizeFilesTool(BaseTool):
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP definition for the tool."""
+
         def filesummary(req: SummarizeFilesReq) -> str:
             return self.execute(pm, req)
 

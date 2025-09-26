@@ -11,6 +11,7 @@ from know.settings import ProjectSettings, ToolOutput
 
 class ReadFileReq(BaseModel):
     """Request model for reading a file."""
+
     path: str = Field(description="Project file path (virtual or plain) to read.")
 
 
@@ -24,8 +25,10 @@ class ReadFileResp(BaseModel):
 
 class ReadFilesTool(BaseTool):
     """Tool to read a file and return an HTTP-like response (JSON or text)."""
+
     tool_name = "vectorops_read_files"
     tool_input = ReadFileReq
+    default_output = ToolOutput.STRUCTURED_TEXT
 
     def execute(
         self,
@@ -47,17 +50,35 @@ class ReadFilesTool(BaseTool):
         file_repo = pm.data.file
         raw_path = req.path or ""
         if not raw_path:
-            return ReadFileResp(status=400, content_type=None, content_encoding=None, body=None, error="Empty path")
+            return ReadFileResp(
+                status=400,
+                content_type=None,
+                content_encoding=None,
+                body=None,
+                error="Empty path",
+            )
 
         decon = pm.deconstruct_virtual_path(raw_path)
         if not decon:
-            return ReadFileResp(status=404, content_type=None, content_encoding=None, body=None, error="Path not found")
+            return ReadFileResp(
+                status=404,
+                content_type=None,
+                content_encoding=None,
+                body=None,
+                error="Path not found",
+            )
 
         repo, rel_path = decon
 
         fm = file_repo.get_by_path(repo.id, rel_path)
         if not fm:
-            return ReadFileResp(status=404, content_type=None, content_encoding=None, body=None, error="File not indexed")
+            return ReadFileResp(
+                status=404,
+                content_type=None,
+                content_encoding=None,
+                body=None,
+                error="File not indexed",
+            )
 
         abs_path = os.path.join(repo.root_path, rel_path)
         try:
@@ -103,7 +124,9 @@ class ReadFilesTool(BaseTool):
                 error=None,
             )
 
-    def encode_output(self, obj: ReadFileResp, *, settings: ProjectSettings | None = None) -> str:
+    def encode_output(
+        self, obj: ReadFileResp, *, settings: ProjectSettings | None = None
+    ) -> str:
         fmt = self.get_output_format(settings=settings)
         if fmt == ToolOutput.JSON:
             return json.dumps(
@@ -171,6 +194,7 @@ class ReadFilesTool(BaseTool):
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP tool definition for this tool."""
+
         def readfile(req: ReadFileReq) -> str:
             """Read and return the file as an HTTP-like response (JSON or text)."""
             res = self.execute(pm, req)
