@@ -280,15 +280,6 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
         self.conn = conn
         self._table = Table(self.table)
 
-    def _get_query(self, q):
-        parameter = QmarkParameter()
-        sql = q.get_sql(parameter=parameter)
-        return sql, parameter.get_parameters()
-
-    def _execute(self, q):
-        sql, args = self._get_query(q)
-        return self.conn.execute(sql, args)
-
     def get_repo_ids(self, project_id: str) -> List[str]:
         q = (
             Query.from_(self._table)
@@ -417,36 +408,48 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
         path_lc = path.lower()
         basename_lc = os.path.basename(path).lower()
 
+        fs_tbl = Table("files_search")
+        ft_tbl = Table("file_trigrams")
+
         # remove old index rows (idempotent)
-        self.conn.execute("DELETE FROM files_search WHERE file_id = ?", [file_id])
-        self.conn.execute("DELETE FROM file_trigrams WHERE file_id = ?", [file_id])
+        q = Query.from_(fs_tbl).where(fs_tbl.file_id == file_id).delete()
+        self._execute(q)
+        q = Query.from_(ft_tbl).where(ft_tbl.file_id == file_id).delete()
+        self._execute(q)
 
         # insert new search rows
-        self.conn.execute(
-            "INSERT INTO files_search (file_id, path_lc, basename_lc) VALUES (?, ?, ?)",
-            [file_id, path_lc, basename_lc],
+        q = (
+            Query.into(fs_tbl)
+            .columns(fs_tbl.file_id, fs_tbl.path_lc, fs_tbl.basename_lc)
+            .insert(file_id, path_lc, basename_lc)
         )
+        self._execute(q)
 
         # insert distinct trigrams for the path (presence-only)
         if len(path_lc) >= 3:
             seen: Set[str] = set()
+            values: list[tuple[str, str]] = []
             for i in range(len(path_lc) - 2):
                 tri = path_lc[i : i + 3]
                 if tri in seen:
                     continue
                 seen.add(tri)
-                self.conn.execute(
-                    "INSERT INTO file_trigrams (file_id, trigram) VALUES (?, ?)",
-                    [file_id, tri],
-                )
+                values.append((file_id, tri))
+            if values:
+                q = Query.into(ft_tbl).columns(ft_tbl.file_id, ft_tbl.trigram)
+                for fid, tri in values:
+                    q = q.insert(fid, tri)
+                self._execute(q)
 
     def _delete_index_for_ids(self, file_ids: list[str]) -> None:
         if not file_ids:
             return
-        # small batches via simple loops (tests use small volumes)
-        for fid in file_ids:
-            self.conn.execute("DELETE FROM files_search WHERE file_id = ?", [fid])
-            self.conn.execute("DELETE FROM file_trigrams WHERE file_id = ?", [fid])
+        fs_tbl = Table("files_search")
+        ft_tbl = Table("file_trigrams")
+        q = Query.from_(fs_tbl).where(fs_tbl.file_id.isin(file_ids)).delete()
+        self._execute(q)
+        q = Query.from_(ft_tbl).where(ft_tbl.file_id.isin(file_ids)).delete()
+        self._execute(q)
 
     # ---------- CRUD overrides to keep search index in sync ----------
     def create(self, item: File) -> File:
