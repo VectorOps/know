@@ -13,7 +13,13 @@ from know.models import (
 from typing import Dict, Any
 import uuid
 from know.settings import ProjectSettings
-from know.data import NodeSearchQuery, PackageFilter, FileFilter, NodeFilter, ImportEdgeFilter
+from know.data import (
+    NodeSearchQuery,
+    PackageFilter,
+    FileFilter,
+    NodeFilter,
+    ImportEdgeFilter,
+)
 
 
 def make_id() -> str:
@@ -54,17 +60,38 @@ def test_package_metadata_repository(data_repo):
     pkg_repo, file_repo = data_repo.package, data_repo.file
 
     orphan_id = make_id()
-    used_id   = make_id()
+    used_id = make_id()
     rid = make_id()
-    pkg_repo.create(Package(id=orphan_id, name="orphan", virtual_path="pkg/orphan", physical_path="pkg/orphan.py", repo_id=rid))
-    pkg_repo.create(Package(id=used_id,   name="used",   virtual_path="pkg/used", physical_path="pkg/used.go", repo_id=rid))
+    pkg_repo.create(
+        Package(
+            id=orphan_id,
+            name="orphan",
+            virtual_path="pkg/orphan",
+            physical_path="pkg/orphan.py",
+            repo_id=rid,
+        )
+    )
+    pkg_repo.create(
+        Package(
+            id=used_id,
+            name="used",
+            virtual_path="pkg/used",
+            physical_path="pkg/used.go",
+            repo_id=rid,
+        )
+    )
 
     # add a file that references the “used” package, leaving the first one orphaned
-    file_repo.create(File(id=make_id(), repo_id=make_id(), path="pkg/used/a.py", package_id=used_id))
+    file_repo.create(
+        File(id=make_id(), repo_id=make_id(), path="pkg/used/a.py", package_id=used_id)
+    )
 
     assert pkg_repo.get_by_virtual_path(rid, "pkg/used").id == used_id
     assert pkg_repo.get_by_physical_path(rid, "pkg/used.go").id == used_id
-    assert {p.id for p in pkg_repo.get_list(PackageFilter(repo_ids=[rid]))} == {orphan_id, used_id}
+    assert {p.id for p in pkg_repo.get_list(PackageFilter(repo_ids=[rid]))} == {
+        orphan_id,
+        used_id,
+    }
     # delete_orphaned should remove only the orphan package
     pkg_repo.delete_orphaned()
     assert pkg_repo.get_by_id(orphan_id) is None
@@ -131,7 +158,18 @@ def test_node_metadata_repository(data_repo):
 def test_import_edge_repository(data_repo):
     edge_repo = data_repo.importedge
     rid, eid, fid, from_pid = make_id(), make_id(), make_id(), make_id()
-    edge_repo.create(ImportEdge(id=eid, repo_id=rid, from_package_id=from_pid, from_file_id=fid, to_package_physical_path="pkg/other", to_package_virtual_path="pkg/other", raw="import pkg.other", external=False))
+    edge_repo.create(
+        ImportEdge(
+            id=eid,
+            repo_id=rid,
+            from_package_id=from_pid,
+            from_file_id=fid,
+            to_package_physical_path="pkg/other",
+            to_package_virtual_path="pkg/other",
+            raw="import pkg.other",
+            external=False,
+        )
+    )
 
     assert edge_repo.get_list(ImportEdgeFilter(source_package_id=from_pid))[0].id == eid
     assert edge_repo.get_list(ImportEdgeFilter(repo_ids=[rid]))[0].id == eid
@@ -144,30 +182,48 @@ def test_node_search(data_repo):
     repo_repo, file_repo, node_repo = data_repo.repo, data_repo.file, data_repo.node
 
     # ---------- minimal repo / file scaffolding ----------
-    rid  = make_id()
-    fid  = make_id()
+    rid = make_id()
+    fid = make_id()
     repo_repo.create(Repo(id=rid, name="test", root_path="/tmp/rid"))
     file_repo.create(File(id=fid, repo_id=rid, path="src/a.py"))
 
     # ---------- seed three nodes ----------
-    node_repo.create(Node(
-        id=make_id(), name="Alpha", repo_id=rid, file_id=fid,
-        body='def Alpha(): pass',
-        kind="function", visibility="public",
-        docstring="Compute foo and bar."
-    ))
-    node_repo.create(Node(
-        id=make_id(), name="Beta", repo_id=rid, file_id=fid,
-        body='class Beta(): pass',
-        kind="class", visibility="private",
-        docstring="Baz qux docs."
-    ))
-    node_repo.create(Node(
-        id=make_id(), name="Gamma", repo_id=rid, file_id=fid,
-        body='Gamma = 10',
-        kind="variable", visibility="public",
-        docstring="Alpha-numeric helper."
-    ))
+    node_repo.create(
+        Node(
+            id=make_id(),
+            name="Alpha",
+            repo_id=rid,
+            file_id=fid,
+            body="def Alpha(): pass",
+            kind="function",
+            visibility="public",
+            docstring="Compute foo and bar.",
+        )
+    )
+    node_repo.create(
+        Node(
+            id=make_id(),
+            name="Beta",
+            repo_id=rid,
+            file_id=fid,
+            body="class Beta(): pass",
+            kind="class",
+            visibility="private",
+            docstring="Baz qux docs.",
+        )
+    )
+    node_repo.create(
+        Node(
+            id=make_id(),
+            name="Gamma",
+            repo_id=rid,
+            file_id=fid,
+            body="Gamma = 10",
+            kind="variable",
+            visibility="public",
+            docstring="Alpha-numeric helper.",
+        )
+    )
     data_repo.refresh_full_text_indexes()
 
     # ---------- no-filter search: default ordering (name ASC) ----------
@@ -175,20 +231,34 @@ def test_node_search(data_repo):
     assert [s.name for s in res] == ["Alpha", "Beta", "Gamma"]
 
     # ---------- name substring (case-insensitive) ----------
-    assert [s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], symbol_name="alpha"))] == ["Alpha"]
+    assert [
+        s.name
+        for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], symbol_name="alpha"))
+    ] == ["Alpha"]
 
     # ---------- kind filter ----------
-    assert [s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], kind="class"))] == ["Beta"]
+    assert [
+        s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], kind="class"))
+    ] == ["Beta"]
 
     # ---------- visibility filter ----------
-    assert {s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], visibility="public"))} == {"Alpha", "Gamma"}
+    assert {
+        s.name
+        for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], visibility="public"))
+    } == {"Alpha", "Gamma"}
 
     # ---------- docstring / comment full-text search ----------
-    assert [s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], doc_needle="foo"))] == ["Alpha"]
+    assert [
+        s.name
+        for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], doc_needle="foo"))
+    ] == ["Alpha"]
 
     # ---------- pagination ----------
     assert len(node_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2))) == 2
-    assert [s.name for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2, offset=2))] == ["Gamma"]
+    assert [
+        s.name
+        for s in node_repo.search(NodeSearchQuery(repo_ids=[rid], limit=2, offset=2))
+    ] == ["Gamma"]
 
 
 # ---------------------------------------------------------------------------
@@ -204,25 +274,46 @@ def test_symbol_embedding_search(data_repo):
     file_repo.create(File(id=fid, repo_id=rid, path="src/vec.py"))
 
     # seed three symbols with simple, orthogonal 3-d vectors
-    node_repo.create(Node(
-        id=make_id(), name="VecA", repo_id=rid, file_id=fid,
-        body="def VecA(): pass", embedding_code_vec=[1.0, 0.0, 0.0] + [0] * 1021
-    ))
-    node_repo.create(Node(
-        id=make_id(), name="VecB", repo_id=rid, file_id=fid,
-        body="def VecB(): pass", embedding_code_vec=[0.0, 1.0, 0.0] + [0] * 1021
-    ))
-    node_repo.create(Node(
-        id=make_id(), name="VecC", repo_id=rid, file_id=fid,
-        body="def VecC(): pass", embedding_code_vec=[0.0, 0.0, 1.0] + [0] * 1021
-    ))
+    node_repo.create(
+        Node(
+            id=make_id(),
+            name="VecA",
+            repo_id=rid,
+            file_id=fid,
+            body="def VecA(): pass",
+            embedding_code_vec=[1.0, 0.0, 0.0] + [0] * 1021,
+        )
+    )
+    node_repo.create(
+        Node(
+            id=make_id(),
+            name="VecB",
+            repo_id=rid,
+            file_id=fid,
+            body="def VecB(): pass",
+            embedding_code_vec=[0.0, 1.0, 0.0] + [0] * 1021,
+        )
+    )
+    node_repo.create(
+        Node(
+            id=make_id(),
+            name="VecC",
+            repo_id=rid,
+            file_id=fid,
+            body="def VecC(): pass",
+            embedding_code_vec=[0.0, 0.0, 1.0] + [0] * 1021,
+        )
+    )
 
     # query vector identical to VecA  ->  VecA must rank first
     res = node_repo.search(
-        NodeSearchQuery(repo_ids=[rid], embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3),
+        NodeSearchQuery(
+            repo_ids=[rid], embedding_query=[1.0, 0.0, 0.0] + [0] * 1021, limit=3
+        ),
     )
 
     assert res[0].name == "VecA"
+
 
 def test_file_filename_complete(data_repo):
     repo_repo, file_repo = data_repo.repo, data_repo.file
@@ -248,3 +339,53 @@ def test_file_filename_complete(data_repo):
     assert any("abc_utils.py" in p for p in paths)
     # default limit should cap results
     assert len(res) <= 5
+
+
+def test_file_index_sync_on_update(data_repo):
+    repo_repo, file_repo = data_repo.repo, data_repo.file
+
+    rid = make_id()
+    repo_repo.create(Repo(id=rid, name="upd", root_path="/tmp/upd"))
+
+    fid = make_id()
+    f = File(id=fid, repo_id=rid, path="src/abc_utils.py")
+    file_repo.create(f)
+
+    # initial search finds the file
+    res = file_repo.filename_complete("abc")
+    assert any(ff.id == fid for ff in res)
+
+    # update path to something that should not match "abc"
+    out = file_repo.update(fid, {"path": "src/zzz.py"})
+    assert out is not None and out.path == "src/zzz.py"
+
+    res = file_repo.filename_complete("abc")
+    assert all(ff.id != fid for ff in res)
+
+    # update path to something that does match subsequence "a.*b.*c"
+    out = file_repo.update(fid, {"path": "docs/alpha/beta/cappa.py"})
+    assert out is not None and "alpha/beta/cappa.py" in out.path
+
+    res = file_repo.filename_complete("abc")
+    assert any(ff.id == fid and "alpha/beta/cappa.py" in ff.path for ff in res)
+
+
+def test_file_index_sync_on_delete(data_repo):
+    repo_repo, file_repo = data_repo.repo, data_repo.file
+
+    rid = make_id()
+    repo_repo.create(Repo(id=rid, name="del", root_path="/tmp/del"))
+
+    fid = make_id()
+    f = File(id=fid, repo_id=rid, path="src/abc_utils.py")
+    file_repo.create(f)
+
+    # present before delete
+    res = file_repo.filename_complete("abc")
+    assert any(ff.id == fid for ff in res)
+
+    # delete and ensure it’s gone from index
+    assert file_repo.delete(fid) is True
+
+    res = file_repo.filename_complete("abc")
+    assert all(ff.id != fid for ff in res)
