@@ -556,7 +556,7 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
         q = (
             q.select(files_tbl.star, score.as_("score"))
             .where(cond)
-            .orderby("score", order=Order.desc)
+            .orderby(score, order=Order.desc)
             .orderby(files_tbl.path)
             .limit(limit)
         )
