@@ -8,7 +8,17 @@ import queue
 from concurrent.futures import Future
 from typing import Optional, Dict, Any, List, Generic, TypeVar, Callable, Tuple, Set
 import importlib.resources as pkg_resources
-from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order, Case
+from pypika import (
+    Table,
+    Query,
+    AliasedQuery,
+    QmarkParameter,
+    CustomFunction,
+    functions,
+    analytics,
+    Order,
+    Case,
+)
 from pypika.terms import LiteralValue, ValueWrapper
 
 from pydantic import BaseModel
@@ -65,7 +75,7 @@ CREATE_MIGRATIONS_TABLE_SQL = """
 """
 INSERT_MIGRATION_SQL = "INSERT INTO __migrations__(name, applied_at) VALUES (?, ?)"
 
-MatchBM25Fn = CustomFunction('fts_main_nodes.match_bm25', ['id', 'query'])
+MatchBM25Fn = CustomFunction("fts_main_nodes.match_bm25", ["id", "query"])
 ArrayCosineSimilarityFn = CustomFunction("array_cosine_similarity", ["vec", "param"])
 
 
@@ -84,7 +94,7 @@ def _row_to_dict(rel) -> list[dict[str, Any]]:
                 row[k] = None
                 continue
             try:
-                is_na = pd.isna(v)          # may return array for sequences
+                is_na = pd.isna(v)  # may return array for sequences
             except Exception:
                 is_na = False
             if isinstance(is_na, bool) and is_na:
@@ -98,6 +108,7 @@ class DuckDBThreadWrapper(BaseQueueWorker):
     to a separate worker thread. Without this random lockups in execute() were happening even
     with cursor.
     """
+
     def __init__(self, db_path: Optional[str] = None):
         super().__init__()
         self._db_path = db_path
@@ -121,7 +132,9 @@ class DuckDBThreadWrapper(BaseQueueWorker):
             assert self._conn is not None
             self._conn.execute(sql, params if params else [])
 
-        def query_fn(sql: str, params: Optional[list[Any]] = None) -> list[dict[str, Any]]:
+        def query_fn(
+            sql: str, params: Optional[list[Any]] = None
+        ) -> list[dict[str, Any]]:
             assert self._conn is not None
             rel = self._conn.execute(sql, params if params else [])
             return _row_to_dict(rel) if rel is not None else []
@@ -152,6 +165,7 @@ class DuckDBThreadWrapper(BaseQueueWorker):
         fut = Future()
         self._queue.put((sql, params, fut))
         return fut.result()
+
 
 # generic base repository
 class _DuckDBBaseRepo(BaseSQLRepository[T]):
@@ -187,7 +201,11 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
         data = self._serialize_data(item.model_dump(exclude_none=True))
 
         keys = data.keys()
-        q = Query.into(self._table).columns([self._table[k] for k in keys]).insert([data[k] for k in keys])
+        q = (
+            Query.into(self._table)
+            .columns([self._table[k] for k in keys])
+            .insert([data[k] for k in keys])
+        )
         self._execute(q)
 
         return item
@@ -221,7 +239,9 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
     def create_many(self, items: list[T]) -> list[T]:
         if not items:
             return []
-        data_list = [self._serialize_data(i.model_dump(exclude_none=True)) for i in items]
+        data_list = [
+            self._serialize_data(i.model_dump(exclude_none=True)) for i in items
+        ]
         keys: list[str] = []
         for d in data_list:
             for k in d.keys():
@@ -241,6 +261,7 @@ class _DuckDBBaseRepo(BaseSQLRepository[T]):
             if updated is not None:
                 out.append(updated)
         return out
+
 
 class DuckDBProjectRepo(_DuckDBBaseRepo[Project], AbstractProjectRepository):
     table = "projects"
@@ -295,6 +316,7 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
 # concrete repositories
 # ---------------------------------------------------------------------------
 
+
 class DuckDBRepoRepo(_DuckDBBaseRepo[Repo], AbstractRepoRepository):
     table = "repos"
     model = Repo
@@ -306,7 +328,11 @@ class DuckDBRepoRepo(_DuckDBBaseRepo[Repo], AbstractRepoRepository):
         return self.model(**self._deserialize_data(rows[0])) if rows else None
 
     def get_by_path(self, root_path: str) -> Optional[Repo]:
-        q = Query.from_(self._table).select("*").where(self._table.root_path == root_path)
+        q = (
+            Query.from_(self._table)
+            .select("*")
+            .where(self._table.root_path == root_path)
+        )
         rows = self._execute(q)
         return self.model(**self._deserialize_data(rows[0])) if rows else None
 
@@ -334,15 +360,25 @@ class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
         self._file_repo = file_repo
 
     def get_by_physical_path(self, repo_id: str, root_path: str) -> Optional[Package]:
-        q = Query.from_(self._table).select("*").where(
-            (self._table.repo_id == repo_id) & (self._table.physical_path == root_path)
+        q = (
+            Query.from_(self._table)
+            .select("*")
+            .where(
+                (self._table.repo_id == repo_id)
+                & (self._table.physical_path == root_path)
+            )
         )
         rows = self._execute(q)
         return self.model(**self._deserialize_data(rows[0])) if rows else None
 
     def get_by_virtual_path(self, repo_id: str, root_path: str) -> Optional[Package]:
-        q = Query.from_(self._table).select("*").where(
-            (self._table.repo_id == repo_id) & (self._table.virtual_path == root_path)
+        q = (
+            Query.from_(self._table)
+            .select("*")
+            .where(
+                (self._table.repo_id == repo_id)
+                & (self._table.virtual_path == root_path)
+            )
         )
         rows = self._execute(q)
         return self.model(**self._deserialize_data(rows[0])) if rows else None
@@ -359,13 +395,18 @@ class DuckDBPackageRepo(_DuckDBBaseRepo[Package], AbstractPackageRepository):
 
     def delete_orphaned(self) -> None:
         files_tbl = Table("files")
-        subq = Query.from_(files_tbl).select(files_tbl.package_id).where(files_tbl.package_id.notnull())
+        subq = (
+            Query.from_(files_tbl)
+            .select(files_tbl.package_id)
+            .where(files_tbl.package_id.notnull())
+        )
 
         q = Query.from_(self._table).where(self._table.id.notin(subq)).delete()
         self._execute(q)
 
 
-from know.data import FileFilter      # already present – keep / ensure
+from know.data import FileFilter  # already present – keep / ensure
+
 
 class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
     table = "files"
@@ -435,8 +476,10 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
         return super().delete_many(item_ids)
 
     def get_by_path(self, repo_id: str, path: str) -> Optional[File]:
-        q = Query.from_(self._table).select("*").where(
-            (self._table.path == path) & (self._table.repo_id == repo_id)
+        q = (
+            Query.from_(self._table)
+            .select("*")
+            .where((self._table.path == path) & (self._table.repo_id == repo_id))
         )
         rows = self._execute(q)
         return self.model(**self._deserialize_data(rows[0])) if rows else None
@@ -485,17 +528,17 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
             tri_hits_ref = AliasedQuery("trihits")
 
         # Base FROM and optional join to trigram hits
-        base = Query.from_(fs_tbl)
+        q = q.from_(fs_tbl)
         if tri_hits_ref is not None:
-            base = base.left_join(tri_hits_ref).on(fs_tbl.file_id == tri_hits_ref.file_id)
-
-        # Join back to full file rows
-        base = base.join(files_tbl).on(files_tbl.id == fs_tbl.file_id)
+            q = q.left_join(tri_hits_ref).on(fs_tbl.file_id == tri_hits_ref.file_id)
+        q = q.join(files_tbl).on(files_tbl.id == fs_tbl.file_id)
 
         # Build score components
         subseq = RegexpFullMatch(fs_tbl.path_lc, ValueWrapper(subseq_pat))
         base_subseq = RegexpFullMatch(fs_tbl.basename_lc, ValueWrapper(subseq_pat))
-        tri_hits_col = (tri_hits_ref.tri_hits if tri_hits_ref is not None else LiteralValue(0))
+        tri_hits_col = (
+            tri_hits_ref.tri_hits if tri_hits_ref is not None else LiteralValue(0)
+        )
         tri_hits_val = functions.Coalesce(tri_hits_col, 0)
 
         score = (
@@ -511,8 +554,7 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
             cond = cond | (tri_hits_val > 0)
 
         q = (
-            q.from_(base)
-            .select(files_tbl.star, score.as_("score"))
+            q.select(files_tbl.star, score.as_("score"))
             .where(cond)
             .orderby("score", order=Order.desc)
             .orderby(files_tbl.path)
@@ -533,7 +575,12 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         "modifiers": lambda v: [Modifier(m) for m in v] if v is not None else [],
     }
 
-    def __init__(self, conn: "DuckDBThreadWrapper", file_repo: "DuckDBFileRepo", settings: ProjectSettings):
+    def __init__(
+        self,
+        conn: "DuckDBThreadWrapper",
+        file_repo: "DuckDBFileRepo",
+        settings: ProjectSettings,
+    ):
         super().__init__(conn)
         self.file_repo = file_repo
         self._settings = settings
@@ -551,7 +598,11 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         )
 
         keys = data.keys()
-        q = Query.into(self._table).columns([self._table[k] for k in keys]).insert([data[k] for k in keys])
+        q = (
+            Query.into(self._table)
+            .columns([self._table[k] for k in keys])
+            .insert([data[k] for k in keys])
+        )
         self._execute(q)
         return item
 
@@ -628,16 +679,12 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
         q = Query.from_(self._table)
 
         # Candidates
-        candidates = (
-            Query
-            .from_(self._table)
-            .select(
-                self._table.id,
-                self._table.repo_id,
-                self._table.embedding_code_vec,
-                self._table.kind,
-                self._table.search_boost,
-            )
+        candidates = Query.from_(self._table).select(
+            self._table.id,
+            self._table.repo_id,
+            self._table.embedding_code_vec,
+            self._table.kind,
+            self._table.search_boost,
         )
 
         if query.repo_ids:
@@ -661,48 +708,48 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
 
         # unified CTE / query construction
         if has_embedding:
-            rank_code_scores = (
-                Query.
-                from_(aliased_candidates).
-                select(
-                    aliased_candidates.id,
-                    ArrayCosineSimilarityFn(
-                        aliased_candidates.embedding_code_vec,
-                        functions.Cast(ValueWrapper(query.embedding_query), "FLOAT[1024]")
-                    ).as_("dist"))
+            rank_code_scores = Query.from_(aliased_candidates).select(
+                aliased_candidates.id,
+                ArrayCosineSimilarityFn(
+                    aliased_candidates.embedding_code_vec,
+                    functions.Cast(ValueWrapper(query.embedding_query), "FLOAT[1024]"),
+                ).as_("dist"),
             )
 
             aliased = AliasedQuery("rank_code_scores")
 
             rank_code = (
-                Query.
-                from_(aliased).
-                select(aliased.id, analytics.RowNumber().orderby(aliased.dist, order=Order.desc).as_("code_rank")).
-                where(aliased.dist >= self.settings.search.embedding_similarity_threshold)
+                Query.from_(aliased)
+                .select(
+                    aliased.id,
+                    analytics.RowNumber()
+                    .orderby(aliased.dist, order=Order.desc)
+                    .as_("code_rank"),
+                )
+                .where(
+                    aliased.dist >= self.settings.search.embedding_similarity_threshold
+                )
             )
 
-            q = q.with_(rank_code_scores, "rank_code_scores").with_(rank_code, "rank_code")
+            q = q.with_(rank_code_scores, "rank_code_scores").with_(
+                rank_code, "rank_code"
+            )
 
         if has_fts:
             assert query.doc_needle
             doc_needle = code_tokenizer(query.doc_needle)
-            rank_fts_scores = (
-                Query.
-                from_(aliased_candidates).
-                select(
-                    aliased_candidates.id,
-                    MatchBM25Fn(
-                        aliased_candidates.id,
-                        doc_needle
-                    ).as_("score"))
+            rank_fts_scores = Query.from_(aliased_candidates).select(
+                aliased_candidates.id,
+                MatchBM25Fn(aliased_candidates.id, doc_needle).as_("score"),
             )
 
             aliased = AliasedQuery("rank_fts_scores")
 
-            rank_fts = (
-                Query.
-                from_(aliased).
-                select(aliased.id, analytics.RowNumber().orderby(aliased.score, order=Order.desc).as_("fts_rank"))
+            rank_fts = Query.from_(aliased).select(
+                aliased.id,
+                analytics.RowNumber()
+                .orderby(aliased.score, order=Order.desc)
+                .as_("fts_rank"),
             )
             bm25_threshold = self.settings.search.bm25_score_threshold
             if bm25_threshold is not None:
@@ -720,22 +767,31 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
                 aliased = AliasedQuery("rank_code")
 
                 union_parts.append(
-                    Query.
-                    from_(aliased).
-                    select(
+                    Query.from_(aliased).select(
                         aliased.id,
-                        (LiteralValue(self.settings.search.rrf_code_weight) / (LiteralValue(self.settings.search.rrf_k) + aliased.code_rank)).as_("score"))
+                        (
+                            LiteralValue(self.settings.search.rrf_code_weight)
+                            / (
+                                LiteralValue(self.settings.search.rrf_k)
+                                + aliased.code_rank
+                            )
+                        ).as_("score"),
+                    )
                 )
 
             if has_fts:
                 aliased = AliasedQuery("rank_fts")
 
                 union_parts.append(
-                    Query.
-                    from_(aliased).
-                    select(
+                    Query.from_(aliased).select(
                         aliased.id,
-                        (LiteralValue(self.settings.search.rrf_fts_weight) / (LiteralValue(self.settings.search.rrf_k) + aliased.fts_rank)).as_("score")
+                        (
+                            LiteralValue(self.settings.search.rrf_fts_weight)
+                            / (
+                                LiteralValue(self.settings.search.rrf_k)
+                                + aliased.fts_rank
+                            )
+                        ).as_("score"),
                     )
                 )
 
@@ -746,10 +802,9 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             aliased = AliasedQuery("rrf_scores")
 
             rrf_final = (
-                Query.
-                from_(aliased).
-                select(aliased.id, functions.Sum(aliased.score).as_("score")).
-                groupby(aliased.id)
+                Query.from_(aliased)
+                .select(aliased.id, functions.Sum(aliased.score).as_("score"))
+                .groupby(aliased.id)
             )
 
             aliased_scores = AliasedQuery("rrf_final")
@@ -760,7 +815,10 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             if query.boost_repo_id and query.repo_boost_factor != 1.0:
                 repo_boost_case = (
                     Case()
-                    .when(aliased_candidates.repo_id == query.boost_repo_id, query.repo_boost_factor)
+                    .when(
+                        aliased_candidates.repo_id == query.boost_repo_id,
+                        query.repo_boost_factor,
+                    )
                     .else_(1.0)
                 )
                 score_col = score_col * repo_boost_case
@@ -773,19 +831,21 @@ class DuckDBNodeRepo(_DuckDBBaseRepo[Node], AbstractNodeRepository):
             )
 
             q = (
-                q.with_(rrf_scores, "rrf_scores").
-                with_(rrf_final, "rrf_final").
-                with_(fused, "fused").
-                join(aliased_fused).on(self._table.id == aliased_fused.id).
-                select(self._table.star, aliased_fused.rrf_score).
-                orderby(aliased_fused.rrf_score, order=Order.desc).
-                orderby(self._table.name)
+                q.with_(rrf_scores, "rrf_scores")
+                .with_(rrf_final, "rrf_final")
+                .with_(fused, "fused")
+                .join(aliased_fused)
+                .on(self._table.id == aliased_fused.id)
+                .select(self._table.star, aliased_fused.rrf_score)
+                .orderby(aliased_fused.rrf_score, order=Order.desc)
+                .orderby(self._table.name)
             )
         else:
             q = (
-                q.select("*").
-                join(aliased_candidates).on(self._table.id == aliased_candidates.id).
-                orderby(self._table.name)
+                q.select("*")
+                .join(aliased_candidates)
+                .on(self._table.id == aliased_candidates.id)
+                .orderby(self._table.name)
             )
 
         raw_limit = query.limit if query.limit is not None else 20
@@ -879,6 +939,7 @@ class DuckDBNodeRefRepo(_DuckDBBaseRepo[NodeRef], AbstractNodeRefRepository):
         q = Query.from_(self._table).where(self._table.file_id == file_id).delete()
         res = self._execute(q)
 
+
 # Data-repository
 class DuckDBDataRepository(AbstractDataRepository):
     """
@@ -956,8 +1017,6 @@ class DuckDBDataRepository(AbstractDataRepository):
     def refresh_full_text_indexes(self) -> None:
         try:
             self._conn.execute("PRAGMA drop_fts_index('nodes');")
-            self._conn.execute(
-                "PRAGMA create_fts_index('nodes', 'id', 'fts_needle');"
-            )
+            self._conn.execute("PRAGMA create_fts_index('nodes', 'id', 'fts_needle');")
         except Exception as ex:
             logger.debug("Failed to refresh DuckDB FTS index", ex=ex)
