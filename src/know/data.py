@@ -135,6 +135,14 @@ class AbstractFileRepository(AbstractCRUDRepository[File]):
     def get_list(self, flt: FileFilter) -> List[File]:
         pass
 
+    @abstractmethod
+    def filename_complete(self, needle: str, limit: int = 5) -> List[File]:
+        """
+        Fuzzy-complete file paths by name using a Sublime Text–like subsequence match.
+        Returns up to `limit` File objects ordered by a relevance score.
+        """
+        pass
+
 
 # Nodes
 @dataclass

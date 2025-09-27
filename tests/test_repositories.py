@@ -223,3 +223,28 @@ def test_symbol_embedding_search(data_repo):
     )
 
     assert res[0].name == "VecA"
+
+def test_file_filename_complete(data_repo):
+    repo_repo, file_repo = data_repo.repo, data_repo.file
+
+    rid = make_id()
+    repo_repo.create(Repo(id=rid, name="fuzzy", root_path="/tmp/fuzzy"))
+
+    f1 = File(id=make_id(), repo_id=rid, path="src/alpha/beta/cappa.py")
+    f2 = File(id=make_id(), repo_id=rid, path="src/abc_utils.py")
+    f3 = File(id=make_id(), repo_id=rid, path="src/random.py")
+    f4 = File(id=make_id(), repo_id=rid, path="docs/AnotherBigCase.md")
+
+    file_repo.create(f1)
+    file_repo.create(f2)
+    file_repo.create(f3)
+    file_repo.create(f4)
+
+    # “abc” should fuzzy-match both contiguous and subsequence-across-folders
+    res = file_repo.filename_complete("abc")
+    paths = [f.path for f in res]
+
+    assert any("alpha/beta/cappa.py" in p for p in paths)
+    assert any("abc_utils.py" in p for p in paths)
+    # default limit should cap results
+    assert len(res) <= 5

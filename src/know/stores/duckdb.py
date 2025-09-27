@@ -3,9 +3,10 @@ import os
 import duckdb
 import pandas as pd
 import math
+import re
 import queue
 from concurrent.futures import Future
-from typing import Optional, Dict, Any, List, Generic, TypeVar, Callable, Tuple
+from typing import Optional, Dict, Any, List, Generic, TypeVar, Callable, Tuple, Set
 import importlib.resources as pkg_resources
 from pypika import Table, Query, AliasedQuery, QmarkParameter, CustomFunction, functions, analytics, Order, Case
 from pypika.terms import LiteralValue, ValueWrapper
@@ -370,6 +371,69 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
     table = "files"
     model = File
 
+    # ---------- internal helpers for search index ----------
+    def _reindex_file(self, file_id: str, path: str) -> None:
+        path_lc = path.lower()
+        basename_lc = os.path.basename(path).lower()
+
+        # remove old index rows (idempotent)
+        self.conn.execute("DELETE FROM files_search WHERE file_id = ?", [file_id])
+        self.conn.execute("DELETE FROM file_trigrams WHERE file_id = ?", [file_id])
+
+        # insert new search rows
+        self.conn.execute(
+            "INSERT INTO files_search (file_id, path_lc, basename_lc) VALUES (?, ?, ?)",
+            [file_id, path_lc, basename_lc],
+        )
+
+        # insert distinct trigrams for the path (presence-only)
+        if len(path_lc) >= 3:
+            seen: Set[str] = set()
+            for i in range(len(path_lc) - 2):
+                tri = path_lc[i : i + 3]
+                if tri in seen:
+                    continue
+                seen.add(tri)
+                self.conn.execute(
+                    "INSERT INTO file_trigrams (file_id, trigram) VALUES (?, ?)",
+                    [file_id, tri],
+                )
+
+    def _delete_index_for_ids(self, file_ids: list[str]) -> None:
+        if not file_ids:
+            return
+        # small batches via simple loops (tests use small volumes)
+        for fid in file_ids:
+            self.conn.execute("DELETE FROM files_search WHERE file_id = ?", [fid])
+            self.conn.execute("DELETE FROM file_trigrams WHERE file_id = ?", [fid])
+
+    # ---------- CRUD overrides to keep search index in sync ----------
+    def create(self, item: File) -> File:
+        out = super().create(item)
+        self._reindex_file(item.id, item.path)
+        return out
+
+    def update(self, item_id: str, data: Dict[str, Any]) -> Optional[File]:
+        out = super().update(item_id, data)
+        if out is not None and ("path" in data):
+            self._reindex_file(out.id, out.path)
+        return out
+
+    def delete(self, item_id: str) -> bool:
+        # remove index first, then the row
+        self._delete_index_for_ids([item_id])
+        return super().delete(item_id)
+
+    def create_many(self, items: list[File]) -> list[File]:
+        out = super().create_many(items)
+        for it in items:
+            self._reindex_file(it.id, it.path)
+        return out
+
+    def delete_many(self, item_ids: list[str]) -> bool:
+        self._delete_index_for_ids(item_ids)
+        return super().delete_many(item_ids)
+
     def get_by_path(self, repo_id: str, path: str) -> Optional[File]:
         q = Query.from_(self._table).select("*").where(
             (self._table.path == path) & (self._table.repo_id == repo_id)
@@ -384,6 +448,76 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
             q = q.where(self._table.repo_id.isin(flt.repo_ids))
         if flt.package_id:
             q = q.where(self._table.package_id == flt.package_id)
+
+        rows = self._execute(q)
+        return [self.model(**self._deserialize_data(r)) for r in rows]
+
+    def filename_complete(self, needle: str, limit: int = 5) -> list[File]:
+        if not needle:
+            return []
+
+        needle_lc = needle.lower()
+        # subsequence regex like Sublime Text: a.*b.*c, case-insensitive
+        # Use full-match against ".*...*" to match anywhere
+        subseq_pat = "(?i).*" + ".*".join(re.escape(ch) for ch in needle_lc) + ".*"
+
+        # build trigram list for the query (for candidate narrowing / scoring)
+        q_trigrams: list[str] = []
+        if len(needle_lc) >= 3:
+            q_trigrams = [needle_lc[i : i + 3] for i in range(len(needle_lc) - 2)]
+
+        files_tbl = self._table
+        fs_tbl = Table("files_search")
+        ft_tbl = Table("file_trigrams")
+        RegexpFullMatch = CustomFunction("regexp_full_match", ["s", "pat"])
+
+        # Optional CTE with trigram hits when we have any trigrams
+        q = Query
+        tri_hits_ref = None
+        if q_trigrams:
+            tri_hits = (
+                Query.from_(ft_tbl)
+                .select(ft_tbl.file_id, functions.Count("*").as_("tri_hits"))
+                .where(ft_tbl.trigram.isin(q_trigrams))
+                .groupby(ft_tbl.file_id)
+            )
+            q = q.with_(tri_hits, "trihits")
+            tri_hits_ref = AliasedQuery("trihits")
+
+        # Base FROM and optional join to trigram hits
+        base = Query.from_(fs_tbl)
+        if tri_hits_ref is not None:
+            base = base.left_join(tri_hits_ref).on(fs_tbl.file_id == tri_hits_ref.file_id)
+
+        # Join back to full file rows
+        base = base.join(files_tbl).on(files_tbl.id == fs_tbl.file_id)
+
+        # Build score components
+        subseq = RegexpFullMatch(fs_tbl.path_lc, ValueWrapper(subseq_pat))
+        base_subseq = RegexpFullMatch(fs_tbl.basename_lc, ValueWrapper(subseq_pat))
+        tri_hits_col = (tri_hits_ref.tri_hits if tri_hits_ref is not None else LiteralValue(0))
+        tri_hits_val = functions.Coalesce(tri_hits_col, 0)
+
+        score = (
+            Case().when(base_subseq, 20).else_(0)
+            + Case().when(subseq, 10).else_(0)
+            + tri_hits_val * 2
+            - (functions.Length(fs_tbl.path_lc) / LiteralValue(100))
+        )
+
+        # Candidate filter: subsequence match OR (has trigram overlap when available)
+        cond = subseq
+        if tri_hits_ref is not None:
+            cond = cond | (tri_hits_val > 0)
+
+        q = (
+            q.from_(base)
+            .select(files_tbl.star, score.as_("score"))
+            .where(cond)
+            .orderby("score", order=Order.desc)
+            .orderby(files_tbl.path)
+            .limit(limit)
+        )
 
         rows = self._execute(q)
         return [self.model(**self._deserialize_data(r)) for r in rows]
