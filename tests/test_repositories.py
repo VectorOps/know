@@ -407,11 +407,11 @@ def test_file_filename_complete_strict_subsequence(data_repo):
     assert "src/vocode/testing.py" not in paths
 
     # update path to something that does match subsequence "a.*b.*c"
-    out = file_repo.update(fid, {"path": "docs/alpha/beta/cappa.py"})
+    out = file_repo.update(f_near1.id, {"path": "docs/alpha/beta/cappa.py"})
     assert out is not None and "alpha/beta/cappa.py" in out.path
 
     res = file_repo.filename_complete("abc")
-    assert any(ff.id == fid and "alpha/beta/cappa.py" in ff.path for ff in res)
+    assert any(ff.id == f_near1.id and "alpha/beta/cappa.py" in ff.path for ff in res)
 
 
 def test_file_index_sync_on_delete(data_repo):
