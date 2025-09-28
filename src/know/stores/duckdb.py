@@ -280,6 +280,15 @@ class DuckDBProjectRepoRepo(AbstractProjectRepoRepository):
         self.conn = conn
         self._table = Table(self.table)
 
+    def _get_query(self, q):
+        parameter = QmarkParameter()
+        sql = q.get_sql(parameter=parameter)
+        return sql, parameter.get_parameters()
+
+    def _execute(self, q):
+        sql, args = self._get_query(q)
+        return self.conn.execute(sql, args)
+
     def get_repo_ids(self, project_id: str) -> List[str]:
         q = (
             Query.from_(self._table)
