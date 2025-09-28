@@ -340,6 +340,22 @@ def test_file_filename_complete(data_repo):
     # default limit should cap results
     assert len(res) <= 5
 
+    # --- verify repo_id filtering ---
+    repo_repo = data_repo.repo
+    rid2 = make_id()
+    repo_repo.create(Repo(id=rid2, name="fuzzy2", root_path="/tmp/fuzzy2"))
+    f5 = File(id=make_id(), repo_id=rid2, path="src/abc_match.ts")
+    file_repo.create(f5)
+
+    # Filter to first repo only: results should all have repo_id == rid
+    res_r1 = file_repo.filename_complete("abc", repo_ids=[rid])
+    assert all(ff.repo_id == rid for ff in res_r1)
+
+    # Filter to second repo only: the new file should be present
+    res_r2 = file_repo.filename_complete("abc", repo_ids=[rid2])
+    assert any(ff.id == f5.id for ff in res_r2)
+    assert all(ff.repo_id == rid2 for ff in res_r2)
+
 
 def test_file_index_sync_on_update(data_repo):
     repo_repo, file_repo = data_repo.repo, data_repo.file

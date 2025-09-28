@@ -507,8 +507,12 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
         rows = self._execute(q)
         return [self.model(**self._deserialize_data(r)) for r in rows]
 
-    def filename_complete(self, needle: str, limit: int = 5) -> list[File]:
+    def filename_complete(
+        self, needle: str, repo_ids: Optional[list[str]] = None, limit: int = 5
+    ) -> list[File]:
         if not needle:
+            return []
+        if repo_ids is not None and len(repo_ids) == 0:
             return []
 
         needle_lc = needle.lower()
@@ -564,6 +568,8 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
         cond = subseq
         if tri_hits_ref is not None:
             cond = cond | (tri_hits_val > 0)
+        if repo_ids:
+            cond = cond & (files_tbl.repo_id.isin(repo_ids))
 
         q = (
             q.select(files_tbl.star, score.as_("score"))

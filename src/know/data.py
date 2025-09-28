@@ -136,9 +136,22 @@ class AbstractFileRepository(AbstractCRUDRepository[File]):
         pass
 
     @abstractmethod
-    def filename_complete(self, needle: str, limit: int = 5) -> List[File]:
+    def filename_complete(
+        self, needle: str, repo_ids: Optional[List[str]] = None, limit: int = 5
+    ) -> List[File]:
         """
         Fuzzy-complete file paths by name using a Sublime Text–like subsequence match.
+
+        Parameters
+        ----------
+        needle:
+            The search string to match (subsequence).
+        repo_ids:
+            Optional list of repo IDs to restrict the search to. If None, search
+            across all repos.
+        limit:
+            Maximum number of File objects to return.
+
         Returns up to `limit` File objects ordered by a relevance score.
         """
         pass
