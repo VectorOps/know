@@ -378,6 +378,34 @@ def test_file_index_sync_on_update(data_repo):
     res = file_repo.filename_complete("abc")
     assert all(ff.id != fid for ff in res)
 
+
+def test_file_filename_complete_strict_subsequence(data_repo):
+    repo_repo, file_repo = data_repo.repo, data_repo.file
+
+    rid = make_id()
+    repo_repo.create(Repo(id=rid, name="strict", root_path="/tmp/strict"))
+
+    # Expected match
+    f_match = File(id=make_id(), repo_id=rid, path="tests/test_buf.py")
+    # Near misses that should NOT match the subsequence "t e s t b u f . p y"
+    f_near1 = File(id=make_id(), repo_id=rid, path="src/vocode/ui/terminal/buf.py")
+    f_near2 = File(id=make_id(), repo_id=rid, path="tests/test_graph.py")
+    f_near3 = File(id=make_id(), repo_id=rid, path="tests/test_runner.py")
+    f_near4 = File(id=make_id(), repo_id=rid, path="src/vocode/testing.py")
+
+    for f in [f_match, f_near1, f_near2, f_near3, f_near4]:
+        file_repo.create(f)
+
+    res = file_repo.filename_complete("testbuf.py", limit=10)
+    paths = [f.path for f in res]
+
+    assert "tests/test_buf.py" in paths
+    # Ensure non-subsequence matches are excluded
+    assert "src/vocode/ui/terminal/buf.py" not in paths
+    assert "tests/test_graph.py" not in paths
+    assert "tests/test_runner.py" not in paths
+    assert "src/vocode/testing.py" not in paths
+
     # update path to something that does match subsequence "a.*b.*c"
     out = file_repo.update(fid, {"path": "docs/alpha/beta/cappa.py"})
     assert out is not None and "alpha/beta/cappa.py" in out.path

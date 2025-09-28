@@ -564,10 +564,8 @@ class DuckDBFileRepo(_DuckDBBaseRepo[File], AbstractFileRepository):
             - (functions.Length(fs_tbl.path_lc) / LiteralValue(100))
         )
 
-        # Candidate filter: subsequence match OR (has trigram overlap when available)
+        # Candidate filter: require subsequence match; trigram hits only affect scoring
         cond = subseq
-        if tri_hits_ref is not None:
-            cond = cond | (tri_hits_val > 0)
         if repo_ids:
             cond = cond & (files_tbl.repo_id.isin(repo_ids))
 
