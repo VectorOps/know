@@ -6,7 +6,8 @@ import re
 from know import init_project
 from know.settings import ProjectSettings, ToolOutput
 from know.file_summary import SummaryMode, FileSummary
-from know.tools.filesummary import SummarizeFilesTool, SummarizeFilesReq
+from know.tools.filesummary import SummarizeFilesTool
+import json
 
 
 def _setup_project(tmp_path):
@@ -46,10 +47,10 @@ def _setup_project(tmp_path):
 def test_filesummary_returns_expected_content(tmp_path):
     project = _setup_project(tmp_path)
 
-    res_json = SummarizeFilesTool().execute(project, SummarizeFilesReq(
-        paths=["foo.py"],
-        summary_mode=SummaryMode.Documentation,
-    ))
+    res_json = SummarizeFilesTool().execute(
+        project,
+        json.dumps({"paths": ["foo.py"], "summary_mode": SummaryMode.Documentation.value}),
+    )
     data = json.loads(res_json)
     res = [FileSummary(**item) for item in data]
     assert len(res) == 1
@@ -69,7 +70,9 @@ def test_filesummary_skips_unknown_files(tmp_path):
     project = _setup_project(tmp_path)
 
     # add an additional, non-existing path
-    res_json = SummarizeFilesTool().execute(project, SummarizeFilesReq(paths=["foo.py", "does_not_exist.py"]))
+    res_json = SummarizeFilesTool().execute(
+        project, json.dumps({"paths": ["foo.py", "does_not_exist.py"]})
+    )
     data = json.loads(res_json)
     res = [FileSummary(**item) for item in data]
     # Only one valid summary expected
@@ -84,7 +87,7 @@ def test_filesummary_structured_text_output(tmp_path):
 
     res_text = SummarizeFilesTool().execute(
         project,
-        SummarizeFilesReq(paths=["foo.py"], summary_mode=SummaryMode.Documentation),
+        json.dumps({"paths": ["foo.py"], "summary_mode": SummaryMode.Documentation.value}),
     )
 
     # Contains the path line

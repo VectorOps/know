@@ -1,4 +1,5 @@
 from typing import Sequence, Optional
+import json
 
 from pydantic import BaseModel, Field
 
@@ -74,8 +75,9 @@ class NodeSearchTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: NodeSearchReq,
+        req: str,
     ) -> str:
+        req = self.parse_input(req)
         pm.maybe_refresh()
 
         # normalise string / enum inputs
@@ -250,8 +252,12 @@ class NodeSearchTool(BaseTool):
         }
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
-        def symbolsearch(req: NodeSearchReq) -> str:
-            return self.execute(pm, req)
+        def symbolsearch(req) -> str:
+            if isinstance(req, BaseModel):
+                payload = req.model_dump_json(by_alias=True, exclude_none=True)
+            else:
+                payload = json.dumps(req or {})
+            return self.execute(pm, payload)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(

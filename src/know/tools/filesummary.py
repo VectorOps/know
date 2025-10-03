@@ -1,6 +1,7 @@
 from typing import Sequence
 from .base import BaseTool, MCPToolDefinition
 from pydantic import BaseModel
+import json
 
 from know.file_summary import FileSummary, SummaryMode, build_file_summary
 
@@ -26,12 +27,13 @@ class SummarizeFilesTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: SummarizeFilesReq,
+        req: str,
     ) -> str:
+        req_obj = self.parse_input(req)
         """Generate summaries for the requested files."""
         pm.maybe_refresh()
 
-        summary_mode = req.summary_mode
+        summary_mode = req_obj.summary_mode
         if isinstance(summary_mode, str):
             summary_mode = SummaryMode(summary_mode)
 
@@ -41,7 +43,7 @@ class SummarizeFilesTool(BaseTool):
             )
 
         summaries: list[FileSummary] = []
-        for path in req.paths:
+        for path in req_obj.paths:
             deconstructed = pm.deconstruct_virtual_path(path)
             if not deconstructed:
                 continue
@@ -102,8 +104,12 @@ class SummarizeFilesTool(BaseTool):
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP definition for the tool."""
 
-        def filesummary(req: SummarizeFilesReq) -> str:
-            return self.execute(pm, req)
+        def filesummary(req) -> str:
+            if isinstance(req, BaseModel):
+                payload = req.model_dump_json(by_alias=True, exclude_none=True)
+            else:
+                payload = json.dumps(req or {})
+            return self.execute(pm, payload)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(

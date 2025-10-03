@@ -1,0 +1,10 @@
+
+# 2025-10-03 18:17:23.052950
++/run architect
+
+# 2025-10-03 18:17:33.174648
++refactor tool calling to have `def execute(self, pm: ProjectManager, req: str) -> str` type. make tools parse input parameters to their input BaseModel. update tests and calling places.
+
+# 2025-10-03 18:25:04.626627
++1. Strict JSON only
++2. fix Flask app - it was buggy. Make it pass strings.

@@ -1,0 +1,10 @@
+# Sample configuration included by the default config template.
+workflows:
+  example:
+    nodes:
+      - name: "Start"
+        type: "llm"
+        model: "gpt-4o-mini"
+        system: "You are a helpful assistant."
+        outcomes: []
+    edges: []

@@ -1,4 +1,5 @@
 import fnmatch
+import json
 from typing import Sequence, Optional
 
 from pydantic import BaseModel, Field
@@ -30,8 +31,9 @@ class ListFilesTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: ListFilesReq,
+        req: str,
     ) -> str:
+        req_obj = self.parse_input(req)
         """
         Return files whose path matches any of the supplied glob patterns.
 
@@ -45,7 +47,7 @@ class ListFilesTool(BaseTool):
         # TODO: Better search
         all_files = file_repo.get_list(FileFilter(repo_ids=pm.repo_ids))
 
-        pats = list(req.patterns) if req.patterns else []
+        pats = list(req_obj.patterns) if req_obj.patterns else []
         if not pats:
             return self.encode_output([])
 
@@ -86,9 +88,13 @@ class ListFilesTool(BaseTool):
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP tool definition for this tool."""
-        def filelist(req: ListFilesReq) -> str:
+        def filelist(req) -> str:
             """List files in the project matching glob patterns."""
-            return self.execute(pm, req)
+            if isinstance(req, BaseModel):
+                payload = req.model_dump_json(by_alias=True, exclude_none=True)
+            else:
+                payload = json.dumps(req or {})
+            return self.execute(pm, payload)
 
         schema = self.get_openai_schema()
 

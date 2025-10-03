@@ -12,8 +12,7 @@ class _DummyReq(BaseModel):
 class _DummyTool(BaseTool):
     tool_name = "dummy_format_tool"
     tool_input = _DummyReq
-
-    def execute(self, pm, req):
+    def execute(self, pm, req: str) -> str:
         return ""
 
     def get_openai_schema(self) -> dict:

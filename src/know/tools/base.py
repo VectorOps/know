@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from know.project import ProjectManager
 from know.settings import ProjectSettings, ToolOutput
-from typing import Any, Dict, List, Type  # keep existing
+from typing import Any, Dict, List, Type
 import json  # NEW
 import inspect
 from enum import Enum
@@ -31,8 +31,24 @@ class BaseTool(ABC):
             ToolRegistry.register_tool(cls)
 
     @abstractmethod
-    def execute(self, pm: ProjectManager, req: Any) -> str:
+    def execute(self, pm: ProjectManager, req: str) -> str:
+        """
+        Execute the tool given a JSON-serialized request payload string.
+        Implementations should parse req via `self.parse_input(req)`.
+        """
         pass
+
+    def parse_input(self, req: str) -> BaseModel:
+        """
+        Strictly parse a JSON string into this tool's `tool_input` model.
+        """
+        model_cls: Type[BaseModel] = getattr(self, "tool_input", None)
+        if model_cls is None:
+            raise TypeError(f"{type(self).__name__} missing tool_input model.")
+        if not isinstance(req, str):
+            raise TypeError(f"{type(self).__name__}.execute expects JSON string, got {type(req)}")
+        data = json.loads(req)
+        return model_cls.model_validate(data)
 
     @abstractmethod
     def get_openai_schema(self) -> dict:

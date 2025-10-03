@@ -1,6 +1,7 @@
 import sys
 import faulthandler
 import signal
+import json
 import pathlib
 from flask import Flask, render_template, url_for, redirect, abort
 from markupsafe import Markup
@@ -162,31 +163,19 @@ def create_app(project) -> Flask:
             token_limit_model = form_data.get("token_limit_model") or None
 
             tool = RepoMapTool()
-            raw_results = tool.execute(
-                project,
-                tool.tool_input(
-                    symbol_names=symbol_names,
-                    file_paths=file_paths,
-                    prompt=prompt,
-                    limit=limit,
-                    restart_prob=restart_prob,
-                    summary_mode=summary_mode,
-                    min_symbol_len=min_symbol_len,
-                    token_limit_count=token_limit_count,
-                    token_limit_model=token_limit_model,
-                )
-            )
-            
-            enriched_results = []
-            for r in raw_results:
-                file_obj = data.file.get_by_path(r.file_path)
-                enriched_results.append({
-                    "file_path": r.file_path,
-                    "file_obj": file_obj,
-                    "score": r.score,
-                    "summary": r.summary,
-                })
-            results = enriched_results
+            raw_json = tool.execute(project, json.dumps({
+                "symbol_names": symbol_names or None,
+                "file_paths": file_paths or None,
+                "prompt": prompt,
+                "limit": limit,
+                "summary_mode": summary_mode.value if hasattr(summary_mode, "value") else summary_mode,
+                "token_limit_count": token_limit_count,
+                "token_limit_model": token_limit_model,
+            }))
+            try:
+                results = json.loads(raw_json)
+            except Exception:
+                results = []
 
         return render_template("explorer/repomap.html",
                                title="RepoMap Tool",
@@ -200,26 +189,21 @@ def create_app(project) -> Flask:
         form_data = request.form
 
         if request.method == "POST":
-            tool = SearchSymbolsTool()
-            raw_results = tool.execute(
-                project,
-                tool.tool_input(
-                    symbol_name=form_data.get("symbol_name") or None,
-                    symbol_fqn=form_data.get("symbol_fqn") or None,
-                    kind=form_data.get("kind") or None,
-                    visibility=form_data.get("visibility") or "public",
-                    query=form_data.get("query") or None,
-                    limit=int(form_data.get("limit") or 20),
-                    summary_mode=SummaryMode(form_data.get("summary_mode", SummaryMode.Definition.value)),
-                )
-            )
-
+            tool = NodeSearchTool()
+            raw_json = tool.execute(project, json.dumps({
+                "symbol_name": form_data.get("symbol_name") or None,
+                "kind": form_data.get("kind") or None,
+                "visibility": form_data.get("visibility") or "all",
+                "query": form_data.get("query") or None,
+                "limit": int(form_data.get("limit") or 20),
+                "summary_mode": form_data.get("summary_mode", SummaryMode.Definition.value),
+            }))
+            try:
+                raw_results = json.loads(raw_json)
+            except Exception:
+                raw_results = []
             enriched_results = []
             for r in raw_results:
-                if r.file_path:
-                    r.file_obj = data.file.get_by_path(r.file_path)
-                else:
-                    r.file_obj = None
                 enriched_results.append(r)
             results = enriched_results
 

@@ -5,6 +5,7 @@ from collections import defaultdict
 from typing import Dict, Optional, Sequence, Set
 from litellm import token_counter
 import networkx as nx
+import json
 
 from .base import BaseTool, MCPToolDefinition
 from pydantic import BaseModel, Field
@@ -334,8 +335,9 @@ class RepoMapTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: RepoMapReq,
+        req: str,
     ) -> str:
+        req = self.parse_input(req)
         pm.maybe_refresh()
 
         summary_mode = req.summary_mode
@@ -538,8 +540,12 @@ class RepoMapTool(BaseTool):
         }
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
-        def repomap(req: RepoMapReq) -> str:
-            return self.execute(pm, req)
+        def repomap(req) -> str:
+            if isinstance(req, BaseModel):
+                payload = req.model_dump_json(by_alias=True, exclude_none=True)
+            else:
+                payload = json.dumps(req or {})
+            return self.execute(pm, payload)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(

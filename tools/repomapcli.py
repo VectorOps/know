@@ -183,18 +183,15 @@ def main() -> None:
 
                 elif cmd == "/run":
                     try:
-                        res_json = repomap_tool.execute(
-                            project,
-                            repomap_tool.tool_input(
-                                symbol_names=symbol_seeds or None,
-                                file_paths=file_seeds   or None,
-                                prompt=prompt_text,
-                                limit=settings.limit,
-                                summary_mode=summary_mode,
-                                token_limit_count=token_limit_count,
-                                token_limit_model=token_limit_model,
-                            )
-                        )
+                        res_json = repomap_tool.execute(project, json.dumps({
+                            "symbol_names": symbol_seeds or None,
+                            "file_paths": file_seeds or None,
+                            "prompt": prompt_text,
+                            "limit": settings.limit,
+                            "summary_mode": summary_mode.value if hasattr(summary_mode, "value") else summary_mode,
+                            "token_limit_count": token_limit_count,
+                            "token_limit_model": token_limit_model,
+                        }))
                         scores = [RepoMapScore.model_validate(obj) for obj in json.loads(res_json)]
                         _print_scores(scores)
                     except Exception as exc:             # noqa: BLE001

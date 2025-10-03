@@ -51,13 +51,11 @@ def main() -> None:
     summarize_tool = ToolRegistry.get("vectorops_summarize_files")
     project.settings.tools.outputs[summarize_tool.tool_name] = ToolOutput.JSON
 
-    json_result = summarize_tool.execute(
-        project,
-        summarize_tool.tool_input(
-            paths=settings.files,
-            summary_mode=settings.summary_mode,
-        )
-    )
+    payload = {
+        "paths": settings.files,
+        "summary_mode": settings.summary_mode.value if hasattr(settings.summary_mode, "value") else settings.summary_mode,
+    }
+    json_result = summarize_tool.execute(project, json.dumps(payload))
     try:
         data = json.loads(json_result)
         summaries = [FileSummary(**item) for item in data]

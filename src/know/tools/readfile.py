@@ -33,8 +33,9 @@ class ReadFilesTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: ReadFileReq,
+        req: str,
     ) -> str:
+        req_obj = self.parse_input(req)
         """
         Read a file and return an HTTP-like response string (JSON or structured text),
         representing an HTTP-like response:
@@ -54,7 +55,7 @@ class ReadFilesTool(BaseTool):
             settings = None
 
         file_repo = pm.data.file
-        raw_path = req.path or ""
+        raw_path = req_obj.path or ""
         if not raw_path:
             return self.encode_output(
                 ReadFileResp(
@@ -219,9 +220,13 @@ class ReadFilesTool(BaseTool):
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         """Return the MCP tool definition for this tool."""
 
-        def readfile(req: ReadFileReq) -> str:
+        def readfile(req) -> str:
             """Read and return the file as an HTTP-like response (JSON or text)."""
-            return self.execute(pm, req)
+            if isinstance(req, BaseModel):
+                payload = req.model_dump_json(by_alias=True, exclude_none=True)
+            else:
+                payload = json.dumps(req or {})
+            return self.execute(pm, payload)
 
         schema = self.get_openai_schema()
 
