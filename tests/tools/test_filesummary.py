@@ -49,7 +49,7 @@ def test_filesummary_returns_expected_content(tmp_path):
 
     res_json = SummarizeFilesTool().execute(
         project,
-        json.dumps({"paths": ["foo.py"], "summary_mode": SummaryMode.Documentation.value}),
+        {"paths": ["foo.py"], "summary_mode": SummaryMode.Documentation.value},
     )
     data = json.loads(res_json)
     res = [FileSummary(**item) for item in data]
@@ -71,7 +71,7 @@ def test_filesummary_skips_unknown_files(tmp_path):
 
     # add an additional, non-existing path
     res_json = SummarizeFilesTool().execute(
-        project, json.dumps({"paths": ["foo.py", "does_not_exist.py"]})
+        project, {"paths": ["foo.py", "does_not_exist.py"]}
     )
     data = json.loads(res_json)
     res = [FileSummary(**item) for item in data]
@@ -84,10 +84,9 @@ def test_filesummary_structured_text_output(tmp_path):
     project = _setup_project(tmp_path)
     # Force structured text output for this tool
     project.settings.tools.outputs["vectorops_summarize_files"] = ToolOutput.STRUCTURED_TEXT
-
     res_text = SummarizeFilesTool().execute(
         project,
-        json.dumps({"paths": ["foo.py"], "summary_mode": SummaryMode.Documentation.value}),
+        {"paths": ["foo.py"], "summary_mode": SummaryMode.Documentation.value},
     )
 
     # Contains the path line
@@ -99,3 +98,13 @@ def test_filesummary_structured_text_output(tmp_path):
     # Should not be valid JSON
     with pytest.raises(Exception):
         json.loads(res_text)
+
+def test_filesummary_accepts_string_input(tmp_path):
+    project = _setup_project(tmp_path)
+    project.settings.tools.outputs["vectorops_summarize_files"] = ToolOutput.JSON
+    # Explicitly pass JSON string to ensure backward compatibility
+    payload = json.dumps({"paths": ["foo.py"], "summary_mode": SummaryMode.Definition.value})
+    res_json = SummarizeFilesTool().execute(project, payload)
+    data = json.loads(res_json)
+    res = [FileSummary(**item) for item in data]
+    assert len(res) == 1

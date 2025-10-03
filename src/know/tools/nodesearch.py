@@ -1,4 +1,4 @@
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Any
 import json
 
 from pydantic import BaseModel, Field
@@ -75,7 +75,7 @@ class NodeSearchTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: str,
+        req: Any,
     ) -> str:
         req = self.parse_input(req)
         pm.maybe_refresh()
@@ -253,11 +253,7 @@ class NodeSearchTool(BaseTool):
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         def symbolsearch(req) -> str:
-            if isinstance(req, BaseModel):
-                payload = req.model_dump_json(by_alias=True, exclude_none=True)
-            else:
-                payload = json.dumps(req or {})
-            return self.execute(pm, payload)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(

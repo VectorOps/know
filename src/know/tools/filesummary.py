@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Any
 from .base import BaseTool, MCPToolDefinition
 from pydantic import BaseModel
 import json
@@ -27,7 +27,7 @@ class SummarizeFilesTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: str,
+        req: Any,
     ) -> str:
         req_obj = self.parse_input(req)
         """Generate summaries for the requested files."""
@@ -105,11 +105,7 @@ class SummarizeFilesTool(BaseTool):
         """Return the MCP definition for the tool."""
 
         def filesummary(req) -> str:
-            if isinstance(req, BaseModel):
-                payload = req.model_dump_json(by_alias=True, exclude_none=True)
-            else:
-                payload = json.dumps(req or {})
-            return self.execute(pm, payload)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(

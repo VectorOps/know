@@ -8,3 +8,42 @@
 # 2025-10-03 18:25:04.626627
 +1. Strict JSON only
 +2. fix Flask app - it was buggy. Make it pass strings.
+
+# 2025-10-03 19:01:15.713360
++/run architect
+
+# 2025-10-03 19:02:05.812785
++refactor tool calling to have `def execute(self, pm: ProjectManager, req: any) -> str` type. make tools parse input parameters to their input BaseModel. if input is a string, try json.loads(), if input is other type - use validate_json(). update tests and calling places to pass python objects. add a test for str parsing.
+
+# 2025-10-03 19:07:52.875802
++fix tests:
++tests/tools/test_filesummary.py:9: in <module>
++    from know.tools.filesummary import SummarizeFilesTool
++src/know/tools/__init__.py:2: in <module>
++    from .filelist import ListFilesTool
++src/know/tools/filelist.py:26: in <module>
++    class ListFilesTool(BaseTool):
++src/know/tools/filelist.py:34: in ListFilesTool
++    req: Any,
++         ^^^
++E   NameError: name 'Any' is not defined
++____________________________________________________________________________________ ERROR collecting tests/tools/test_repomap.py ____________________________________________________________________________________
++tests/tools/test_repomap.py:14: in <module>
++    from know.tools.repomap import RepoMap, RepoMapTool, RepoMapScore
++src/know/tools/__init__.py:2: in <module>
++    from .filelist import ListFilesTool
++src/know/tools/filelist.py:26: in <module>
++    class ListFilesTool(BaseTool):
++src/know/tools/filelist.py:34: in ListFilesTool
++    req: Any,
++         ^^^
++E   NameError: name 'Any' is not defined
++============================================================================================== short test summary info ===============================================================================================
++ERROR tests/tools/test_filesummary.py - NameError: name 'Any' is not defined
++ERROR tests/tools/test_repomap.py - NameError: name 'Any' is not defined
++!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
++================================================================================================= 2 errors in 1.84s ==================================================================================================
++
+
+# 2025-10-03 19:09:27.102914
++tests/tools/test_filesummary.py:9: in <module> still failing due to missing Any import

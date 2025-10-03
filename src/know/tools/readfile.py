@@ -2,6 +2,7 @@ import os
 import base64
 import mimetypes
 import json
+from typing import Any
 from pydantic import BaseModel, Field
 
 from know.project import ProjectManager, VIRTUAL_PATH_PREFIX
@@ -33,7 +34,7 @@ class ReadFilesTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: str,
+        req: Any,
     ) -> str:
         req_obj = self.parse_input(req)
         """
@@ -222,11 +223,7 @@ class ReadFilesTool(BaseTool):
 
         def readfile(req) -> str:
             """Read and return the file as an HTTP-like response (JSON or text)."""
-            if isinstance(req, BaseModel):
-                payload = req.model_dump_json(by_alias=True, exclude_none=True)
-            else:
-                payload = json.dumps(req or {})
-            return self.execute(pm, payload)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
 

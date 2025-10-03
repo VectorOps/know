@@ -31,23 +31,40 @@ class BaseTool(ABC):
             ToolRegistry.register_tool(cls)
 
     @abstractmethod
-    def execute(self, pm: ProjectManager, req: str) -> str:
+    def execute(self, pm: ProjectManager, req: Any) -> str:
         """
-        Execute the tool given a JSON-serialized request payload string.
+        Execute the tool for the provided request.
+        Request can be:
+          - dict-like (preferred),
+          - a Pydantic BaseModel,
+          - or a JSON string.
         Implementations should parse req via `self.parse_input(req)`.
         """
         pass
 
-    def parse_input(self, req: str) -> BaseModel:
+    def parse_input(self, req: Any) -> BaseModel:
         """
-        Strictly parse a JSON string into this tool's `tool_input` model.
+        Parse an arbitrary request payload into this tool's `tool_input` model.
+        - If req is a string: attempt json.loads().
+        - If req is a BaseModel: coerce into the tool_input model.
+        - Otherwise: validate with Pydantic model_validate(req).
         """
         model_cls: Type[BaseModel] = getattr(self, "tool_input", None)
         if model_cls is None:
             raise TypeError(f"{type(self).__name__} missing tool_input model.")
-        if not isinstance(req, str):
-            raise TypeError(f"{type(self).__name__}.execute expects JSON string, got {type(req)}")
-        data = json.loads(req)
+
+        data: Any
+        if isinstance(req, str):
+            try:
+                data = json.loads(req)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON string for {type(self).__name__}: {e}") from e
+        elif isinstance(req, BaseModel):
+            # Convert any BaseModel into plain dict first (use aliases and drop None)
+            data = req.model_dump(by_alias=True, exclude_none=True)
+        else:
+            data = req
+
         return model_cls.model_validate(data)
 
     @abstractmethod

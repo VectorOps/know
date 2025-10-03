@@ -1,6 +1,6 @@
 import fnmatch
 import json
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Any
 
 from pydantic import BaseModel, Field
 
@@ -31,7 +31,7 @@ class ListFilesTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: str,
+        req: Any,
     ) -> str:
         req_obj = self.parse_input(req)
         """
@@ -90,11 +90,7 @@ class ListFilesTool(BaseTool):
         """Return the MCP tool definition for this tool."""
         def filelist(req) -> str:
             """List files in the project matching glob patterns."""
-            if isinstance(req, BaseModel):
-                payload = req.model_dump_json(by_alias=True, exclude_none=True)
-            else:
-                payload = json.dumps(req or {})
-            return self.execute(pm, payload)
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
 

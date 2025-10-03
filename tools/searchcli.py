@@ -85,11 +85,11 @@ def main() -> None:
                 break
 
             try:
-                results_str = search_tool.execute(project, json.dumps({
+                results_str = search_tool.execute(project, {
                     "query": query,
                     "limit": settings.limit,
                     "offset": settings.offset,
-                }))
+                })
                 results_data = json.loads(results_str)
                 results = [NodeSearchResult(**r) for r in results_data]
                 _print_results(results)

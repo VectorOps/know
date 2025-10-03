@@ -55,7 +55,7 @@ def main() -> None:
         "paths": settings.files,
         "summary_mode": settings.summary_mode.value if hasattr(settings.summary_mode, "value") else settings.summary_mode,
     }
-    json_result = summarize_tool.execute(project, json.dumps(payload))
+    json_result = summarize_tool.execute(project, payload)
     try:
         data = json.loads(json_result)
         summaries = [FileSummary(**item) for item in data]

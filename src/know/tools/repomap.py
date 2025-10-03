@@ -2,7 +2,7 @@ import math, re, os
 import time
 from dataclasses import dataclass
 from collections import defaultdict
-from typing import Dict, Optional, Sequence, Set
+from typing import Dict, Optional, Sequence, Set, Any
 from litellm import token_counter
 import networkx as nx
 import json
@@ -335,7 +335,7 @@ class RepoMapTool(BaseTool):
     def execute(
         self,
         pm: ProjectManager,
-        req: str,
+        req: Any,
     ) -> str:
         req = self.parse_input(req)
         pm.maybe_refresh()
@@ -541,11 +541,8 @@ class RepoMapTool(BaseTool):
 
     def get_mcp_definition(self, pm: ProjectManager) -> MCPToolDefinition:
         def repomap(req) -> str:
-            if isinstance(req, BaseModel):
-                payload = req.model_dump_json(by_alias=True, exclude_none=True)
-            else:
-                payload = json.dumps(req or {})
-            return self.execute(pm, payload)
+            # Accept dict/BaseModel/JSON str directly; BaseTool will parse
+            return self.execute(pm, req)
 
         schema = self.get_openai_schema()
         return MCPToolDefinition(
