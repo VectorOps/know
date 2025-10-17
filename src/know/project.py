@@ -192,12 +192,17 @@ class ProjectManager:
         return op.join(repo.root_path, relative_path)
 
     # Single repo refresh helper
-    def refresh(self, repo=None):
+    def refresh(
+        self,
+        repo=None,
+        paths: Optional[list[str]] = None,
+        progress_callback: Optional[callable] = None,
+    ):
         if repo is None:
             repo = self.default_repo
 
         from know import scanner
-        scan_result = scanner.scan_repo(self, repo)
+        scan_result = scanner.scan_repo(self, repo, paths=paths, progress_callback=progress_callback)
 
         self.refresh_components(scan_result)
         self._last_refresh_time = datetime.datetime.now(datetime.timezone.utc)

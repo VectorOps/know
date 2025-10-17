@@ -47,3 +47,36 @@
 
 # 2025-10-03 19:09:27.102914
 +tests/tools/test_filesummary.py:9: in <module> still failing due to missing Any import
+
+# 2025-10-03 19:11:27.605756
++/quit
+
+# 2025-10-15 21:19:04.838453
++/run architect
+
+# 2025-10-15 21:21:09.499498
++extend Project refresh to optionally accept a list of paths. extend scanner scan_repo to accept optional list of paths. when scanning project and list of files is provided, only process them instead of running glob. create tests in existing test files.
+
+# 2025-10-15 21:30:11.726980
++update project refresh() to also accept callback function of the same type as scan_project.
+
+# 2025-10-15 21:30:15.018440
++/run architect
+
+# 2025-10-15 21:30:16.031042
++update project refresh() to also accept callback function of the same type as scan_project.
+
+# 2025-10-15 21:31:57.051602
++/run architect
+
+# 2025-10-15 21:31:57.912477
++update project refresh() to also accept callback function of the same type as scan_project.
+
+# 2025-10-15 21:32:59.382301
++only change project.py
+
+# 2025-10-15 21:33:53.731203
++we're only want to forward callback function for progress reporting from project to scanner. do not make any other changes.
+
+# 2025-10-15 21:34:54.944543
++re-read project.py, there's no scanning logic there.

@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 import json
 
 from know.helpers import generate_id
@@ -8,6 +9,7 @@ from know.models import (
     NodeRef, NodeRefType,
 )
 from know.project import ProjectManager
+from know.data import FileFilter
 from know.stores.duckdb import DuckDBDataRepository
 from know.scanner import ScanResult
 from know.settings import ProjectSettings, RefreshSettings, ToolOutput, ToolSettings
@@ -246,3 +248,68 @@ def test_repomap_tool_token_budget():
     )
     # all returned summaries must fit in the budget
     assert total_tokens <= 5
+
+
+def test_project_refresh_with_paths(tmp_path: Path):
+    """
+    Test that project refresh with a specific list of paths only processes those files.
+    """
+    # 1. Setup project in a temporary directory
+    project_dir = tmp_path / "test_project"
+    project_dir.mkdir()
+    (project_dir / "a.py").write_text("def func_a(): pass")
+    (project_dir / "b.py").write_text("def func_b(): pass")
+    (project_dir / "c.py").write_text("def func_c(): pass")
+
+    settings = ProjectSettings(
+        project_name="test_partial_refresh",
+        repo_name="test_repo",
+        repo_path=str(project_dir),
+        refresh=RefreshSettings(enabled=False),
+    )
+    dr = DuckDBDataRepository(settings)
+    project = ProjectManager(settings, dr)
+
+    # 2. Initial full refresh
+    project.refresh()
+
+    # Verify all files are in the database
+    all_files = dr.file.get_list(FileFilter())
+    assert len(all_files) == 3
+    assert {f.path for f in all_files} == {"a.py", "b.py", "c.py"}
+    file_a_initial = dr.file.get_by_path(project.default_repo.id, "a.py")
+    assert file_a_initial is not None
+    initial_a_hash = file_a_initial.file_hash
+
+    file_b_initial = dr.file.get_by_path(project.default_repo.id, "b.py")
+    assert file_b_initial is not None
+    initial_b_hash = file_b_initial.file_hash
+
+    # 3. Modify two files, but only refresh one
+    (project_dir / "a.py").write_text("# modified\ndef func_a(): pass")
+    (project_dir / "b.py").write_text("# modified\ndef func_b(): pass")
+
+    # 4. Refresh only a.py
+    project.refresh(paths=["a.py"])
+
+    # 5. Assertions
+    file_a_updated = dr.file.get_by_path(project.default_repo.id, "a.py")
+    assert file_a_updated is not None
+    assert file_a_updated.file_hash != initial_a_hash
+
+    file_b_after_refresh = dr.file.get_by_path(project.default_repo.id, "b.py")
+    assert file_b_after_refresh is not None
+    assert file_b_after_refresh.file_hash == initial_b_hash # b.py should not have been rescanned
+
+    # 6. Test file deletion is skipped on partial scan
+    file_c_path = project_dir / "c.py"
+    file_c_path.unlink()
+
+    project.refresh(paths=["a.py"])
+    file_c_in_db = dr.file.get_by_path(project.default_repo.id, "c.py")
+    assert file_c_in_db is not None # Should not have been deleted
+
+    # 7. Test full scan still deletes it
+    project.refresh()
+    file_c_in_db = dr.file.get_by_path(project.default_repo.id, "c.py")
+    assert file_c_in_db is None # Should be deleted now

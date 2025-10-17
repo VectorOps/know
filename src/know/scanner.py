@@ -163,7 +163,12 @@ def _process_file(
         )
 
 
-def scan_repo(pm: ProjectManager, repo: Repo, progress_callback: Optional[Callable[[BaseModel], None]] = None) -> ScanResult:
+def scan_repo(
+    pm: ProjectManager,
+    repo: Repo,
+    progress_callback: Optional[Callable[[BaseModel], None]] = None,
+    paths: Optional[list[str]] = None,
+) -> ScanResult:
     """
     Recursively walk the project directory, parse every supported source file
     and store parsing results via the project-wide data repository.
@@ -189,7 +194,10 @@ def scan_repo(pm: ProjectManager, repo: Repo, progress_callback: Optional[Callab
     # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
     gitignore = parse_gitignore(root)
 
-    all_files = list(root.rglob("*"))
+    if paths:
+        all_files = [root / p for p in paths]
+    else:
+        all_files = list(root.rglob("*"))
 
     num_workers = pm.settings.scanner_num_workers
     if num_workers is None:
@@ -290,24 +298,26 @@ def scan_repo(pm: ProjectManager, repo: Repo, progress_callback: Optional[Callab
                 else:
                     result.files_updated.append(res.parsed_file.path)
 
-    #  Remove stale metadata for files that have disappeared from disk
-    file_repo = pm.data.file
-    node_repo = pm.data.node
-    symbolref_repo = pm.data.symbolref
-    repo_id = repo.id
+    # Remove stale metadata for files that have disappeared from disk.
+    # Only perform this check on a full scan (when `paths` is not provided).
+    if paths is None:
+        file_repo = pm.data.file
+        node_repo = pm.data.node
+        symbolref_repo = pm.data.symbolref
+        repo_id = repo.id
 
-    # All File currently stored for this repo
-    from know.data import FileFilter
-    existing_files = file_repo.get_list(FileFilter(repo_ids=[repo_id]))
+        # All File currently stored for this repo
+        from know.data import FileFilter
+        existing_files = file_repo.get_list(FileFilter(repo_ids=[repo_id]))
 
-    for fm in existing_files:
-        if fm.path not in processed_paths:
-            # 1) delete all symbol-refs & symbols that belonged to the vanished file
-            symbolref_repo.delete_by_file_id(fm.id)
-            node_repo.delete_by_file_id(fm.id)
-            # 2) delete the file metadata itself
-            file_repo.delete(fm.id)
-            result.files_deleted.append(fm.path)
+        for fm in existing_files:
+            if fm.path not in processed_paths:
+                # 1) delete all symbol-refs & symbols that belonged to the vanished file
+                symbolref_repo.delete_by_file_id(fm.id)
+                node_repo.delete_by_file_id(fm.id)
+                # 2) delete the file metadata itself
+                file_repo.delete(fm.id)
+                result.files_deleted.append(fm.path)
 
     #  Remove Package entries that lost all their files
     package_repo = pm.data.package

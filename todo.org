@@ -1,5 +1,7 @@
 #+title: Todo
 * [ ] Do not return minimized/compressed JS files
+* [ ] Make tools return rich object instead of str similar to FastMCP response:
+CallToolResult(content=[TextContent(type='text', text='hello', annotations=None, meta=None)], structured_content={'result': 'hello'}, data='hello', is_error=False)
 * [X] Make read file tool to return an error if file does not exist
 * [X] Change summary API to not return whole file - remove enum.
 * [X] Create a new read file tool
