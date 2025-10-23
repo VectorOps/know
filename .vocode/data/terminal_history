@@ -110,3 +110,26 @@
 
 # 2025-10-22 21:51:18.015953
 +refactor parse_gitignore to use os.sep instead of hardcoded slashes.
+
+# 2025-10-22 22:06:30.906953
++/run architect
+
+# 2025-10-22 22:07:10.618685
++analyze ts parser and find why following export is not supported:
++
++export enum Foobar { a = 1, b = 2 };
++
++src/know/lang/typescript.py
++
++fix and update tests.
+
+# 2025-10-22 22:09:33.962358
++/reset
+
+# 2025-10-22 22:10:09.736780
++analyze golang parser and figure out why following statement produces no output:
++
++type Foobar = int
++
++fix and update the test.
++

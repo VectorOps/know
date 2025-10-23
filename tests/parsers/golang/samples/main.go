@@ -16,6 +16,9 @@ var (
 	f = 0.1 // Hello
 )
 
+// Simple type alias
+type Foobar = int
+
 type E struct {
 	d str
 }

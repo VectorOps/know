@@ -68,6 +68,10 @@ def test_golang_parser_on_sample_file():
     # Top-level symbols
     symbols = {sym.name: sym for sym in parsed_file.symbols if sym.name}
 
+    # Type alias
+    assert "Foobar" in symbols
+    assert symbols["Foobar"].kind == NodeKind.TYPE_ALIAS
+
     # Constant
     assert "A" in symbols
     assert symbols["A"].kind == NodeKind.CONSTANT
@@ -101,6 +105,7 @@ def test_golang_parser_on_sample_file():
         "j",
         "k",
         "f",  # variables (new)
+        "Foobar",  # type alias
         "S",  # struct
         "I",  # interface (new)
         "m",  # method attached to S

@@ -116,3 +116,32 @@ def test_typescript_parser_on_simple_file():
     test_cls_children = _to_map(flat_map["Test"].children)
     assert "method" in test_cls_children
     assert test_cls_children["method"].kind == NodeKind.METHOD
+
+
+def test_exported_enum_is_supported(tmp_path: Path):
+    """
+    Ensure `export enum ...` parses into an EXPORT node with an ENUM child marked exported.
+    """
+    src = 'export enum Foobar { a = 1, b = 2 };'
+    (tmp_path / "export_enum.ts").write_text(src, encoding="utf-8")
+    project = _make_dummy_project(tmp_path)
+    cache = ProjectCache()
+
+    parser = TypeScriptCodeParser(project, project.default_repo, "export_enum.ts")
+    parsed = parser.parse(cache)
+
+    # find export node
+    export_nodes = [s for s in parsed.symbols if s.kind == NodeKind.EXPORT]
+    assert len(export_nodes) == 1
+    exp = export_nodes[0]
+
+    # it should contain one enum child named Foobar, marked exported
+    enums = [c for c in exp.children if c.kind == NodeKind.ENUM]
+    assert len(enums) == 1
+    enum_sym = enums[0]
+    assert enum_sym.name == "Foobar"
+    assert enum_sym.exported is True
+
+    # the enum should include its members
+    member_names = {c.name for c in enum_sym.children if c.name}
+    assert {"a", "b"}.issubset(member_names)

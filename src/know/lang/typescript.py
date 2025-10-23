@@ -387,6 +387,9 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 case "interface_declaration":
                     sym.children.extend(self._handle_interface(child, parent=parent, exported=True))
                     decl_handled = True
+                case "enum_declaration":
+                    sym.children.extend(self._handle_enum(child, parent=parent, exported=True))
+                    decl_handled = True
                 case "type_alias_declaration":
                     sym.children.extend(self._handle_type_alias(child, parent=parent, exported=True))
                     decl_handled = True
@@ -843,7 +846,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
             )
         ]
 
-    def _handle_enum(self, node: ts.Node, parent: Optional[ParsedNode] = None) -> list[ParsedNode]:
+    def _handle_enum(self, node: ts.Node, parent: Optional[ParsedNode] = None, exported: bool = False) -> list[ParsedNode]:
         name_node = node.child_by_field_name("name")
         name = get_node_text(name_node)
         if not name:
@@ -907,6 +910,7 @@ class TypeScriptCodeParser(AbstractCodeParser):
                 fqn=self._make_fqn(name, parent),
                 signature=sig,
                 children=children,
+                exported=exported,
             )
         ]
 

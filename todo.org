@@ -49,12 +49,17 @@ CallToolResult(content=[TextContent(type='text', text='hello', annotations=None,
 *** [X] Refactror node parser to return nodes like python and typescript parsers
 *** [X] Generics
 *** [X] Add support for multi-module projects with nested go.mod
+*** [ ] Add support for type declarations
+type FooBar = int
+type Boo = func(a int) (err)
 ** [-] TypeScript
 *** [X] Reference parsing
 *** [X] Generics
 *** [X] Namespaces
 *** [X] CommonJS imports and exports
 *** [X] Modules
+*** [ ] Add support for
+export enum Foobar { a = "b", c = "d" }
 *** [ ] Declare
 *** [ ] Test module path resolution
 *** [ ] Include extends type to ref results

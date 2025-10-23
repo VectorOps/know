@@ -763,7 +763,8 @@ class GolangCodeParser(AbstractCodeParser):
         parent.children.append(child)
 
     def _handle_type_declaration(self, node) -> List[ParsedNode]:
-        specs = [c for c in node.children if c.type == "type_spec"]
+        # accept both regular type specs and alias specs
+        specs = [c for c in node.children if c.type in ("type_spec", "type_alias", "type_alias_spec")]
 
         # single-line declaration has no inner *type_spec* – treat the node itself
         if not specs:
@@ -785,8 +786,18 @@ class GolangCodeParser(AbstractCodeParser):
             # ---------- type node (struct / interface / …) --------------
             after_ident = False
             type_node = None
+            is_alias = spec.type in ("type_alias", "type_alias_spec")
+            skipped_equals = False
             for c in spec.children:
-                if after_ident and c.type != "comment":
+                if after_ident:
+                    if c.type == "comment":
+                        continue
+                    # Detect and skip the '=' token for alias declarations
+                    if not skipped_equals and c.type == "=":
+                        is_alias = True
+                        skipped_equals = True
+                        continue
+                    # The first non-comment, non '=' child after ident is the type node
                     type_node = c
                     break
                 if c is ident:
@@ -798,6 +809,11 @@ class GolangCodeParser(AbstractCodeParser):
                     kind = NodeKind.CLASS
                 elif type_node.type == "interface_type":
                     kind = NodeKind.INTERFACE
+                elif is_alias:
+                    kind = NodeKind.TYPE_ALIAS
+            elif is_alias:
+                # no explicit type_node captured, but alias detected
+                kind = NodeKind.TYPE_ALIAS
 
             visibility = infer_visibility(name)
             sym = self._make_node(
