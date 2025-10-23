@@ -11,7 +11,8 @@ class EmbeddingSettings(BaseSettings):
     """Settings for managing embeddings."""
 
     calculator_type: str = Field(
-        default="local", description='The type of embedding calculator to use (eg. "local").'
+        default="local",
+        description='The type of embedding calculator to use (eg. "local").',
     )
     model_name: str = Field(
         default="all-MiniLM-L6-v2",
@@ -27,7 +28,9 @@ class EmbeddingSettings(BaseSettings):
             "If None, a suitable device is chosen automatically."
         ),
     )
-    batch_size: int = Field(default=128, description="The batch size for embedding calculations.")
+    batch_size: int = Field(
+        default=128, description="The batch size for embedding calculations."
+    )
     enabled: bool = Field(
         default=False,
         description=(
@@ -36,8 +39,7 @@ class EmbeddingSettings(BaseSettings):
         ),
     )
     sync_embeddings: bool = Field(
-        default=False,
-        description="If True, embeddings will be synchronized."
+        default=False, description="If True, embeddings will be synchronized."
     )
     cache_path: Optional[str] = Field(
         default=None,
@@ -253,16 +255,12 @@ def _get_default_languages() -> dict[str, LanguageSettings]:
 class ProjectSettings(BaseSettings):
     """Top-level settings for a project."""
 
-    project_name: str = Field(
-        description="Project name."
-    )
+    project_name: Optional[str] = Field(default=None, description="Project name.")
 
-    repo_name: str = Field(
-        description="Repository name."
-    )
+    repo_name: Optional[str] = Field(default=None, description="Repository name.")
     repo_path: Optional[str] = Field(
         default=None,
-        description="The root directory of the project to be analyzed. Required for new repositories."
+        description="The root directory of the project to be analyzed. Required for new repositories.",
     )
     repository_backend: Optional[str] = Field(
         default="duckdb",
@@ -291,7 +289,7 @@ class ProjectSettings(BaseSettings):
             ".idea",
             ".vscode",
             ".pytest_cache",
-            ".mypy_cache"
+            ".mypy_cache",
         },
         description="A set of directory names to ignore during project scanning.",
     )
@@ -312,12 +310,11 @@ class ProjectSettings(BaseSettings):
         description="A `ToolSettings` object with tool-specific configurations.",
     )
     repomap: RepoMapSettings = Field(
-        default_factory=RepoMapSettings,
-        description="Settings for the RepoMap tool."
+        default_factory=RepoMapSettings, description="Settings for the RepoMap tool."
     )
     refresh: RefreshSettings = Field(
         default_factory=RefreshSettings,
-        description="Settings for auto-refreshing project data."
+        description="Settings for auto-refreshing project data.",
     )
     search: SearchSettings = Field(
         default_factory=SearchSettings,
@@ -354,11 +351,11 @@ def load_settings(
     **kwargs,
 ) -> ProjectSettings:
     config_dict = SettingsConfigDict(
-        cli_parse_args = cli,
-        env_prefix = env_prefix or "",
-        env_file = env_file,
-        toml_file = toml_file,
-        json_file = json_file,
+        cli_parse_args=cli,
+        env_prefix=env_prefix or "",
+        env_file=env_file,
+        toml_file=toml_file,
+        json_file=json_file,
     )
 
     class Settings(ProjectSettings):
@@ -389,7 +386,9 @@ def iter_settings(
     # Resolve whether booleans get --no-* automatically
     if implicit_flags is None:
         # pydantic-settings defaults to True for cli_implicit_flags
-        implicit_flags = bool(getattr(model, "model_config", {}).get("cli_implicit_flags", True))
+        implicit_flags = bool(
+            getattr(model, "model_config", {}).get("cli_implicit_flags", True)
+        )
 
     def add(option: CliOption) -> None:
         if option.flag not in seen:
@@ -419,17 +418,25 @@ def iter_settings(
 
             # Flag generation logic
             all_flags = []
-            path_prefix = ".".join(p.replace("_", "-") for p in dotted.split(".")) if kebab and dotted else ""
+            path_prefix = (
+                ".".join(p.replace("_", "-") for p in dotted.split("."))
+                if kebab and dotted
+                else ""
+            )
             path_prefix_dot = f"{path_prefix}." if path_prefix else ""
 
             choices = []
             if field.validation_alias:
                 if isinstance(field.validation_alias, str):
                     choices.append(field.validation_alias)
-                elif hasattr(field.validation_alias, 'choices'):  # AliasChoices
+                elif hasattr(field.validation_alias, "choices"):  # AliasChoices
                     choices.extend(map(str, field.validation_alias.choices))
 
-            flag_name = ".".join(p.replace("_", "-") for p in path.split(".")) if kebab else path
+            flag_name = (
+                ".".join(p.replace("_", "-") for p in path.split("."))
+                if kebab
+                else path
+            )
             if choices:
                 for choice in choices:
                     if len(choice) == 1 and not path_prefix:
@@ -440,7 +447,7 @@ def iter_settings(
             else:
                 all_flags.append(f"--{flag_name}")
 
-            all_flags.sort(key=lambda x: (x.startswith('--'), len(x)), reverse=True)
+            all_flags.sort(key=lambda x: (x.startswith("--"), len(x)), reverse=True)
             main_flag = all_flags[0]
             aliases = all_flags[1:]
 
@@ -450,7 +457,9 @@ def iter_settings(
                     aliases=sorted(aliases),
                     description=desc,
                     is_required=field.is_required(),
-                    default_value=field.get_default() if not field.is_required() else ...,
+                    default_value=(
+                        field.get_default() if not field.is_required() else ...
+                    ),
                     is_group=is_nested_model,
                 )
             )

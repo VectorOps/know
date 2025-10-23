@@ -69,6 +69,11 @@ class ProjectManager:
         self.embeddings = embeddings
         self._last_refresh_time: Optional[datetime.datetime] = None
 
+        if not self.settings.project_name:
+            raise ValueError(f"settings.project_name is required.")
+        if not self.settings.repo_name:
+            raise ValueError(f"settings.repo_name is required.")
+
         self._init_project()
 
         self._components: dict[str, ProjectComponent] = {}
