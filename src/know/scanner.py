@@ -229,6 +229,25 @@ def scan_repo(
     else:
         all_files = list(root.rglob("*"))
 
+    # Prefilter against .gitignore and ignored directories before scheduling work
+    filtered_files: list[Path] = []
+    for path in all_files:
+        try:
+            rel_path = path.relative_to(root)
+        except Exception:
+            # Skip paths outside root (shouldn't happen, but defensive)
+            continue
+        # Only files
+        if not path.is_file():
+            continue
+        # Skip .gitignore matches
+        if gitignore.match_file(str(rel_path)):
+            continue
+        # Skip ignored directories by settings
+        if any(part in pm.settings.ignored_dirs for part in rel_path.parts):
+            continue
+        filtered_files.append(path)
+
     num_workers = pm.settings.scanner_num_workers
     if num_workers is None:
         try:
@@ -246,15 +265,8 @@ def scan_repo(
 
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = []
-        for path in all_files:
+        for path in filtered_files:
             rel_path = path.relative_to(root)
-
-            if not path.is_file():
-                continue
-
-            # Skip ignored directories
-            if any(part in pm.settings.ignored_dirs for part in rel_path.parts):
-                continue
 
             processed_paths.add(str(rel_path))
             futures.append(

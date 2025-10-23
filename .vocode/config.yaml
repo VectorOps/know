@@ -1,6 +1,6 @@
 # Default Vocode configuration
 ui:
-  log_level: debug
+#  log_level: debug
 variables:
   LLM_DISCOVERY_MODEL: openai/gpt-5-mini
   LLM_ARCHITECT_MODEL: openai/gpt-5
