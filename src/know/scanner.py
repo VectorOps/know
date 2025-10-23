@@ -273,7 +273,6 @@ def scan_repo(
             processed += 1
             if progress_callback and (processed % 100 == 0):
                 try:
-                    print("EMIT")
                     progress_callback(
                         ScanProgress(
                             repo_id=repo.id,

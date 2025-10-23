@@ -64,5 +64,5 @@ type Number interface {
 }
 
 type G struct {
-	*E
+	fmt.E
 }
