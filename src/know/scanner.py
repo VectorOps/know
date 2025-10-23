@@ -24,15 +24,25 @@ from know.models import (
     NodeRef,
 )
 from know.data import NodeSearchQuery, NodeFilter, ImportEdgeFilter, PackageFilter
-from know.parsers import CodeParserRegistry, ParsedFile, ParsedNode, ParsedImportEdge, AbstractCodeParser
-from know.embedding_helpers import schedule_missing_embeddings, schedule_outdated_embeddings, schedule_symbol_embedding
-
+from know.parsers import (
+    CodeParserRegistry,
+    ParsedFile,
+    ParsedNode,
+    ParsedImportEdge,
+    AbstractCodeParser,
+)
+from know.embedding_helpers import (
+    schedule_missing_embeddings,
+    schedule_outdated_embeddings,
+    schedule_symbol_embedding,
+)
 
 
 @dataclass
 class EmbeddingTask:
     symbol_id: str
     text: str
+
 
 class ScanProgress(BaseModel):
     repo_id: str
@@ -111,7 +121,9 @@ def _process_file(
         # Skip paths ignored by .gitignore
         if gitignore.match_file(str(rel_path_str)):
             duration = time.perf_counter() - file_proc_start
-            return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
+            return ProcessFileResult(
+                status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix
+            )
 
         # mtime-based change detection
         file_repo = pm.data.file
@@ -120,12 +132,16 @@ def _process_file(
         mod_time = path.stat().st_mtime
         if existing_meta and existing_meta.last_updated == mod_time:
             duration = time.perf_counter() - file_proc_start
-            return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
+            return ProcessFileResult(
+                status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix
+            )
 
         file_hash = compute_file_hash(str(path))
         if existing_meta and existing_meta.file_hash == file_hash:
             duration = time.perf_counter() - file_proc_start
-            return ProcessFileResult(status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix)
+            return ProcessFileResult(
+                status=ProcessFileStatus.SKIPPED, duration=duration, suffix=suffix
+            )
 
         # File has changed or is new, needs processing
         parser_cls = parser_map.get(path.suffix.lower())
@@ -186,7 +202,9 @@ def scan_repo(
 
     cache = ProjectCache()
     state = ParsingState()
-    timing_stats: defaultdict[str, dict[str, int | float]] = defaultdict(lambda: {"count": 0, "total_time": 0.0})
+    timing_stats: defaultdict[str, dict[str, int | float]] = defaultdict(
+        lambda: {"count": 0, "total_time": 0.0}
+    )
     upsert_timing_stats: defaultdict[str, float] = defaultdict(float)
 
     parser_map = _get_parser_map(pm)
@@ -227,7 +245,11 @@ def scan_repo(
                 continue
 
             processed_paths.add(str(rel_path))
-            futures.append(executor.submit(_process_file, pm, repo, path, root, gitignore, cache, parser_map))
+            futures.append(
+                executor.submit(
+                    _process_file, pm, repo, path, root, gitignore, cache, parser_map
+                )
+            )
 
         total_tasks = len(futures)
         processed = 0
@@ -239,6 +261,7 @@ def scan_repo(
             processed += 1
             if progress_callback and (processed % 100 == 0):
                 try:
+                    print("EMIT")
                     progress_callback(
                         ScanProgress(
                             repo_id=repo.id,
@@ -261,12 +284,17 @@ def scan_repo(
             timing_stats[res.suffix]["total_time"] += res.duration
 
             if res.status == ProcessFileStatus.ERROR:
-                logger.error("Failed to parse file", path=res.rel_path, exc=res.exception)
+                logger.error(
+                    "Failed to parse file", path=res.rel_path, exc=res.exception
+                )
                 continue
 
             if res.status == ProcessFileStatus.BARE_FILE:
                 assert res.rel_path is not None
-                logger.debug("No parser registered for path – storing bare File.", path=res.rel_path)
+                logger.debug(
+                    "No parser registered for path – storing bare File.",
+                    path=res.rel_path,
+                )
                 if res.existing_meta is None:
                     assert res.file_hash is not None
                     assert res.mod_time is not None
@@ -292,7 +320,9 @@ def scan_repo(
 
             elif res.status == ProcessFileStatus.PARSED_FILE:
                 assert res.parsed_file is not None
-                upsert_parsed_file(pm, repo, state, res.parsed_file, upsert_timing_stats)
+                upsert_parsed_file(
+                    pm, repo, state, res.parsed_file, upsert_timing_stats
+                )
                 if res.existing_meta is None:
                     result.files_added.append(res.parsed_file.path)
                 else:
@@ -308,6 +338,7 @@ def scan_repo(
 
         # All File currently stored for this repo
         from know.data import FileFilter
+
         existing_files = file_repo.get_list(FileFilter(repo_ids=[repo_id]))
 
         for fm in existing_files:
@@ -332,7 +363,10 @@ def scan_repo(
     resolve_pending_import_edges(pm, repo, state)
 
     if pm.embeddings and state.pending_embeddings:
-        logger.debug("Scheduling embeddings for new/updated symbols", count=len(state.pending_embeddings))
+        logger.debug(
+            "Scheduling embeddings for new/updated symbols",
+            count=len(state.pending_embeddings),
+        )
         for task in state.pending_embeddings:
             schedule_symbol_embedding(
                 node_repo,
@@ -419,7 +453,9 @@ def upsert_parsed_file(
     t_start = time.perf_counter()
     pkg_meta: Optional[Package] = None
     if parsed_file.package:
-        pkg_meta = pm.data.package.get_by_virtual_path(repo.id, parsed_file.package.virtual_path)
+        pkg_meta = pm.data.package.get_by_virtual_path(
+            repo.id, parsed_file.package.virtual_path
+        )
 
         pkg_data = parsed_file.package.to_dict()
         pkg_data["repo_id"] = repo.id
@@ -500,7 +536,11 @@ def upsert_parsed_file(
         if not edge.external and edge.to_package_id is None:
             state.pending_import_edges.append(edge)
 
-    obsolete_ids = [edge.id for edge_key, edge in existing_by_key.items() if edge_key not in new_keys]
+    obsolete_ids = [
+        edge.id
+        for edge_key, edge in existing_by_key.items()
+        if edge_key not in new_keys
+    ]
     if obsolete_ids:
         import_repo.delete_many(obsolete_ids)
     t_imp = time.perf_counter()
@@ -524,8 +564,7 @@ def upsert_parsed_file(
 
     nodes_to_create: list[Node] = []
 
-    def _insert_symbol(psym: ParsedNode,
-                       parent_id: str | None = None) -> str:
+    def _insert_symbol(psym: ParsedNode, parent_id: str | None = None) -> str:
         """
         Insert *psym* as Node (recursively handles its children).
         When an old symbol with identical body exists, its embedding vector
@@ -533,13 +572,15 @@ def upsert_parsed_file(
         """
         # base attributes coming from the parser
         sm_data: dict[str, Any] = psym.to_dict()
-        sm_data.update({
-            "id": generate_id(),
-            "repo_id": repo.id,
-            "file_id": file_meta.id,
-            "package_id": pkg_meta.id if pkg_meta else None,
-            "parent_node_id": parent_id,
-        })
+        sm_data.update(
+            {
+                "id": generate_id(),
+                "repo_id": repo.id,
+                "file_id": file_meta.id,
+                "package_id": pkg_meta.id if pkg_meta else None,
+                "parent_node_id": parent_id,
+            }
+        )
         kind_val = sm_data.get("kind")
         if kind_val is not None:
             kind_key = kind_val.value if hasattr(kind_val, "value") else str(kind_val)
@@ -570,7 +611,9 @@ def upsert_parsed_file(
                     body=embedding_text,
                 )
             else:
-                state.pending_embeddings.append(EmbeddingTask(symbol_id=sm.id, text=embedding_text))
+                state.pending_embeddings.append(
+                    EmbeddingTask(symbol_id=sm.id, text=embedding_text)
+                )
 
         # recurse into children
         for child in psym.children:
@@ -668,7 +711,8 @@ def assign_parents_to_orphan_methods(pm: ProjectManager, repo: Repo) -> None:
         if pkg_id is None:
             continue
         candidates = [
-            s for s in node_repo.get_list(NodeFilter(package_id=pkg_id))
+            s
+            for s in node_repo.get_list(NodeFilter(package_id=pkg_id))
             if s.kind in parent_kinds and s.fqn
         ]
         if not candidates:
@@ -688,9 +732,11 @@ def assign_parents_to_orphan_methods(pm: ProjectManager, repo: Repo) -> None:
                 node_repo.update(meth.id, {"parent_node_id": best_parent.id})
 
 
-def resolve_pending_import_edges(pm: ProjectManager, repo: Repo, state: ParsingState) -> None:
-    pkg_repo  = pm.data.package
-    imp_repo  = pm.data.importedge
+def resolve_pending_import_edges(
+    pm: ProjectManager, repo: Repo, state: ParsingState
+) -> None:
+    pkg_repo = pm.data.package
+    imp_repo = pm.data.importedge
 
     for edge in list(state.pending_import_edges):
         if edge.external or edge.to_package_id is not None:

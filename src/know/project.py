@@ -20,8 +20,9 @@ VIRTUAL_PATH_PREFIX = ".virtual-path"
 @dataclass
 class ScanResult:
     """Result object returned by `scan_project_directory`."""
+
     repo: Repo
-    files_added:  list[str] = field(default_factory=list)
+    files_added: list[str] = field(default_factory=list)
     files_updated: list[str] = field(default_factory=list)
     files_deleted: list[str] = field(default_factory=list)
 
@@ -35,24 +36,22 @@ class ProjectComponent(ABC):
         self.pm = pm
 
     @abstractmethod
-    def initialize(self) -> None:
-        ...
+    def initialize(self) -> None: ...
 
     @abstractmethod
-    def refresh(self, scan_result: "ScanResult") -> None:
-        ...
+    def refresh(self, scan_result: "ScanResult") -> None: ...
 
     @abstractmethod
-    def destroy(self) -> None:
-        ...
+    def destroy(self) -> None: ...
 
 
 class ProjectManager:
     _component_registry: Dict[str, Type[ProjectComponent]] = {}
 
     @classmethod
-    def register_component(cls, comp_cls: Type[ProjectComponent], 
-                           name: str | None = None) -> None:
+    def register_component(
+        cls, comp_cls: Type[ProjectComponent], name: str | None = None
+    ) -> None:
         if comp_cls.component_name is None:
             raise ValueError(
                 f"Cannot register component {comp_cls.__name__} without a `component_name`."
@@ -95,10 +94,12 @@ class ProjectManager:
         self.repo_ids = self.data.prj_repo.get_repo_ids(project.id)
 
         # Initialize default repo
-        self.default_repo = self.add_repo_path(self.settings.repo_name, self.settings.repo_path)
+        self.default_repo = self.add_repo_path(
+            self.settings.repo_name, self.settings.repo_path
+        )
 
     # Simple repo management
-    def add_repo_path(self, name, path: Optional[str]=None):
+    def add_repo_path(self, name, path: Optional[str] = None):
         repo = self.data.repo.get_by_name(name)
         if repo is None:
             if path is None:
@@ -114,14 +115,19 @@ class ProjectManager:
             self.data.repo.create(repo)
 
         if path and repo.root_path != path:
-            logger.warn("Repo path does not match, updating...",
-                        repo_name=name,
-                        old_path=repo.root_path,
-                        new_path=path)
+            logger.warn(
+                "Repo path does not match, updating...",
+                repo_name=name,
+                old_path=repo.root_path,
+                new_path=path,
+            )
 
-            repo = self.data.repo.update(repo.id, {
-                "root_path": path,
-            })
+            repo = self.data.repo.update(
+                repo.id,
+                {
+                    "root_path": path,
+                },
+            )
 
         assert repo is not None
         if repo.id not in self.repo_ids:
@@ -202,7 +208,10 @@ class ProjectManager:
             repo = self.default_repo
 
         from know import scanner
-        scan_result = scanner.scan_repo(self, repo, paths=paths, progress_callback=progress_callback)
+
+        scan_result = scanner.scan_repo(
+            self, repo, paths=paths, progress_callback=progress_callback
+        )
 
         self.refresh_components(scan_result)
         self._last_refresh_time = datetime.datetime.now(datetime.timezone.utc)
@@ -297,12 +306,12 @@ class ProjectManager:
             logger.error("Failed to close data repository", exc=exc)
 
 
-
 class ProjectCache:
     """
     Mutable project-wide cache for expensive/invariant information
     that code parsers may want to re-use (ex: go.mod content).
     """
+
     def __init__(self) -> None:
         self._cache: dict[str, Any] = {}
 

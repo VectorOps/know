@@ -34,10 +34,10 @@ def test_golang_parser_on_sample_file():
     doc-comments and symbol-references are extracted correctly.
     """
     samples_dir = Path(__file__).parent / "samples"
-    project     = _make_dummy_project(samples_dir)
-    cache       = ProjectCache()
+    project = _make_dummy_project(samples_dir)
+    cache = ProjectCache()
 
-    parser      = GolangCodeParser(project, project.default_repo, "main.go")
+    parser = GolangCodeParser(project, project.default_repo, "main.go")
     parsed_file = parser.parse(cache)
 
     # Basic assertions
@@ -96,17 +96,20 @@ def test_golang_parser_on_sample_file():
 
     # Ensure we saw exactly the expected set of top-level symbols
     expected = {
-        "A",         # constant
-        "B",         # constant (new)
-        "j", "k", "f",   # variables (new)
-        "S",         # struct
-        "I",         # interface (new)
-        "m",         # method attached to S
-        "dummy",     # function
-        "main",      # function
+        "A",  # constant
+        "B",  # constant (new)
+        "j",
+        "k",
+        "f",  # variables (new)
+        "S",  # struct
+        "I",  # interface (new)
+        "m",  # method attached to S
+        "dummy",  # function
+        "main",  # function
         "E",
         "Number",
         "SumIntsOrFloats",
+        "G",
     }
     assert set(symbols.keys()) == expected
 
@@ -116,15 +119,16 @@ def test_golang_parser_on_sample_file():
 
     # Symbol references
     refs = parsed_file.symbol_refs
-    assert len(refs) >= 3                       # at least S, m(), foobar()
+    assert len(refs) >= 3  # at least S, m(), foobar()
 
     ref_set = {(r.name, r.type) for r in refs}
 
     assert ("foobar", NodeRefType.CALL) in ref_set
-    assert ("m",      NodeRefType.CALL) in ref_set
-    assert ("S",      NodeRefType.TYPE) in ref_set
+    assert ("m", NodeRefType.CALL) in ref_set
+    assert ("S", NodeRefType.TYPE) in ref_set
 
     # verify package-resolution for the aliased k.foobar() call
-    foobar_ref = next(r for r in refs
-                      if r.name == "foobar" and r.type == NodeRefType.CALL)
+    foobar_ref = next(
+        r for r in refs if r.name == "foobar" and r.type == NodeRefType.CALL
+    )
     assert foobar_ref.to_package_virtual_path == "example.com/m"

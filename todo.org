@@ -5,7 +5,7 @@ CallToolResult(content=[TextContent(type='text', text='hello', annotations=None,
 * [X] Make read file tool to return an error if file does not exist
 * [X] Change summary API to not return whole file - remove enum.
 * [X] Create a new read file tool
-* [ ] Figure out a way to give access to 3rd-party related projects that are not part of the project
+* [X] Figure out a way to give access to 3rd-party related projects that are not part of the project
 * [ ] Create a tool that returns project summary and mapping between virtual paths and imports
 * [ ] Create an API to notify what files have changed and only refresh them
 * [ ] Create async API

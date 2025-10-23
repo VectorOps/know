@@ -646,7 +646,7 @@ class GolangCodeParser(AbstractCodeParser):
             id_nodes = [c for c in fld.children if c.type == "field_identifier"]
             if not id_nodes:
                 # embedded / anonymous field
-                type_node = next((c for c in fld.children if c.type not in ("comment",)), None)
+                type_node = next((c for c in fld.children if c.type == "type_identifier"), None)
 
                 if type_node is None:
                     logger.warning(

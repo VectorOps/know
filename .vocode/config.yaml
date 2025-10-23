@@ -1,14 +1,14 @@
 # Default Vocode configuration
 ui:
-#  log_level: debug
+  log_level: debug
 variables:
-#  LLM_DISCOVERY_MODEL: openai/gpt-5
-#  LLM_ARCHITECT_MODEL: openai/gpt-5
-#  LLM_CODER_MODEL: openai/gpt-5
-  LLM_DISCOVERY_MODEL: gemini/gemini-2.5-flash
-  LLM_ARCHITECT_MODEL: gemini/gemini-2.5-pro
-  LLM_CODER_MODEL: gemini/gemini-2.5-flash
-  LLM_DIFF_FORMAT: patch
+  LLM_DISCOVERY_MODEL: openai/gpt-5-mini
+  LLM_ARCHITECT_MODEL: openai/gpt-5
+  LLM_CODER_MODEL: openai/gpt-5-mini
+#  LLM_DISCOVERY_MODEL: gemini/gemini-2.5-flash
+#  LLM_ARCHITECT_MODEL: gemini/gemini-2.5-pro
+#  LLM_CODER_MODEL: gemini/gemini-2.5-flash
+#  LLM_DIFF_FORMAT: patch
 tools:
   - name: vectorops_read_files
     auto_approve: true
@@ -223,12 +223,18 @@ workflows:
         hide_final_output: true
         system: |
           You're friendly chat assistant. Take user prompts and provide necessary answers.
+
+          * Analyze existing project by calling discovery tools before providing an anwer.
         outcomes:
           - name: done
       - name: llm
         type: llm
         model: ${LLM_ARCHITECT_MODEL}
         reset_policy: keep_state
+        tools:
+          - vectorops_search
+          - vectorops_summarize_files
+          - vectorops_read_files
         outcomes:
           - name: done
     edges:
