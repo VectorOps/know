@@ -17,7 +17,7 @@ foo/bar
 
 def test_parse_gitignore(tmp_path: Path) -> None:
     _create_gitignore(tmp_path)
-    spec = parse_gitignore(tmp_path)
+    spec = parse_gitignore(tmp_path / ".gitignore")
     assert spec.match_file(".env")
     assert spec.match_file("src/.env")
     assert spec.match_file("node_modules/pkg/index.js")
@@ -29,7 +29,7 @@ def test_parse_gitignore(tmp_path: Path) -> None:
 
 def test_matches_gitignore(tmp_path: Path) -> None:
     _create_gitignore(tmp_path)
-    spec = parse_gitignore(tmp_path)
+    spec = parse_gitignore(tmp_path / ".gitignore")
 
     # positives
     assert matches_gitignore(".env", spec)

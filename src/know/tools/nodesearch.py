@@ -18,10 +18,12 @@ class NodeSearchReq(BaseModel):
         default=True, description="Search through all repos in the project."
     )
     symbol_name: Optional[str] = Field(
-        default=None, description="Exact, case-sensitive match on the symbol’s short name."
+        default=None,
+        description="Exact, case-sensitive match on the symbol’s short name.",
     )
     kind: Optional[NodeKind | str] = Field(
-        default=None, description="Restrict results to a specific kind of node or a symbol."
+        default=None,
+        description="Restrict results to a specific kind of node or a symbol.",
     )
     visibility: Optional[Visibility | str] = Field(
         default="all",
@@ -37,8 +39,12 @@ class NodeSearchReq(BaseModel):
             "full-text and vector search. Use when you don’t know the exact name."
         ),
     )
-    limit: int | None = Field(default=10, description="Maximum number of results to return.")
-    offset: int | None = Field(default=0, description="Number of results to skip. Used for pagination.")
+    limit: int | None = Field(
+        default=10, description="Maximum number of results to return."
+    )
+    offset: int | None = Field(
+        default=0, description="Number of results to skip. Used for pagination."
+    )
     summary_mode: SummaryMode | str = Field(
         default=SummaryMode.Definition,
         description="Amount of source code to include with each match",
@@ -46,24 +52,22 @@ class NodeSearchReq(BaseModel):
 
 
 class NodeSearchResult(BaseModel):
-    symbol_id: str = Field(..., description="The unique identifier of the symbol.")
-    fqn: Optional[str] = Field(default=None, description="The fully-qualified name of the symbol.")
-    name: Optional[str] = Field(default=None, description="The short name of the symbol.")
+    name: Optional[str] = Field(
+        default=None, description="The short name of the symbol."
+    )
     kind: Optional[str] = Field(
         default=None, description="The kind of symbol (e.g., 'function', 'class')."
     )
     visibility: Optional[str] = Field(
-        default=None, description="The visibility of the symbol (e.g., 'public', 'private')."
+        default=None,
+        description="The visibility of the symbol (e.g., 'public', 'private').",
     )
     file_path: Optional[str] = Field(
         default=None, description="The path to the file containing the symbol."
     )
     body: Optional[str] = Field(
-        default=None, description="The summary or body of the symbol, depending on the summary_mode."
-    )
-    summary_mode: SummaryMode = Field(
-        ...,
-        description="Summary granularity used to produce 'body' (skip, definition, documentation or source).",
+        default=None,
+        description="The summary or body of the symbol, depending on the summary_mode.",
     )
 
 
@@ -91,7 +95,9 @@ class NodeSearchTool(BaseTool):
                 kind = NodeKind(req.kind)
             except ValueError:
                 valid_kinds = [k.value for k in NodeKind]
-                raise ValueError(f"Invalid kind '{req.kind}'. Valid values are: {valid_kinds}")
+                raise ValueError(
+                    f"Invalid kind '{req.kind}'. Valid values are: {valid_kinds}"
+                )
 
         # visibility
         vis = None
@@ -105,7 +111,9 @@ class NodeSearchTool(BaseTool):
                     vis = Visibility(req.visibility)
                 except ValueError:
                     valid_vis = [v.value for v in Visibility] + ["all"]
-                    raise ValueError(f"Invalid visibility '{req.visibility}'. Valid values are: {valid_vis}")
+                    raise ValueError(
+                        f"Invalid visibility '{req.visibility}'. Valid values are: {valid_vis}"
+                    )
 
         # summary_mode
         summary_mode = req.summary_mode
@@ -114,7 +122,9 @@ class NodeSearchTool(BaseTool):
                 summary_mode = SummaryMode(summary_mode)
             except ValueError:
                 valid_modes = [m.value for m in SummaryMode]
-                raise ValueError(f"Invalid summary_mode '{req.summary_mode}'. Valid values are: {valid_modes}")
+                raise ValueError(
+                    f"Invalid summary_mode '{req.summary_mode}'. Valid values are: {valid_modes}"
+                )
 
         # transform free-text query -> embedding vector (if requested)
         embedding_vec = None
@@ -127,18 +137,18 @@ class NodeSearchTool(BaseTool):
             repo_ids = [pm.default_repo.id]
 
         query = NodeSearchQuery(
-            repo_ids = repo_ids,
-            symbol_name = req.symbol_name,
-            kind = kind,
-            visibility = vis,
-            doc_needle = req.query,
-            embedding_query = embedding_vec,
-            boost_repo_id = pm.default_repo.id,
-            repo_boost_factor = pm.settings.search.default_repo_boost,
-            limit = req.limit or 20,
-            offset = req.offset,
+            repo_ids=repo_ids,
+            symbol_name=req.symbol_name,
+            kind=kind,
+            visibility=vis,
+            doc_needle=req.query,
+            embedding_query=embedding_vec,
+            boost_repo_id=pm.default_repo.id,
+            repo_boost_factor=pm.settings.search.default_repo_boost,
+            limit=req.limit or 20,
+            offset=req.offset,
         )
-        
+
         syms = pm.data.node.search(query)
 
         file_repo = pm.data.file
@@ -152,13 +162,15 @@ class NodeSearchTool(BaseTool):
             file_path = None
             if s.file_id:
                 fm = file_repo.get_by_id(s.file_id)
-                file_path = pm.construct_virtual_path(s.repo_id, fm.path) if fm else None
+                file_path = (
+                    pm.construct_virtual_path(s.repo_id, fm.path) if fm else None
+                )
 
                 if fm and fm.language:
                     helper = CodeParserRegistry.get_helper(fm.language)
 
             sym_summary: Optional[str] = None
-            sym_body:    Optional[str] = None
+            sym_body: Optional[str] = None
 
             sym_body = None
             if summary_mode != SummaryMode.Skip:
@@ -167,28 +179,27 @@ class NodeSearchTool(BaseTool):
                 elif helper is not None:
                     include_docs = summary_mode == SummaryMode.Documentation
                     include_comments = summary_mode == SummaryMode.Documentation
-                    sym_body  = helper.get_symbol_summary(s,
-                                                          include_comments=include_comments,
-                                                          include_docs=include_docs,
-                                                          include_parents=True)  # type: ignore[call-arg]
+                    sym_body = helper.get_symbol_summary(
+                        s,
+                        include_comments=include_comments,
+                        include_docs=include_docs,
+                        include_parents=True,
+                    )  # type: ignore[call-arg]
 
             results.append(
                 NodeSearchResult(
-                    symbol_id  = s.id,
-                    fqn        = s.fqn,
-                    name       = s.name,
-                    kind       = s.kind,
-                    visibility = s.visibility,
-                    file_path  = file_path,
-                    body       = sym_body,
-                    summary_mode = summary_mode,
+                    name=s.name,
+                    kind=s.kind,
+                    visibility=s.visibility,
+                    file_path=file_path,
+                    body=sym_body,
                 )
             )
         return self.encode_output(results, settings=pm.settings)
 
     def get_openai_schema(self) -> dict:
-        kind_enum        = [k.value for k in NodeKind]
-        visibility_enum  = [v.value for v in Visibility] + ["all"]
+        kind_enum = [k.value for k in NodeKind]
+        visibility_enum = [v.value for v in Visibility] + ["all"]
         summary_enum = [m.value for m in SummaryMode]
 
         return {
@@ -204,12 +215,12 @@ class NodeSearchTool(BaseTool):
                 "properties": {
                     "symbol_name": {
                         "type": "string",
-                        "description": "Exact, case-sensitive match on the symbol’s short name."
+                        "description": "Exact, case-sensitive match on the symbol’s short name.",
                     },
                     "kind": {
                         "type": "string",
                         "enum": kind_enum,
-                        "description": "Restrict results to a specific kind of symbol."
+                        "description": "Restrict results to a specific kind of symbol.",
                     },
                     "visibility": {
                         "type": "string",
@@ -225,19 +236,19 @@ class NodeSearchTool(BaseTool):
                         "description": (
                             "Natural-language search string evaluated against docstrings, comments, and code "
                             "with both full-text and vector search. Use when you don’t know the exact name."
-                        )
+                        ),
                     },
                     "limit": {
                         "type": "integer",
                         "minimum": 1,
                         "default": 10,
-                        "description": "Maximum number of results to return."
+                        "description": "Maximum number of results to return.",
                     },
                     "offset": {
                         "type": "integer",
                         "minimum": 0,
                         "default": 0,
-                        "description": "Number of results to skip. Used for pagination."
+                        "description": "Number of results to skip. Used for pagination.",
                     },
                     "summary_mode": {
                         "type": "string",

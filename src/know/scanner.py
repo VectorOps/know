@@ -209,8 +209,20 @@ def scan_repo(
 
     parser_map = _get_parser_map(pm)
 
-    # Collect ignore patterns from .gitignore (simple glob matching – no ! negation support)
-    gitignore = parse_gitignore(root)
+    # Collect ignore patterns from all .gitignore files (combined)
+    combined_spec = pathspec.PathSpec.from_lines("gitwildmatch", [])
+    gitignore_paths: set[Path] = set()
+    root_gitignore = root / ".gitignore"
+    if root_gitignore.exists():
+        gitignore_paths.add(root_gitignore)
+    for gi in root.rglob(".gitignore"):
+        gitignore_paths.add(gi)
+    for gi_path in sorted(gitignore_paths):
+        try:
+            combined_spec = combined_spec + parse_gitignore(gi_path, root_dir=root)
+        except Exception as exc:
+            logger.warning("Failed to parse .gitignore", path=str(gi_path), exc=exc)
+    gitignore = combined_spec
 
     if paths:
         all_files = [root / p for p in paths]

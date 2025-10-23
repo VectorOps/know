@@ -145,3 +145,41 @@ def test_upsert_parsed_file_insert_update_delete(tmp_path: Path):
     assert len(rs.package.get_list(PackageFilter(repo_ids=[repo_meta.id]))) == 1
     # Confirm mod2 file metadata truly deleted
     assert rs.file.get_by_id(file_id_mod2) is None
+
+def test_nested_gitignore_skips_files(tmp_path: Path):
+    """
+    A nested .gitignore with a relative pattern should ignore matching files
+    under that subtree (including deeper descendants), but not outside it.
+    """
+    repo_dir = tmp_path / "repo_nested"
+    pkg_dir = repo_dir / "pkg"
+    deep_dir = pkg_dir / "sub" / "deeper"
+    pkg_dir.mkdir(parents=True)
+    deep_dir.mkdir(parents=True)
+
+    # Nested .gitignore in 'pkg' ignores any 'ignoreme.py' under 'pkg'
+    (pkg_dir / ".gitignore").write_text("ignoreme.py\n")
+
+    # Files to be ignored
+    (pkg_dir / "ignoreme.py").write_text("print('ignored at pkg')\n")
+    (deep_dir / "ignoreme.py").write_text("print('ignored deeper')\n")
+
+    # Files to be kept
+    (repo_dir / "ignoreme.py").write_text("print('kept at root')\n")
+    (pkg_dir / "keep.py").write_text("def foo():\n    return 1\n")
+
+    pm = _make_project(repo_dir)
+    scan_repo(pm, pm.default_repo)
+
+    rs = pm.data
+    repo_meta = pm.default_repo
+    files = rs.file.get_list(FileFilter(repo_ids=[repo_meta.id]))
+    paths = {f.path for f in files}
+
+    # kept
+    assert "ignoreme.py" in paths              # root-level should NOT be affected
+    assert "pkg/keep.py" in paths
+
+    # ignored by nested .gitignore
+    assert "pkg/ignoreme.py" not in paths
+    assert "pkg/sub/deeper/ignoreme.py" not in paths
